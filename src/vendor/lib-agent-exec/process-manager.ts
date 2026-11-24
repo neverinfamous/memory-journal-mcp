@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { ChildProcess, spawnSync } from 'node:child_process';
+import path from 'node:path';
 
 export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];
 
 export function isPidAlive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -122,7 +124,8 @@ function taskkillTree(pid: number): boolean {
 function killWindowsTree(child: ChildProcess, pid: number, parentGone: boolean): void {
   const spawnfile = child.spawnfile || '';
   const spawnargs: string[] = child.spawnargs || [];
-  if (spawnfile.toLowerCase().endsWith('wsl.exe')) killWslProcessGroup(spawnargs);
+  const baseSpawn = path.basename(spawnfile).toLowerCase().replace(/\.exe$/, '');
+  if (baseSpawn === 'wsl') killWslProcessGroup(spawnargs);
   if (parentGone || !taskkillTree(pid)) killWindowsDescendantsFallback(pid);
   try {
     child.kill('SIGKILL');

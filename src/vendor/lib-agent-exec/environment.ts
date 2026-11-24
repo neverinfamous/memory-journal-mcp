@@ -132,7 +132,7 @@ export const IMMUTABLE_ENV_OVERRIDES: ReadonlySet<string> = new Set([
 ]);
 
 export function buildEnvironment(payloadEnv?: Record<string, string | number | boolean | undefined>) {
-  const env: Record<string, string | undefined> = {};
+  const env: Record<string, string | undefined> = Object.create(null);
   const isWin = process.platform === 'win32';
   const upperKeysMap = new Map<string, string>();
 

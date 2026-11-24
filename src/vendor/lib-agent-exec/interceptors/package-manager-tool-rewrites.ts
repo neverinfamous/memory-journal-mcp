@@ -1,7 +1,7 @@
 // @ts-nocheck
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { convertToWindowsPath } from '../command-utils.js';
 import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
 import {
   AUTONOMOUS_HEALING_MSG,
@@ -9,7 +9,7 @@ import {
   resolveAgentScriptFallback,
   tryAccelerateCompiledCommitScript,
 } from '../utils.js';
-import { handleRipgrepInterception } from './search-interceptor.js';
+import { handleRipgrepInterception, parseGrepSearchArgs } from './search-interceptor.js';
 import { resolvePackageProjectDir } from './package-manager-js-rewrites.js';
 import { AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS, type ExecutionContext } from './types.js';
 import { findFirstPkgSubcmdIndex } from './utils.js';
@@ -88,6 +88,9 @@ export function rewriteTsxInvocation(
     ...(ctx.payload.target !== undefined ? { target: ctx.payload.target } : {}),
     ...(ctx.payload.env !== undefined ? { payloadEnv: ctx.payload.env } : {}),
     startIdx,
+    onSync: () => {
+      if ('command' in ctx.payload) ctx.payload.args = ctx.args;
+    },
   });
   if (rewritten !== null && 'command' in ctx.payload) {
     ctx.payload.args = ctx.args;
@@ -177,7 +180,10 @@ export function rewriteToolBinary(
     : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
   const prefixDir = resolvePackageProjectDir(args.slice(0, targetIdx), baseDir);
   if (prefixDir !== baseDir) {
-    ctx.payload.cwd = prefixDir;
+    const resolvedPrefixDir = process.platform === 'win32' && ctx.payload.target !== 'wsl2' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(prefixDir)
+      ? convertToWindowsPath(prefixDir)
+      : prefixDir;
+    ctx.payload.cwd = resolvedPrefixDir;
   }
   ctx.cmdBasename = mappedCmd;
   ctx.args = args.slice(targetIdx + 1);
@@ -191,6 +197,33 @@ export function rewriteToolBinary(
   return true;
 }
 
+function applySubcmdPrefixCwd(ctx: ExecutionContext, args: readonly string[]): string | undefined {
+  const subIdx = findFirstPkgSubcmdIndex(args);
+  const rawPayloadCwd = ctx.payload.cwd;
+  const isPosixWsl = ctx.payload.target === 'wsl2'
+    && typeof rawPayloadCwd === 'string'
+    && (rawPayloadCwd.startsWith('/') || rawPayloadCwd.startsWith('~'));
+  const baseDir = rawPayloadCwd !== undefined && rawPayloadCwd.length > 0
+    ? (isPosixWsl ? rawPayloadCwd : path.resolve(rawPayloadCwd))
+    : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
+  if (subIdx > 0) {
+    const prefixDir = resolvePackageProjectDir(args.slice(0, subIdx), baseDir);
+    if (prefixDir !== baseDir) {
+      ctx.payload.cwd = process.platform === 'win32' && ctx.payload.target !== 'wsl2' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(prefixDir)
+        ? convertToWindowsPath(prefixDir)
+        : prefixDir;
+    }
+  }
+  const activeCwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? ctx.payload.cwd : ctx.cwd;
+  if (process.platform === 'win32' && activeCwd !== undefined) {
+    if ((activeCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(activeCwd)) || activeCwd.startsWith('~')) {
+      return ctx.cwd;
+    }
+    if (/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(activeCwd)) return convertToWindowsPath(activeCwd);
+  }
+  return activeCwd;
+}
+
 function handleAgentNativeToolSubcmd(
   ctx: ExecutionContext,
   cmdBasename: string,
@@ -202,7 +235,10 @@ function handleAgentNativeToolSubcmd(
     return true;
   }
   if (subCmd === 'list_dir') {
-    const pathArg = args.slice(args.indexOf(subCmd) + 1).find(a => !a.startsWith('-')) ?? '.';
+    applySubcmdPrefixCwd(ctx, args);
+    const subIdx = findFirstPkgSubcmdIndex(args);
+    const afterSub = subIdx !== -1 ? args.slice(subIdx + 1) : args;
+    const pathArg = afterSub.find(a => !a.startsWith('-')) ?? '.';
     ctx.cmdBasename = 'ls';
     ctx.args = [pathArg];
     ctx.payload.target = 'wsl2';
@@ -212,8 +248,11 @@ function handleAgentNativeToolSubcmd(
     return true;
   }
   if (subCmd === 'view_file') {
-    const fileArg = args.slice(args.indexOf(subCmd) + 1).find(a => !a.startsWith('-'));
+    const subIdx = findFirstPkgSubcmdIndex(args);
+    const afterSub = subIdx !== -1 ? args.slice(subIdx + 1) : args;
+    const fileArg = afterSub.find(a => !a.startsWith('-'));
     if (fileArg) {
+      applySubcmdPrefixCwd(ctx, args);
       ctx.cmdBasename = 'cat';
       ctx.args = [fileArg];
       ctx.payload.target = 'wsl2';
@@ -228,47 +267,25 @@ function handleAgentNativeToolSubcmd(
 }
 
 function translateGrepSearch(ctx: ExecutionContext, cmdBasename: string, args: string[], subCmd: string): void {
-  const valueFlagSet = new Set(['-s', '--symbol', '--pattern', '-p', '--path', '-d', '--dir', '--searchpath', '--search-path', '--searchpattern', '--search-pattern', '--targetcontent', '--target-content', '--content']);
-  const sIdx = args.findIndex(a => ['-s', '--symbol', '--pattern', '--searchpattern', '--search-pattern', '--targetcontent', '--target-content', '--content'].includes(a.toLowerCase()));
-  const pIdx = args.findIndex(a => ['-p', '--path', '-d', '--dir', '--searchpath', '--search-path'].includes(a.toLowerCase()));
-  const after = args.slice(args.indexOf(subCmd) + 1);
-  const nonFlags: string[] = [];
-  for (let i = 0; i < after.length; i++) {
-    const a = after[i];
-    if (a === undefined) continue;
-    if (valueFlagSet.has(a.toLowerCase())) { i++; continue; }
-    if (!a.startsWith('-')) nonFlags.push(a);
-  }
-  let finalPattern = sIdx !== -1 && sIdx + 1 < args.length ? (args[sIdx + 1] ?? '') : (nonFlags[0] ?? '');
-  let finalPath = pIdx !== -1 && pIdx + 1 < args.length ? (args[pIdx + 1] ?? '.') : (nonFlags[1] ?? '.');
-  if (isLikelyPathArg(finalPattern, ctx.payload.cwd) && !isLikelyPathArg(finalPath, ctx.payload.cwd) && finalPath.length > 0) {
-    [finalPattern, finalPath] = [finalPath, finalPattern];
-  }
+  const effectiveCwd = applySubcmdPrefixCwd(ctx, args);
+  const subIdx = findFirstPkgSubcmdIndex(args);
+  const after = subIdx !== -1 ? args.slice(subIdx + 1) : args;
+  const parsed = parseGrepSearchArgs(after, effectiveCwd);
+  const finalPattern = parsed.pattern;
+  const finalPath = parsed.searchPath || '.';
   if (finalPattern.length === 0) {
     console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script or CLI binary. Please invoke the '${subCmd}' tool directly instead of executing '${cmdBasename} ${subCmd}'.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
   ctx.cmdBasename = 'rg';
   const rgFlags = ['-n'];
-  if (args.some(a => a === '-i' || a === '-ri' || a === '-ir' || a === '--case-insensitive' || (a.startsWith('-') && !a.startsWith('--') && a.includes('i')))) rgFlags.push('-i');
-  if (args.some(a => a === '-w' || a === '--word-regexp')) rgFlags.push('-w');
-  if (!args.some(a => a === '-e' || a === '--regexp')) rgFlags.push('-F');
+  if (parsed.isCaseInsensitive) rgFlags.push('-i');
+  if (parsed.isWord) rgFlags.push('-w');
+  if (!parsed.isRegex) rgFlags.push('-F');
+  if (finalPattern.startsWith('-')) rgFlags.push('-e');
   ctx.args = [...rgFlags, finalPattern, finalPath];
   if ('command' in ctx.payload) { ctx.payload.command = 'rg'; ctx.payload.args = ctx.args; }
   console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
   handleRipgrepInterception(ctx, Boolean(ctx.payload.stdin));
-}
-
-function isLikelyPathArg(s: string, payloadCwd?: string): boolean {
-  if (!s) return false;
-  const clean = s.trim();
-  if (clean === '.' || clean === '..' || clean.startsWith('./') || clean.startsWith('../') || clean.endsWith('/') || clean.endsWith('\\')) return true;
-  if (clean.includes('/') || clean.includes('\\') || /^[a-zA-Z]:/.test(clean)) return true;
-  try {
-    const cwd = payloadCwd !== undefined && payloadCwd.length > 0 ? path.resolve(payloadCwd) : process.cwd();
-    return fs.statSync(path.resolve(cwd, clean), { throwIfNoEntry: false })?.isDirectory() === true;
-  } catch {
-    return false;
-  }
 }

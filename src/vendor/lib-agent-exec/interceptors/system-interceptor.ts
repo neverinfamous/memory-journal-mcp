@@ -4,7 +4,7 @@ import { healPathHallucinations } from '../path-healer.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
 import { runSystemCommandArms } from './system-command-arms.js';
-import { buildSystemCommandContext, resolveInlineCommand, SHELL_NAMES } from './system-command-context.js';
+import { buildSystemCommandContext, resolveInlineCommand } from './system-command-context.js';
 import { healEvalPayload } from './system-eval-healer.js';
 import { rewriteInlineInterpreterScripts } from './system-inline-script.js';
 import { blockUnsafePipes } from './system-pipe-guard.js';
@@ -14,6 +14,8 @@ import { extendPayloadTimeouts } from './system-timeouts.js';
 import type { ExecutionContext } from './types.js';
 
 function syncDerivedArgs(ctx: ExecutionContext, derived: ReturnType<typeof buildSystemCommandContext>): void {
+  derived.cmdBasename = ctx.cmdBasename;
+  derived.cmd = ctx.cmdBasename.toLowerCase();
   const combined = [...derived.embeddedArgs, ...ctx.args];
   derived.args = combined;
   derived.positionalArgs = getPositionalArgs(derived.cmdBasename, combined);
@@ -26,7 +28,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   healEvalPayload(ctx.payload, resolvedCwd);
 
   const derived = buildSystemCommandContext(ctx);
-  if (routeEmbeddedShellTools(derived.payload, resolvedCwd)) return;
+  routeEmbeddedShellTools(derived.payload, resolvedCwd);
   extendPayloadTimeouts(derived, resolvedCwd);
 
   healPathHallucinations(ctx);
@@ -52,7 +54,6 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     innerCmdStr: inline.innerCmdStr,
     positionalArgs: derived.positionalArgs,
     hasStdin: derived.hasStdin,
-    shells: SHELL_NAMES,
   });
   rewriteInlineInterpreterScripts(ctx, derived.isCommand, derived.originalCmd);
 }

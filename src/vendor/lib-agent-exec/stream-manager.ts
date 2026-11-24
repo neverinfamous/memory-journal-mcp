@@ -113,7 +113,7 @@ export class StreamManager {
       (isOsc && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC && !COMPLETE_OSC_REGEX.test(potentialSeq)) ||
       (isCsi && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI && !COMPLETE_CSI_REGEX.test(potentialSeq)) ||
       (potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC && DCS_START_REGEX.test(potentialSeq) && !DCS_COMPLETE_REGEX.test(potentialSeq)) ||
-      (!isOsc && !isCsi && !DCS_START_REGEX.test(potentialSeq) && potentialSeq.length < 3);
+      (!isOsc && !isCsi && !DCS_START_REGEX.test(potentialSeq) && !potentialSeq.startsWith('\u001b\\') && potentialSeq.length < 3);
 
     if (incomplete) {
       return { safeStr: ansiBuffer.substring(0, lastEscapeIdx), remainder: potentialSeq };
@@ -121,19 +121,22 @@ export class StreamManager {
     return { safeStr: ansiBuffer, remainder: '' };
   }
 
+  private diffAgainstFlushed(resolved: string, flushed: string): string {
+    if (resolved.startsWith(flushed)) {
+      return resolved.substring(flushed.length);
+    }
+    const padding = ' '.repeat(Math.max(0, flushed.length - resolved.length));
+    let diff = `\r${resolved}${padding}`;
+    if (padding.length > 0) diff += `\r${resolved}`;
+    return diff;
+  }
+
   private resolveMergedLines(lines: readonly string[], s: StreamState): string {
     let result = '';
     for (let i = 0; i < lines.length; i++) {
       const resolved = this.resolveCarriageReturns(lines[i] ?? '');
       if (i === 0 && s.flushedResolved) {
-        if (resolved.startsWith(s.flushedResolved)) {
-          result += `${resolved.substring(s.flushedResolved.length)}\n`;
-        } else {
-          const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - resolved.length));
-          result += `\r${resolved}${padding}`;
-          if (padding.length > 0) result += `\r${resolved}`;
-          result += '\n';
-        }
+        result += `${this.diffAgainstFlushed(resolved, s.flushedResolved)}\n`;
         s.flushedResolved = '';
       } else {
         result += `${resolved}\n`;
@@ -170,20 +173,7 @@ export class StreamManager {
     if (!s.lineBuffer) return '';
     
     const res = this.resolveCarriageReturns(s.lineBuffer);
-    let toReturn: string;
-    if (s.flushedResolved) {
-      if (res.startsWith(s.flushedResolved)) {
-        toReturn = res.substring(s.flushedResolved.length);
-      } else {
-        const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - res.length));
-        toReturn = '\r' + res + padding;
-        if (padding.length > 0) {
-           toReturn += '\r' + res;
-        }
-      }
-    } else {
-      toReturn = res;
-    }
+    const toReturn = s.flushedResolved ? this.diffAgainstFlushed(res, s.flushedResolved) : res;
     
     if (toReturn) {
       s.flushedResolved = res;
@@ -207,15 +197,7 @@ export class StreamManager {
     
     let toReturn: string;
     if (s.flushedResolved) {
-      if (res.startsWith(s.flushedResolved)) {
-        toReturn = res.substring(s.flushedResolved.length);
-      } else {
-        const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - res.length));
-        toReturn = '\r' + res + padding;
-        if (padding.length > 0) {
-           toReturn += '\r' + res;
-        }
-      }
+      toReturn = this.diffAgainstFlushed(res, s.flushedResolved);
       s.flushedResolved = '';
     } else {
       toReturn = res;
@@ -281,12 +263,13 @@ export class StreamManager {
 
   public getRawBufferedLength(isErr: boolean): number {
     const s = this.getState(isErr);
-    return s.length + s.lineBuffer.length;
+    return s.length + Math.max(0, s.lineBuffer.length - s.flushedResolved.length);
   }
 
   public getBufferedLength(isErr: boolean): number {
     const rawLen = this.getRawBufferedLength(isErr);
-    if (this.truncateOutputLength) {
+    const targetStream = isErr ? this.errStream : this.outStream;
+    if (this.truncateOutputLength && !targetStream) {
       return Math.min(rawLen, this.truncateOutputLength);
     }
     return rawLen;

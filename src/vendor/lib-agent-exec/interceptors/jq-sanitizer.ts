@@ -3,8 +3,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { convertToWindowsPath, convertToWslPath, getPositionalArgs } from '../command-utils.js';
+import { convertToWindowsPath, convertToWslPath, getPositionalArgIndices, getPositionalArgs } from '../command-utils.js';
 import type { ExecutionContext } from './types.js';
+import { hasJqShortOrLongFlag, scanJqFromFiles } from './utils.js';
 
 const sanitizedJqTempFiles = new Set<string>();
 let jqExitCleanupRegistered = false;
@@ -58,11 +59,18 @@ function stripJqPreambleNoise(raw: string): SanitizedJqText {
       return { cleaned: cand, reason: 'tags', tagName: tagMatch[1] };
     }
   }
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fenceMatch?.[1] !== undefined) {
-    const cand = fenceMatch[1].trim();
-    if (cand.length > 0 && cand !== raw && isValidJsonOrJsonl(cand)) {
-      return { cleaned: cand, reason: 'fence' };
+  const openIdx = raw.indexOf('```');
+  if (openIdx !== -1) {
+    const closeIdx = raw.lastIndexOf('```');
+    if (closeIdx > openIdx + 2) {
+      let inner = raw.slice(openIdx + 3, closeIdx);
+      if (inner.slice(0, 4).toLowerCase() === 'json') {
+        inner = inner.slice(4);
+      }
+      const cand = inner.trim();
+      if (cand.length > 0 && cand !== raw && isValidJsonOrJsonl(cand)) {
+        return { cleaned: cand, reason: 'fence' };
+      }
     }
   }
   if (raw.includes('[WARNING:') || raw.includes('<database_output>')) {
@@ -79,12 +87,7 @@ function stripJqPreambleNoise(raw: string): SanitizedJqText {
 }
 
 function hasJqRawInputFlag(args: readonly string[]): boolean {
-  for (const a of args) {
-    if (a === '--') break;
-    if (a === '-R' || a === '--raw-input') return true;
-    if (a.startsWith('-') && !a.startsWith('--') && /^-[a-zA-Z]*R[a-zA-Z]*$/.test(a)) return true;
-  }
-  return false;
+  return hasJqShortOrLongFlag(args, 'R', '--raw-input');
 }
 
 function sanitizeJqStdin(ctx: ExecutionContext): void {
@@ -111,14 +114,7 @@ function resolveJqFileArg(fileArg: string, cwd: string): { isWslPath: boolean; r
 
 export function sanitizeJqInvocation(ctx: ExecutionContext, args: string[]): void {
   const hasStdin = ctx.payload.stdin !== undefined && ctx.payload.stdin.length > 0;
-  let hasFilterFile = false;
-  for (const a of args) {
-    if (a === '--') break;
-    if (a === '-f' || a === '--from-file' || a.startsWith('--from-file=')) {
-      hasFilterFile = true;
-      break;
-    }
-  }
+  const { hasFromFile: hasFilterFile } = scanJqFromFiles(args);
   if (hasStdin && !hasFilterFile && getPositionalArgs('jq', args).length === 0) {
     ctx.args.push('.');
     if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {
@@ -131,20 +127,30 @@ export function sanitizeJqInvocation(ctx: ExecutionContext, args: string[]): voi
   sanitizeJqStdin(ctx);
 
   const rawPayloadCwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? ctx.payload.cwd : undefined;
+  if (process.platform === 'win32' && rawPayloadCwd !== undefined &&
+    ((rawPayloadCwd.startsWith('/') && !/^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(rawPayloadCwd)) || rawPayloadCwd.startsWith('~'))) {
+    return;
+  }
   const normPayloadCwd = rawPayloadCwd !== undefined && process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(rawPayloadCwd)
     ? convertToWindowsPath(rawPayloadCwd)
     : rawPayloadCwd;
+  const hostCtxCwd = ctx.cwd !== undefined && ctx.cwd.length > 0 ? ctx.cwd : undefined;
   const cwd = normPayloadCwd !== undefined
     ? path.resolve(normPayloadCwd)
-    : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
-  const posArgs = getPositionalArgs('jq', ctx.args);
-  const fileArgCandidates = hasFilterFile ? posArgs : posArgs.slice(1);
+    : (hostCtxCwd !== undefined ? path.resolve(hostCtxCwd) : process.cwd());
+  const posIndices = getPositionalArgIndices('jq', ctx.args);
+  const fileIndices = hasFilterFile ? posIndices : posIndices.slice(1);
 
-  for (const fileArg of fileArgCandidates) {
+  for (const argIdx of fileIndices) {
+    const fileArg = ctx.args[argIdx];
     if (!fileArg || fileArg.startsWith('-')) continue;
+    if (process.platform === 'win32' && ((fileArg.startsWith('/') && !/^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(fileArg)) || fileArg.startsWith('~'))) {
+      continue;
+    }
     const { isWslPath, resolvedFile } = resolveJqFileArg(fileArg, cwd);
-    if (!fs.existsSync(resolvedFile)) continue;
     try {
+      const st = fs.statSync(resolvedFile, { throwIfNoEntry: false });
+      if (st === undefined || !st.isFile() || st.size > 10 * 1024 * 1024) continue;
       const rawContent = fs.readFileSync(resolvedFile, 'utf8');
       const result = stripJqPreambleNoise(rawContent);
       if (result.reason === null || result.cleaned === rawContent) continue;
@@ -154,11 +160,9 @@ export function sanitizeJqInvocation(ctx: ExecutionContext, args: string[]): voi
       registerJqTempFile(tmpSanitized);
 
       const newFileArg = isWslPath ? convertToWslPath(tmpSanitized) : tmpSanitized;
-      const idx = ctx.args.indexOf(fileArg);
-      if (idx !== -1) ctx.args[idx] = newFileArg;
-      if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {
-        const pIdx = ctx.payload.args.indexOf(fileArg);
-        if (pIdx !== -1) ctx.payload.args[pIdx] = newFileArg;
+      ctx.args[argIdx] = newFileArg;
+      if ('args' in ctx.payload && Array.isArray(ctx.payload.args) && ctx.payload.args.length === ctx.args.length) {
+        ctx.payload.args[argIdx] = newFileArg;
       }
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped untrusted wrapper tags / warning preambles from jq input file '${fileArg}'... (Frictionless Recovery)\x1b[0m`);
     } catch (err: unknown) {

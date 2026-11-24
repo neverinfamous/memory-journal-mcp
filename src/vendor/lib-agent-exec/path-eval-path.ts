@@ -9,7 +9,7 @@ import {
   formatHealedPath,
   isDirectoryPath,
   isFilePath,
-  normalizeMntPath,
+  normalizeMntPathForHost,
 } from './path-healer.js';
 import { findNeighborFilePath } from './path-neighbor.js';
 import { resolveBuildSrcSwap, resolvePathWithDirectorySynonyms } from './path-synonym.js';
@@ -35,9 +35,9 @@ function cleanRaw(raw: string): string {
 }
 
 function buildEvalPathContext(rawFilePath: string, cwd: string, target: HealTarget | undefined, allowDirs: boolean): EvalPathContext {
-  const isWslPath = target === 'wsl2' || rawFilePath.startsWith('/mnt/');
+  const isWslPath = target === 'wsl2' || /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(rawFilePath);
   const isWindowsDrivePath = /^[a-zA-Z]:[/\\]/.test(rawFilePath);
-  const wslNormalized = isWslPath ? normalizeMntPath(rawFilePath) : rawFilePath;
+  const wslNormalized = isWslPath ? normalizeMntPathForHost(rawFilePath) : rawFilePath;
   const resolvedPath = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(cwd, wslNormalized);
   return { rawFilePath, resolvedPath, isWslPath, isWindowsDrivePath, target, allowDirs, cwd };
 }
@@ -56,7 +56,7 @@ function healExistingEvalPath(ctx: EvalPathContext): string | null | undefined {
 function firstBarrelDisplay(ctx: EvalPathContext, resolvedWithoutExt: string, withoutExt: string): string | null {
   for (const barrel of BARREL_CANDIDATES) {
     const barrelFile = path.join(resolvedWithoutExt, barrel);
-    if (!fs.existsSync(barrelFile)) continue;
+    if (!isFilePath(barrelFile)) continue;
     const sep = withoutExt.includes('\\') ? '\\' : '/';
     return toWslOrDisplay(barrelFile, `${withoutExt}${sep}${barrel}`, ctx, withoutExt);
   }
@@ -68,7 +68,7 @@ function healEvalBarrel(ctx: EvalPathContext): string | null {
   if (extMatch === null) return null;
   const withoutExt = ctx.rawFilePath.slice(0, -extMatch[0].length);
   if (withoutExt.length === 0 || /[\\/]$/.test(withoutExt)) return null;
-  const normalizedWithoutExt = ctx.isWslPath ? normalizeMntPath(withoutExt) : withoutExt;
+  const normalizedWithoutExt = ctx.isWslPath ? normalizeMntPathForHost(withoutExt) : withoutExt;
   const resolvedWithoutExt = path.isAbsolute(normalizedWithoutExt) ? path.normalize(normalizedWithoutExt) : path.resolve(ctx.cwd, normalizedWithoutExt);
   if (!isDirectoryPath(resolvedWithoutExt)) return null;
   if (ctx.allowDirs) return toWslOrDisplay(resolvedWithoutExt, withoutExt, ctx, withoutExt);
@@ -76,9 +76,11 @@ function healEvalBarrel(ctx: EvalPathContext): string | null {
 }
 
 function healEvalAddedExtension(ctx: EvalPathContext): string | null {
+  if (ctx.allowDirs && /[\\/]$/.test(ctx.rawFilePath)) return null;
   const clean = cleanRaw(ctx.rawFilePath);
+  const cleanResolved = ctx.resolvedPath.replace(/[\\/]+$/, '');
   for (const ext of CANDIDATE_EXTENSIONS) {
-    const candidate = ctx.resolvedPath + ext;
+    const candidate = cleanResolved + ext;
     if (!isFilePath(candidate)) continue;
     return toWslOrDisplay(candidate, `${clean}${ext}`, ctx, clean);
   }
@@ -86,6 +88,7 @@ function healEvalAddedExtension(ctx: EvalPathContext): string | null {
 }
 
 function healEvalSwappedExtension(ctx: EvalPathContext): string | null {
+  if (/[\\/]$/.test(ctx.rawFilePath)) return null;
   const clean = cleanRaw(ctx.rawFilePath);
   const baseExt = path.extname(ctx.rawFilePath).toLowerCase();
   const alts = altModuleExtensions(baseExt);
@@ -105,6 +108,7 @@ function healEvalNeighbor(ctx: EvalPathContext): string | null {
     ?? resolveBuildSrcSwap(ctx.resolvedPath, ctx.allowDirs)
     ?? findNeighborFilePath(ctx.resolvedPath, ctx.allowDirs);
   if (neighborFile === null) return null;
+  if (/[\\/]$/.test(ctx.rawFilePath) && !isDirectoryPath(neighborFile)) return null;
   const asWsl = ctx.rawFilePath.startsWith('/mnt/')
     || (ctx.target === 'wsl2' && (ctx.isWindowsDrivePath || ctx.rawFilePath.includes('\\')));
   return formatHealedPath(ctx.rawFilePath, neighborFile, ctx.cwd, asWsl);
@@ -117,12 +121,18 @@ function healEvalWslFallback(ctx: EvalPathContext): string | null {
   return null;
 }
 
-export function healSingleEvalPath(filePath: string, allowDirs: boolean, cwd: string, target?: HealTarget): string | null {
+export interface EvalPathHealResult {
+  healed: string;
+  normalizedOnly: boolean;
+}
+
+export function healSingleEvalPathResult(filePath: string, allowDirs: boolean, cwd: string, target?: HealTarget): EvalPathHealResult | null {
   const rawFilePath = filePath.replace(/^['"]|['"]$/g, '');
   if (
     rawFilePath.length === 0 ||
     rawFilePath.startsWith('-') ||
     rawFilePath.startsWith('~') ||
+    rawFilePath.includes('://') ||
     rawFilePath.includes('$') ||
     rawFilePath.includes('*') ||
     rawFilePath.includes('?') ||
@@ -132,10 +142,17 @@ export function healSingleEvalPath(filePath: string, allowDirs: boolean, cwd: st
   }
   const ctx = buildEvalPathContext(rawFilePath, cwd, target, allowDirs);
   const existing = healExistingEvalPath(ctx);
-  if (existing !== undefined) return existing;
-  return healEvalBarrel(ctx)
+  if (existing !== undefined) {
+    return existing === null ? null : { healed: existing, normalizedOnly: true };
+  }
+  const healed = healEvalBarrel(ctx)
     ?? healEvalAddedExtension(ctx)
     ?? healEvalSwappedExtension(ctx)
     ?? healEvalNeighbor(ctx)
     ?? healEvalWslFallback(ctx);
+  return healed === null ? null : { healed, normalizedOnly: false };
+}
+
+export function healSingleEvalPath(filePath: string, allowDirs: boolean, cwd: string, target?: HealTarget): string | null {
+  return healSingleEvalPathResult(filePath, allowDirs, cwd, target)?.healed ?? null;
 }

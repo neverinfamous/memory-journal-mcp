@@ -55,20 +55,35 @@ function walkSubcommands(args: readonly string[], startIdx: number, valueFlags: 
   return { pos, idx: -1 };
 }
 
-function collectRemainingPositionals(args: readonly string[], startIdx: number, valueFlags: ReadonlySet<string>): string[] {
-  const pos: string[] = [];
-  for (let i = startIdx; i < args.length; i++) {
-    const a = args[i];
-    if (a === undefined || a === '--') break;
-    if (valueFlags.has(a)) { i++; continue; }
-    if (a.startsWith('-')) continue;
-    pos.push(a);
+function findComposeProgressSpan(scanSlice: readonly string[]): { idx: number; count: number } | null {
+  for (let i = 0; i < scanSlice.length; i++) {
+    const a = scanSlice[i];
+    if (a !== undefined && a.startsWith('--progress=')) return { idx: i, count: 1 };
+    if (a === '--progress') return { idx: i, count: i + 1 < scanSlice.length ? 2 : 1 };
   }
-  return pos;
+  return null;
 }
 
-function injectPlainProgressIfMissing(args: string[]): void {
-  if (!args.includes('--progress=plain') && !args.includes('--progress')) args.push('--progress=plain');
+function injectPlainProgressIfMissing(args: string[], composeBuildIdx = -1, onSync?: () => void): void {
+  const ddIdx = args.indexOf('--');
+  const scanSlice = ddIdx === -1 ? args : args.slice(0, ddIdx);
+  const existing = findComposeProgressSpan(scanSlice);
+  if (existing !== null) {
+    if (composeBuildIdx !== -1 && existing.idx > composeBuildIdx) {
+      const moved = args.splice(existing.idx, existing.count);
+      args.splice(composeBuildIdx, 0, ...moved);
+      onSync?.();
+    }
+    return;
+  }
+  if (composeBuildIdx !== -1 && (ddIdx === -1 || composeBuildIdx < ddIdx)) {
+    args.splice(composeBuildIdx, 0, '--progress=plain');
+  } else if (ddIdx !== -1) {
+    args.splice(ddIdx, 0, '--progress=plain');
+  } else {
+    args.push('--progress=plain');
+  }
+  onSync?.();
 }
 
 function stripFollowFromLogsArgs(args: string[], startIdx: number, endIdx: number): boolean {
@@ -76,7 +91,7 @@ function stripFollowFromLogsArgs(args: string[], startIdx: number, endIdx: numbe
   for (let i = endIdx - 1; i >= startIdx; i--) {
     const a = args[i];
     if (a === undefined) continue;
-    if (a === '-f' || a === '--follow' || a.startsWith('--follow=')) {
+    if (a === '-f' || a === '--follow' || (a.startsWith('--follow=') && a.toLowerCase() !== '--follow=false' && a !== '--follow=0')) {
       args.splice(i, 1);
       stripped = true;
     } else if (/^-[a-zA-Z]*f[a-zA-Z]*$/.test(a)) {
@@ -101,7 +116,7 @@ function handleDockerLogsCmd(cmdBasename: string, args: string[], ctx: Execution
   const postLogsDd = args.indexOf('--', startIdx);
   const postLogsSlice = args.slice(startIdx, postLogsDd === -1 ? args.length : postLogsDd);
   const hasTailOrLimit = postLogsSlice.some(a =>
-    a === '--tail' || a.startsWith('--tail=') || a === '-n' || a.startsWith('-n=') ||
+    a === '--tail' || a.startsWith('--tail=') || a === '-n' || a.startsWith('-n=') || /^-n\d+$/.test(a) ||
     a === '--since' || a.startsWith('--since=') || a === '--until' || a.startsWith('--until=')
   );
   if (!hasTailOrLimit) {
@@ -112,8 +127,8 @@ function handleDockerLogsCmd(cmdBasename: string, args: string[], ctx: Execution
   }
 }
 
-function hasDockerStartInteractiveFlag(args: readonly string[]): boolean {
-  const startIdx = args.indexOf('start');
+function hasDockerStartInteractiveFlag(args: readonly string[], startSubIdx = -1): boolean {
+  const startIdx = startSubIdx >= 0 ? startSubIdx : args.indexOf('start');
   const start = startIdx !== -1 ? startIdx + 1 : 0;
   for (let i = start; i < args.length; i++) {
     const a = args[i];
@@ -132,18 +147,25 @@ function guardDockerComposeSubcmd(
 ): void {
   const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = args; };
   if (composeSubCmd === 'up') {
-    if (!args.includes('-d') && !args.includes('--detach')) {
-      args.push('-d');
+    const subStart = Math.max(0, composeSubIdx + 1);
+    const ddIdx = args.indexOf('--', subStart);
+    const preDd = ddIdx === -1 ? args.slice(subStart) : args.slice(subStart, ddIdx);
+    const hasDetach = preDd.some(a =>
+      a === '-d' || a === '--detach' || a === '--detach=true' || (!a.startsWith('--') && /^-[a-zA-Z]*d[a-zA-Z]*$/.test(a)),
+    );
+    if (!hasDetach) {
+      if (ddIdx !== -1) args.splice(ddIdx, 0, '-d');
+      else args.push('-d');
       syncArgs();
       console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose up' was called without '-d' or '--detach'. Automatically appending '-d' flag to prevent indefinite blocking... (Frictionless Recovery)`);
     }
-    const ddIdx = args.indexOf('--', Math.max(0, composeSubIdx + 1));
-    const endIdx = ddIdx === -1 ? args.length : ddIdx;
+    const postDdIdx = args.indexOf('--', Math.max(0, composeSubIdx + 1));
+    const endIdx = postDdIdx === -1 ? args.length : postDdIdx;
     let strippedWatch = false;
     for (let i = endIdx - 1; i > composeSubIdx; i--) {
       const a = args[i];
       if (a === undefined) continue;
-      if (a === '--watch' || a === '-w') {
+      if (a === '--watch' || a === '-w' || (a.startsWith('--watch=') && a.toLowerCase() !== '--watch=false' && a !== '--watch=0')) {
         args.splice(i, 1);
         strippedWatch = true;
       } else if (/^-[dVw]*w[dVw]*$/.test(a)) {
@@ -164,16 +186,40 @@ function guardDockerComposeSubcmd(
     console.error(`   Please run this command manually in a separate terminal if you need live syncing.`);
     process.exit(1);
   }
-  if (composeSubCmd === 'wait' || composeSubCmd === 'attach' || composeSubCmd === 'events' || (composeSubCmd === 'stats' && !args.includes('--no-stream'))) {
+  const subDdIdx = args.indexOf('--', Math.max(0, composeSubIdx + 1));
+  const subScanEnd = subDdIdx === -1 ? args.length : subDdIdx;
+  const postSubArgs = composeSubIdx >= 0 ? args.slice(composeSubIdx + 1, subScanEnd) : args.slice(0, subScanEnd);
+  if (composeSubCmd === 'wait' || composeSubCmd === 'attach' || composeSubCmd === 'events' || (composeSubCmd === 'stats' && !postSubArgs.includes('--no-stream'))) {
     console.error(`\n   💡 AGENT HINT: 'docker compose ${composeSubCmd}' blocks or streams indefinitely. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
-  const afterComposeRm = composeSubIdx >= 0 ? args.slice(composeSubIdx + 1) : args;
-  if (composeSubCmd === 'rm' && !afterComposeRm.includes('-f') && !afterComposeRm.includes('--force')) {
-    args.push('-f');
+  if (composeSubCmd === 'rm' && !postSubArgs.some(a => a === '--force' || /^-[a-zA-Z]*f[a-zA-Z]*$/.test(a))) {
+    if (subDdIdx !== -1) args.splice(subDdIdx, 0, '-f');
+    else args.push('-f');
     syncArgs();
     console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose rm' asks for confirmation. Automatically appending '-f' flag to prevent indefinite blocking... (Frictionless Recovery)`);
   }
+}
+
+function guardDockerPrune(
+  args: string[],
+  isDockerCmd: boolean,
+  subCmd: string | undefined,
+  secondSubPos: string | undefined,
+  isBuildxPlugin: boolean,
+  buildxSubCmd: string | undefined,
+  preArgs: readonly string[],
+  syncArgs: () => void,
+): void {
+  const needsSubPrune = isDockerCmd && subCmd !== undefined && PRUNE_CATEGORIES.includes(subCmd) && secondSubPos === 'prune';
+  const needsBuildxPrune = isBuildxPlugin && buildxSubCmd === 'prune';
+  if ((!needsSubPrune && !needsBuildxPrune) || preArgs.some(a => a === '--force' || /^-[a-zA-Z]*f[a-zA-Z]*$/.test(a))) return;
+  const ddIdx = args.indexOf('--');
+  if (ddIdx !== -1) args.splice(ddIdx, 0, '-f');
+  else args.push('-f');
+  syncArgs();
+  const label = needsSubPrune ? subCmd : 'buildx';
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker ${label} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
 }
 
 function guardNonInteractiveDockerSubcmds(
@@ -214,12 +260,16 @@ function guardNonInteractiveDockerSubcmds(
       process.exit(1);
     }
   }
-  if (isDockerCmd && subCmd === 'plugin' && args.includes('install') && !args.includes('--grant-all-permissions')) {
-    args.push('--grant-all-permissions');
+  const ddIdx = args.indexOf('--');
+  const preArgs = ddIdx === -1 ? args : args.slice(0, ddIdx);
+
+  if (isDockerCmd && subCmd === 'plugin' && secondSubPos === 'install' && !preArgs.includes('--grant-all-permissions')) {
+    if (ddIdx !== -1) args.splice(ddIdx, 0, '--grant-all-permissions');
+    else args.push('--grant-all-permissions');
     syncArgs();
     console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker plugin install' asks for confirmation. Automatically injecting '--grant-all-permissions'... (Frictionless Recovery)`);
   }
-  if (isDockerCmd && targetSub === 'start' && hasDockerStartInteractiveFlag(args)) {
+  if (isDockerCmd && targetSub === 'start' && hasDockerStartInteractiveFlag(args, resolvedLogsIdx)) {
     console.error(`\n   💡 AGENT HINT: 'docker start' with interactive/attach flags will hang indefinitely. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
@@ -227,7 +277,7 @@ function guardNonInteractiveDockerSubcmds(
     console.error(`\n   💡 AGENT HINT: 'docker attach' inherently connects stdio to the container and hangs in non-interactive modes. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
-  if (isDockerCmd && !isComposePlugin && (targetSub === 'events' || targetSub === 'wait' || (subCmd === 'system' && args.includes('events')) || (targetSub === 'stats' && !args.includes('--no-stream')))) {
+  if (isDockerCmd && !isComposePlugin && (targetSub === 'events' || targetSub === 'wait' || (subCmd === 'system' && secondSubPos === 'events') || (targetSub === 'stats' && !preArgs.includes('--no-stream')))) {
     console.error(`\n   💡 AGENT HINT: 'docker ${targetSub}' runs indefinitely or blocks execution. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
@@ -237,18 +287,7 @@ function guardNonInteractiveDockerSubcmds(
     handleDockerLogsCmd(cmdBasename, args, ctx, resolvedLogsIdx);
   }
   if (isComposeOrPlugin) guardDockerComposeSubcmd(ctx, args, composeSubCmd, composeSubIdx);
-  if (isDockerCmd && subCmd !== undefined && PRUNE_CATEGORIES.includes(subCmd) && secondSubPos === 'prune') {
-    if (!args.includes('-f') && !args.includes('--force')) {
-      args.push('-f');
-      syncArgs();
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker ${subCmd} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
-    }
-  }
-  if (isBuildxPlugin && buildxSubCmd === 'prune' && !args.includes('-f') && !args.includes('--force')) {
-    args.push('-f');
-    syncArgs();
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker buildx prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
-  }
+  guardDockerPrune(args, isDockerCmd, subCmd, secondSubPos, isBuildxPlugin, buildxSubCmd, preArgs, syncArgs);
 }
 
 export function dockerInterceptor(ctx: ExecutionContext): void {
@@ -275,22 +314,22 @@ export function dockerInterceptor(ctx: ExecutionContext): void {
   const buildxSubCmd = isBuildxPlugin
     ? walkSubcommands(args, firstInfo.idx + 1, new Set(['--builder'])).pos[0]
     : undefined;
-  const secondInfo = (isDockerCmd && subCmd !== undefined && PRUNE_CATEGORIES.includes(subCmd))
+  const secondInfo = (isDockerCmd && subCmd !== undefined && (PRUNE_CATEGORIES.includes(subCmd) || subCmd === 'plugin'))
     ? walkSubcommands(args, firstInfo.idx + 1, new Set())
     : { pos: [], idx: -1 };
   const secondSubPos = secondInfo.pos[0];
   const containerSubCmd = subCmd === 'container' ? secondSubPos : undefined;
-  const remainingDockerPos = (isDockerCmd && subCmd !== undefined && !isComposePlugin)
-    ? collectRemainingPositionals(args, firstInfo.idx + 1, new Set())
-    : [];
-  const effectiveSub = subCmd;
 
-  const isDockerBuild = (isDockerCmd && effectiveSub === 'build') ||
+  const isDockerBuild = (isDockerCmd && subCmd === 'build') ||
     (isBuildxPlugin && buildxSubCmd === 'build') ||
     ((isComposeCmd || isComposePlugin) && composeSubCmd === 'build');
-  if (isDockerBuild) injectPlainProgressIfMissing(args);
+  const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = args; };
+  if (isDockerBuild) {
+    const composeBuildIdx = (isComposeCmd || isComposePlugin) && composeSubCmd === 'build' ? composeInfo.idx : -1;
+    injectPlainProgressIfMissing(args, composeBuildIdx, syncArgs);
+  }
 
-  const isDockerScout = isDockerCmd && effectiveSub === 'scout';
+  const isDockerScout = isDockerCmd && subCmd === 'scout';
   applyDockerWslRoutingAndTimeouts(ctx, isDockerBuild, isDockerScout);
 
   const isComposeOrPlugin = isComposePlugin || isComposeCmd;
@@ -298,21 +337,23 @@ export function dockerInterceptor(ctx: ExecutionContext): void {
     ? composeInfo.idx
     : (subCmd === 'container' ? secondInfo.idx : firstInfo.idx);
   guardNonInteractiveDockerSubcmds(
-    ctx, cmdBasename, args, effectiveSub, composeSubCmd, composeInfo.idx,
+    ctx, cmdBasename, args, subCmd, composeSubCmd, composeInfo.idx,
     buildxSubCmd, containerSubCmd, secondSubPos, resolvedLogsIdx,
     isComposePlugin, isBuildxPlugin, isDockerCmd, isComposeCmd, payload.stdin,
   );
 
-  if (isDockerCmd && !isComposePlugin && !isBuildxPlugin && effectiveSub !== undefined && MULTI_TARGET_SUBCMDS.includes(effectiveSub)) {
-    splitDockerMultiTargets(args, effectiveSub, ctx);
+  const targetMultiSub = subCmd === 'container' ? containerSubCmd : subCmd;
+  const targetMultiIdx = subCmd === 'container' ? secondInfo.idx : firstInfo.idx;
+  if (isDockerCmd && !isComposePlugin && !isBuildxPlugin && targetMultiSub !== undefined && MULTI_TARGET_SUBCMDS.includes(targetMultiSub)) {
+    splitDockerMultiTargets(args, targetMultiSub, ctx, targetMultiIdx);
   }
 
-  const isContainerExec = (isDockerCmd && !isComposePlugin && (effectiveSub === 'run' || effectiveSub === 'exec' || (effectiveSub === 'container' && (containerSubCmd === 'run' || containerSubCmd === 'exec' || remainingDockerPos[0] === 'run' || remainingDockerPos[0] === 'exec')))) ||
+  const isContainerExec = (isDockerCmd && !isComposePlugin && (subCmd === 'run' || subCmd === 'exec' || (subCmd === 'container' && (containerSubCmd === 'run' || containerSubCmd === 'exec')))) ||
     (isComposeOrPlugin && (composeSubCmd === 'run' || composeSubCmd === 'exec'));
   if (isContainerExec) {
     const runExecIdx = isComposeOrPlugin
       ? composeInfo.idx
-      : (effectiveSub === 'container' ? secondInfo.idx : firstInfo.idx);
+      : (subCmd === 'container' ? secondInfo.idx : firstInfo.idx);
     guardDockerTtyAndRepl(
       ctx,
       isComposeOrPlugin && composeSubCmd === 'exec',

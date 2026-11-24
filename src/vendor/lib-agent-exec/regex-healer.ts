@@ -18,9 +18,18 @@ function escapeUnescapedLiteralBraces(pattern: string, pcre2 = false): string {
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i];
     if (ch === undefined) continue;
+    if (pcre2 && inLiteralSpan) {
+      if (ch === '\\' && pattern[i + 1] === 'E') {
+        out += '\\E';
+        inLiteralSpan = false;
+        i++;
+        continue;
+      }
+      out += ch;
+      continue;
+    }
     if (escaped) {
-      if (pcre2 && ch === 'Q' && !inLiteralSpan && !inCharClass) inLiteralSpan = true;
-      else if (pcre2 && ch === 'E' && inLiteralSpan) inLiteralSpan = false;
+      if (pcre2 && ch === 'Q' && !inCharClass) inLiteralSpan = true;
       out += ch;
       escaped = false;
       continue;
@@ -28,10 +37,6 @@ function escapeUnescapedLiteralBraces(pattern: string, pcre2 = false): string {
     if (ch === '\\') {
       out += ch;
       escaped = true;
-      continue;
-    }
-    if (inLiteralSpan) {
-      out += ch;
       continue;
     }
     if (ch === '[' && !inCharClass) {
@@ -48,9 +53,11 @@ function escapeUnescapedLiteralBraces(pattern: string, pcre2 = false): string {
       const rest = pattern.slice(i);
       const isQuantifierSyntax = /^\{\d+(?:,\d*)?\}/.test(rest);
       const prevChar = i > 0 ? pattern[i - 1] : undefined;
+      let backslashes = 0;
+      for (let b = i - 2; b >= 0 && pattern[b] === '\\'; b--) backslashes++;
       const prevIsNonAtom =
         prevChar === undefined ||
-        (['(', '|', '^', '*', '+', '?', '{'].includes(prevChar) && (i < 2 || pattern[i - 2] !== '\\'));
+        (['(', '|', '^', '*', '+', '?', '{'].includes(prevChar) && backslashes % 2 === 0);
       if (!isRustBraceEscapePrefix(pattern, i, pcre2) && (!isQuantifierSyntax || prevIsNonAtom)) {
         out += '\\{';
         continue;
@@ -123,11 +130,17 @@ function toJsRegexValidationCopy(pattern: string, pcre2 = false): string {
     .replace(/\(\?[imsxUu-]+\)/g, '');
   if (pcre2) {
     normalized = normalized
-      .replace(/((?:^|[^\\])(?:\\\\)*)\\Q[\s\S]*?(?:\\E|$)/g, '$1q')
+      .replace(/(?<!\\)((?:\\\\)*)\\Q[\s\S]*?(?:\\E|$)/g, '$1q')
+      .replace(/\(\?[imsxUuJn-]+:/g, '(?:')
+      .replace(/\(\?[imsxUuJn-]+\)/g, '')
+      .replace(/\(\?\|/g, '(?:')
       .replace(/\(\?#[^)]*\)/g, '')
+      .replace(/\(\*(?:FAIL|F|ACCEPT|UTF|UCP|CRLF|CR|LF|ANYCRLF|ANY|BSR_ANYCRLF|BSR_UNICODE|NO_AUTO_POSSESS|NO_START_OPT|(?:COMMIT|PRUNE|SKIP|THEN|MARK)(?::[^)]+)?|(?:LIMIT_MATCH|LIMIT_DEPTH|LIMIT_RECURSION)=\d+)\)/g, '')
+      .replace(/\(\?\([^)]+\)/g, '(?:')
+      .replace(/\(\?(?:R|[+-]?\d+|&[a-zA-Z_][a-zA-Z0-9_]*)\)/g, 'x')
       .replace(/\(\?>/g, '(?:')
       .replace(/([*+?]|\{\d+(?:,\d*)?\})\+/g, '$1')
-      .replace(/((?:^|[^\\])(?:\\\\)*)\\(?:K|h|H|Z|G|R|X|C|e|V|N|o|c|g\{[^}]+\}|g-?\d+)/g, '$1x');
+      .replace(/(?<!\\)((?:\\\\)*)\\(?:K|h|H|Z|G|R|X|C|e|V|N|o|c[\x20-\x7e]|g\{[^}]+\}|g-?\d+)/g, '$1x');
   }
   return normalized;
 }
@@ -188,21 +201,30 @@ function stripWrappingQuotes(regexArg: string): string {
 const PCRE2_EXTRA_ESCAPES = new Set([
   'K', 'h', 'H', 'Z', 'G', 'Q', 'E', 'R', 'X', 'g', 'o', 'c', 'N', 'C', 'e', 'V',
 ]);
+const VALID_RUST_ESCAPES = new Set([
+  'a', 'f', 't', 'n', 'r', 'v',
+  'd', 'D', 's', 'S', 'w', 'W',
+  'b', 'B', 'A', 'z',
+  'p', 'P', 'x', 'u', 'U', 'k',
+]);
 
 function healRustLetterEscapes(sanitized: string, pcre2 = false): string {
   // In Rust's regex engine (ripgrep), backslashes before unrecognized ASCII letters
   // (e.g. \R in \README.md or Windows path separators) cause syntax parse errors.
-  // Valid Rust letter escapes: a, f, t, n, r, v, d, D, s, S, w, W, b, B, A, z, p, P, x, u, U, k
-  const validRustEscapes = new Set([
-    'a', 'f', 't', 'n', 'r', 'v',
-    'd', 'D', 's', 'S', 'w', 'W',
-    'b', 'B', 'A', 'z',
-    'p', 'P', 'x', 'u', 'U', 'k'
-  ]);
-
   let healedEscapes = '';
+  let inLiteralSpan = false;
   for (let i = 0; i < sanitized.length; i++) {
     const ch = sanitized[i];
+    if (pcre2 && inLiteralSpan) {
+      if (ch === '\\' && sanitized[i + 1] === 'E') {
+        healedEscapes += '\\E';
+        inLiteralSpan = false;
+        i++;
+        continue;
+      }
+      healedEscapes += ch;
+      continue;
+    }
     if (ch === '\\') {
       const next = sanitized[i + 1];
       if (next === '\\') {
@@ -210,7 +232,13 @@ function healRustLetterEscapes(sanitized: string, pcre2 = false): string {
         i++;
         continue;
       }
-      const allowed = validRustEscapes.has(next ?? '') || (pcre2 && PCRE2_EXTRA_ESCAPES.has(next ?? ''));
+      if (pcre2 && next === 'Q') {
+        healedEscapes += '\\Q';
+        inLiteralSpan = true;
+        i++;
+        continue;
+      }
+      const allowed = VALID_RUST_ESCAPES.has(next ?? '') || (pcre2 && PCRE2_EXTRA_ESCAPES.has(next ?? ''));
       if (next !== undefined && /[a-zA-Z]/.test(next) && !allowed) {
         healedEscapes += '\\\\';
         continue;

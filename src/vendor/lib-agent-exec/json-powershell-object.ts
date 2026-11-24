@@ -37,7 +37,11 @@ function handleBackslash(scan: PairScan): void {
 
 function consumeStringDelimiter(scan: PairScan, ch: string): boolean {
   if (scan.inString !== false) {
-    if (ch === scan.inString) scan.inString = false;
+    if (ch === scan.inString) {
+      scan.inString = false;
+      return true;
+    }
+    if (scan.inKey && !/\s/.test(ch)) scan.currentKey += ch;
     return true;
   }
   if (ch === '"' || ch === "'" || ch === '`') {
@@ -137,8 +141,8 @@ function unwrapQuotes(cleanVal: string): string | null {
 
 function cleanArrayItem(item: string): string {
   let cleaned = stripWrappingBackslashes(item.trim());
-  const doubleQuoted = cleaned.startsWith('"') && cleaned.endsWith('"');
-  const singleQuoted = cleaned.startsWith("'") && cleaned.endsWith("'");
+  const doubleQuoted = cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2;
+  const singleQuoted = cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length >= 2;
   if (doubleQuoted || singleQuoted) cleaned = cleaned.slice(1, -1);
   return cleaned.replace(/\\(["',])/g, '$1');
 }
@@ -153,7 +157,8 @@ function coerceArray(cleanVal: string): string[] | null {
 function coerceScalar(cleanVal: string): unknown {
   if (cleanVal === 'true') return true;
   if (cleanVal === 'false') return false;
-  if (!isNaN(Number(cleanVal)) && cleanVal.trim() !== '') return Number(cleanVal);
+  const num = Number(cleanVal);
+  if (cleanVal.trim() !== '' && Number.isFinite(num)) return num;
   return cleanVal;
 }
 

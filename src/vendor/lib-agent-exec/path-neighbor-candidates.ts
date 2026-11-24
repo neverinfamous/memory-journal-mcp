@@ -20,6 +20,7 @@ import {
 const MODIFIER_RE = /^(.+?)[._-](?:handlers?|controllers?|services?|routes?|routers?|schemas?|tools?|tests?|specs?|utils?|adapters?|creates?|drops?|updates?|deletes?|gets?|lists?|reads?|writes?|adds?|removes?)\.(ts|js|tsx|jsx|mjs|cjs)$/i;
 const PREFIX_RE = /^(?:creates?|drops?|updates?|deletes?|gets?|lists?|reads?|writes?|adds?|removes?|finds?|search)[._-](.+?)\.(ts|js|tsx|jsx|mjs|cjs)$/i;
 const CODE_EXT_RE = /\.(ts|js|tsx|jsx|mjs|cjs)$/i;
+const TEST_FILE_RE = /\.(?:test|spec)\.(?:ts|js|tsx|jsx|mjs|cjs)$/i;
 
 function pushFile(results: string[], candidate: string): void {
   if (isFilePath(candidate)) results.push(candidate);
@@ -48,6 +49,8 @@ function pushAltStems(results: string[], dir: string, stem: string, currentExt: 
 }
 
 function collectModifierCandidates(dir: string, base: string, allowDirs: boolean, results: string[]): void {
+  // [INVARIANT]: Never strip `.test` / `.spec` from a test filename to hijack it onto a production source file.
+  if (TEST_FILE_RE.test(base)) return;
   const modifierMatch = base.match(MODIFIER_RE);
   const stem = modifierMatch?.[1];
   const ext = modifierMatch?.[2];
@@ -80,31 +83,30 @@ function tokenPermutationKey(stem: string): string | null {
   return [...tokens].sort().join('\0');
 }
 
-function collectTokenPermutationCandidates(dir: string, base: string, allowDirs: boolean, results: string[]): void {
+function collectTokenPermutationCandidates(dir: string, base: string, allowDirs: boolean, results: string[], getEntries: () => readonly Dirent[] | null): void {
   if (results.length > 0) return;
   const parsed = path.parse(base);
   const targetKey = tokenPermutationKey(parsed.name);
   if (targetKey === null) return;
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (isIgnoredEntryName(entry.name)) continue;
-      if (entry.isDirectory()) {
-        if (allowDirs && parsed.ext.length === 0 && tokenPermutationKey(entry.name) === targetKey) {
-          results.push(path.join(dir, entry.name));
-        }
-        continue;
-      }
-      if (!entry.isFile() || !extensionAccepted(entry.name, base)) continue;
-      if (tokenPermutationKey(path.parse(entry.name).name) === targetKey) {
+  const entries = getEntries();
+  if (entries === null) return;
+  for (const entry of entries) {
+    if (isIgnoredEntryName(entry.name)) continue;
+    if (entry.isDirectory()) {
+      if (allowDirs && parsed.ext.length === 0 && tokenPermutationKey(entry.name) === targetKey) {
         results.push(path.join(dir, entry.name));
       }
+      continue;
     }
-  } catch { /* ignore */ }
+    if (!entry.isFile() || !extensionAccepted(entry.name, base)) continue;
+    if (tokenPermutationKey(path.parse(entry.name).name) === targetKey) {
+      results.push(path.join(dir, entry.name));
+    }
+  }
 }
 
 function collectCompoundCandidates(dir: string, base: string, allowDirs: boolean, results: string[]): void {
-  if (results.length > 0) return;
+  if (results.length > 0 || /\s/.test(base) || TEST_FILE_RE.test(base)) return;
   const extMatch = base.match(CODE_EXT_RE);
   const ext = extMatch?.[1];
   if (extMatch === null || ext === undefined) return;
@@ -153,13 +155,12 @@ function considerNormalizedEntry(results: string[], dir: string, entry: Dirent, 
   if (extensionAccepted(entry.name, base)) results.push(entryPath);
 }
 
-function collectNormalizedCandidates(dir: string, base: string, allowDirs: boolean, results: string[]): void {
+function collectNormalizedCandidates(dir: string, base: string, allowDirs: boolean, results: string[], getEntries: () => readonly Dirent[] | null): void {
   if (results.length > 0) return;
+  const entries = getEntries();
+  if (entries === null) return;
   const normBase = normalizedEntryKey(base);
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) considerNormalizedEntry(results, dir, entry, base, normBase, allowDirs);
-  } catch { /* ignore */ }
+  for (const entry of entries) considerNormalizedEntry(results, dir, entry, base, normBase, allowDirs);
 }
 
 function collectDirectorySynonyms(dir: string, base: string, allowDirs: boolean, results: string[]): void {
@@ -203,18 +204,28 @@ function collectModularDirectory(dir: string, base: string, allowDirs: boolean, 
   pushBarrelMatch(results, path.join(dir, parsed.name), allowDirs, true);
 }
 
-export function getFileCandidates(dir: string, base: string, allowDirs = false, allowCompoundParts = true): string[] {
+export function getFileCandidates(dir: string, base: string, allowDirs = false, allowCompoundParts = true, preReadEntries?: readonly Dirent[]): string[] {
   if (!isDirectoryPath(dir)) return [];
   const exact = path.join(dir, base);
   if (isFilePath(exact) || (allowDirs && isDirectoryPath(exact))) return [exact];
+  let cachedEntries: readonly Dirent[] | null | undefined = preReadEntries;
+  const getEntries = (): readonly Dirent[] | null => {
+    if (cachedEntries !== undefined) return cachedEntries;
+    try {
+      cachedEntries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      cachedEntries = null;
+    }
+    return cachedEntries;
+  };
   const results: string[] = [];
   collectModifierCandidates(dir, base, allowDirs, results);
   collectPrefixCandidates(dir, base, results);
-  collectTokenPermutationCandidates(dir, base, allowDirs, results);
+  collectTokenPermutationCandidates(dir, base, allowDirs, results, getEntries);
   if (allowCompoundParts) collectCompoundCandidates(dir, base, allowDirs, results);
   if (path.extname(base).length === 0) collectMissingExtensions(exact, results);
   else collectSwappedExtensions(dir, base, results);
-  collectNormalizedCandidates(dir, base, allowDirs, results);
+  collectNormalizedCandidates(dir, base, allowDirs, results, getEntries);
   collectDirectorySynonyms(dir, base, allowDirs, results);
   collectStemSynonyms(dir, base, results);
   collectModularDirectory(dir, base, allowDirs, results);

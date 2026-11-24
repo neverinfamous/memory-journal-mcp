@@ -58,17 +58,26 @@ function unwrapRunnerCommand(cmd: string, args: readonly string[]): { tool: stri
   const idx = skipLeadingFlags(args, 0, RUNNER_VALUE_FLAGS);
   const first = args[idx];
   if (first === undefined) return null;
-  if (base === 'npx' || base === 'pnpx' || base === 'bunx') {
-    return { tool: normalizeCmdBasename(first).replace(/\.(?:mjs|cjs|js)$/i, ''), rest: args.slice(idx + 1) };
-  }
   if ((base === 'pnpm' && (first === 'exec' || first === 'dlx')) || (base === 'npm' && first === 'exec') || (base === 'bun' && first === 'x')) {
-    const toolIdx = skipLeadingFlags(args, idx + 1, RUNNER_VALUE_FLAGS);
+    let toolIdx = skipLeadingFlags(args, idx + 1, RUNNER_VALUE_FLAGS);
+    if (args[toolIdx] === '--') toolIdx += 1;
     const bin = args[toolIdx];
     return bin !== undefined ? { tool: normalizeCmdBasename(bin).replace(/\.(?:mjs|cjs|js)$/i, ''), rest: args.slice(toolIdx + 1) } : null;
   }
+  if (base === 'npx' || base === 'pnpx' || base === 'bunx') {
+    let binIdx = idx;
+    let bin = first;
+    if (bin === '--') {
+      binIdx = idx + 1;
+      bin = args[binIdx] ?? '';
+      if (bin.length === 0) return null;
+    }
+    return { tool: normalizeCmdBasename(bin).replace(/\.(?:mjs|cjs|js)$/i, ''), rest: args.slice(binIdx + 1) };
+  }
   if (first === 'run') {
-    const scriptName = args[idx + 1];
-    return scriptName !== undefined ? { tool: scriptName, rest: args.slice(idx + 2) } : null;
+    const scriptIdx = skipLeadingFlags(args, idx + 1, RUNNER_VALUE_FLAGS);
+    const scriptName = args[scriptIdx];
+    return scriptName !== undefined ? { tool: scriptName, rest: args.slice(scriptIdx + 1) } : null;
   }
   if (base === 'bun' && first === 'test') return { tool: 'bun-test', rest: args.slice(idx + 1) };
   return { tool: first, rest: args.slice(idx + 1) };
@@ -76,15 +85,23 @@ function unwrapRunnerCommand(cmd: string, args: readonly string[]): { tool: stri
 
 function hasPositionalTargetPaths(args: readonly string[], valueFlags: ReadonlySet<string>, requireCodeExt: boolean): boolean {
   let i = 0;
+  let seenDoubleDash = false;
+  let matchedCount = 0;
   while (i < args.length) {
     const token = args[i];
     if (token === undefined) break;
-    if (token === '--') { i += 1; continue; }
-    if (token.startsWith('-')) { i += !token.includes('=') && valueFlags.has(token) ? 2 : 1; continue; }
-    if (requireCodeExt ? CODE_FILE_EXT_RE.test(token) : token !== '.' && token !== './' && token !== '*' && token !== '**') return true;
+    if (!seenDoubleDash && token === '--') { seenDoubleDash = true; i += 1; continue; }
+    if (!seenDoubleDash && token.startsWith('-')) { i += !token.includes('=') && valueFlags.has(token) ? 2 : 1; continue; }
+    if (requireCodeExt) {
+      // [INVARIANT]: Mixed directory + file eslint runs (e.g. `eslint src/ foo.test.ts`) lint an entire directory tree and must acquire `full-lint`.
+      if (!CODE_FILE_EXT_RE.test(token)) return false;
+      matchedCount += 1;
+    } else if (token !== '.' && token !== './' && token !== '*' && token !== '**') {
+      return true;
+    }
     i += 1;
   }
-  return false;
+  return requireCodeExt ? matchedCount > 0 : false;
 }
 
 /** [INTENT]: Classify whether a command requires per-repo validation serialization or can run lock-free. */
@@ -117,8 +134,20 @@ export function classifyValidationCommand(cmd: string, args: readonly string[]):
 
 /** [INTENT]: Derive a deterministic, case-normalized SHA-256 scope key for a project working directory. */
 export function resolveValidationScopeKey(projectDir: string): { scopeKey: string; normalizedDir: string } {
+  if (process.platform === 'win32' && ((projectDir.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(projectDir)) || projectDir === '~' || projectDir.startsWith('~/'))) {
+    let normPosix = path.posix.normalize(projectDir);
+    while (normPosix.length > 1 && normPosix.endsWith('/')) normPosix = normPosix.slice(0, -1);
+    return { scopeKey: crypto.createHash('sha256').update(normPosix).digest('hex').slice(0, 16), normalizedDir: normPosix };
+  }
+  let hostTarget = projectDir;
+  if (process.platform === 'win32' && /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/i.test(projectDir)) {
+    const m = /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/i.exec(projectDir);
+    if (m?.[1] !== undefined) {
+      hostTarget = `${m[1].toUpperCase()}:\\${(m[2] ?? '').replace(/\//g, '\\')}`;
+    }
+  }
   let resolved: string;
-  try { resolved = fs.realpathSync.native(projectDir); } catch { resolved = path.resolve(projectDir); }
+  try { resolved = fs.realpathSync.native(hostTarget); } catch { resolved = path.resolve(hostTarget); }
   const root = path.parse(resolved).root;
   let trimmed = resolved;
   while (trimmed.length > root.length && (trimmed.endsWith('\\') || trimmed.endsWith('/'))) trimmed = trimmed.slice(0, -1);
@@ -146,9 +175,9 @@ function parseLockRecord(rawText: string): ValidationLockRecord | null {
   }
 }
 
-function tryReclaimStaleLock(lockPath: string, staleTtlMs: number, isPidAliveFn: (pid: number) => boolean): boolean {
+function isLockRecordStale(lockPath: string, staleTtlMs: number, isPidAliveFn: (pid: number) => boolean): boolean {
   const stat = fs.statSync(lockPath, { throwIfNoEntry: false });
-  if (stat === undefined) return true;
+  if (stat === undefined) return false;
   let record: ValidationLockRecord | null;
   try {
     record = parseLockRecord(fs.readFileSync(lockPath, 'utf8'));
@@ -156,11 +185,45 @@ function tryReclaimStaleLock(lockPath: string, staleTtlMs: number, isPidAliveFn:
     return false;
   }
   const now = Date.now();
-  const isStale = record === null
+  return record === null
     ? now - stat.mtimeMs > CORRUPT_LOCK_GRACE_MS
     : !isPidAliveFn(record.pid) || now - record.acquiredAt > staleTtlMs;
-  if (!isStale) return false;
-  try { fs.unlinkSync(lockPath); return true; } catch { return false; }
+}
+
+function pruneStaleReclaimDir(reclaimDir: string): void {
+  const rStat = fs.statSync(reclaimDir, { throwIfNoEntry: false });
+  if (rStat === undefined || Date.now() - rStat.mtimeMs <= 5000) return;
+  try {
+    fs.rmdirSync(reclaimDir);
+  } catch { /* another waiter recovered */ }
+}
+
+function tryAcquireReclaimMutex(reclaimDir: string): boolean {
+  try {
+    fs.mkdirSync(reclaimDir, { mode: 0o700 });
+    return true;
+  } catch {
+    pruneStaleReclaimDir(reclaimDir);
+    return false;
+  }
+}
+
+function tryReclaimStaleLock(lockPath: string, staleTtlMs: number, isPidAliveFn: (pid: number) => boolean): boolean {
+  if (fs.statSync(lockPath, { throwIfNoEntry: false }) === undefined) return true;
+  if (!isLockRecordStale(lockPath, staleTtlMs, isPidAliveFn)) return false;
+  const reclaimDir = `${lockPath}.reclaim`;
+  if (!tryAcquireReclaimMutex(reclaimDir)) return false;
+  try {
+    if (!isLockRecordStale(lockPath, staleTtlMs, isPidAliveFn)) {
+      return fs.statSync(lockPath, { throwIfNoEntry: false }) === undefined;
+    }
+    fs.unlinkSync(lockPath);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try { fs.rmdirSync(reclaimDir); } catch { /* ignore reclaim dir cleanup failure */ }
+  }
 }
 
 function createOwnershipRelease(lockPath: string, token: string): () => void {
@@ -168,11 +231,35 @@ function createOwnershipRelease(lockPath: string, token: string): () => void {
   return () => {
     if (released) return;
     released = true;
+    const reclaimDir = `${lockPath}.reclaim`;
+    if (!tryAcquireReclaimMutex(reclaimDir)) return;
     try {
       const record = parseLockRecord(fs.readFileSync(lockPath, 'utf8'));
       if (record !== null && record.token === token) fs.unlinkSync(lockPath);
-    } catch { /* Lock already removed or unreadable. */ }
+    } catch { /* Lock already removed or unreadable. */ } finally {
+      try { fs.rmdirSync(reclaimDir); } catch { /* ignore reclaim dir cleanup failure */ }
+    }
   };
+}
+
+function tryAcquireLockStep(
+  lockPath: string,
+  payload: string,
+  staleTtlMs: number,
+  isPidAliveFn: (pid: number) => boolean,
+  isJson: boolean | undefined,
+): 'acquired' | 'fatal' | 'retry' | 'reclaimed' {
+  try {
+    fs.writeFileSync(lockPath, payload, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    return 'acquired';
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'EEXIST') {
+      if (isJson !== true) console.error(`⚠️ Validation lock write failed: ${err instanceof Error ? err.message : String(err)}`);
+      return 'fatal';
+    }
+    return tryReclaimStaleLock(lockPath, staleTtlMs, isPidAliveFn) ? 'reclaimed' : 'retry';
+  }
 }
 
 /** [INTENT]: Acquire an exclusive per-repo validation lock file, queuing cleanly behind active same-repo runs. */
@@ -191,28 +278,41 @@ export async function acquireValidationLock(options: AcquireValidationLockOption
   const staleTtlMs = options.staleTtlMs ?? DEFAULT_STALE_TTL_MS;
   const isPidAliveFn = options.isPidAliveFn ?? isPidAlive;
   const token = crypto.randomUUID();
-  const payload = JSON.stringify({ pid: process.pid, token, kind: options.classification.kind, label: options.classification.label, cwd: normalizedDir, acquiredAt: Date.now() });
+  const baseRecord = {
+    pid: process.pid,
+    token,
+    kind: options.classification.kind,
+    label: options.classification.label,
+    cwd: normalizedDir,
+  };
   const deadlineMs = Date.now() + (options.timeoutMs ?? 90_000);
   let loggedWait = false;
+  let reclaimAttempts = 0;
+  let retryReclaimed: boolean;
 
-  while (Date.now() < deadlineMs) {
-    try {
-      fs.writeFileSync(lockPath, payload, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  do {
+    retryReclaimed = false;
+    const payload = JSON.stringify({ ...baseRecord, acquiredAt: Date.now() });
+    const step = tryAcquireLockStep(lockPath, payload, staleTtlMs, isPidAliveFn, options.isJson);
+    if (step === 'acquired') {
       return { lockPath, scopeKey, kind: options.classification.kind, release: createOwnershipRelease(lockPath, token) };
-    } catch (err: unknown) {
-      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
-      if (code !== 'EEXIST') {
-        if (options.isJson !== true) console.error(`⚠️ Validation lock write failed: ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      }
-      if (tryReclaimStaleLock(lockPath, staleTtlMs, isPidAliveFn)) continue;
-      if (!loggedWait && options.isJson !== true) {
-        loggedWait = true;
-        console.error(`⏳ Waiting for active ${options.classification.kind} validation lock in ${normalizedDir}...`);
-      }
-      await new Promise((r) => setTimeout(r, 150 + Math.random() * 150));
     }
-  }
+    if (step === 'fatal') return null;
+    if (step === 'reclaimed') {
+      if (reclaimAttempts < 2) {
+        reclaimAttempts += 1;
+        retryReclaimed = true;
+        continue;
+      }
+      break;
+    }
+    if (Date.now() >= deadlineMs) break;
+    if (!loggedWait && options.isJson !== true) {
+      loggedWait = true;
+      console.error(`⏳ Waiting for active ${options.classification.kind} validation lock in ${normalizedDir}...`);
+    }
+    await new Promise((r) => setTimeout(r, 150 + Math.random() * 150));
+  } while (retryReclaimed || Date.now() < deadlineMs);
 
   if (options.isJson !== true) console.error(`⚠️ Timed out waiting for validation lock (${options.classification.label}); proceeding fail-open.`);
   return null;

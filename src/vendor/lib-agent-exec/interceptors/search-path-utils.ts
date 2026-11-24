@@ -87,13 +87,12 @@ export function isSecondExistingTargetOnly(first: string, second: string, cwd?: 
     const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
     const resolvedFirst = path.resolve(baseDir, first);
     const resolvedSecond = path.resolve(baseDir, second);
-    if (!fs.existsSync(resolvedSecond)) return false;
+    const secondStat = fs.statSync(resolvedSecond, { throwIfNoEntry: false });
+    if (secondStat === undefined) return false;
     if (!fs.existsSync(resolvedFirst)) return true;
     return first !== '.'
       && first !== '..'
-      && !first.includes('/')
-      && !first.includes('\\')
-      && fs.statSync(resolvedSecond).isFile();
+      && secondStat.isFile();
   } catch {
     return false;
   }
@@ -101,8 +100,7 @@ export function isSecondExistingTargetOnly(first: string, second: string, cwd?: 
 
 function statIsDirectory(target: string): boolean | undefined {
   try {
-    if (!fs.existsSync(target)) return undefined;
-    return fs.statSync(target).isDirectory();
+    return fs.statSync(target, { throwIfNoEntry: false })?.isDirectory();
   } catch {
     return undefined;
   }

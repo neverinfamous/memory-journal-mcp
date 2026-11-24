@@ -19,8 +19,9 @@ const SHELL_INTERPRETERS = new Set([
 
 export function isJavaScriptOrTypeScriptCode(code: string): boolean {
   const trimmed = code.trim();
-  // Direct statements at the top
-  if (/^(?:import\s|export\s|console\.(?:log|error|warn|info|dir|trace)\b|const\s|let\s|var\s|async\s+function|function\*?\s|process\.(?:exit|env|cwd|version|argv)\b|require\s*\()/.test(trimmed)) {
+  const isJsImport = /^import(?:\s*\(|\s*\.meta\b|\s+(?:type\s+)?(?:['"*{]|[A-Za-z_$][\w$]*(?:\s*,\s*(?:[*A-Za-z_${][\w$},\s*]*))?\s+from\s+['"]))/.test(trimmed);
+  // Direct statements at the top (keep bare Python `import mod` distinct from JS ESM `import` syntax)
+  if (isJsImport || /^(?:export\s|console\.(?:log|error|warn|info|dir|trace)\b|const\s|let\s|var\s|async\s+function|function\*?\s|process\.(?:exit|env|cwd|version|argv)\b|require\s*\()/.test(trimmed)) {
     return true;
   }
   // Characteristic JS constructs outside strings/comments
@@ -34,13 +35,24 @@ export function isJavaScriptOrTypeScriptCode(code: string): boolean {
 
 export function isShellCommandScript(code: string): boolean {
   const trimmed = code.trim();
-  const lines = trimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('//') && !l.startsWith('/*'));
-  const shellCommands = /^(?:echo|cat|rm|mkdir|touch|cd|ls|dir|git|apt|apt-get|pnpm|npm|yarn|bun|node|python|python3|which|where|curl|wget|chmod|chown|source|rg|grep|egrep|fgrep|find|sed|awk|gawk|jq|printf|docker|gh|kubectl)\s|^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=)/;
-  if (lines.some(line => shellCommands.test(line))) return true;
+  const spans = buildNonCodeSpans(code, { includeHashComments: false, includeSlashComments: true, includeRegexLiterals: false });
+  const activeLines: string[] = [];
+  let offset = 0;
+  for (const rawLine of code.split('\n')) {
+    const lineLen = rawLine.length;
+    const trimmedLine = rawLine.trim();
+    if (trimmedLine.length > 0 && !trimmedLine.startsWith('//') && !trimmedLine.startsWith('/*')) {
+      const firstNonWs = offset + rawLine.search(/\S/);
+      if (!isIndexInSpans(spans, firstNonWs)) activeLines.push(trimmedLine);
+    }
+    offset += lineLen + 1;
+  }
+  const shellCommands = /^(?:echo|cat|rm|mkdir|touch|cd|ls|dir|git|apt|apt-get|pnpm|npm|yarn|bun|node|python|python3|which|where|curl|wget|chmod|chown|source|rg|grep|egrep|fgrep|find|sed|awk|gawk|jq|printf|docker|gh|kubectl)\s(?![ \t]*=)|^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=)/;
+  if (activeLines.some(line => shellCommands.test(line))) return true;
   if (isJavaScriptOrTypeScriptCode(code) || isPythonCode(code) || isPowerShellCode(code)) return false;
   if (/\b(?:type|interface|enum|class)\s+[A-Z]/.test(trimmed) || /=>/.test(trimmed)) return false;
   const shellOperators = /(?:&&|\|\||(?<![|<>=!])\|(?![|=])|(?:^|\s)\d*>{1,2}\s+\S)/;
-  return lines.some(line => !line.startsWith('#') && shellOperators.test(line));
+  return activeLines.some(line => !line.startsWith('#') && shellOperators.test(line));
 }
 
 export function isPythonCode(code: string): boolean {
@@ -51,10 +63,12 @@ export function isPythonCode(code: string): boolean {
   return false;
 }
 
+const PS_CMDLET_REGEX = /(?:^|[;\n|&({])[ \t]*(?:Get|Set|New|Remove|Start|Stop|Restart|Select|Test|Invoke|Clear|Copy|Move|Write|Add|Enter|Exit|Find|Format|Measure|Read|Reset|Resume|Search|Show|Split|Switch|Wait)-(?:[A-Za-z]+)\b/g;
+
 export function isPowerShellCode(code: string): boolean {
   const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: true, includeRegexLiterals: false });
-  const psCmdletRegex = /(?:^|[;\n|&({])\s*(?:Get|Set|New|Remove|Start|Stop|Restart|Select|Test|Invoke|Clear|Copy|Move|Write|Add|Enter|Exit|Find|Format|Measure|Read|Reset|Resume|Search|Show|Split|Switch|Wait)-(?:[A-Za-z]+)\b/g;
-  for (const m of code.matchAll(psCmdletRegex)) {
+  PS_CMDLET_REGEX.lastIndex = 0;
+  for (const m of code.matchAll(PS_CMDLET_REGEX)) {
     if (m.index !== undefined && !isIndexInSpans(spans, m.index)) return true;
   }
   const psVarRegex = /\$(?:PSScriptRoot|PSVersionTable|LASTEXITCODE|ErrorActionPreference|ProgressPreference)\b/gi;
@@ -97,7 +111,7 @@ function findStaticImportEnd(code: string, start: number): number | null {
   const prev = start === 0 ? '\n' : (code[start - 1] ?? '');
   if (start > 0 && !/[\s;]/.test(prev)) return null;
   const nextCh = code[start + 6] ?? '';
-  if (!/[\s{'*]/.test(nextCh)) return null;
+  if (!/[\s{'"*]/.test(nextCh)) return null;
   const trimmedAfter = code.slice(start + 6).trimStart();
   if (trimmedAfter.startsWith('(') || trimmedAfter.startsWith('.')) return null;
 
@@ -251,10 +265,10 @@ interface HealedSqlCall {
 }
 
 function tryHealSqlCallAt(code: string, dotIdx: number): HealedSqlCall | null {
-  const methodMatch = code.slice(dotIdx + 1).match(/^(exec|prepare)\s*\(/);
+  const methodMatch = code.slice(dotIdx + 1, dotIdx + 32).match(/^(exec|prepare)\s*\(/);
   if (methodMatch === null || methodMatch[0] === undefined) return null;
   const openParenIdx = dotIdx + methodMatch[0].length;
-  const afterOpen = code.slice(openParenIdx + 1);
+  const afterOpen = code.slice(openParenIdx + 1, openParenIdx + 256);
   const leadingMatch = afterOpen.match(/^\s*(?:\\\s*)?/);
   const leadingOffset = leadingMatch?.[0]?.length ?? 0;
   const candidateStart = afterOpen.slice(leadingOffset);
@@ -267,14 +281,14 @@ function tryHealSqlCallAt(code: string, dotIdx: number): HealedSqlCall | null {
   if (closeParenIdx === -1) return null;
   const rawBody = code.slice(openParenIdx + 1, closeParenIdx)
     .replace(/^(\s*)\\/, '$1')
-    .replace(/\\(\s*)$/, '$1')
+    .replace(/(\\+)(\s*)$/, (m, slashes: string, ws: string) => (slashes.length % 2 === 1 ? `${slashes.slice(0, -1)}${ws}` : m))
     .replace(/`/g, '\\`')
     .replace(/\$\{/g, '\\${');
   return { openParenIdx, closeParenIdx, sqlLiteral: `\`${rawBody}\`` };
 }
 
 // [INTENT]: Restores backtick template literals around unquoted SQL statements inside .exec(...) and .prepare(...) when PowerShell double-quoting stripped the backticks.
-export function healStrippedSqlTemplateLiterals(code: string): string {
+export function healStrippedSqlTemplateLiterals(code: string, deferredLogs?: string[]): string {
   let result = '';
   let lastCopied = 0;
   let healedCount = 0;
@@ -298,7 +312,9 @@ export function healStrippedSqlTemplateLiterals(code: string): string {
   if (healedCount === 0) return code;
 
   result += code.slice(lastCopied);
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected unquoted SQL inside .exec()/.prepare() from PowerShell backtick stripping. Restoring template literals... (Frictionless Recovery)\x1b[0m`);
+  const banner = `\n   🛠️ AUTONOMOUS HEALING: Detected unquoted SQL inside .exec()/.prepare() from PowerShell backtick stripping. Restoring template literals... (Frictionless Recovery)\x1b[0m`;
+  if (deferredLogs !== undefined) deferredLogs.push(banner);
+  else console.error(banner);
   return result;
 }
 
@@ -359,7 +375,7 @@ export function resolveEvalExecutionTarget(
       console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'pwsh' and target to 'windows'... (Frictionless Recovery)\x1b[0m`);
     } else if (!isShellCommandScript(p.code) && !isPowerShellCode(p.code) && !(p.target !== 'wsl2' && isPwsh(p.interpreter ?? '')) && (isJavaScriptOrTypeScriptCode(p.code) || hasTopLevelReturn(p.code))) {
       const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
-      const needsWindowsTarget = p.target === 'wsl2' && (/\bbetter-sqlite3\b|[a-zA-Z]:[/\\]/.test(p.code));
+      const needsWindowsTarget = p.target === 'wsl2' && (/\bbetter-sqlite3\b|(?<![A-Za-z0-9_:])[a-zA-Z]:[/\\]/.test(p.code));
       effectiveInterpreter = 'bun';
       p.interpreter = 'bun';
       if (needsWindowsTarget) {

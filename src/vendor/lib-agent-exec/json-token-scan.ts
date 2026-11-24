@@ -6,7 +6,7 @@ interface ScanState {
   index: number;
 }
 
-function tryParse(json: string): unknown | undefined {
+export function tryParse(json: string): unknown | undefined {
   try {
     return JSON.parse(json);
   } catch {

@@ -64,14 +64,15 @@ function isPathWithTrailingSlash(s: string, cwd?: string): boolean {
     }
   }
   if ((s.endsWith('\\') || s.endsWith('/')) && withoutTrailing.length > 0 && !s.startsWith('-')) {
+    const isNonHostPosixCwd = process.platform === 'win32' && cwd !== undefined
+      && ((cwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(cwd)) || cwd.startsWith('~'));
+    if (isNonHostPosixCwd) return false;
     const baseCwd = cwd !== undefined && cwd.length > 0
-      ? (/^\/mnt\/[a-zA-Z](?:\/|$)/.test(cwd) ? convertToWindowsPath(cwd) : cwd)
+      ? (/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(cwd) ? convertToWindowsPath(cwd) : cwd)
       : process.cwd();
     try {
       const candidate = path.resolve(baseCwd, withoutTrailing);
-      if (fs.statSync(candidate).isDirectory()) {
-        return true;
-      }
+      return fs.statSync(candidate, { throwIfNoEntry: false })?.isDirectory() === true;
     } catch {
       // Ignore missing/inaccessible candidate paths
     }
@@ -160,6 +161,9 @@ function normalizeJoinedQuotes(joined: string): string {
   if (joined.startsWith('\\"') && joined.endsWith('"')) {
     return `"${joined.slice(2, -1)}"`;
   }
+  if (joined.startsWith('"') && joined.endsWith('\\"')) {
+    return `"${joined.slice(1, -2)}"`;
+  }
   return joined;
 }
 
@@ -217,10 +221,26 @@ function matchNextFragment(next: string, cwd?: string): FragmentBody | null {
   return null;
 }
 
+const HYPHEN_INTERNAL_CLOSE_RE = /^(-[a-zA-Z0-9_-]+)\\([|):;,\]].*)$/;
+
+function matchHyphenClosingFragment(next: string): FragmentBody | null {
+  if (endsWithUnescapedBackslash(next) && !next.includes('/') && !strippedPathSeparators(next).includes('\\')) {
+    return { matchedType: 'pure-slash', internalWord: '', internalRest: '' };
+  }
+  return captureInnerSplit(next, 'internal-close', HYPHEN_INTERNAL_CLOSE_RE);
+}
+
 function findFragmentEnd(currentArgs: readonly string[], start: number, cwd?: string): FragmentMatch | null {
   for (let j = start + 1; j < currentArgs.length; j++) {
     const next = currentArgs[j];
-    if (next === undefined || next.startsWith('-')) break;
+    if (next === undefined) break;
+    if (next.startsWith('-')) {
+      if (j === start + 1) {
+        const hyphenMatch = matchHyphenClosingFragment(next);
+        if (hyphenMatch !== null) return { endIdx: j, ...hyphenMatch };
+      }
+      break;
+    }
     const matched = matchNextFragment(next, cwd);
     if (matched !== null) return { endIdx: j, ...matched };
   }

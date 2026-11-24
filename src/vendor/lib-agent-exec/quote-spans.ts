@@ -8,6 +8,8 @@ export interface NonCodeSpanOptions {
   includeHashComments?: boolean;
   includeSlashComments?: boolean;
   includeRegexLiterals?: boolean;
+  allowMultilineQuotes?: boolean;
+  noSingleQuoteEscape?: boolean;
 }
 
 function skipWhitespaceBackwardsIndex(source: string, idx: number): number {
@@ -73,7 +75,7 @@ function closeRegexLiteral(source: string, index: number): number {
   return index;
 }
 
-function closeTemplateLiteral(source: string, index: number): number {
+function closeTemplateLiteral(source: string, index: number, options: NonCodeSpanOptions): number {
   let i = index;
   while (i < source.length) {
     const ch = source[i];
@@ -82,7 +84,7 @@ function closeTemplateLiteral(source: string, index: number): number {
       continue;
     }
     if (ch === '$' && source[i + 1] === '{') {
-      i = closeTemplateExpr(source, i + 2);
+      i = closeTemplateExpr(source, i + 2, options);
       continue;
     }
     if (ch === '`') return i + 1;
@@ -91,22 +93,23 @@ function closeTemplateLiteral(source: string, index: number): number {
   return i;
 }
 
-function closeTemplateExpr(source: string, index: number): number {
+function closeTemplateExpr(source: string, index: number, options: NonCodeSpanOptions): number {
+  const { includeSlashComments = true, includeRegexLiterals = true } = options;
   let depth = 1;
   let i = index;
   while (i < source.length && depth > 0) {
     const ch = source[i];
-    if (ch === '/' && source[i + 1] === '/') {
+    if (includeSlashComments && ch === '/' && source[i + 1] === '/') {
       i += 2;
       while (i < source.length && source[i] !== '\n') i += 1;
       continue;
     }
-    if (ch === '/' && source[i + 1] === '*') {
+    if (includeSlashComments && ch === '/' && source[i + 1] === '*') {
       const endBlock = source.indexOf('*/', i + 2);
       i = endBlock === -1 ? source.length : endBlock + 2;
       continue;
     }
-    if (ch === '/' && looksLikeRegexStart(source, i)) {
+    if (includeRegexLiterals && ch === '/' && looksLikeRegexStart(source, i)) {
       const regexEnd = closeRegexLiteral(source, i + 1);
       if (regexEnd > i + 1) {
         i = regexEnd;
@@ -118,7 +121,7 @@ function closeTemplateExpr(source: string, index: number): number {
       continue;
     }
     if (ch === '`') {
-      i = closeTemplateLiteral(source, i + 1);
+      i = closeTemplateLiteral(source, i + 1, options);
       continue;
     }
     if (ch === '{') depth += 1;
@@ -167,7 +170,7 @@ export function buildNonCodeSpans(source: string, options: NonCodeSpanOptions = 
     if (ch === "'" || ch === '"' || ch === '`') {
       const start = index;
       const quote = ch;
-      index = quote === '`' ? closeTemplateLiteral(source, index + 1) : closeQuote(source, index + 1, quote);
+      index = quote === '`' ? closeTemplateLiteral(source, index + 1, options) : closeQuote(source, index + 1, quote, options);
       spans.push({ start, end: index });
       continue;
     }
@@ -176,14 +179,14 @@ export function buildNonCodeSpans(source: string, options: NonCodeSpanOptions = 
   return spans;
 }
 
-function closeQuote(source: string, index: number, quote: string): number {
+function closeQuote(source: string, index: number, quote: string, options?: NonCodeSpanOptions): number {
   while (index < source.length) {
-    if (source[index] === '\\') {
+    if (source[index] === '\\' && !(quote === "'" && options?.noSingleQuoteEscape === true)) {
       index += 2;
       continue;
     }
     if (source[index] === quote) return index + 1;
-    if (quote !== '`' && source[index] === '\n') return index;
+    if (quote !== '`' && options?.allowMultilineQuotes !== true && source[index] === '\n') return index;
     index += 1;
   }
   return index;
@@ -197,48 +200,10 @@ export function isIndexInSpans(spans: readonly Span[], index: number): boolean {
   return false;
 }
 
-function isLineCommentBefore(prefix: string): boolean {
-  let index = 0;
-  let quote = '';
-  while (index < prefix.length) {
-    const ch = prefix[index];
-    if (quote.length > 0) {
-      if (ch === '\\') {
-        index += 2;
-        continue;
-      }
-      if (ch === quote) quote = '';
-      index += 1;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') {
-      quote = ch;
-      index += 1;
-      continue;
-    }
-    if (ch === '/' && prefix[index + 1] === '/') return true;
-    index += 1;
-  }
-  return false;
-}
-
 function extractReplaceOffset(args: readonly unknown[]): unknown {
   return typeof args[args.length - 1] === 'object' && args[args.length - 1] !== null
     ? args[args.length - 3]
     : args[args.length - 2];
-}
-
-/** [INTENT]: WSL drive-letter conversion must rewrite quoted JS paths and still leave // comments alone. */
-export function replaceOutsideLineComments(source: string, pattern: RegExp, replacer: (match: string) => string): string {
-  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
-  const globalPattern = new RegExp(pattern.source, flags);
-  return source.replace(globalPattern, (match: string, ...args: unknown[]) => {
-    const offset = extractReplaceOffset(args);
-    if (typeof offset !== 'number') return replacer(match);
-    const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
-    if (isLineCommentBefore(source.slice(lineStart, offset))) return match;
-    return replacer(match);
-  });
 }
 
 export function replaceOutsideQuotes(

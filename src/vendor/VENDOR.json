@@ -40,11 +40,13 @@
         "exit-code-policy.ts",
         "help.ts",
         "inline-script-healer.ts",
+        "interceptors/cloud-cli-gh.ts",
         "interceptors/cloud-cli-interceptor.ts",
         "interceptors/docker-interceptor.ts",
         "interceptors/docker-lifecycle-guards.ts",
         "interceptors/docker-tty-repl-guard.ts",
         "interceptors/find-interceptor.ts",
+        "interceptors/git-add-broad-scan.ts",
         "interceptors/git-commit-rewrite.ts",
         "interceptors/git-add-guards.ts",
         "interceptors/git-guards.ts",
@@ -104,6 +106,7 @@
         "prompt-detector.ts",
         "quote-healer.ts",
         "quote-spans.ts",
+        "redaction.ts",
         "regex-healer.ts",
         "schema.ts",
         "stream-manager.ts",
@@ -113,8 +116,8 @@
         "windows-wrapper-utils.ts",
         "wsl-command-wrapper.ts"
       ],
-      "syncedAt": "2026-11-22T19:13:59.720Z",
-      "syncedFromCommit": "40b33d9486929a5348d6479079c0fc5b5c782f7b"
+      "syncedAt": "2026-11-24T08:36:04.343Z",
+      "syncedFromCommit": "83cbfe6a3557738d7686f6da7c84acaa9105a6d6"
     },
     "commit": {
       "source": ".agents/scripts",

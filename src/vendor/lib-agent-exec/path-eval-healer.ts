@@ -1,15 +1,15 @@
 // @ts-nocheck
 import path from 'node:path';
-import { convertToWslPath } from './command-utils.js';
+import { FLAGS_WITH_ARG_BY_TOOL, convertToWslPath, inspectCombinedShortFlag } from './command-utils.js';
 import { buildNonCodeSpans, isIndexInSpans } from './quote-spans.js';
 import { healModuleImports, type HealModuleImportOptions } from './path-module-healer.js';
-import { healSingleEvalPath, isPosixSystemPath } from './path-eval-path.js';
+import { healSingleEvalPath, healSingleEvalPathResult, isPosixSystemPath } from './path-eval-path.js';
 import { logPathHeal } from './path-healer.js';
 
 type HealTarget = 'windows' | 'wsl2';
 type NonCodeSpans = ReturnType<typeof buildNonCodeSpans>;
 
-const TOKEN_RE = /([^\s"'`]+|"[^"]*"|'[^']*'|`[^`]*`|\s+)/g;
+const TOKEN_RE = /(?:[^\s"'`]+|"[^"]*"|'[^']*'|`[^`]*`)+|\s+/g;
 const READ_DIR_TOOLS: ReadonlySet<string> = new Set(['ls', 'dir']);
 const MUTATING_FILE_TOOLS: ReadonlySet<string> = new Set(['rm', 'cp', 'mv', 'touch', 'mkdir', 'chmod']);
 const RUNNER_SUBCOMMANDS: ReadonlySet<string> = new Set(['run', 'test', 'exec', 'x', 'dev', 'start', 'build']);
@@ -76,13 +76,19 @@ function healFileToolToken(token: string, isDirTool: boolean, isMutatingTool: bo
   }
   const cleanPath = trimmed.replace(/^['"`]|['"`]$/g, '').replace(/[\\/]+$/, '');
   if (isDirTool && !cleanPath.includes('/') && !cleanPath.includes('\\') && !cleanPath.includes('.')) return null;
-  const healed = healSingleEvalPath(trimmed, isDirTool, cwd, target);
-  if (healed === null || healed === trimmed) return null;
+  const res = healSingleEvalPathResult(trimmed, isDirTool, cwd, target);
+  if (res === null || res.healed === trimmed) return null;
+  const { healed, normalizedOnly } = res;
   const isBarrel = /(?:^|[/\\])index\.[jt]sx?$/i.test(healed) && !/(?:^|[/\\])index\.[jt]sx?$/i.test(trimmed);
-  const hint = isBarrel
-    ? `Path '${trimmed}' in eval code not found on disk, but barrel '${healed}' exists.`
-    : `Path '${trimmed}' in eval code not found on disk, but found at '${healed}'.`;
-  emitEvalPathHeal(hint, `Auto-correcting eval command to '${cmdWord} ... ${healed}'... (Frictionless Recovery)`, deferredLogs);
+  const hint = normalizedOnly
+    ? `Path '${trimmed}' in eval code requires WSL path normalization.`
+    : (isBarrel
+      ? `Path '${trimmed}' in eval code not found on disk, but barrel '${healed}' exists.`
+      : `Path '${trimmed}' in eval code not found on disk, but found at '${healed}'.`);
+  const action = normalizedOnly
+    ? `Normalizing existing path to '${healed}'... (Frictionless Recovery)`
+    : `Auto-correcting eval command to '${cmdWord} ... ${healed}'... (Frictionless Recovery)`;
+  emitEvalPathHeal(hint, action, deferredLogs);
   return quoteWrap(token, healed);
 }
 
@@ -126,7 +132,7 @@ function healInspectionMatch(fullMatch: string, cmdWord: string, restArgs: strin
 
 function healEvalFileTools(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
   const fileInspectionRegex = /(?:^|(?<=[;&|\n]))\s*(cat|head|tail|wc|ls|dir|rm|cp|mv|touch|mkdir|chmod|diff)\b([^;&|\n#]*)/gi;
-  const spans = buildNonCodeSpans(code, { includeHashComments: true });
+  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(fileInspectionRegex, (fullMatch: string, cmdWord: string, restArgs: string, offset: number) => {
     return healInspectionMatch(fullMatch, cmdWord, restArgs, offset, spans, cwd, target, deferredLogs);
   });
@@ -135,6 +141,7 @@ function healEvalFileTools(code: string, cwd: string, target: HealTarget | undef
 function healSearchToken(
   token: string,
   state: { seenDoubleDash: boolean; skipNext: boolean; hasPatternFlag: boolean; posCount: number; sawRedirect: boolean },
+  cmdBase: string,
   cwd: string,
   target: HealTarget | undefined,
   deferredLogs?: string[],
@@ -144,9 +151,18 @@ function healSearchToken(
   if (state.skipNext) { state.skipNext = false; return null; }
   if (!state.seenDoubleDash && token === '--') { state.seenDoubleDash = true; return null; }
   if (!state.seenDoubleDash && token.startsWith('-')) {
-    if (SEARCH_EVAL_PATTERN_FLAGS.has(token)) { state.hasPatternFlag = true; state.skipNext = true; }
-    else if (/^-[ef]./.test(token) || /^--(?:regexp|file)=/.test(token)) { state.hasPatternFlag = true; }
-    else if (SEARCH_EVAL_VALUE_FLAGS.has(token)) { state.skipNext = true; }
+    const toolFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, cmdBase) ? FLAGS_WITH_ARG_BY_TOOL[cmdBase] : undefined;
+    const shortInfo = inspectCombinedShortFlag(cmdBase, token, toolFlags);
+    const sp = shortInfo.shortPrefix;
+    const isCombinedPattern = sp.length > 1 && (sp.includes('e') || sp.includes('f'));
+    if (SEARCH_EVAL_PATTERN_FLAGS.has(token) || isCombinedPattern) {
+      state.hasPatternFlag = true;
+      if (SEARCH_EVAL_PATTERN_FLAGS.has(token) || shortInfo.takesSeparateValue) state.skipNext = true;
+    } else if (/^-[ef]./.test(token) || /^--(?:regexp|file)=/.test(token)) {
+      state.hasPatternFlag = true;
+    } else if (SEARCH_EVAL_VALUE_FLAGS.has(token) || shortInfo.takesSeparateValue) {
+      state.skipNext = true;
+    }
     return null;
   }
   const posIdx = state.posCount++;
@@ -154,23 +170,30 @@ function healSearchToken(
   const unquoted = token.replace(/^['"`]|['"`]$/g, '');
   const cleanTargetPath = unquoted.replace(/[\\/]+$/, '');
   if (path.extname(cleanTargetPath).length === 0 && !cleanTargetPath.includes('/') && !cleanTargetPath.includes('\\')) return null;
-  const healed = healSingleEvalPath(token, true, cwd, target);
-  if (healed === null || healed === unquoted) return null;
-  emitEvalPathHeal(`Search path '${token}' in eval code not found on disk, but found at '${healed}'.`, `Auto-correcting search path in eval command to '${healed}'... (Frictionless Recovery)`, deferredLogs);
-  return quoteWrap(token, healed);
+  const res = healSingleEvalPathResult(token, true, cwd, target);
+  if (res === null || res.healed === unquoted) return null;
+  const hint = res.normalizedOnly
+    ? `Search path '${token}' in eval code requires WSL path normalization.`
+    : `Search path '${token}' in eval code not found on disk, but found at '${res.healed}'.`;
+  const action = res.normalizedOnly
+    ? `Normalizing search path to '${res.healed}'... (Frictionless Recovery)`
+    : `Auto-correcting search path in eval command to '${res.healed}'... (Frictionless Recovery)`;
+  emitEvalPathHeal(hint, action, deferredLogs);
+  return quoteWrap(token, res.healed);
 }
 
 function healEvalSearchTools(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
   const searchMatchRegex = /(?:^|(?<=[;&|\n]))\s*(grep|egrep|fgrep|rg)\b([^;&|\n#]*)/g;
-  const spans = buildNonCodeSpans(code, { includeHashComments: true });
+  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(searchMatchRegex, (fullMatch: string, cmdWord: string, restArgs: string, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
     const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
     const tokens = restArgs.match(TOKEN_RE) ?? [];
+    const cmdBase = cmdWord.toLowerCase();
     const state = { seenDoubleDash: false, skipNext: false, hasPatternFlag: false, posCount: 0, sawRedirect: false };
     let modified = false;
     const healedTokens = tokens.map((token) => {
-      const healed = healSearchToken(token, state, cwd, target, deferredLogs);
+      const healed = healSearchToken(token, state, cmdBase, cwd, target, deferredLogs);
       if (healed === null) return token;
       modified = true;
       return healed;
@@ -222,7 +245,7 @@ function healEvalPowerShell(code: string, cwd: string, target: HealTarget | unde
   if (target === 'wsl2') return code;
   if (interpreter !== undefined && !/^(?:pwsh|powershell|cmd)(?:\.exe)?$/i.test(path.basename(interpreter.trim()))) return code;
   const psCmdletRegex = /(?:^|(?<=[;&|\n]))\s*(Get-Content|gc|type|Get-ChildItem|gci)\b([^;&|\n#]*)/gi;
-  const spans = buildNonCodeSpans(code, { includeHashComments: true });
+  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(psCmdletRegex, (fullMatch: string, cmdlet: string, restArgs: string, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
     const afterMatch = code.slice(offset + fullMatch.length);
@@ -246,10 +269,16 @@ function healRunnerToken(token: string, runnerCmd: string, cwd: string, target: 
   if (RUNNER_SUBCOMMANDS.has(cleanPath.toLowerCase())) return null;
   const isPathLike = cleanPath.includes('/') || cleanPath.includes('\\') || /\.(?:ts|js|mjs|cjs|py|json)$/i.test(cleanPath);
   if (!isPathLike) return null;
-  const healed = healSingleEvalPath(trimmed, false, cwd, target);
-  if (healed === null || healed === trimmed) return null;
-  emitEvalPathHeal(`Script path '${trimmed}' in eval code not found on disk, but found at '${healed}'.`, `Auto-correcting eval command to '${runnerCmd} ... ${healed}'... (Frictionless Recovery)`, deferredLogs);
-  return quoteWrap(token, healed);
+  const res = healSingleEvalPathResult(trimmed, false, cwd, target);
+  if (res === null || res.healed === trimmed) return null;
+  const hint = res.normalizedOnly
+    ? `Script path '${trimmed}' in eval code requires WSL path normalization.`
+    : `Script path '${trimmed}' in eval code not found on disk, but found at '${res.healed}'.`;
+  const action = res.normalizedOnly
+    ? `Normalizing script path to '${res.healed}'... (Frictionless Recovery)`
+    : `Auto-correcting eval command to '${runnerCmd} ... ${res.healed}'... (Frictionless Recovery)`;
+  emitEvalPathHeal(hint, action, deferredLogs);
+  return quoteWrap(token, res.healed);
 }
 
 function stepRunnerToken(
@@ -266,7 +295,16 @@ function stepRunnerToken(
   if (state.skipNext) { state.skipNext = false; return null; }
   if (trimmed.startsWith('-')) {
     const flagKey = trimmed.split('=')[0] ?? trimmed;
+    if (runnerCmd.toLowerCase() === 'bun' && flagKey === '--cwd') { state.aborted = true; return null; }
     if (!trimmed.includes('=') && RUNNER_VALUE_FLAGS.has(flagKey)) state.skipNext = true;
+    const lowerRunner = runnerCmd.toLowerCase();
+    const isPython = lowerRunner === 'python' || lowerRunner === 'python3';
+    if (
+      flagKey === '-e' || flagKey === '--eval' || flagKey === '-p' || flagKey === '--print' ||
+      (isPython && (flagKey === '-c' || flagKey === '-m' || trimmed.startsWith('-c') || trimmed.startsWith('-m')))
+    ) {
+      state.sawScript = true;
+    }
     return null;
   }
   const lowerPos = trimmed.replace(/^['"`]|['"`]$/g, '').toLowerCase();
@@ -278,7 +316,7 @@ function stepRunnerToken(
 
 function healEvalRunners(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
   const runnerRegex = /(?:^|(?<=[;&|\n]))\s*(bun|node|tsx|ts-node|python|python3)\b([^;&|\n#]*)/gi;
-  const spans = buildNonCodeSpans(code, { includeHashComments: true });
+  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(runnerRegex, (fullMatch: string, runnerCmd: string, restArgs: string, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
     const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
@@ -295,7 +333,11 @@ function healEvalRunners(code: string, cwd: string, target: HealTarget | undefin
   });
 }
 
-function isReadOnlyPsPathSegment(code: string, offset: number): boolean {
+const DIR_CAPABLE_PS_CMDLETS: ReadonlySet<string> = new Set([
+  'get-childitem', 'gci', 'test-path', 'get-item', 'gi', 'resolve-path', 'rvpa',
+]);
+
+function getReadOnlyPsPathMode(code: string, offset: number): 'dir' | 'file' | null {
   const prevBoundary = Math.max(
     code.lastIndexOf(';', offset),
     code.lastIndexOf('&', offset),
@@ -304,18 +346,21 @@ function isReadOnlyPsPathSegment(code: string, offset: number): boolean {
   );
   const leadingStmt = code.slice(prevBoundary + 1, offset).trim();
   const cmdletMatch = leadingStmt.match(/^([a-zA-Z][a-zA-Z0-9-]*)\b/);
-  return cmdletMatch?.[1] !== undefined && READONLY_PS_PATH_CMDLETS.has(cmdletMatch[1].toLowerCase());
+  const name = cmdletMatch?.[1]?.toLowerCase();
+  if (name === undefined || !READONLY_PS_PATH_CMDLETS.has(name)) return null;
+  return DIR_CAPABLE_PS_CMDLETS.has(name) ? 'dir' : 'file';
 }
 
 function healEvalPathFlag(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
   if (target === 'wsl2' || /(?:^|(?<=[;&|\n]))\s*find\b/i.test(code)) return code;
   const pathFlagRegex = /(-Path\s+)(?:"([^"]+)"|'([^']+)'|([^\s"'`;|]+))/gi;
-  const spans = buildNonCodeSpans(code, { includeHashComments: true });
+  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(pathFlagRegex, (fullMatch: string, flagPrefix: string, qDouble: string | undefined, qSingle: string | undefined, unquoted: string | undefined, offset: number) => {
-    if (isIndexInSpans(spans, offset) || !isReadOnlyPsPathSegment(code, offset)) return fullMatch;
+    const mode = isIndexInSpans(spans, offset) ? null : getReadOnlyPsPathMode(code, offset);
+    if (mode === null) return fullMatch;
     const rawPath = qDouble ?? qSingle ?? unquoted ?? '';
     if (rawPath.length === 0 || rawPath.includes('*') || rawPath.includes('?') || isPosixSystemPath(rawPath)) return fullMatch;
-    const healed = healSingleEvalPath(rawPath, true, cwd, target);
+    const healed = healSingleEvalPath(rawPath, mode === 'dir', cwd, target);
     if (healed === null) return fullMatch;
     emitEvalPathHeal(`-Path '${rawPath}' in eval code not found on disk, but found at '${healed}'.`, `Auto-correcting -Path in eval command to '${healed}'... (Frictionless Recovery)`, deferredLogs);
     const quote = qDouble !== undefined ? '"' : (qSingle !== undefined ? "'" : '');

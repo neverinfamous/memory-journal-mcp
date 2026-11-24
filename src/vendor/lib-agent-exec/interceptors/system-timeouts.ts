@@ -1,6 +1,8 @@
 // @ts-nocheck
+import path from 'node:path';
 import type { ExecPayload } from '../schema.js';
 import { getUnderlyingPackageScript } from '../command-utils.js';
+import { isJavaScriptOrTypeScriptCode, isPythonCode } from '../eval-healer.js';
 import { emitInterceptBanner } from '../utils.js';
 import type { SystemCommandDerived } from './system-command-context.js';
 import {
@@ -132,11 +134,11 @@ function applyWindowsCommandTimeout(derived: SystemCommandDerived, baseCwd?: str
   maybeSplitJoinedTestArgs(cmdBasename, args, underlyingScript, payload, isNestedAgentExec);
   const profile = windowsCommandProfile(cmdBasename, args, underlyingScript, isNestedAgentExec);
   if (profile.isPlaywright || profile.isDocker) {
+    payload.timeoutMs = applyMinTimeoutFloor(payload.timeoutMs, 600000);
+    payload.bypassInterceptors = true;
     if (profile.isInfraOrchestration) {
       emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s...`);
     }
-    payload.timeoutMs = applyMinTimeoutFloor(payload.timeoutMs, 600000);
-    payload.bypassInterceptors = true;
     return;
   }
   if (profile.isKnownDeterministic) {
@@ -154,17 +156,23 @@ function applyWindowsCommandTimeout(derived: SystemCommandDerived, baseCwd?: str
 function scriptFlags(payload: ExecPayload): ScriptFlags {
   const codeOrScript = codeOrScriptOf(payload);
   const isEval = payload.type === 'eval';
+  const interp = isEval ? (payload.interpreter ?? '').trim().toLowerCase() : '';
+  const isNonShellEval = isEval && (
+    (interp.length > 0 && /^(?:bun|node|nodejs|tsx|ts-node|js|ts|python\d*(?:\.\d+)?)$/.test(path.basename(interp).replace(/\.(?:exe|cmd)$/i, '')))
+    || (interp.length === 0 && (isJavaScriptOrTypeScriptCode(codeOrScript) || isPythonCode(codeOrScript)))
+  );
   const isInlineShellHallucination = isEval && INLINE_SHELL_RE.test(codeOrScript);
   const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
   const isBackupConversations = !isInlineShellHallucination && Boolean(codeOrScript && /backup-conversations\.ts/i.test(codeOrScript));
-  const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
-  const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
-  const isDockerScout = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /scout/i.test(codeOrScript));
-  const isDockerBuild = !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /\b(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
-  const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /\b(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
-  const isChainedQuality = !isInlineShellHallucination && isEval && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
-  const hasQualityCheck = !isInlineShellHallucination && isEval && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
-  const hasMountedSearch = !isInlineShellHallucination && Boolean(codeOrScript && /\b(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript));
+  const isPlaywright = !isNonShellEval && !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
+  const isCoverage = !isNonShellEval && !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
+  const isDockerScout = !isNonShellEval && !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /scout/i.test(codeOrScript));
+  const isDockerBuild = !isNonShellEval && !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /\b(?:build|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
+  const isDocker = !isNonShellEval && !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /\b(?:build|scout|pull|push|up|down|restart|recreate|load|save|import|export|prune)\b|Health\.Status/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
+  const hasChainOp = !isNonShellEval && !isInlineShellHallucination && isEval && (codeOrScript.includes('&&') || codeOrScript.includes(';'));
+  const isChainedQuality = hasChainOp && codeOrScript.split(/&&|;/).filter(seg => /(?:typecheck|tsc|lint|check|build|test)/i.test(seg)).length >= 2;
+  const hasQualityCheck = !isNonShellEval && !isInlineShellHallucination && isEval && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
+  const hasMountedSearch = !isNonShellEval && !isInlineShellHallucination && Boolean(codeOrScript && /\b(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript));
   return {
     isInlineShellHallucination,
     isKnownDeterministic,
@@ -187,10 +195,9 @@ function codeOrScriptOf(payload: ExecPayload): string {
 }
 
 function bannerTimeout(payload: ExecPayload, timeout: number, banner: string): number {
-  if (payload.timeoutMs !== 0 && (payload.timeoutMs === undefined || payload.timeoutMs < timeout)) {
-    emitInterceptBanner(banner);
-  }
+  const shouldLog = payload.timeoutMs !== 0 && (payload.timeoutMs === undefined || payload.timeoutMs < timeout);
   payload.bypassInterceptors = true;
+  if (shouldLog) emitInterceptBanner(banner);
   return timeout;
 }
 
@@ -202,9 +209,8 @@ function searchBannerTimeout(payload: ExecPayload, timeout: number, banner: stri
 }
 
 function assignBannerTimeout(payload: ExecPayload, timeout: number, banner: string): void {
-  if (payload.timeoutMs !== 0 && (payload.timeoutMs === undefined || payload.timeoutMs < timeout)) {
-    emitInterceptBanner(banner);
-  }
+  const shouldLog = payload.timeoutMs !== 0 && (payload.timeoutMs === undefined || payload.timeoutMs < timeout);
   payload.timeoutMs = applyMinTimeoutFloor(payload.timeoutMs, timeout);
   payload.bypassInterceptors = true;
+  if (shouldLog) emitInterceptBanner(banner);
 }

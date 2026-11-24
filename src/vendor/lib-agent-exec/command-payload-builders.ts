@@ -24,7 +24,39 @@ import {
 import { healEvalCodePathHallucinations } from './path-healer.js';
 import { buildNonCodeSpans, isIndexInSpans, replaceOutsideQuotes } from './quote-spans.js';
 import type { ExecPayload } from './schema.js';
-import { resolveAgentScriptFallback } from './utils.js';
+import { recordAgentIssue, resolveAgentScriptFallback } from './utils.js';
+
+const PIPE_EXEMPT_TOOLS = new Set([
+  'rg', 'rg.exe', 'grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe',
+  'cat', 'cat.exe', 'ls', 'ls.exe', 'dir', 'dir.exe', 'rm', 'rm.exe', 'cp', 'cp.exe',
+  'mv', 'mv.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'awk', 'awk.exe', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe',
+]);
+const PIPE_DATA_PREV_FLAGS = new Set([
+  '-m', '--message', '--msg', '-e', '--eval', '--regexp', '-c', '-command', '/c', '-p', '--print',
+  '--history', '--summary', '--reason', '--pattern', '-f', '-F', '--file', '-b', '--body', '-t', '--title', '-n', '--notes', '--query', '-q', '--filter',
+]);
+
+export function rejectUnsafePosixPipes(payload: ExecPayload, isJson: boolean, exitWithError: (message: string) => never): void {
+  if (process.platform !== 'win32' || payload.target === 'wsl2' || payload.bypassInterceptors === true) return;
+  const cmdBase = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
+  const hasPipeCommand = payload.type === 'command' && (
+    payload.command.includes(' && ') || payload.command.includes(' || ') ||
+    payload.command.includes(' | ') || payload.command.includes(' > ')
+  );
+  const args = payload.args ?? [];
+  const hasPipeArg = !PIPE_EXEMPT_TOOLS.has(cmdBase) && args.some((a, idx) => {
+    if (!['&&', '||', '|', '>'].includes(a.trim())) return false;
+    const prev = idx > 0 ? args[idx - 1]?.toLowerCase() : undefined;
+    return prev === undefined || !PIPE_DATA_PREV_FLAGS.has(prev);
+  });
+  if (!hasPipeCommand && !hasPipeArg) return;
+  recordAgentIssue('POSIX_PIPES_IN_POWERSHELL', 'Native PowerShell does NOT support && or ||', { payload });
+  if (isJson) {
+    exitWithError(`Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.`);
+  }
+  console.error(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.\x1b[0m`);
+  process.exit(1);
+}
 
 export interface BuiltPayloadCommand {
   cmd: string;
@@ -100,8 +132,13 @@ export function buildScriptPayload(
   exitWithError: (message: string) => never,
 ): BuiltPayloadCommand {
   let tempScriptPath: string | null = null;
-  const isPosixInternalScript = process.platform === 'win32' && p.target === 'wsl2'
-    && (/^\/(?!mnt\/[a-zA-Z](?:\/|$))/i.test(p.scriptPath) || p.scriptPath.startsWith('~/'));
+  const trimmedCwd = typeof p.cwd === 'string' ? p.cwd.trim().replace(/^['"]|['"]$/g, '').trim() : undefined;
+  const isPosixInternalCwd = process.platform === 'win32' && p.target === 'wsl2' && trimmedCwd !== undefined
+    && ((trimmedCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(trimmedCwd)) || trimmedCwd.startsWith('~'));
+  const isPosixRelScript = isPosixInternalCwd && !/^[a-zA-Z]:[/\\]/.test(p.scriptPath) && !/^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(p.scriptPath);
+  const isPosixInternalScript = (process.platform === 'win32' && p.target === 'wsl2'
+    && (/^\/(?!mnt\/[a-zA-Z](?:\/|$))/i.test(p.scriptPath) || p.scriptPath.startsWith('~/')))
+    || isPosixRelScript;
   const rawScriptPath = process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(p.scriptPath)
     ? convertToWindowsPath(p.scriptPath)
     : p.scriptPath;
@@ -115,13 +152,18 @@ export function buildScriptPayload(
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${origScriptPath}' to '${fallbackScript}'... (Frictionless Recovery)`);
     }
   }
-  if (!isPosixInternalScript && (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile())) {
+  if (!isPosixInternalScript && fs.statSync(scriptFile, { throwIfNoEntry: false })?.isFile() !== true) {
     exitWithError(`The script file '${scriptFile}' does not exist or is not a file.`);
   }
 
   let localCmd = p.interpreter ? resolveInterpreterAlias(p.interpreter) : inferScriptInterpreter(scriptFile);
-  const localCmdBase = path.basename(localCmd).toLowerCase().replace(/\.exe$/i, '');
-  if (!isPosixInternalScript && p.target === 'wsl2' && ['bash', 'sh'].includes(localCmdBase)) {
+  let localCmdBase = path.basename(localCmd).toLowerCase().replace(/\.exe$/i, '');
+  if (p.target === 'wsl2' && ['pwsh', 'powershell', 'cmd'].includes(localCmdBase)) {
+    localCmd = 'bash';
+    localCmdBase = 'bash';
+  }
+  const WSL_LF_SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ash']);
+  if (!isPosixInternalScript && p.target === 'wsl2' && WSL_LF_SHELLS.has(localCmdBase)) {
     const content = fs.readFileSync(scriptFile, 'utf-8');
     if (content.includes('\r\n')) {
       tempScriptPath = path.join(os.tmpdir(), `agent-exec-wsl-${crypto.randomUUID()}.sh`);
@@ -141,7 +183,13 @@ export function buildScriptPayload(
 }
 
 function rewriteShCommentsOutsideHeredocsAndQuotes(code: string): string {
-  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
+  const spans = buildNonCodeSpans(code, {
+    includeHashComments: true,
+    includeSlashComments: false,
+    includeRegexLiterals: false,
+    allowMultilineQuotes: true,
+    noSingleQuoteEscape: true,
+  });
   const lines = code.split('\n');
   let offset = 0;
   let activeHeredocEnd: string | null = null;
@@ -206,16 +254,23 @@ function prepareEvalCodeContent(
     const isJsOrTs = ext === '.js' || ext === '.ts';
     const spans = buildNonCodeSpans(codeToExecute, {
       includeHashComments: isShOrPy,
-      includeSlashComments: true,
+      includeSlashComments: !isShOrPy,
       includeRegexLiterals: isJsOrTs,
+      noSingleQuoteEscape: ext === '.sh',
     });
     codeToExecute = codeToExecute.replace(/\b([a-zA-Z]):\\[^\s"'`;&|)]*/g, (m, _d: string, offset: number) => {
       const span = spans.find((s) => offset >= s.start && offset < s.end);
       if (span !== undefined && (codeToExecute[span.start] === '#' || codeToExecute[span.start] === '/')) return m;
       return convertToWslPath(m);
     });
+    const slashSpans = buildNonCodeSpans(codeToExecute, {
+      includeHashComments: isShOrPy,
+      includeSlashComments: !isShOrPy,
+      includeRegexLiterals: isJsOrTs,
+      noSingleQuoteEscape: ext === '.sh',
+    });
     codeToExecute = codeToExecute.replace(/(?<![${a-zA-Z0-9_:])\b([a-zA-Z]):\/+[^\s"'`;&|)]*/g, (m, _d: string, offset: number) => {
-      const span = spans.find((s) => offset >= s.start && offset < s.end);
+      const span = slashSpans.find((s) => offset >= s.start && offset < s.end);
       if (span !== undefined && (codeToExecute[span.start] === '#' || codeToExecute[span.start] === '/')) return m;
       return convertToWslPath(m);
     });
@@ -223,22 +278,32 @@ function prepareEvalCodeContent(
       codeToExecute,
       /(^|[\s"'`=])(?:\.{1,2}|[a-zA-Z0-9_.-]+)\\[a-zA-Z0-9_.\-\\/]+/g,
       (m) => {
-        const core = m.trimStart();
+        const core = m.replace(/^[\s"'`=]+/, '');
         if (!fs.existsSync(path.resolve(cwd, core)) && /^[a-zA-Z0-9_-]+\\[.-][a-zA-Z0-9_.-]*$/.test(core)) return m;
         return m.replace(/\\/g, '/');
       },
-      { includeHashComments: isShOrPy, includeRegexLiterals: isJsOrTs },
+      { includeHashComments: isShOrPy, includeSlashComments: !isShOrPy, includeRegexLiterals: isJsOrTs, noSingleQuoteEscape: ext === '.sh' },
     );
     if (ext === '.sh') {
       codeToExecute = rewriteShCommentsOutsideHeredocsAndQuotes(codeToExecute);
     }
   }
   if (ext === '.js' || ext === '.ts') {
-    codeToExecute = healStrippedStringRawLiterals(healStrippedSqlTemplateLiterals(codeToExecute));
+    const deferredLogs: string[] = [];
+    const healedLiterals = healStrippedStringRawLiterals(
+      healStrippedSqlTemplateLiterals(codeToExecute, deferredLogs),
+      deferredLogs,
+    );
+    if (healedLiterals !== codeToExecute) {
+      codeToExecute = healedLiterals;
+      p.code = codeToExecute;
+      for (const line of deferredLogs) console.error(line);
+    }
     if (hasTopLevelReturn(codeToExecute)) {
+      codeToExecute = wrapCodeInAsyncIife(codeToExecute);
+      p.code = codeToExecute;
       console.error(`\n   💡 AGENT HINT: Code Mode style top-level 'return' detected in eval payload.`);
       console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping code in async IIFE to capture returned output... (Frictionless Recovery)\x1b[0m`);
-      codeToExecute = wrapCodeInAsyncIife(codeToExecute);
     }
   }
   return codeToExecute;
@@ -254,16 +319,17 @@ export function buildEvalPayload(
   const uniqueId = crypto.randomUUID();
   const scratchDir = path.join(os.tmpdir(), 'agent-exec-scratch');
   if (!fs.existsSync(scratchDir)) {
-    fs.mkdirSync(scratchDir, { recursive: true });
+    fs.mkdirSync(scratchDir, { recursive: true, mode: 0o700 });
   }
   const { effectiveInterpreter, ext } = resolveEvalExecutionTarget(p);
   let effectiveEvalCwd = cwd;
-  if (p.target === 'windows' && typeof p.cwd === 'string' && p.cwd.length > 0) {
-    const rawWinCwd = process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(p.cwd)
-      ? convertToWindowsPath(p.cwd)
-      : p.cwd;
-    if (path.resolve(rawWinCwd) !== cwd) {
-      const candidateWinCwd = path.resolve(rawWinCwd);
+  if (p.target !== 'wsl2' && typeof p.cwd === 'string' && p.cwd.trim().length > 0) {
+    const trimmedWinCwd = p.cwd.trim().replace(/^['"]|['"]$/g, '').trim();
+    const rawWinCwd = process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(trimmedWinCwd)
+      ? convertToWindowsPath(trimmedWinCwd)
+      : trimmedWinCwd;
+    const candidateWinCwd = path.resolve(cwd, rawWinCwd);
+    if (candidateWinCwd !== cwd) {
       const st = fs.statSync(candidateWinCwd, { throwIfNoEntry: false });
       if (st === undefined || !st.isDirectory()) {
         exitWithError(`Resolved Windows cwd '${candidateWinCwd}' for eval target does not exist or is not a directory.`);
@@ -288,9 +354,9 @@ export function buildEvalPayload(
   }
   const normalizedTemp = scriptFilePath.replace(/\\/g, '/');
   let localArgs: string[];
-  if (isPwsh(localCmd) || isCmd(localCmd)) {
+  if (isPwsh(normalizedLocal) || isCmd(normalizedLocal)) {
     localArgs = formatScriptArgs(localCmd, scriptFilePath, p.args);
-  } else if (process.platform === 'win32' && ['bash', 'sh', 'zsh'].includes(localCmd.toLowerCase())) {
+  } else if (process.platform === 'win32' && ['bash', 'sh', 'zsh'].includes(normalizedLocal)) {
     const prefix = p.target === 'wsl2' ? '/mnt/' : '/';
     const unixTemp = normalizedTemp.replace(/^([a-zA-Z]):\//, (_m, drive: string) => `${prefix}${drive.toLowerCase()}/`);
     localArgs = [unixTemp, ...(p.args ?? [])];

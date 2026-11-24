@@ -2,57 +2,89 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { convertToWindowsPath } from '../command-utils.js';
 import type { ExecutionContext } from './types.js';
-import { AGENT_EXEC_README_URL } from './utils.js';
+import {
+  AGENTS_PATH_RE,
+  GLOB_META_RE,
+  PATHSPEC_FROM_FILE_RE,
+  blockGitAdd,
+  extractGitDirWorkTreeFlags,
+  guardPathspecFromFile,
+  isPrivateRuntimePath,
+  isSensitiveSecretPath,
+  matchesGitLongOpt,
+  mergeGitEnv,
+  resolveEffectiveGitRepoRoot,
+  scanBroadGitAddForBlockedPaths,
+  stripGitPathspecMagic,
+  tryRealpath,
+} from './git-add-broad-scan.js';
 
-/** [INVARIANT]: Keep in sync with commit.ts stale-lock threshold (5 minutes). */
+export { blockGitAdd };
+
+/** [INTENT]: Keep in sync with commit.ts stale-lock threshold (5 minutes). */
 export const STALE_INDEX_LOCK_MS = 5 * 60 * 1000;
 
-const AGENTS_PATH_RE = /(?:^|[\\/])\.agents(?:[\\/]|$)/i;
-const PRIVATE_PATH_RE = /(?:^|[\\/])\.agents[\\/](?:scratch|cache)(?:[\\/]|$)|issues\.jsonl$/i;
-const GIT_ADD_FORCE_RE = /^-[nvfipeuAN]*f[nvfipeuAN]*$/;
+const GIT_ADD_FORCE_RE = /^-[nvfipeuANU]*f[nvfipeuANU]*$/;
 const BROAD_ADD_GLOBS = new Set(['.', './', '..', '../', '.agents', '.agents/', '.agents/*', '.agents/**', '*', '**']);
-const ALL_ADD_FLAG_RE = /^-[nvfipeuAN]*A[nvfipeuAN]*$/;
+const ALL_ADD_FLAG_RE = /^-[nvfipeuANU]*A[nvfipeuANU]*$/;
+const UPDATE_ADD_FLAG_RE = /^-[nvfipeuANU]*u[nvfipeuANU]*$/;
+const SKIP_STAGED_DEL_SHORT_RE = /^-[nvfipeuANU]*[nipe][nvfipeuANU]*$/;
 
 export interface GitIgnoreProbe {
   ignored: boolean;
   pattern: string | null;
+  sourceFile?: string | null;
 }
 
 /**
  * [INTENT]: Ask git (in the payload cwd) whether a path is ignored, and by which pattern.
  * Tracked files are never reported as ignored by `git check-ignore`.
  */
-export function probeGitIgnore(cwd: string, target: string): GitIgnoreProbe {
+export function probeGitIgnore(
+  cwd: string,
+  target: string,
+  gitOverrideFlags: readonly string[] = [],
+  payloadEnv?: Record<string, string | undefined>
+): GitIgnoreProbe {
   try {
-    const res = spawnSync('git', ['check-ignore', '-v', '--', target], {
+    const res = spawnSync('git', [...gitOverrideFlags, 'check-ignore', '-v', '--', target], {
       cwd,
       encoding: 'utf8',
       timeout: 10000,
       windowsHide: true,
+      env: mergeGitEnv(payloadEnv),
     });
     if (res.status !== 0 || typeof res.stdout !== 'string' || res.stdout.trim() === '') {
-      return { ignored: false, pattern: null };
+      return { ignored: false, pattern: null, sourceFile: null };
     }
     const meta = (res.stdout.split(/\r?\n/)[0] ?? '').split('\t')[0] ?? '';
-    const patternMatch = meta.match(/^.*?:\d+:(.*)$/);
-    const pattern = patternMatch !== null && patternMatch[1] !== undefined ? patternMatch[1] : null;
+    const patternMatch = meta.match(/^(.*?):\d+:(.*)$/);
+    const sourceFile = patternMatch !== null && patternMatch[1] !== undefined ? patternMatch[1] : null;
+    const pattern = patternMatch !== null && patternMatch[2] !== undefined ? patternMatch[2] : null;
     if (pattern !== null && pattern.startsWith('!')) {
-      return { ignored: false, pattern };
+      return { ignored: false, pattern, sourceFile };
     }
-    return { ignored: true, pattern };
-  } catch {
-    return { ignored: false, pattern: null };
+    return { ignored: true, pattern, sourceFile };
+  } catch (err: unknown) {
+    console.error(`[git-add-guards] git check-ignore failed: ${err instanceof Error ? err.message : String(err)}`);
+    return { ignored: false, pattern: null, sourceFile: null };
   }
 }
 
-export function isWholesaleAgentsIgnore(pattern: string | null): boolean {
+export function isWholesaleAgentsIgnore(pattern: string | null, sourceFile?: string | null): boolean {
   if (pattern === null) return false;
   const norm = pattern.trim().replace(/^\/+/, '').replace(/^\*\*\//, '');
-  return ['.agents', '.agents/', '.agents/*', '.agents/**'].includes(norm);
+  if (['.agents', '.agents/', '.agents/*', '.agents/**', '.agents/**/*'].includes(norm)) return true;
+  if (norm === '*' && typeof sourceFile === 'string') {
+    const normSource = sourceFile.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+    return normSource === '.agents/.gitignore' || normSource.endsWith('/.agents/.gitignore');
+  }
+  return false;
 }
 
-function findGitRepoRoot(startDir: string): string {
+export function findGitRepoRoot(startDir: string): string {
   let current = path.resolve(startDir);
   while (true) {
     if (fs.statSync(path.join(current, '.git'), { throwIfNoEntry: false }) !== undefined) {
@@ -75,41 +107,45 @@ function isSameFsPath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
-function stripGitPathspecMagic(rawSpec: string): { isTopRooted: boolean; isExcluded: boolean; cleaned: string } {
-  let s = rawSpec.trim().replace(/^['"]|['"]$/g, '');
-  let isTopRooted = false;
-  let isExcluded = false;
-  if (s.startsWith(':(')) {
-    const closeIdx = s.indexOf(')');
-    if (closeIdx !== -1) {
-      const attrs = s.slice(2, closeIdx).split(',').map((part) => part.trim().toLowerCase());
-      if (attrs.includes('top')) isTopRooted = true;
-      if (attrs.includes('exclude')) isExcluded = true;
-      s = s.slice(closeIdx + 1);
-    }
-  } else if (s.startsWith(':')) {
-    let idx = 1;
-    while (idx < s.length && (s[idx] === '/' || s[idx] === '!' || s[idx] === '^')) {
-      if (s[idx] === '/') isTopRooted = true;
-      if (s[idx] === '!' || s[idx] === '^') isExcluded = true;
-      idx++;
-    }
-    s = s.slice(idx);
-  }
-  const norm = s.replace(/\\/g, '/').replace(/^\/+/, '');
-  return { isTopRooted, isExcluded, cleaned: norm.length > 0 ? norm : '.' };
-}
-
 function globSegmentMatches(targetName: string, seg: string): boolean {
-  if (!/[*?]/.test(seg)) return seg.toLowerCase() === targetName.toLowerCase();
-  const escaped = seg.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
-  return new RegExp(`^${escaped}$`, 'i').test(targetName);
+  if (!GLOB_META_RE.test(seg)) return seg.toLowerCase() === targetName.toLowerCase();
+  let regexSrc = '^';
+  for (let i = 0; i < seg.length; i++) {
+    const ch = seg[i] ?? '';
+    if (ch === '*') {
+      if (!regexSrc.endsWith('.*')) regexSrc += '.*';
+    } else if (ch === '?') regexSrc += '.';
+    else if (ch === '[') {
+      const close = seg.indexOf(']', i + 1);
+      if (close !== -1) {
+        const inner = seg.slice(i + 1, close);
+        const regexInner = inner.startsWith('!') ? `^${inner.slice(1)}` : inner;
+        regexSrc += `[${regexInner}]`;
+        i = close;
+        continue;
+      }
+      regexSrc += '\\[';
+    } else if (/[.+^${}()|\\]/.test(ch)) {
+      regexSrc += `\\${ch}`;
+    } else {
+      regexSrc += ch;
+    }
+  }
+  try {
+    return new RegExp(`${regexSrc}$`, 'i').test(targetName);
+  } catch {
+    return true;
+  }
 }
 
 function isWildcardTargetingAgents(posixRelFromRoot: string): boolean {
   const clean = posixRelFromRoot.replace(/^\.\//, '');
-  const firstSeg = clean.split('/')[0] ?? '';
-  if (!/[*?]/.test(firstSeg)) return false;
+  const parts = clean.split('/');
+  const firstSeg = parts[0] ?? '';
+  if (firstSeg.toLowerCase() === '.agents') {
+    return parts.slice(1).some(seg => /[*?[\]]/.test(seg));
+  }
+  if (!/[*?[\]]/.test(firstSeg)) return false;
   return globSegmentMatches('.agents', firstSeg);
 }
 
@@ -132,27 +168,46 @@ export function collectGitPathspecs(afterArgs: readonly string[]): Array<{ offse
   return specs;
 }
 
-export function findAlreadyStagedGitDeletions(gitCwd: string, rawPathspecs: readonly string[]): Set<string> {
+export function findAlreadyStagedGitDeletions(
+  gitCwd: string,
+  rawPathspecs: readonly string[],
+  gitOverrideFlags: readonly string[] = [],
+  payloadEnv?: Record<string, string | undefined>
+): Set<string> {
   const stagedDeletions = new Set<string>();
   const missingTargets: Array<{ original: string; relPosix: string }> = [];
   for (const rawPathspec of rawPathspecs) {
     const cleaned = rawPathspec.trim().replace(/^['"]|['"]$/g, '');
     if (cleaned.length === 0 || cleaned === '.' || cleaned === '..' || cleaned.startsWith(':') || /[*?[\]]/.test(cleaned)) continue;
     const absPath = path.resolve(gitCwd, cleaned);
-    if (fs.statSync(absPath, { throwIfNoEntry: false }) !== undefined) continue;
+    if (fs.lstatSync(absPath, { throwIfNoEntry: false }) !== undefined) continue;
     const rel = path.relative(gitCwd, absPath);
     if (rel === '' || rel === '.' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) continue;
     missingTargets.push({ original: rawPathspec, relPosix: rel.replace(/\\/g, '/') });
   }
   if (missingTargets.length === 0) return stagedDeletions;
+  const fold = (s: string): string => (process.platform === 'win32' ? s.toLowerCase() : s);
+  const specPrefix = process.platform === 'win32' ? ':(icase,literal)' : ':(literal)';
   try {
-    const cachedDelRes = spawnSync('git', ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z', '--', ...missingTargets.map(m => m.relPosix)], { cwd: gitCwd, encoding: 'utf8', timeout: 10000, windowsHide: true });
+    const cachedDelRes = spawnSync(
+      'git',
+      [...gitOverrideFlags, 'diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z', '--', ...missingTargets.map(m => `${specPrefix}${m.relPosix}`)],
+      {
+        cwd: gitCwd,
+        encoding: 'utf8',
+        timeout: 10000,
+        windowsHide: true,
+        env: mergeGitEnv(payloadEnv),
+      }
+    );
     if (cachedDelRes.status !== 0 || typeof cachedDelRes.stdout !== 'string') return stagedDeletions;
-    const cachedDeletedSet = new Set(cachedDelRes.stdout.split('\0').filter(Boolean));
+    const cachedDeletedSet = new Set(cachedDelRes.stdout.split('\0').filter(Boolean).map(fold));
     for (const item of missingTargets) {
-      if (cachedDeletedSet.has(item.relPosix)) stagedDeletions.add(item.original);
+      if (cachedDeletedSet.has(fold(item.relPosix))) stagedDeletions.add(item.original);
     }
-  } catch {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`WARN: failed checking staged deletions in '${gitCwd}': ${msg}`);
     return stagedDeletions;
   }
   return stagedDeletions;
@@ -164,9 +219,10 @@ export function isAlreadyStagedGitDeletion(gitCwd: string, rawPathspec: string):
 
 export function healGitRmStagedDeletions(ctx: ExecutionContext, gitCwd: string, rmIdx: number): void {
   const afterRm = ctx.args.slice(rmIdx + 1);
-  if (afterRm.includes('--ignore-unmatch') || afterRm.some(a => a === '--pathspec-from-file' || a.startsWith('--pathspec-from-file='))) return;
+  if (afterRm.includes('--ignore-unmatch') || afterRm.some(a => PATHSPEC_FROM_FILE_RE.test(a))) return;
   const paths = collectGitPathspecs(afterRm).map(s => s.value);
-  if (paths.length > 0 && findAlreadyStagedGitDeletions(gitCwd, paths).size > 0) {
+  const { flags: gitOverrideFlags } = extractGitDirWorkTreeFlags(ctx.args.slice(0, rmIdx), ctx.payload.env);
+  if (paths.length > 0 && findAlreadyStagedGitDeletions(gitCwd, paths, gitOverrideFlags, ctx.payload.env).size > 0) {
     ctx.args.splice(rmIdx + 1, 0, '--ignore-unmatch');
     syncGitPayloadArgs(ctx);
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Injecting '--ignore-unmatch' into 'git rm' for already-staged deletion(s)... (Frictionless Recovery)\x1b[0m`);
@@ -175,12 +231,25 @@ export function healGitRmStagedDeletions(ctx: ExecutionContext, gitCwd: string, 
 
 export function healGitAddStagedDeletions(ctx: ExecutionContext, gitCwd: string, addIdx: number): boolean {
   const afterAdd = ctx.args.slice(addIdx + 1);
-  if (afterAdd.some(a => ['-n', '--dry-run', '-i', '--interactive', '-p', '--patch', '-e', '--edit', '--pathspec-from-file'].includes(a) || a.startsWith('--pathspec-from-file='))) {
+  const ddIdx = afterAdd.indexOf('--');
+  const preDdAdd = ddIdx === -1 ? afterAdd : afterAdd.slice(0, ddIdx);
+  if (
+    preDdAdd.some(
+      (a) =>
+        a === '--dry-run' ||
+        a === '--interactive' ||
+        a === '--patch' ||
+        a === '--edit' ||
+        SKIP_STAGED_DEL_SHORT_RE.test(a) ||
+        PATHSPEC_FROM_FILE_RE.test(a)
+    )
+  ) {
     return false;
   }
   const pathSpecs = collectGitPathspecs(afterAdd).map(s => ({ argIndex: addIdx + 1 + s.offset, value: s.value }));
   if (pathSpecs.length === 0) return false;
-  const stagedSet = findAlreadyStagedGitDeletions(gitCwd, pathSpecs.map(s => s.value));
+  const { flags: gitOverrideFlags } = extractGitDirWorkTreeFlags(ctx.args.slice(0, addIdx), ctx.payload.env);
+  const stagedSet = findAlreadyStagedGitDeletions(gitCwd, pathSpecs.map(s => s.value), gitOverrideFlags, ctx.payload.env);
   if (stagedSet.size === 0) return false;
   const stagedDeleted = pathSpecs.filter(s => stagedSet.has(s.value));
   if (pathSpecs.length > stagedDeleted.length) {
@@ -202,7 +271,14 @@ export function healGitAddStagedDeletions(ctx: ExecutionContext, gitCwd: string,
 function hasBroadAllAddFlag(afterAdd: readonly string[]): boolean {
   for (const a of afterAdd) {
     if (a === '--') break;
-    if (a === '-A' || a === '--all' || a === '--no-ignore-removal' || ALL_ADD_FLAG_RE.test(a)) return true;
+    if (
+      a === '-A' ||
+      matchesGitLongOpt(a, '--all', 4) ||
+      matchesGitLongOpt(a, '--no-ignore-removal', 13) ||
+      ALL_ADD_FLAG_RE.test(a)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -216,71 +292,176 @@ function hasPrivateStateInDir(dirPath: string): boolean {
       const nameLower = entry.name.toLowerCase();
       return nameLower === 'scratch' || nameLower === 'cache' || nameLower.endsWith('issues.jsonl');
     });
-  } catch {
+  } catch (err: unknown) {
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
+    if (code !== 'ENOENT') {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`WARN: failed inspecting '${agentsDir}': ${msg}`);
+    }
     return false;
   }
 }
 
-export function blockGitAdd(hint: string, fix: string): void {
-  console.error(`\n   💡 AGENT HINT: ${hint}\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. ${fix} Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
-  process.exit(1);
-}
-
-function guardBroadAgentsForceAdd(rawLabel: string, repoRoot: string): void {
+function guardBroadAgentsForceAdd(
+  rawLabel: string,
+  repoRoot: string,
+  gitOverrideFlags: readonly string[] = [],
+  payloadEnv?: Record<string, string | undefined>
+): void {
   const rootAgentsDir = path.resolve(repoRoot, '.agents');
   if (hasPrivateStateInDir(rootAgentsDir)) {
-    blockGitAdd(
-      `Refusing to force-add broad directory '${rawLabel}': '.agents' contains scratch/cache directories or *issues.jsonl logs.`,
-      `Remove '${rawLabel}' from 'git add -f'. Stage explicit tracked paths only.`,
-    );
+    blockGitAdd(`Refusing to force-add broad directory '${rawLabel}': '.agents' contains scratch/cache directories or *issues.jsonl logs.`, `Remove '${rawLabel}' from 'git add -f'. Stage explicit tracked paths only.`);
   }
   if (fs.statSync(rootAgentsDir, { throwIfNoEntry: false })?.isDirectory() === true) {
-    const rootProbe = probeGitIgnore(repoRoot, '.agents');
-    if (rootProbe.ignored && isWholesaleAgentsIgnore(rootProbe.pattern)) {
-      blockGitAdd(
-        `Refusing to force-add broad directory '${rawLabel}': this repo ignores '.agents/' wholesale (${rootProbe.pattern ?? '.agents/'}), so its agent tooling must stay out of git.`,
-        `Remove '${rawLabel}' from 'git add -f'. Stage explicit tracked paths only.`,
-      );
+    const dirProbe = probeGitIgnore(repoRoot, '.agents', gitOverrideFlags, payloadEnv);
+    const childProbe = dirProbe.ignored ? dirProbe : probeGitIgnore(repoRoot, '.agents/.gitignore', gitOverrideFlags, payloadEnv);
+    if (childProbe.ignored && isWholesaleAgentsIgnore(childProbe.pattern, childProbe.sourceFile)) {
+      blockGitAdd(`Refusing to force-add broad directory '${rawLabel}': this repo ignores '.agents/' wholesale (${childProbe.pattern ?? '.agents/'}), so its agent tooling must stay out of git.`, `Remove '${rawLabel}' from 'git add -f'. Stage explicit tracked paths only.`);
     }
   }
 }
 
+export function probeGitIgnoreBatch(
+  cwd: string,
+  targets: readonly string[],
+  gitOverrideFlags: readonly string[] = [],
+  payloadEnv?: Record<string, string | undefined>
+): Map<string, GitIgnoreProbe> {
+  const result = new Map<string, GitIgnoreProbe>();
+  if (targets.length === 0) return result;
+  try {
+    const res = spawnSync('git', [...gitOverrideFlags, 'check-ignore', '-v', '-z', '--stdin'], {
+      cwd,
+      encoding: 'utf8',
+      input: `${targets.join('\0')}\0`,
+      timeout: 10000,
+      windowsHide: true,
+      env: mergeGitEnv(payloadEnv),
+    });
+    if (res.status !== 0 || typeof res.stdout !== 'string' || res.stdout.length === 0) return result;
+    const fields = res.stdout.split('\0');
+    for (let i = 0; i + 3 < fields.length; i += 4) {
+      const sourceFile = fields[i] ?? null;
+      const pattern = fields[i + 2] ?? null;
+      const pathname = fields[i + 3];
+      if (pathname !== undefined && pathname.length > 0) {
+        result.set(pathname, { ignored: pattern !== null && !pattern.startsWith('!'), pattern, sourceFile });
+      }
+    }
+  } catch (err: unknown) {
+    console.error(`[git-add-guards] git check-ignore batch failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return result;
+}
+
+interface PendingAgentsProbe {
+  rawSpec: string;
+  probeRoot: string;
+  probeTarget: string;
+  isWildcardOrRootGlob: boolean;
+}
+
+function evaluateAgentsIgnoreProbes(
+  agentsProbes: readonly PendingAgentsProbe[],
+  repoRoot: string,
+  hasForce: boolean,
+  gitOverrideFlags: readonly string[],
+  payloadEnv: Record<string, string | undefined> | undefined
+): boolean {
+  const probesByRoot = new Map<string, string[]>();
+  for (const item of agentsProbes) {
+    const list = probesByRoot.get(item.probeRoot) ?? [];
+    list.push(item.probeTarget);
+    probesByRoot.set(item.probeRoot, list);
+  }
+  const probeResultsByRoot = new Map<string, Map<string, GitIgnoreProbe>>();
+  for (const [probeRoot, targets] of probesByRoot) {
+    probeResultsByRoot.set(probeRoot, probeGitIgnoreBatch(probeRoot, targets, gitOverrideFlags, payloadEnv));
+  }
+  let anyIgnoredAgents = false;
+  for (const item of agentsProbes) {
+    const probe = probeResultsByRoot.get(item.probeRoot)?.get(item.probeTarget) ?? { ignored: false, pattern: null, sourceFile: null };
+    if (probe.ignored && isWholesaleAgentsIgnore(probe.pattern, probe.sourceFile)) {
+      blockGitAdd(`Refusing to ${hasForce ? 'force-add' : 'add'} '${item.rawSpec}': this repo ignores '.agents/' wholesale (${probe.pattern ?? '.agents/'}), so its agent tooling must stay out of git.`, `Remove '${item.rawSpec}' from 'git add' (and drop -f). Stage explicit tracked paths only.`);
+      return false;
+    }
+    if (probe.ignored) {
+      if (!hasForce && item.isWildcardOrRootGlob) {
+        guardBroadAgentsForceAdd(item.rawSpec, repoRoot, gitOverrideFlags, payloadEnv);
+        return false;
+      }
+      anyIgnoredAgents = true;
+    }
+  }
+  return anyIgnoredAgents;
+}
+
 export function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string, addIdx: number): void {
   if (addIdx === -1) return;
-  const repoRoot = findGitRepoRoot(gitCwd);
+  const { flags: gitOverrideFlags, hasGitOverride, workTreeOverride } = extractGitDirWorkTreeFlags(ctx.args.slice(0, addIdx), ctx.payload.env, gitCwd);
+  const repoRoot = resolveEffectiveGitRepoRoot(gitCwd, gitOverrideFlags, hasGitOverride, ctx.payload.env, workTreeOverride, findGitRepoRoot);
   const rootAgentsDir = path.resolve(repoRoot, '.agents');
   const afterAdd = ctx.args.slice(addIdx + 1);
-  const hasForce = afterAdd.some(a => a === '--force' || GIT_ADD_FORCE_RE.test(a));
-  if (hasForce && hasBroadAllAddFlag(afterAdd)) {
-    guardBroadAgentsForceAdd('-A', repoRoot);
-  }
+  guardPathspecFromFile(afterAdd);
+  const ddIdx = afterAdd.indexOf('--');
+  const preDdAdd = ddIdx === -1 ? afterAdd : afterAdd.slice(0, ddIdx);
+  const hasForce = preDdAdd.some(a => matchesGitLongOpt(a, '--force', 3) || GIT_ADD_FORCE_RE.test(a));
+  const hasBroadAll = hasBroadAllAddFlag(afterAdd);
+  const hasUpdateFlag = preDdAdd.some(a => matchesGitLongOpt(a, '--update', 4) || matchesGitLongOpt(a, '--renormalize', 5) || UPDATE_ADD_FLAG_RE.test(a));
+  const hasFullRepoFlag = hasBroadAll || hasUpdateFlag;
+  let agentsForceGuarded = false;
+  const ensureAgentsForceGuarded = (label: string): void => {
+    if (agentsForceGuarded) return;
+    agentsForceGuarded = true;
+    guardBroadAgentsForceAdd(label, repoRoot, gitOverrideFlags, ctx.payload.env);
+  };
+  if (hasForce && hasBroadAll) ensureAgentsForceGuarded('-A');
   const paths = collectGitPathspecs(afterAdd).map(s => s.value);
   let hasNonAgentsPath = false;
-  let anyIgnoredAgents = false;
+  let anyBroadOrWildcard = false;
+  let hasFullRepoScan = hasFullRepoFlag;
+  const agentsProbes: PendingAgentsProbe[] = [];
+  const broadScanTargets: string[] = [];
+
   for (const rawSpec of paths) {
     const magic = stripGitPathspecMagic(rawSpec);
     if (magic.isExcluded) continue;
     const baseDir = magic.isTopRooted ? repoRoot : gitCwd;
     const posixNorm = path.posix.normalize(magic.cleaned);
-    const absResolved = path.resolve(baseDir, posixNorm);
-    if (PRIVATE_PATH_RE.test(rawSpec) || PRIVATE_PATH_RE.test(posixNorm) || PRIVATE_PATH_RE.test(absResolved)) {
+    const fsSpec = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(posixNorm) ? convertToWindowsPath(posixNorm) : posixNorm;
+    const absResolved = path.resolve(baseDir, fsSpec);
+    const realResolved = tryRealpath(absResolved);
+    if (isPrivateRuntimePath(rawSpec) || isPrivateRuntimePath(posixNorm) || isPrivateRuntimePath(absResolved) || (realResolved !== null && isPrivateRuntimePath(realResolved))) {
       return blockGitAdd(`Refusing to ${hasForce ? 'force-add' : 'add'} '${rawSpec}': scratch/cache directories and *issues.jsonl logs are private runtime state.`, `Remove '${rawSpec}' from 'git add' (and drop -f). Stage explicit tracked paths only.`);
+    }
+    if (isSensitiveSecretPath(rawSpec) || isSensitiveSecretPath(posixNorm) || isSensitiveSecretPath(absResolved) || (realResolved !== null && isSensitiveSecretPath(realResolved))) {
+      return blockGitAdd(`Refusing to ${hasForce ? 'force-add' : 'add'} '${rawSpec}': secrets/env/private key files must never be staged.`, `Remove '${rawSpec}' from 'git add'.`);
+    }
+    const isDirTarget = fs.statSync(absResolved, { throwIfNoEntry: false })?.isDirectory() === true;
+    if (isSameFsPath(absResolved, repoRoot) || isContainedInDir(repoRoot, absResolved)) {
+      hasFullRepoScan = true;
+    } else if (GLOB_META_RE.test(magic.cleaned) || isDirTarget) {
+      broadScanTargets.push(magic.isTopRooted ? `:/${magic.cleaned}` : magic.cleaned);
     }
     const normRel = posixNorm.replace(/\/+$/, '');
     const relToRoot = path.relative(repoRoot, absResolved).replace(/\\/g, '/');
-    const isAgentsDir = isSameFsPath(absResolved, rootAgentsDir);
-    const isBroadOrWildcard = BROAD_ADD_GLOBS.has(normRel) || BROAD_ADD_GLOBS.has(posixNorm) || isSameFsPath(absResolved, repoRoot)
-      || isAgentsDir || isContainedInDir(rootAgentsDir, absResolved) || isWildcardTargetingAgents(relToRoot);
-    if (hasForce && isBroadOrWildcard) guardBroadAgentsForceAdd(rawSpec, repoRoot);
-    const isAgents = AGENTS_PATH_RE.test(rawSpec) || AGENTS_PATH_RE.test(posixNorm) || isContainedInDir(absResolved, rootAgentsDir);
+    const isWildcardAgents = isWildcardTargetingAgents(relToRoot);
+    const isAgentsDir = isSameFsPath(absResolved, rootAgentsDir) || (realResolved !== null && isSameFsPath(realResolved, rootAgentsDir));
+    const inAgentsDir = isContainedInDir(absResolved, rootAgentsDir) || (realResolved !== null && isContainedInDir(realResolved, rootAgentsDir));
+    const isWildcardOrRootGlob = BROAD_ADD_GLOBS.has(normRel) || BROAD_ADD_GLOBS.has(posixNorm) || isWildcardAgents;
+    const isBroadOrWildcard = isWildcardOrRootGlob || isSameFsPath(absResolved, repoRoot) || isAgentsDir || isContainedInDir(rootAgentsDir, absResolved) || (isDirTarget && inAgentsDir);
+    if (isBroadOrWildcard) anyBroadOrWildcard = true;
+    if (hasForce && isBroadOrWildcard) ensureAgentsForceGuarded(rawSpec);
+    const isAgents = AGENTS_PATH_RE.test(rawSpec) || AGENTS_PATH_RE.test(posixNorm) || inAgentsDir || isWildcardAgents;
     if (!isAgents) { hasNonAgentsPath = true; continue; }
-    const probe = probeGitIgnore(baseDir, magic.cleaned);
-    if (probe.ignored && isWholesaleAgentsIgnore(probe.pattern)) {
-      return blockGitAdd(`Refusing to ${hasForce ? 'force-add' : 'add'} '${rawSpec}': this repo ignores '.agents/' wholesale (${probe.pattern ?? '.agents/'}), so its agent tooling must stay out of git.`, `Remove '${rawSpec}' from 'git add' (and drop -f). Stage explicit tracked paths only.`);
-    }
-    if (probe.ignored) anyIgnoredAgents = true;
+    const canProbeFromRoot = relToRoot.length > 0 && !relToRoot.startsWith('..');
+    agentsProbes.push({ rawSpec, probeRoot: canProbeFromRoot ? repoRoot : baseDir, probeTarget: canProbeFromRoot ? relToRoot : magic.cleaned, isWildcardOrRootGlob });
   }
-  if (paths.length > 0 && !hasForce && !hasNonAgentsPath && anyIgnoredAgents) {
+  if (hasFullRepoScan || broadScanTargets.length > 0) {
+    scanBroadGitAddForBlockedPaths({ gitCwd, repoRoot, targets: broadScanTargets, hasFullRepoScan, hasForce, isUpdateOnly: !hasBroadAll && hasUpdateFlag, gitOverrideFlags, hasGitOverride, payloadEnv: ctx.payload.env });
+  }
+  const anyIgnoredAgents = evaluateAgentsIgnoreProbes(agentsProbes, repoRoot, hasForce, gitOverrideFlags, ctx.payload.env);
+  if (paths.length > 0 && !hasForce && !hasNonAgentsPath && anyIgnoredAgents && !anyBroadOrWildcard) {
     ctx.args.splice(addIdx + 1, 0, '-f');
     syncGitPayloadArgs(ctx);
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Injecting '-f' to 'git add' for '.agents' path(s) that git check-ignore reports as ignored... (Frictionless Recovery)\x1b[0m`);
@@ -288,18 +469,25 @@ export function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string, addId
 }
 
 export function validateNonHostWslAddPaths(gitCwd: string, afterAdd: readonly string[]): void {
+  guardPathspecFromFile(afterAdd);
   const normCwd = path.posix.normalize(gitCwd.replace(/\\/g, '/'));
   const blockMsg = (target: string): void => blockGitAdd(
     `Refusing to add '${target}': scratch/cache directories and *issues.jsonl logs are private runtime state.`,
     `Remove '${target}' from 'git add'. Stage explicit tracked paths only.`,
   );
-  if (PRIVATE_PATH_RE.test(gitCwd) || PRIVATE_PATH_RE.test(normCwd)) return blockMsg(gitCwd);
+  if (isPrivateRuntimePath(gitCwd) || isPrivateRuntimePath(normCwd)) return blockMsg(gitCwd);
   for (const spec of collectGitPathspecs(afterAdd)) {
     const magic = stripGitPathspecMagic(spec.value);
     if (magic.isExcluded) continue;
     const normArg = magic.cleaned;
-    if (PRIVATE_PATH_RE.test(spec.value) || PRIVATE_PATH_RE.test(normArg) || PRIVATE_PATH_RE.test(path.posix.resolve(normCwd, normArg))) {
+    if (isPrivateRuntimePath(spec.value) || isPrivateRuntimePath(normArg) || isPrivateRuntimePath(path.posix.resolve(normCwd, normArg))) {
       return blockMsg(spec.value);
+    }
+    if (isSensitiveSecretPath(spec.value) || isSensitiveSecretPath(normArg)) {
+      return blockGitAdd(
+        `Refusing to add '${spec.value}': secrets/env/private key files must never be staged.`,
+        `Remove '${spec.value}' from 'git add'.`
+      );
     }
   }
 }

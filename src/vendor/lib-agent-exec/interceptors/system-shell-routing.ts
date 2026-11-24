@@ -13,7 +13,7 @@ const SHELL_SCRIPT_EXTS = ['.ps1', '.bat', '.cmd', '.sh', '.bash'];
 const FS_SEARCH_ALIASES = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'];
 const FS_LIST_ALIASES = ['ls', 'ls.exe', 'dir', 'dir.exe', 'tree', 'tree.com'];
 const SYSTEMD_ALIASES = ['journalctl', 'journalctl.exe'];
-const SHELL_PREFIX_KEYWORDS = new Set(['then', 'do', 'else', 'elif', '!', 'time', 'exec']);
+const SHELL_PREFIX_KEYWORDS = new Set(['if', 'then', 'do', 'else', 'elif', 'while', 'until', '!', 'time', 'exec']);
 
 export function routeEmbeddedShellTools(payload: ExecPayload, baseCwd?: string): boolean {
   routeNetworkCommandString(payload);
@@ -75,7 +75,16 @@ function extractShellCommandHeads(scriptContent: string): Array<{ head: string; 
     let idx = 0;
     while (idx < tokens.length) {
       const tok = tokens[idx] ?? '';
-      if (SHELL_PREFIX_KEYWORDS.has(tok.toLowerCase()) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(tok)) {
+      if (SHELL_PREFIX_KEYWORDS.has(tok.toLowerCase())) {
+        idx++;
+        continue;
+      }
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok)) {
+        const subCmdMatch = tok.match(/^[A-Za-z_][A-Za-z0-9_]*=["']?(?:\$\(|`)([^\s`()]+)/);
+        if (subCmdMatch?.[1] !== undefined) {
+          out.push({ head: subCmdMatch[1].toLowerCase(), segment: tok });
+          break;
+        }
         idx++;
         continue;
       }
@@ -109,7 +118,9 @@ function routeShellToolAliases(payload: ExecPayload, baseCwd?: string): boolean 
   const scriptContent = readShellScriptContent(payload, baseCwd);
   // [INTENT]: PowerShell cmdlets stay on Windows pwsh and skip the rest of system interception.
   if (isPowerShellCode(scriptContent)) {
-    if (payload.interpreter && ['bash', 'sh'].includes(payload.interpreter.toLowerCase())) {
+    const interpLower = payload.interpreter?.toLowerCase();
+    const shouldSwitchToPwsh = interpLower === undefined || interpLower.length === 0 || interpLower === 'bash' || interpLower === 'sh';
+    if (shouldSwitchToPwsh && (payload.type === 'eval' || (interpLower !== undefined && interpLower.length > 0))) {
       payload.interpreter = 'pwsh';
       payload.target = 'windows';
     }
@@ -142,17 +153,23 @@ function normalizeWinPathIfMnt(p: string): string {
 function readShellScriptContent(payload: ExecPayload, baseCwd?: string): string {
   if (payload.type === 'eval') return payload.code;
   if (payload.type === 'script' && typeof payload.scriptPath === 'string') {
+    if (process.platform === 'win32' && payload.scriptPath.startsWith('~')) return '';
     const normScript = normalizeWinPathIfMnt(payload.scriptPath);
     if (process.platform === 'win32' && normScript.startsWith('/')) return '';
+    if (process.platform === 'win32' && typeof payload.cwd === 'string' && payload.cwd.startsWith('~')) return '';
     const normPayloadCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? normalizeWinPathIfMnt(payload.cwd) : undefined;
     if (process.platform === 'win32' && normPayloadCwd !== undefined && normPayloadCwd.startsWith('/')) return '';
     const rawCwd = normPayloadCwd !== undefined
       ? normPayloadCwd
       : (baseCwd !== undefined && baseCwd.length > 0 ? normalizeWinPathIfMnt(baseCwd) : process.cwd());
     const resolved = path.resolve(rawCwd, normScript);
-    const st = fs.statSync(resolved, { throwIfNoEntry: false });
-    if (st !== undefined && st.isFile()) {
-      return fs.readFileSync(resolved, 'utf8');
+    try {
+      const st = fs.statSync(resolved, { throwIfNoEntry: false });
+      if (st !== undefined && st.isFile() && st.size <= 512 * 1024) {
+        return fs.readFileSync(resolved, 'utf8');
+      }
+    } catch {
+      return '';
     }
   }
   return '';

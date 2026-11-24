@@ -59,13 +59,20 @@ export function injectRecursiveGrepExclusions(
   }
   if (!args.some((arg) => arg.startsWith('--binary-files='))) {
     args.unshift('--binary-files=without-match');
+    onSync?.();
   }
   const binaryPatterns = ['*.db', '*.sqlite', '*.sqlite3', '*.lock'];
+  let addedBinaryPat = false;
   for (const pat of binaryPatterns) {
-    if (!hasExcludePattern(args, pat)) args.unshift(`--exclude=${pat}`);
+    if (!hasExcludePattern(args, pat)) {
+      args.unshift(`--exclude=${pat}`);
+      addedBinaryPat = true;
+    }
+  }
+  if (missingExcludes.length > 0 || addedBinaryPat) {
+    onSync?.();
   }
   if (missingExcludes.length > 0) {
-    onSync?.();
     console.error(
       `\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted Windows filesystem detected. Auto-injecting --exclude-dir for node_modules, .git, and dist (and artifact/cache dirs) to prevent timeouts... (Frictionless Recovery)`
     );

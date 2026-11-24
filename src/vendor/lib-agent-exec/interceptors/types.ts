@@ -7,6 +7,7 @@ export interface ExecutionContext {
   envOverrides: Record<string, string>;
   payload: ExecPayload;
   cwd?: string;
+  evalInterpreterDefaulted?: boolean;
 }
 
 export type Interceptor = (ctx: ExecutionContext) => void;

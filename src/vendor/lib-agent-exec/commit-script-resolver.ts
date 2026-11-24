@@ -6,11 +6,33 @@ import { fileURLToPath } from 'node:url';
 const AGENT_SCRIPT_REF_RE = /^(?:(?:\.[\\/])?\.agents|.*[\\/]\.agents)[\\/]scripts[\\/]([a-zA-Z0-9_.-]+\.(?:ts|js|mjs))$/;
 const TSX_COMMIT_SCRIPT_RE = /^(?:pnpm(?:\s+exec)?\s+|bun(?:x)?\s+|npx\s+|node\s+\S*?)?\b(?:tsx|cli\.mjs)\s+['"]?(?:\.[\\/])?scripts[\\/]commit\.ts['"]?\s*$/i;
 
+function isRegularNonSymlinkFile(filePath: string): boolean {
+  const st = fs.lstatSync(filePath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isFile();
+}
+
+function tryRealpathNative(filePath: string): string | null {
+  try {
+    return fs.realpathSync.native(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function isContainedInRealRoot(targetPath: string, realRoot: string): boolean {
+  const realTarget = tryRealpathNative(targetPath);
+  if (realTarget === null) return false;
+  const normRoot = process.platform === 'win32' ? realRoot.toLowerCase() : realRoot;
+  const normTarget = process.platform === 'win32' ? realTarget.toLowerCase() : realTarget;
+  const rel = path.relative(normRoot, normTarget);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
 export function resolveAgentScriptFallback(rawArg: string, projectDir: string): string | null {
   const matchResult = rawArg.match(AGENT_SCRIPT_REF_RE);
   if (matchResult === null) return null;
 
-  if (fs.statSync(path.resolve(projectDir, rawArg), { throwIfNoEntry: false }) !== undefined) {
+  if (fs.lstatSync(path.resolve(projectDir, rawArg), { throwIfNoEntry: false }) !== undefined) {
     return null;
   }
 
@@ -18,19 +40,34 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
   if (scriptName === undefined) return null;
 
   const localScriptPath = path.join(projectDir, 'scripts', scriptName);
-  if (fs.statSync(localScriptPath, { throwIfNoEntry: false }) !== undefined) {
+  const realProjectDir = tryRealpathNative(projectDir);
+  if (
+    isRegularNonSymlinkFile(localScriptPath) &&
+    realProjectDir !== null &&
+    isContainedInRealRoot(localScriptPath, realProjectDir)
+  ) {
     return `scripts/${scriptName}`;
   }
 
-  let ancestorDir = path.dirname(path.resolve(projectDir));
-  while (true) {
-    const ancestorCandidate = path.join(ancestorDir, 'scripts', scriptName);
-    if (fs.statSync(ancestorCandidate, { throwIfNoEntry: false }) !== undefined) {
-      return ancestorCandidate;
+  if (fs.lstatSync(path.join(projectDir, '.git'), { throwIfNoEntry: false }) === undefined) {
+    let ancestorDir = path.dirname(path.resolve(projectDir));
+    for (let depth = 0; depth < 12; depth++) {
+      const ancestorCandidate = path.join(ancestorDir, 'scripts', scriptName);
+      const realAncestor = tryRealpathNative(ancestorDir);
+      if (
+        isRegularNonSymlinkFile(ancestorCandidate) &&
+        realAncestor !== null &&
+        isContainedInRealRoot(ancestorCandidate, realAncestor)
+      ) {
+        return ancestorCandidate;
+      }
+      if (fs.lstatSync(path.join(ancestorDir, '.git'), { throwIfNoEntry: false }) !== undefined) {
+        break;
+      }
+      const parent = path.dirname(ancestorDir);
+      if (parent === ancestorDir) break;
+      ancestorDir = parent;
     }
-    const parent = path.dirname(ancestorDir);
-    if (parent === ancestorDir) break;
-    ancestorDir = parent;
   }
 
   const bundledScriptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -44,7 +81,7 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
       : []),
   ];
   for (const bundledCandidate of bundledCandidates) {
-    if (fs.statSync(bundledCandidate, { throwIfNoEntry: false }) !== undefined) {
+    if (isRegularNonSymlinkFile(bundledCandidate)) {
       return bundledCandidate;
     }
   }
@@ -54,9 +91,10 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
 
 function hasNewerTsInDir(dirPath: string, targetMtimeMs: number): boolean {
   const dirStat = fs.lstatSync(dirPath, { throwIfNoEntry: false });
-  if (dirStat === undefined || dirStat.isSymbolicLink() || !dirStat.isDirectory()) return false;
+  if (dirStat === undefined) return false;
+  if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) return true;
   for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-    if (entry.isSymbolicLink()) continue;
+    if (entry.isSymbolicLink()) return true;
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
       if (hasNewerTsInDir(fullPath, targetMtimeMs)) return true;
@@ -95,19 +133,27 @@ export function resolveFreshCompiledCommitBundle(
   }
   const compiledPath = path.join(repoRoot, 'dist', 'vendor', 'commit', 'commit.js');
   try {
-    const compiledStats = fs.statSync(compiledPath, { throwIfNoEntry: false });
-    if (compiledStats === undefined || !compiledStats.isFile()) {
+    const realRoot = tryRealpathNative(repoRoot);
+    if (realRoot === null) return null;
+    const compiledStats = fs.lstatSync(compiledPath, { throwIfNoEntry: false });
+    if (compiledStats === undefined || compiledStats.isSymbolicLink() || !compiledStats.isFile()) {
+      return null;
+    }
+    if (!isContainedInRealRoot(compiledPath, realRoot)) {
       return null;
     }
     const compiledMtime = compiledStats.mtimeMs;
-    const targetStats = fs.statSync(absScript, { throwIfNoEntry: false });
-    if (targetStats === undefined || !targetStats.isFile() || targetStats.mtimeMs > compiledMtime) {
+    const targetStats = fs.lstatSync(absScript, { throwIfNoEntry: false });
+    if (targetStats === undefined || targetStats.isSymbolicLink() || !targetStats.isFile() || targetStats.mtimeMs > compiledMtime) {
+      return null;
+    }
+    if (!isContainedInRealRoot(absScript, realRoot)) {
       return null;
     }
     const scriptsCommit = path.join(repoRoot, 'scripts', 'commit.ts');
     if (norm(absScript) !== norm(scriptsCommit)) {
-      const scriptsCommitStats = fs.statSync(scriptsCommit, { throwIfNoEntry: false });
-      if (scriptsCommitStats !== undefined && scriptsCommitStats.mtimeMs > compiledMtime) {
+      const scriptsCommitStats = fs.lstatSync(scriptsCommit, { throwIfNoEntry: false });
+      if (scriptsCommitStats !== undefined && (scriptsCommitStats.isSymbolicLink() || scriptsCommitStats.mtimeMs > compiledMtime)) {
         return null;
       }
     }

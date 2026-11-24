@@ -64,7 +64,7 @@ export const DIRECTORY_SYNONYMS: Record<string, readonly string[]> = {
   docs: ['documentation', 'doc'],
   doc: ['docs', 'documentation'],
   lib: ['src', 'utils'],
-  src: ['lib', 'dist', 'build'],
+  src: ['lib'],
   dist: ['src', 'lib', 'build', 'out'],
   build: ['src', 'lib', 'dist', 'out'],
   out: ['src', 'lib', 'dist', 'build'],
@@ -137,9 +137,15 @@ export function isFilePath(filePath: string): boolean {
   }
 }
 
+export const WSL_DRIVE_MNT_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/i;
+
 export function normalizeMntPath(raw: string): string {
-  if (!raw.startsWith('/mnt/')) return raw;
-  return raw.replace(/^\/mnt\/([a-zA-Z])(?:\/(.*))?$/, (_match: string, drive: string, rest?: string) => `${drive.toUpperCase()}:/${rest ?? ''}`);
+  if (!WSL_DRIVE_MNT_RE.test(raw)) return raw;
+  return raw.replace(/^\/mnt\/([a-zA-Z])(?:\/(.*))?$/i, (_match: string, drive: string, rest?: string) => `${drive.toUpperCase()}:/${rest ?? ''}`);
+}
+
+export function normalizeMntPathForHost(raw: string): string {
+  return process.platform === 'win32' && WSL_DRIVE_MNT_RE.test(raw) ? normalizeMntPath(raw) : raw;
 }
 
 export function preserveQuotes(original: string, updated: string): string {
@@ -175,9 +181,44 @@ export function formatHealedPath(originalArg: string, candidatePath: string, cwd
     if (rawPath.includes('/') && !rawPath.includes('\\')) formatted = formatted.replace(/\\/g, '/');
   } else {
     formatted = path.relative(cwd, candidatePath);
+    if (formatted.length === 0) formatted = '.';
     if (rawPath.includes('/') || !rawPath.includes('\\')) formatted = formatted.replace(/\\/g, '/');
   }
   return preserveQuotes(originalArg, formatted);
+}
+
+const JOINED_PATH_EXT_RE = /\.[a-zA-Z0-9]{1,8}$/;
+
+function isJoinedPathToken(token: string, cwd: string): { pathLike: boolean; exists: boolean } {
+  if (token.length === 0 || token.startsWith('-')) return { pathLike: false, exists: false };
+  const hostToken = WSL_DRIVE_MNT_RE.test(token) ? normalizeMntPathForHost(token) : token;
+  let exists: boolean;
+  try {
+    const resolved = path.isAbsolute(hostToken) ? path.normalize(hostToken) : path.resolve(cwd, hostToken);
+    exists = fs.existsSync(resolved);
+  } catch {
+    exists = false;
+  }
+  const hasPathShape = exists || token.includes('/') || token.includes('\\') || JOINED_PATH_EXT_RE.test(token);
+  return { pathLike: hasPathShape, exists };
+}
+
+/**
+ * [INTENT]: Split a single non-existent whitespace-separated multi-target argument (e.g. `"a.ts b.ts c.ts"`)
+ * into individual path arguments when all tokens look path-like and at least two resolve on disk.
+ */
+export function splitJoinedFileArg(arg: string, cwd: string): string[] | null {
+  const raw = arg.replace(/^['"]|['"]$/g, '').trim();
+  if (!/\s/.test(raw) || raw.includes('\n') || raw.includes('\r')) return null;
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  let existingCount = 0;
+  for (const part of parts) {
+    const info = isJoinedPathToken(part, cwd);
+    if (!info.pathLike) return null;
+    if (info.exists) existingCount += 1;
+  }
+  return existingCount >= 2 ? parts : null;
 }
 
 export { findNeighborFilePath } from './path-neighbor.js';

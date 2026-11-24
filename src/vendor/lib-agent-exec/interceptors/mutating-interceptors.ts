@@ -3,13 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { match, P } from 'ts-pattern';
 import { execFileSync } from 'node:child_process';
-import { convertToWindowsPath } from '../command-utils.js';
+import { convertToWindowsPath, convertToWslPath } from '../command-utils.js';
 import { ExecutionContext } from './types.js';
-import { AGENT_EXEC_README_URL } from './utils.js';
+import { AGENT_EXEC_README_URL, hasJournalctlFollowFlag } from './utils.js';
 import { sanitizeJqInvocation } from './jq-sanitizer.js';
 import {
   STALE_INDEX_LOCK_MS,
   findAlreadyStagedGitDeletions,
+  findGitRepoRoot,
   healGitAddForceFlag,
   healGitAddStagedDeletions,
   healGitRmStagedDeletions,
@@ -49,13 +50,17 @@ function isPosixOrTildePath(p: string): boolean {
 }
 
 function resolveMutatingGitDir(next: string, currentCwd: string): string {
-  const normalized = /^\/mnt\/[a-zA-Z](?:\/|$)/.test(next) && process.platform === 'win32'
-    ? convertToWindowsPath(next)
-    : next;
-  if ((normalized.startsWith('/') && !normalized.startsWith('/mnt/')) || normalized === '~' || normalized.startsWith('~/')) {
+  const isPosixBase = isPosixOrTildePath(currentCwd);
+  let normalized = next;
+  if (/^\/mnt\/[a-zA-Z](?:\/|$)/.test(next) && process.platform === 'win32') {
+    normalized = convertToWindowsPath(next);
+  } else if (isPosixBase && path.win32.isAbsolute(next)) {
+    normalized = convertToWslPath(next);
+  }
+  if (normalized.startsWith('/') || normalized === '~' || normalized.startsWith('~/') || path.win32.isAbsolute(normalized)) {
     return normalized;
   }
-  if (isPosixOrTildePath(currentCwd)) {
+  if (isPosixBase) {
     return currentCwd.startsWith('~') ? path.posix.join(currentCwd, normalized) : path.posix.resolve(currentCwd, normalized);
   }
   return path.isAbsolute(normalized) ? normalized : path.resolve(currentCwd, normalized);
@@ -79,11 +84,10 @@ function parseGitInvocation(ctx: ExecutionContext): ParsedGitInvocation {
     if (a === undefined || a === '--') break;
     if (a === '-C') {
       const next = ctx.args[i + 1];
-      if (next !== undefined && !/^\d+$/.test(next)) gitCwd = resolveMutatingGitDir(next, gitCwd);
+      if (next !== undefined && next.length > 0) gitCwd = resolveMutatingGitDir(next, gitCwd);
       i += 2;
     } else if (a.startsWith('-C') && a.length > 2) {
-      const candidate = a.slice(2);
-      if (!/^\d+$/.test(candidate)) gitCwd = resolveMutatingGitDir(candidate, gitCwd);
+      gitCwd = resolveMutatingGitDir(a.slice(2), gitCwd);
       i += 1;
     } else if (GIT_TOP_VALUE_FLAGS.has(a)) {
       i += 2;
@@ -101,6 +105,7 @@ const SUDO_VALUE_FLAGS = new Set([
   '-r', '--role', '-t', '--type', '-C', '--close-from', '-D', '--chdir',
   '-T', '--command-timeout', '-U', '--other-user',
 ]);
+const SUDO_SHORT_VALUE_CHARS = new Set(['u', 'g', 'h', 'p', 'r', 't', 'C', 'D', 'T', 'U']);
 
 function hasSudoNonInteractiveFlag(args: readonly string[]): boolean {
   for (let i = 0; i < args.length; i++) {
@@ -108,23 +113,63 @@ function hasSudoNonInteractiveFlag(args: readonly string[]): boolean {
     if (a === undefined || a === '--') break;
     if (a === '-n' || a === '--non-interactive') return true;
     if (!a.startsWith('-')) break;
-    if (/^-[a-zA-Z]*n[a-zA-Z]*$/.test(a)) return true;
-    if (SUDO_VALUE_FLAGS.has(a)) i += 1;
+    if (SUDO_VALUE_FLAGS.has(a)) {
+      i += 1;
+      continue;
+    }
+    if (!a.startsWith('--')) {
+      let takesNext = false;
+      for (let c = 1; c < a.length; c++) {
+        const ch = a[c] ?? '';
+        if (ch === 'n') return true;
+        if (SUDO_SHORT_VALUE_CHARS.has(ch)) {
+          takesNext = c === a.length - 1;
+          break;
+        }
+      }
+      if (takesNext) i += 1;
+    }
   }
   return false;
 }
 
+const WIN_PING_T_RE = /^[-/]t$/i;
+const UNIX_PING_C_RE = /^-c\d+$/;
+const RM_FORCE_SHORT_RE = /^-([a-zA-Z]*f[a-zA-Z]*)$/;
+
+function resolveGitIndexLockPath(lockRoot: string): string {
+  const dotGitPath = path.join(lockRoot, '.git');
+  const dotGitStat = fs.lstatSync(dotGitPath, { throwIfNoEntry: false });
+  if (dotGitStat !== undefined && dotGitStat.isFile() && !dotGitStat.isSymbolicLink()) {
+    try {
+      const content = fs.readFileSync(dotGitPath, 'utf8');
+      const match = /^gitdir:\s*(.+)$/im.exec(content);
+      if (match?.[1] !== undefined) {
+        return path.join(path.resolve(lockRoot, match[1].trim()), 'index.lock');
+      }
+    } catch {
+      // Fall back to default .git/index.lock
+    }
+  }
+  return path.join(dotGitPath, 'index.lock');
+}
+
 function healGitMutatingCommand(ctx: ExecutionContext, matchedArgs: readonly string[]): void {
   const { gitCwd, subcmdIndex, subcmd } = parseGitInvocation(ctx);
-  const lockPath = path.join(gitCwd, '.git', 'index.lock');
-  const lockStats = fs.statSync(lockPath, { throwIfNoEntry: false });
-  if (lockStats !== undefined && Date.now() - lockStats.mtimeMs > STALE_INDEX_LOCK_MS) {
-    try {
-      fs.unlinkSync(lockPath);
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected stale '.git/index.lock' (age: ${Math.round((Date.now() - lockStats.mtimeMs) / 1000)}s). Removing lock to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
-    } catch { /* ignore stale lock race */ }
+  const isNonHostPosixCwd = process.platform === 'win32'
+    && ((gitCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(gitCwd)) || gitCwd.startsWith('~'));
+  const hasLocalGitCwd = !isNonHostPosixCwd && fs.statSync(gitCwd, { throwIfNoEntry: false })?.isDirectory() === true;
+  if (hasLocalGitCwd) {
+    const lockRoot = findGitRepoRoot(gitCwd);
+    const lockPath = resolveGitIndexLockPath(lockRoot);
+    const lockStats = fs.lstatSync(lockPath, { throwIfNoEntry: false });
+    if (lockStats !== undefined && !lockStats.isSymbolicLink() && lockStats.isFile() && Date.now() - lockStats.mtimeMs > STALE_INDEX_LOCK_MS) {
+      try {
+        fs.unlinkSync(lockPath);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected stale '.git/index.lock' (age: ${Math.round((Date.now() - lockStats.mtimeMs) / 1000)}s). Removing lock to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
+      } catch { /* ignore stale lock race */ }
+    }
   }
-  const hasLocalGitCwd = fs.statSync(gitCwd, { throwIfNoEntry: false })?.isDirectory() === true;
   if (subcmd === 'rm' && ctx.payload.target !== 'wsl2') healGitRmStagedDeletions(ctx, gitCwd, subcmdIndex);
   else if (subcmd === 'add') {
     const rewritten = ctx.payload.target !== 'wsl2' ? healGitAddStagedDeletions(ctx, gitCwd, subcmdIndex) : false;
@@ -148,6 +193,58 @@ function healGitMutatingCommand(ctx: ExecutionContext, matchedArgs: readonly str
   }
 }
 
+const SSH_OPT_VALUE_FLAGS = new Set(['-b', '-c', '-D', '-E', '-e', '-F', '-I', '-i', '-J', '-L', '-l', '-m', '-O', '-o', '-P', '-p', '-Q', '-R', '-S', '-W', '-w']);
+
+function hasSshOption(args: readonly string[], optionRe: RegExp): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (!a.startsWith('-')) break;
+    if (a === '-o') {
+      const next = args[i + 1];
+      if (next !== undefined && optionRe.test(next)) return true;
+      i++;
+      continue;
+    }
+    if (a.startsWith('-o') && a.length > 2) {
+      if (optionRe.test(a.slice(2))) return true;
+      continue;
+    }
+    if (SSH_OPT_VALUE_FLAGS.has(a)) i++;
+  }
+  return false;
+}
+
+const SSH_STRICT_HOST_KEY_RE = /^\s*StrictHostKeyChecking(?:=|\s+)/i;
+const SSH_BATCH_MODE_YES_RE = /^\s*BatchMode(?:=|\s+)yes\b/i;
+
+function healRmCommand(ctx: ExecutionContext): void {
+  const ddIdx = ctx.args.indexOf('--');
+  const endIdx = ddIdx === -1 ? ctx.args.length : ddIdx;
+  let strippedInteractive = false;
+  for (let i = endIdx - 1; i >= 0; i--) {
+    const a = ctx.args[i];
+    if (a === undefined) continue;
+    if (a === '-i' || a === '-I' || a === '--interactive' || a.startsWith('--interactive=')) {
+      ctx.args.splice(i, 1);
+      strippedInteractive = true;
+    } else if (!a.startsWith('--') && /^-[a-zA-Z]*[iI][a-zA-Z]*$/.test(a)) {
+      const rest = a.replace(/[iI]/g, '');
+      if (rest === '-') ctx.args.splice(i, 1);
+      else ctx.args[i] = rest;
+      strippedInteractive = true;
+    }
+  }
+  const nextDdIdx = ctx.args.indexOf('--');
+  const flagsSlice = nextDdIdx === -1 ? ctx.args : ctx.args.slice(0, nextDdIdx);
+  const hasForce = flagsSlice.some(a => a === '-f' || a === '--force' || RM_FORCE_SHORT_RE.test(a));
+  if (!hasForce || strippedInteractive) {
+    if (!hasForce) ctx.args.unshift('-f');
+    syncGitPayloadArgs(ctx);
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically enforcing '-f' (non-interactive) on rm command to prevent interactive prompts and missing file errors.... (Frictionless Recovery)`);
+  }
+}
+
 export function runMutatingInterceptors(
   ctx: ExecutionContext,
   derived: { cmd: string; cmdBasename: string; args: string[] }
@@ -157,11 +254,11 @@ export function runMutatingInterceptors(
   match({ cmd, args })
     .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args: matchedArgs }) => {
       let mutated = false;
-      if (!matchedArgs.some(a => a.includes('StrictHostKeyChecking='))) {
+      if (!hasSshOption(matchedArgs, SSH_STRICT_HOST_KEY_RE)) {
         ctx.args.unshift('-o', 'StrictHostKeyChecking=accept-new');
         mutated = true;
       }
-      if (!matchedArgs.some(a => a.includes('BatchMode=yes'))) {
+      if (!hasSshOption(matchedArgs, SSH_BATCH_MODE_YES_RE)) {
         ctx.args.unshift('-o', 'BatchMode=yes');
         syncGitPayloadArgs(ctx);
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.... (Frictionless Recovery)`);
@@ -171,29 +268,22 @@ export function runMutatingInterceptors(
     })
     .with({ cmd: P.union('ping', 'ping.exe') }, ({ args: matchedArgs }) => {
       if ((process.platform === 'win32' && ctx.payload.target !== 'wsl2') || cmd === 'ping.exe') {
-        if (matchedArgs.includes('-t')) {
+        if (matchedArgs.some(a => WIN_PING_T_RE.test(a))) {
           for (let i = ctx.args.length - 1; i >= 0; i--) {
-            if (ctx.args[i] === '-t') ctx.args.splice(i, 1);
+            if (WIN_PING_T_RE.test(ctx.args[i] ?? '')) ctx.args.splice(i, 1);
           }
           syncGitPayloadArgs(ctx);
           console.error(`\n   🛠️ AUTONOMOUS HEALING: 'ping -t' runs indefinitely. Stripped '-t' (Frictionless Recovery). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
         }
       } else {
-        if (!matchedArgs.includes('-c')) {
+        if (!matchedArgs.some(a => a === '-c' || UNIX_PING_C_RE.test(a))) {
           ctx.args.unshift('-c', '4');
           syncGitPayloadArgs(ctx);
           console.error(`\n   🛠️ AUTONOMOUS HEALING: 'ping' on Unix runs indefinitely without '-c'. Injecting '-c 4'.... (Frictionless Recovery)`);
         }
       }
     })
-    .with({ cmd: P.union('rm', 'rm.exe') }, ({ args: matchedArgs }) => {
-      const hasForce = matchedArgs.some(a => a === '-f' || a === '--force' || /^-([a-zA-Z]*f[a-zA-Z]*)$/.test(a));
-      if (!hasForce) {
-        ctx.args.unshift('-f');
-        syncGitPayloadArgs(ctx);
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-f' into rm command to prevent interactive prompts and missing file errors.... (Frictionless Recovery)\x1b[0m`);
-      }
-    })
+    .with({ cmd: P.union('rm', 'rm.exe') }, () => { healRmCommand(ctx); })
     .with({ cmd: P.union('sudo', 'sudo.exe') }, ({ args: matchedArgs }) => {
       if ((process.platform !== 'win32' || ctx.payload.target === 'wsl2') && !hasSudoNonInteractiveFlag(matchedArgs)) {
         ctx.args.unshift('-n');
@@ -202,8 +292,7 @@ export function runMutatingInterceptors(
       }
     })
     .with({ cmd: P.union('journalctl', 'journalctl.exe') }, ({ args: matchedArgs }) => {
-      const hasFollow = matchedArgs.some(a => a === '-f' || a === '--follow' || /^-[exqrkaobml]*f[exqrkaobml]*$/.test(a));
-      if (hasFollow) return;
+      if (hasJournalctlFollowFlag(matchedArgs)) return;
       if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
         ctx.payload.target = 'wsl2';
         console.error(`\n   🛠️ AUTONOMOUS HEALING: 'journalctl' requires Linux systemd. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);

@@ -30,7 +30,7 @@ function stripFollowFlag(args: string[], startIdx: number, endIdx: number): bool
   for (let i = endIdx - 1; i >= startIdx; i--) {
     const a = args[i];
     if (a === undefined) continue;
-    if (a === '-f' || a === '--follow' || a.startsWith('--follow=')) {
+    if (a === '-f' || a === '--follow' || (a.startsWith('--follow=') && a.toLowerCase() !== '--follow=false' && a !== '--follow=0')) {
       args.splice(i, 1);
       stripped = true;
     } else if (/^-[fpti]*f[fpti]*$/.test(a)) {
@@ -143,13 +143,13 @@ export function applyDockerWslRoutingAndTimeouts(
 }
 
 const MULTI_TARGET_VALUE_FLAGS: ReadonlySet<string> = new Set([
-  '-f', '--format', '--type', '-t', '--time', '--timeout',
+  '--format', '--type', '-t', '--time', '--timeout',
   '-s', '--signal', '--detach-keys', '--context', '-c',
   '-H', '--host', '-l', '--log-level', '--config',
 ]);
 
-export function splitDockerMultiTargets(args: string[], subCmd: string, ctx?: ExecutionContext): void {
-  const subCmdIdx = args.indexOf(subCmd);
+export function splitDockerMultiTargets(args: string[], subCmd: string, ctx?: ExecutionContext, resolvedSubIdx?: number): void {
+  const subCmdIdx = resolvedSubIdx !== undefined && resolvedSubIdx >= 0 ? resolvedSubIdx : args.indexOf(subCmd);
   if (subCmdIdx === -1) return;
   const expandedArgs: string[] = args.slice(0, subCmdIdx + 1);
   let skipNext = false;
@@ -160,7 +160,7 @@ export function splitDockerMultiTargets(args: string[], subCmd: string, ctx?: Ex
     if (arg === undefined) continue;
     if (skipNext) { skipNext = false; expandedArgs.push(arg); continue; }
     if (arg.startsWith('-')) {
-      if (MULTI_TARGET_VALUE_FLAGS.has(arg)) skipNext = true;
+      if (MULTI_TARGET_VALUE_FLAGS.has(arg) || (subCmd === 'inspect' && arg === '-f')) skipNext = true;
       expandedArgs.push(arg);
       continue;
     }

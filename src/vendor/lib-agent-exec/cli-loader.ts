@@ -27,12 +27,14 @@ function registerPluginExports(plugin: unknown): void {
   const defaultExport = 'default' in plugin ? plugin.default : undefined;
   for (const candidate of [interceptorsExport, defaultExport]) {
     if (typeof candidate === 'function') {
-      customInterceptors.push(candidate as (ctx: ExecutionContext) => void);
+      customInterceptors.push((ctx: ExecutionContext) => { Reflect.apply(candidate, undefined, [ctx]); });
       continue;
     }
     if (!Array.isArray(candidate)) continue;
     for (const fn of candidate) {
-      if (typeof fn === 'function') customInterceptors.push(fn as (ctx: ExecutionContext) => void);
+      if (typeof fn === 'function') {
+        customInterceptors.push((ctx: ExecutionContext) => { Reflect.apply(fn, undefined, [ctx]); });
+      }
     }
   }
 }
@@ -65,6 +67,36 @@ const CLI_VALUE_FLAGS = new Set([
   '-p', '--payload', '--base64', '--payloadPath', '-t', '--target',
   '--cwd', '--timeout', '--timeoutMs', '--interceptors', '--plugin',
 ]);
+const CLI_SHORT_VALUE_FLAGS = new Set(['p', 't']);
+
+function inspectCliFlagToken(tok: string): { consumesNext: boolean; attachesPayload: boolean } {
+  if (tok === '--' || !tok.startsWith('-') || tok.length <= 1) return { consumesNext: false, attachesPayload: false };
+  if (tok.startsWith('--')) {
+    const attachesPayload = tok === '--payload' || tok === '--base64' || tok === '--payloadPath' ||
+      tok.startsWith('--payload=') || tok.startsWith('--base64=') || tok.startsWith('--payloadPath=');
+    return { consumesNext: CLI_VALUE_FLAGS.has(tok), attachesPayload };
+  }
+  let attachesPayload = false;
+  for (let j = 1; j < tok.length; j++) {
+    const ch = tok[j] ?? '';
+    if (CLI_SHORT_VALUE_FLAGS.has(ch)) {
+      if (ch === 'p') attachesPayload = true;
+      return { consumesNext: j === tok.length - 1, attachesPayload };
+    }
+  }
+  return { consumesNext: false, attachesPayload };
+}
+
+function normalizeShortVersionCluster(tok: string): string {
+  if (tok === '-V') return '-v';
+  if (!tok.startsWith('-') || tok.startsWith('--')) return tok;
+  let stopIdx = tok.length;
+  for (let j = 1; j < tok.length; j++) {
+    if (CLI_SHORT_VALUE_FLAGS.has(tok[j] ?? '')) { stopIdx = j; break; }
+  }
+  const head = tok.slice(0, stopIdx);
+  return head.includes('V') ? `${head.replace(/V/g, 'v')}${tok.slice(stopIdx)}` : tok;
+}
 
 export function hasTopLevelCliFlag(
   argv: readonly string[],
@@ -74,7 +106,7 @@ export function hasTopLevelCliFlag(
     const tok = argv[i];
     if (tok === undefined || tok === '--') break;
     if (predicate(tok)) return true;
-    if (CLI_VALUE_FLAGS.has(tok)) {
+    if (inspectCliFlagToken(tok).consumesNext) {
       i += 1;
       continue;
     }
@@ -84,12 +116,25 @@ export function hasTopLevelCliFlag(
   return false;
 }
 
+export function normalizeTopLevelVersionArg(argv: readonly string[]): string[] {
+  const out = [...argv];
+  for (let i = 0; i < out.length; i++) {
+    const tok = out[i];
+    if (tok === undefined || tok === '--') break;
+    const normalized = normalizeShortVersionCluster(tok);
+    if (normalized !== tok) out[i] = normalized;
+    if (inspectCliFlagToken(tok).consumesNext) { i += 1; continue; }
+    if (!tok.startsWith('-')) break;
+  }
+  return out;
+}
+
 export function findFirstTopLevelPositionalIndex(argv: readonly string[]): number {
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
     if (tok === undefined) continue;
     if (tok === '--') return i + 1 < argv.length ? i + 1 : -1;
-    if (CLI_VALUE_FLAGS.has(tok)) {
+    if (inspectCliFlagToken(tok).consumesNext) {
       i += 1;
       continue;
     }
@@ -103,44 +148,32 @@ export function splitRawCommandInvocation(rawArgv: readonly string[]): {
   flagArgs: string[];
   rawPositionals: string[] | null;
 } {
+  let firstPosIdx = -1;
+  let hasExplicitSourceFlag = false;
   for (let i = 0; i < rawArgv.length; i++) {
     const tok = rawArgv[i];
     if (tok === undefined) continue;
     if (tok === '--') {
-      return {
-        flagArgs: rawArgv.slice(0, i),
-        rawPositionals: rawArgv.slice(i + 1),
-      };
+      return { flagArgs: rawArgv.slice(0, i), rawPositionals: rawArgv.slice(i + 1) };
     }
-    if (CLI_VALUE_FLAGS.has(tok)) {
+    const flagInfo = inspectCliFlagToken(tok);
+    if (flagInfo.attachesPayload) hasExplicitSourceFlag = true;
+    if (flagInfo.consumesNext) {
       i += 1;
       continue;
     }
     if (tok.startsWith('-')) continue;
+    firstPosIdx = i;
     break;
   }
-  const firstPosIdx = findFirstTopLevelPositionalIndex(rawArgv);
   if (firstPosIdx === -1) return { flagArgs: [...rawArgv], rawPositionals: null };
   const firstPos = (rawArgv[firstPosIdx] ?? '').trim();
   const isJsonOrFile =
-    firstPos.startsWith('{') ||
-    firstPos.startsWith("'{") ||
-    firstPos.startsWith('"{') ||
-    firstPos.startsWith("'{\\") ||
+    /^['"]?\s*(?:\{|```)/.test(firstPos) ||
     firstPos.startsWith('base64:') ||
-    firstPos.startsWith('```') ||
     path.extname(firstPos).toLowerCase() === '.json';
-  const hasExplicitSourceFlag = rawArgv.slice(0, firstPosIdx).some((tok) =>
-    ['-p', '--payload', '--base64', '--payloadPath'].includes(tok) ||
-    tok.startsWith('--payload=') ||
-    tok.startsWith('--base64=') ||
-    tok.startsWith('--payloadPath=')
-  );
   if (!isJsonOrFile && !hasExplicitSourceFlag) {
-    return {
-      flagArgs: rawArgv.slice(0, firstPosIdx),
-      rawPositionals: rawArgv.slice(firstPosIdx),
-    };
+    return { flagArgs: rawArgv.slice(0, firstPosIdx), rawPositionals: rawArgv.slice(firstPosIdx) };
   }
   return { flagArgs: [...rawArgv], rawPositionals: null };
 }
@@ -161,7 +194,7 @@ export function parseTimeoutOverride(cliTimeout: string | number | undefined): n
 
 export function resolveAndValidateCwd(payload: ExecPayload, onInvalidCwd: (cwd: string) => never): string {
   if (payload.cwd !== undefined && typeof payload.cwd === 'string') {
-    const unquotedCwd = payload.cwd.trim().replace(/^['"]|['"]$/g, '');
+    const unquotedCwd = payload.cwd.trim().replace(/^['"]|['"]$/g, '').trim();
     if (process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/.*)?$/i.test(unquotedCwd)) {
       const origCwd = payload.cwd;
       const converted = convertToWindowsPath(unquotedCwd);
@@ -172,14 +205,20 @@ export function resolveAndValidateCwd(payload: ExecPayload, onInvalidCwd: (cwd: 
   }
 
   const isWslTarget = payload.target === 'wsl2';
-  const trimmedCwd = typeof payload.cwd === 'string' ? payload.cwd.trim().replace(/^['"]|['"]$/g, '') : undefined;
+  const trimmedCwd = typeof payload.cwd === 'string' ? payload.cwd.trim().replace(/^['"]|['"]$/g, '').trim() : undefined;
+  if (typeof payload.cwd === 'string' && trimmedCwd !== undefined && trimmedCwd.length === 0) {
+    onInvalidCwd(payload.cwd);
+  }
+  if (trimmedCwd !== undefined && trimmedCwd !== payload.cwd) {
+    payload.cwd = trimmedCwd;
+  }
   const isPosixInternalCwd = isWslTarget && trimmedCwd !== undefined && trimmedCwd.length > 0 &&
     ((trimmedCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(trimmedCwd)) || trimmedCwd.startsWith('~'));
   const cwd = trimmedCwd !== undefined && trimmedCwd.length > 0
     ? (isPosixInternalCwd ? process.cwd() : path.resolve(trimmedCwd))
     : process.cwd();
 
-  if (!isPosixInternalCwd && cwd.length < 260) {
+  if (!isPosixInternalCwd) {
     try {
       const st = fs.statSync(cwd, { throwIfNoEntry: false });
       if (st === undefined || !st.isDirectory()) {
@@ -189,6 +228,9 @@ export function resolveAndValidateCwd(payload: ExecPayload, onInvalidCwd: (cwd: 
       onInvalidCwd(cwd);
     }
   }
+  if (!isPosixInternalCwd && trimmedCwd !== undefined && trimmedCwd.length > 0) {
+    payload.cwd = cwd;
+  }
   return cwd;
 }
 
@@ -196,7 +238,10 @@ export function mergeFinalEnvironment(
   payloadEnv: ExecPayload['env'],
   envOverrides: Record<string, string> | undefined,
 ): Record<string, string | undefined> {
-  const finalEnv = { ...buildEnvironment(payloadEnv) };
+  const finalEnv = Object.assign(
+    Object.create(null) as Record<string, string | undefined>,
+    buildEnvironment(payloadEnv),
+  );
   if (!envOverrides) return finalEnv;
 
   const explicitKeys = new Set(

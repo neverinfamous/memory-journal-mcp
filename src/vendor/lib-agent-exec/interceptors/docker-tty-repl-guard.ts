@@ -1,18 +1,25 @@
 // @ts-nocheck
 import path from 'node:path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
+import { TUI_COMMANDS } from './repl-tui-constants.js';
 import type { ExecutionContext } from './types.js';
+
+const CONTAINER_TUI_COMMANDS: ReadonlySet<string> = new Set(
+  TUI_COMMANDS.map(c => c.toLowerCase().replace(/\.exe$/, '')),
+);
 
 export const DOCKER_VALUE_FLAGS: readonly string[] = [
   '-a', '--attach', '--index',
   '-v', '--volume', '-p', '--publish', '--name', '-e', '--env', '--env-file',
   '--build-arg', '-f', '--file', '-w', '--workdir', '-u', '--user', '--network',
-  '--entrypoint', '-m', '--memory', '--cpus', '--label', '--hostname', '--add-host',
+  '--entrypoint', '-m', '--memory', '--memory-swap', '--memory-reservation',
+  '-c', '--cpu-shares', '--cpu-quota', '--cpu-period', '--cpuset-cpus', '--cpus',
+  '--pids-limit', '--oom-score-adj', '--label', '--hostname', '--add-host',
   '--dns', '--cap-add', '--cap-drop', '--device', '--log-driver', '--log-opt',
   '--restart', '--mount', '--tmpfs', '--ulimit', '--pid', '--ipc', '--uts',
   '--userns', '--cgroupns', '--runtime', '--isolation', '--security-opt',
   '--storage-opt', '--sysctl', '--link', '--health-cmd', '--health-interval',
-  '--health-retries', '--health-timeout', '--stop-signal', '--stop-timeout',
+  '--health-retries', '--health-timeout', '--health-start-period', '--stop-signal', '--stop-timeout',
   '--shm-size', '--gpus', '--ip', '--ip6', '--mac-address',
   '--platform', '--pull', '-l', '-h', '--group-add', '--expose', '--domainname',
   '--blkio-weight', '--cidfile', '--cgroup-parent',
@@ -20,14 +27,21 @@ export const DOCKER_VALUE_FLAGS: readonly string[] = [
 ];
 
 const DOCKER_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS);
-const DB_CONN_VALUE_FLAGS_BY_CMD: Readonly<Record<string, ReadonlySet<string>>> = {
-  sqlite3: new Set(['-separator', '-nullvalue', '-newline', '-init', '-cmd']),
-  'redis-cli': new Set(['-h', '-p', '-s', '-a', '-u', '--user', '--pass', '-n', '-r', '-i', '-d', '--ldb']),
-};
 const DEFAULT_DB_CONN_VALUE_FLAGS: ReadonlySet<string> = new Set([
   '-h', '-p', '-a', '-n', '-u', '-P', '-D', '-U', '-d',
   '--host', '--port', '--user', '--socket', '--database', '--dbname',
 ]);
+const MONGO_CONN_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  ...DEFAULT_DB_CONN_VALUE_FLAGS,
+  '--username', '--password', '--authenticationDatabase', '--authenticationMechanism',
+  '--tlsCAFile', '--tlsCertificateKeyFile',
+]);
+const DB_CONN_VALUE_FLAGS_BY_CMD: Readonly<Record<string, ReadonlySet<string>>> = {
+  sqlite3: new Set(['-separator', '-nullvalue', '-newline', '-init', '-cmd', '-vfs']),
+  'redis-cli': new Set(['-h', '-p', '-s', '-a', '-u', '--user', '--pass', '-n', '-r', '-i', '-d', '--ldb', '--cacert', '--cert', '--key', '--sni']),
+  mongosh: MONGO_CONN_VALUE_FLAGS,
+  mongo: MONGO_CONN_VALUE_FLAGS,
+};
 
 const CONTAINER_SHELLS = new Set(['bash', 'sh', 'zsh', 'ash', 'dash', 'fish', 'csh', 'tcsh', 'ksh']);
 const CONTAINER_JS_RUNTIMES = new Set(['node', 'bun', 'deno', 'tsx', 'ts-node']);
@@ -80,8 +94,9 @@ export function stripDockerTtyFlags(
       continue;
     }
     if (!arg.startsWith('-')) {
-      const prev = args[i - 1] ?? '';
-      if (!DOCKER_VALUE_FLAG_SET.has(prev)) stopStripping = true;
+      const prev = newArgs[newArgs.length - 1] ?? '';
+      const prevTakesVal = DOCKER_VALUE_FLAG_SET.has(prev) || (prev.length === 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(prev));
+      if (!prevTakesVal) stopStripping = true;
       newArgs.push(arg);
       continue;
     }
@@ -136,11 +151,24 @@ function collectNonConnDbPositionals(baseCmd: string, args: readonly string[]): 
   return pos;
 }
 
+function absorbsNextDockerShortValue(arg: string): boolean {
+  if (arg.startsWith('--') || arg.length <= 2) return false;
+  for (let j = 1; j < arg.length; j++) {
+    if (DOCKER_SHORT_VALUE_FLAG_SET.has(`-${arg[j] ?? ''}`)) {
+      return j === arg.length - 1;
+    }
+  }
+  return false;
+}
+
 export function extractDockerRunExecCommand(args: readonly string[], runExecIdx?: number): { containerCmd: string; containerCmdArgs: string[] } | null {
   let foundRunExec = false;
   let skipNextValue = false;
+  let capturedEntrypoint: string | null = null;
+  let expectingEntrypointVal = false;
   let containerName: string | null = null;
   let containerCmd: string | null = null;
+  let pastDoubleDash = false;
   const containerCmdArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -150,15 +178,35 @@ export function extractDockerRunExecCommand(args: readonly string[], runExecIdx?
       if (runExecIdx !== undefined ? i === runExecIdx : (arg === 'run' || arg === 'exec')) foundRunExec = true;
       continue;
     }
+    if (expectingEntrypointVal) {
+      expectingEntrypointVal = false;
+      if (arg.trim().length > 0) capturedEntrypoint = arg;
+      continue;
+    }
     if (skipNextValue) { skipNextValue = false; continue; }
-    if (arg === '-T' || arg === '--no-TTY') continue;
-    if (!containerCmd && arg.startsWith('-')) {
-      if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.startsWith('--') && arg.includes('='))) {
+    if (!pastDoubleDash && arg === '--') {
+      pastDoubleDash = true;
+      continue;
+    }
+    if (!pastDoubleDash && !containerName && (arg === '-T' || arg === '--no-TTY')) continue;
+    if (!pastDoubleDash && !containerName && arg.startsWith('-')) {
+      if (arg === '--entrypoint') {
+        expectingEntrypointVal = true;
+      } else if (arg.startsWith('--entrypoint=')) {
+        const val = arg.slice('--entrypoint='.length);
+        if (val.trim().length > 0) capturedEntrypoint = val;
+      } else if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.startsWith('--') && arg.includes('='))) {
         if (!arg.includes('=')) skipNextValue = true;
+      } else if (absorbsNextDockerShortValue(arg)) {
+        skipNextValue = true;
       }
       continue;
     }
-    if (!containerName) { containerName = arg; continue; }
+    if (!containerName) {
+      containerName = arg;
+      if (capturedEntrypoint !== null) containerCmd = capturedEntrypoint;
+      continue;
+    }
     if (!containerCmd) { containerCmd = arg; continue; }
     containerCmdArgs.push(arg);
   }
@@ -204,10 +252,11 @@ function isContainerDbNonInteractive(baseCmd: string, containerCmdArgs: readonly
   return false;
 }
 
-const SHELL_VALUE_FLAGS = new Set(['-o', '+o', '-O', '+O']);
+const SHELL_VALUE_FLAGS = new Set(['-o', '+o', '-O', '+O', '--rcfile', '--init-file']);
 const JS_RUNTIME_VALUE_FLAGS = new Set([
-  '-r', '--require', '--import', '--loader', '--experimental-loader',
+  '-r', '--require', '--import', '--loader', '--experimental-loader', '--preload',
   '--env-file', '--env-file-if-exists', '-C', '--conditions', '--input-type', '--max-old-space-size', '--title',
+  '-e', '--eval', '-p', '--print',
 ]);
 const PYTHON_VALUE_FLAGS = new Set(['-W', '-X', '--check-hash-based-pycs']);
 const RUBY_VALUE_FLAGS = new Set(['-r', '-I', '-C', '-E', '-K', '-F', '-0']);
@@ -248,10 +297,34 @@ function isContainerCmdNonInteractive(
     return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-c', '--command'])) || hasContainerScriptPositional(containerCmdArgs, SHELL_VALUE_FLAGS);
   }
   if (CONTAINER_JS_RUNTIMES.has(baseCmd)) {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, JS_RUNTIME_VALUE_FLAGS);
+    const ddIdx = containerCmdArgs.indexOf('--');
+    const preDd = ddIdx === -1 ? containerCmdArgs : containerCmdArgs.slice(0, ddIdx);
+    let firstPos: string | undefined;
+    for (let i = 0; i < preDd.length; i++) {
+      const a = preDd[i];
+      if (a === undefined) continue;
+      if (
+        a === '--watch' || a.startsWith('--watch=')
+        || a === '--watch-path' || a.startsWith('--watch-path=')
+        || a === '--inspect' || a.startsWith('--inspect=')
+        || a === '--inspect-brk' || a.startsWith('--inspect-brk=')
+        || a === '--inspect-wait' || a.startsWith('--inspect-wait=')
+      ) {
+        return false;
+      }
+      if (JS_RUNTIME_VALUE_FLAGS.has(a)) { i++; continue; }
+      if (a.startsWith('-')) continue;
+      if (firstPos === undefined) firstPos = a;
+    }
+    if ((baseCmd === 'bun' && firstPos === 'repl') || (baseCmd === 'deno' && firstPos === 'repl') || (baseCmd === 'tsx' && firstPos === 'watch') || (baseCmd === 'node' && firstPos === 'inspect')) {
+      return false;
+    }
+    return preDd.some(a => matchesContainerFlagOrPrefix(a, ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, JS_RUNTIME_VALUE_FLAGS);
   }
   if (CONTAINER_PYTHON.has(baseCmd)) {
-    if (hasPythonInteractiveFlag(containerCmdArgs)) return false;
+    const endIdx = containerCmdArgs.findIndex((a, i) => a === '--' || a === '-c' || a.startsWith('-c') || (a === '-m' && containerCmdArgs[i + 1] !== 'pdb'));
+    const pre = endIdx === -1 ? containerCmdArgs : containerCmdArgs.slice(0, endIdx);
+    if (hasPythonInteractiveFlag(containerCmdArgs) || pre.some((a, i) => a === '-mpdb' || (a === '-m' && pre[i + 1] === 'pdb'))) return false;
     return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-c', '-m', '-V', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, PYTHON_VALUE_FLAGS);
   }
   if (CONTAINER_RUBY.has(baseCmd)) {
@@ -307,6 +380,17 @@ export function guardDockerTtyAndRepl(
   const parsed = extractDockerRunExecCommand(args, runExecIdx);
   if (parsed === null) return;
   const baseCmd = path.posix.basename(parsed.containerCmd.replace(/\\/g, '/')).toLowerCase().replace(/\.exe$/, '');
+  if (CONTAINER_TUI_COMMANDS.has(baseCmd)) {
+    const ddIdx = parsed.containerCmdArgs.indexOf('--');
+    const preDd = ddIdx === -1 ? parsed.containerCmdArgs : parsed.containerCmdArgs.slice(0, ddIdx);
+    const hasMetaHelp = preDd.some(a => ['--help', '-h', '--version', '-V'].includes(a));
+    if (!hasMetaHelp) {
+      console.error(`\n   💡 AGENT HINT: 'docker ... ${parsed.containerCmd}' launches an interactive TUI application inside the container.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
+      process.exit(1);
+    }
+    return;
+  }
   if (!ALL_CONTAINER_REPLS.has(baseCmd)) return;
 
   if (!isContainerCmdNonInteractive(baseCmd, parsed.containerCmdArgs, Boolean(payload.stdin))) {

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ExecPayload } from '../schema.js';
-import { RG_VALUE_FLAGS, convertToWindowsPath, convertToWslPath, escapeUnixArg } from '../command-utils.js';
+import { RG_VALUE_FLAGS, convertToWindowsPath, convertToWslPath, escapeUnixArg, extractLeadingShortFlags } from '../command-utils.js';
 import { isJavaScriptOrTypeScriptCode, isPythonCode } from '../eval-healer.js';
 import { buildNonCodeSpans, isIndexInSpans } from '../quote-spans.js';
 import { findEcosystemScript } from '../utils.js';
@@ -17,7 +17,7 @@ const PRUNE_TARGET_DIRS = ['node_modules', '.git', 'dist', '.cache', 'coverage']
 const FIND_ACTION_RE = /(?:^|\s)(?:-print0?|-printf|-quit|-ls|-delete|-exec(?:dir)?|-ok(?:dir)?|-fprint0?|-fprintf)\b/i;
 
 function resolveEvalBaseCwd(payload: EvalPayload, fallbackCwd?: string): string {
-  let payloadCwd = payload.cwd !== undefined && payload.cwd.length > 0 && (!payload.cwd.startsWith('/') || payload.cwd.startsWith('/mnt/'))
+  let payloadCwd = payload.cwd !== undefined && payload.cwd.length > 0 && !payload.cwd.startsWith('~') && (!payload.cwd.startsWith('/') || payload.cwd.startsWith('/mnt/'))
     ? payload.cwd
     : undefined;
   if (payloadCwd !== undefined && payloadCwd.startsWith('/mnt/') && process.platform === 'win32') {
@@ -73,6 +73,7 @@ function healGrepSearchFunction(payload: EvalPayload, trimmedCode: string): void
   const flags = ['-n'];
   if (isCaseInsensitive) flags.push('-i');
   if (!isRegex) flags.push('-F');
+  if (pattern.startsWith('-')) flags.push('-e');
   payload.target = 'wsl2';
   payload.interpreter = 'bash';
   payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
@@ -83,7 +84,9 @@ function healGrepSearchFunction(payload: EvalPayload, trimmedCode: string): void
 function healGrepSearchCli(payload: EvalPayload, trimmedCode: string, baseCwd: string): boolean {
   const grepSearchCliMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?grep_search(?:\.ts|\.js)?\b\s*(.*)$/i);
   if (grepSearchCliMatch === null) return false;
-  const cleanTokens = shellTokens(grepSearchCliMatch[1] ?? '').map(token => stripWrappingQuotes(token));
+  const rawArgs = (grepSearchCliMatch[1] ?? '').trim();
+  if (rawArgs.length === 0 || /^\(\s*\)$/.test(rawArgs)) return false;
+  const cleanTokens = shellTokens(rawArgs).map(token => stripWrappingQuotes(token));
   const parsed = parseGrepSearchArgs(cleanTokens, baseCwd);
   if (parsed.pattern.length > 0) {
     writeGrepSearchRg(payload, parsed.pattern, parsed.searchPath, parsed.isCaseInsensitive, parsed.isWord, parsed.isRegex);
@@ -95,8 +98,9 @@ function healGrepSearchCli(payload: EvalPayload, trimmedCode: string, baseCwd: s
     payload.code = `rg --files ${escapeUnixArg(convertToWslPath(parsed.searchPath), false)}`;
     console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code without pattern.`);
     console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg) --files... (Frictionless Recovery)\x1b[0m`);
+    return true;
   }
-  return true;
+  return false;
 }
 
 function writeGrepSearchRg(
@@ -113,15 +117,21 @@ function writeGrepSearchRg(
   if (isCaseInsensitive) rgFlags.push('-i');
   if (isWord) rgFlags.push('-w');
   if (!isRegex) rgFlags.push('-F');
+  if (pattern.startsWith('-')) rgFlags.push('-e');
   payload.code = `rg ${rgFlags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
   console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
 }
 
+function stripOptionalEvalCallParens(raw: string): string {
+  const t = raw.trim();
+  return t.startsWith('(') && t.endsWith(')') ? t.slice(1, -1).trim() : t;
+}
+
 function healListDirEval(payload: EvalPayload, trimmedCode: string): boolean {
   const listDirMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?list_dir(?:\.ts|\.js)?\b\s*(.*)$/i);
   if (listDirMatch === null) return false;
-  const rest = (listDirMatch[1] ?? '').trim().replace(/^['"`]|['"`]$/g, '');
+  const rest = stripOptionalEvalCallParens(listDirMatch[1] ?? '').replace(/^['"`]|['"`]$/g, '').trim();
   const targetPath = rest.length > 0 ? rest : '.';
   payload.target = 'wsl2';
   payload.interpreter = 'bash';
@@ -133,8 +143,17 @@ function healListDirEval(payload: EvalPayload, trimmedCode: string): boolean {
 
 function healViewFileEval(payload: EvalPayload, trimmedCode: string): boolean {
   const viewFileMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?(?:view_file|read_file)(?:\.ts|\.js)?\b\s*(.*)$/i);
-  if (viewFileMatch === null || (viewFileMatch[1] ?? '').trim().length === 0) return false;
-  const targetPath = (viewFileMatch[1] ?? '').trim().replace(/^['"`]|['"`]$/g, '');
+  if (viewFileMatch === null) return false;
+  const rawArg = (viewFileMatch[1] ?? '').trim();
+  let targetPath = '';
+  if (rawArg.startsWith('(')) {
+    const singleCall = /^\(\s*(?:"([^"]+)"|'([^']+)'|`([^`]+)`)\s*\)$/.exec(rawArg);
+    targetPath = (singleCall?.[1] ?? singleCall?.[2] ?? singleCall?.[3] ?? '').trim();
+  } else {
+    const inner = rawArg.replace(/^['"`]|['"`]$/g, '').trim();
+    if (!inner.includes(',')) targetPath = inner;
+  }
+  if (targetPath.length === 0) return false;
   payload.target = 'wsl2';
   payload.interpreter = 'bash';
   payload.code = `cat ${escapeUnixArg(convertToWslPath(targetPath), false)}`;
@@ -185,7 +204,7 @@ function parseSupportedGitInspectArgs(gitSubCmd: string, tokens: readonly string
       continue;
     }
     if (tok.startsWith('-')) return null;
-    if (tok.includes('..') && rangeVal === undefined) {
+    if (!/^\.{2,}(?:[/\\].*)?$/.test(tok) && tok.includes('..') && rangeVal === undefined) {
       rangeVal = tok;
       continue;
     }
@@ -235,25 +254,31 @@ function gitHistorySpawn(scriptPathEscaped: string, cwdEscaped: string, extraArg
 }
 
 function healFindMissingName(payload: EvalPayload, trimmedCode: string): void {
-  const findGlobMatch = trimmedCode.match(/^find\s+([^\s]+)\s+((?:"[^"]*"|'[^']*'|[^\s])*[*?](?:"[^"]*"|'[^']*'|[^\s])*)(.*)$/i);
+  const { firstSegment, remainder } = splitFirstShellSegment(trimmedCode);
+  const findGlobMatch = firstSegment.trim().match(/^find\s+((?:[^\s"']|"[^"]*"|'[^']*')+)\s+((?:[^\s"']|"[^"]*"|'[^']*')+)(.*)$/i);
   if (findGlobMatch === null || findGlobMatch[1] === undefined || findGlobMatch[2] === undefined) return;
-  const searchPath = findGlobMatch[1];
+  if (!findGlobMatch[2].includes('*') && !findGlobMatch[2].includes('?')) return;
+  const searchPath = stripWrappingQuotes(findGlobMatch[1]);
   const pattern = stripWrappingQuotes(findGlobMatch[2]);
+  if (pattern.includes('/') || pattern.includes('\\')) return;
   const rest = findGlobMatch[3] ?? '';
-  payload.code = `find ${escapeUnixArg(searchPath)} -name ${quoteShellWord(pattern)} ${rest}`.trim();
+  const rewrittenFirst = `find ${escapeUnixArg(searchPath)} -name ${quoteShellWord(pattern)} ${rest}`.trim();
+  payload.code = `${rewrittenFirst}${remainder}`;
   console.error(`\n   💡 AGENT HINT: 'find' without '-name' flag detected in eval code.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-name' flag for pattern '${pattern}'... (Frictionless Recovery)\x1b[0m`);
 }
 
 function isBroadFindRootPath(rootPath: string): boolean {
-  return rootPath === '.' || rootPath === './' || rootPath === '..' || rootPath === '../'
-    || rootPath.startsWith('/mnt/') || /^[a-zA-Z]:/.test(rootPath);
+  const clean = stripWrappingQuotes(rootPath.trim());
+  return clean === '.' || clean === './' || clean === '..' || clean === '../'
+    || clean.startsWith('/mnt/') || /^[a-zA-Z]:/.test(clean);
 }
 
 function healBroadFindEval(payload: EvalPayload): void {
   const { firstSegment, remainder } = splitFirstShellSegment(payload.code);
-  if (firstSegment.includes('-prune')) return;
-  const findBodyMatch = firstSegment.match(/^find\s+(.+)$/i);
+  const trimmedFirst = firstSegment.trimStart();
+  if (trimmedFirst.includes('-prune')) return;
+  const findBodyMatch = trimmedFirst.match(/^find\s+(.+)$/i);
   if (findBodyMatch?.[1] === undefined) return;
   const tokens = shellTokens(findBodyMatch[1]);
   const leadFlags: string[] = [];
@@ -273,18 +298,19 @@ function healBroadFindEval(payload: EvalPayload): void {
   }
   const restTokens = tokens.slice(idx);
   const rest = restTokens.join(' ').trim();
-  if (rootPaths.length === 0 || rest.length === 0 || !rootPaths.some(isBroadFindRootPath) || rest.includes('-maxdepth')) return;
-  const rootSegs = rootPaths.flatMap(rp => rp.replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean));
+  if (rootPaths.length === 0 || !rootPaths.some(isBroadFindRootPath)) return;
+  if (restTokens.some(t => ['-maxdepth', '-delete', '-depth', '--help', '--version'].includes(t))) return;
+  const rootSegs = rootPaths.flatMap(rp => stripWrappingQuotes(rp.trim()).replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean));
   const dirsToPrune = PRUNE_TARGET_DIRS.filter((dir) => {
     const dirLower = dir.toLowerCase();
     return !rootSegs.includes(dirLower) && !rest.toLowerCase().includes(dirLower);
   });
   if (dirsToPrune.length === 0) return;
   const pruneClause = `\\( ${dirsToPrune.map((d) => `-name ${d}`).join(' -o ')} \\) -prune -o`;
-  const groupedRest = /(?:^|\s)(?:-o|-or)\b/.test(rest) ? `\\( ${rest} \\)` : rest;
+  const groupedRest = rest.length > 0 && /(?:^|\s)(?:-o|-or)\b/.test(rest) ? `\\( ${rest} \\)` : rest;
   const printSuffix = FIND_ACTION_RE.test(rest) ? '' : ' -print';
-  const head = [...leadFlags, ...rootPaths].join(' ');
-  payload.code = `find ${head} ${pruneClause} ${groupedRest}${printSuffix}${remainder}`;
+  const body = [ ...leadFlags, ...rootPaths, pruneClause, groupedRest ].filter(s => s.length > 0).join(' ');
+  payload.code = `find ${body}${printSuffix}${remainder}`;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Broad find in eval payload detected. Auto-injecting directory pruning for node_modules, .git, and dist to prevent timeouts... (Frictionless Recovery)\x1b[0m`);
 }
 
@@ -322,9 +348,11 @@ function hasFileOrPathLikeWord(words: readonly string[], cwd?: string): boolean 
 
 const RG_EVAL_VALUE_FLAGS = new Set(RG_VALUE_FLAGS);
 
+const RG_EXPLICIT_PATTERN_FLAGS = new Set(['-e', '--regexp', '-f', '--file']);
+
 function healUnquotedRgPattern(payload: EvalPayload, baseCwd: string): void {
-  const trimmed = payload.code.trim();
-  const rgHead = trimmed.match(/^rg\s+(.*)$/i);
+  const { firstSegment, remainder } = splitFirstShellSegment(payload.code.trim());
+  const rgHead = firstSegment.match(/^rg\s+(.*)$/i);
   if (rgHead?.[1] === undefined) return;
   const tokens = rgHead[1].split(/\s+/);
   const flagTokens: string[] = [];
@@ -332,11 +360,26 @@ function healUnquotedRgPattern(payload: EvalPayload, baseCwd: string): void {
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
     if (tok === undefined || tok.length === 0) continue;
-    if (tok === '--') return;
+    if (tok === '--' || /[|><&;]/.test(tok)) return;
+    const shortPrefix = tok.startsWith('-') && !tok.startsWith('--') ? extractLeadingShortFlags('rg', tok) : '';
+    const tailChar = shortPrefix.length > 1 ? shortPrefix[shortPrefix.length - 1] : '';
+    if (
+      tok === '--files' ||
+      RG_EXPLICIT_PATTERN_FLAGS.has(tok) ||
+      tailChar === 'e' ||
+      tailChar === 'f' ||
+      /^-[ef]./.test(tok) ||
+      tok.startsWith('--regexp=') ||
+      tok.startsWith('--file=')
+    ) {
+      return;
+    }
     if (tok.startsWith('-')) {
       if (posTokens.length > 0) return;
       flagTokens.push(tok);
-      if (RG_EVAL_VALUE_FLAGS.has(tok) && i + 1 < tokens.length) {
+      const takesSeparateVal = RG_EVAL_VALUE_FLAGS.has(tok)
+        || (tok.length === shortPrefix.length && tailChar !== '' && RG_EVAL_VALUE_FLAGS.has(`-${tailChar}`));
+      if (takesSeparateVal && i + 1 < tokens.length) {
         const val = tokens[i + 1];
         if (val !== undefined) flagTokens.push(val);
         i += 1;
@@ -351,13 +394,15 @@ function healUnquotedRgPattern(payload: EvalPayload, baseCwd: string): void {
   if (targetPath === undefined || !/^(\/[^\s]+|[a-zA-Z]:[^\s]+|\.[^\s]+|[^\s]+\.[a-zA-Z0-9]+)$/.test(targetPath)) return;
   if (!wordTokens.every((w) => /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/.test(w)) || hasFileOrPathLikeWord(wordTokens, baseCwd)) return;
   const flags = flagTokens.length > 0 ? `${flagTokens.join(' ')} ` : '';
-  payload.code = `rg ${flags}"${wordTokens.join(' ')}" ${targetPath}`;
+  payload.code = `rg ${flags}"${wordTokens.join(' ')}" ${targetPath}${remainder}`;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Unquoted search pattern in eval 'rg' detected. Recombining into single quoted pattern... (Frictionless Recovery)\x1b[0m`);
 }
 
 function blockNativeEvalTools(trimmedCode: string): void {
-  if ((AGENT_NATIVE_TOOLS as readonly string[]).includes(trimmedCode)) {
-    console.error(`\n   💡 AGENT HINT: '${trimmedCode}' is an agent-native tool, NOT executable code or a shell script. Please invoke the '${trimmedCode}' tool directly.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+  const headMatch = /^([a-zA-Z_][a-zA-Z0-9_]*)(?=$|\s|\()/.exec(trimmedCode);
+  const headIdent = headMatch?.[1];
+  if (headIdent !== undefined && (AGENT_NATIVE_TOOLS as readonly string[]).includes(headIdent)) {
+    console.error(`\n   💡 AGENT HINT: '${headIdent}' is an agent-native tool, NOT executable code or a shell script. Please invoke the '${headIdent}' tool directly.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
     process.exit(1);
   }
   const matchedMcpTool = (ECOSYSTEM_MCP_TOOLS as readonly string[]).find(tool => trimmedCode === tool || trimmedCode.startsWith(`${tool}(`) || trimmedCode.startsWith(`${tool} `));

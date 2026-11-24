@@ -4,7 +4,7 @@ import type { SystemCommandDerived } from './system-command-context.js';
 import { EXACT_SHELL_CHARS, INLINE_FLAGS, PATTERN_TOOLS } from './system-command-context.js';
 import { AGENT_EXEC_README_URL, getUnquoted } from './utils.js';
 
-const PKG_MANAGERS = ['npm', 'npm.cmd', 'pnpm', 'pnpm.cmd', 'yarn', 'yarn.cmd', 'bun', 'bun.exe', 'npx', 'npx.cmd'];
+const PKG_MANAGERS = ['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.exe', 'bunx', 'bunx.cmd', 'bunx.exe', 'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe'];
 const SHELL_CMDS = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'];
 const TEXT_DATA_FLAGS: readonly string[] = [
   '-m', '--message', '--msg',
@@ -22,6 +22,7 @@ const TEXT_DATA_FLAGS: readonly string[] = [
   '--label',
   '--tag',
   '-a', '--author',
+  '-p', '--print', '--test-name-pattern',
 ];
 const TEXT_DATA_PREFIXES: readonly string[] = [
   '--body=', '-b=',
@@ -36,6 +37,7 @@ const TEXT_DATA_PREFIXES: readonly string[] = [
   '-d=', '--data=', '--data-raw=', '--data-binary=',
   '--filter=',
   '-f=', '-F=',
+  '-p=', '--print=', '--test-name-pattern=',
   'body=', 'title=', 'notes=', 'comment=', 'query=', 'message=', 'description=',
   'msg=', 'history=', 'summary=', 'reason=', 'prompt=', 'subject=',
 ];
@@ -57,9 +59,21 @@ function resolvePkgDelegatedTool(args: readonly string[]): string | undefined {
   return undefined;
 }
 
+const GIT_TOP_VALUE_FLAGS = new Set([
+  '-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
+]);
+
 function isGitPatternOperand(derived: SystemCommandDerived): boolean {
   if (derived.cmd !== 'git' && derived.cmd !== 'git.exe') return false;
-  const sub = derived.args.find(a => !a.startsWith('-'))?.toLowerCase();
+  let sub: string | undefined;
+  for (let i = 0; i < derived.args.length; i++) {
+    const a = derived.args[i];
+    if (a === undefined || a === '--') break;
+    if (GIT_TOP_VALUE_FLAGS.has(a)) { i++; continue; }
+    if (a.startsWith('-')) continue;
+    sub = a.toLowerCase();
+    break;
+  }
   return sub === 'grep' || sub === 'log' || sub === 'diff';
 }
 
@@ -84,10 +98,14 @@ export function blockUnsafePipes(derived: SystemCommandDerived): void {
 
 function argumentHasUnsafeShell(arg: string, index: number, args: string[], isShell: boolean, isPkgMgr: boolean): boolean {
   const previous = index > 0 ? args[index - 1] : undefined;
-  if (previous !== undefined && INLINE_FLAGS.includes(previous.toLowerCase())) return false;
+  if (previous !== undefined) {
+    const prevLower = previous.toLowerCase();
+    if (INLINE_FLAGS.includes(prevLower)) return false;
+    if (isShell && /^-[a-z]+$/i.test(previous) && prevLower.includes('c')) return false;
+  }
   if (startsWithInlineFlag(arg)) return false;
-  if (previous !== undefined && TEXT_DATA_FLAGS.includes(previous.toLowerCase())) return false;
-  if (TEXT_DATA_PREFIXES.some(prefix => arg.toLowerCase().startsWith(prefix))) return false;
+  if (previous !== undefined && (TEXT_DATA_FLAGS.includes(previous) || TEXT_DATA_FLAGS.includes(previous.toLowerCase()))) return false;
+  if (TEXT_DATA_PREFIXES.some(prefix => arg.startsWith(prefix) || arg.toLowerCase().startsWith(prefix))) return false;
   return match(arg)
     .with(P.when((value: string) => isShell && (value.includes('$(') || value.includes('`'))), () => true)
     .with(P.when(value => value.includes('\\&') || value.includes('\\|') || value.includes('\\>') || value.includes('\\<') || value.includes('\\;')), () => true)
@@ -100,8 +118,12 @@ function startsWithInlineFlag(arg: string): boolean {
   return INLINE_FLAGS.some(flag => lower.startsWith(`${flag}=`) || (flag.length === 2 && lower.startsWith(flag) && arg.length > 2));
 }
 
+const STANDALONE_REDIR_TOKENS = new Set(['>>', '<<', '<<<', '2>', '1>', '2>>', '1>>', '&>', '&>>', '2>&1', '1>&2', '|&']);
+const ATTACHED_REDIR_RE = /^(?:[12&]?>>?|<<?<?|\|&)|(?:2>&1|1>&2|\|&)/;
+
 function unquotedContainsOperator(arg: string, isShell: boolean, isPkgMgr: boolean): boolean {
-  if (EXACT_SHELL_CHARS.includes(arg.trim())) return true;
+  const trimmed = arg.trim();
+  if (EXACT_SHELL_CHARS.includes(trimmed) || STANDALONE_REDIR_TOKENS.has(trimmed)) return true;
   const unquoted = getUnquoted(arg);
   return EXACT_SHELL_CHARS.some(op => operatorIsUnsafe(unquoted, op, isShell, isPkgMgr));
 }
@@ -119,13 +141,19 @@ function operatorIsUnsafe(unquoted: string, op: string, isShell: boolean, isPkgM
   if (checkStr.trim() === op) return true;
   if (isShell) return true;
   if (checkStr.includes('{') || checkStr.includes('[')) return false;
-  if (!hasSpacesAround) return unspacedOperatorIsUnsafe(op);
+  if (!hasSpacesAround) return unspacedOperatorIsUnsafe(op, checkStr);
   if (isPkgMgr) return true;
   return false;
 }
 
-function unspacedOperatorIsUnsafe(op: string): boolean {
-  if (op === '|') return false;
+function unspacedOperatorIsUnsafe(op: string, checkStr: string): boolean {
+  if (op === '|') return checkStr.includes('|&');
   if (op === '&&' || op === '||') return true;
+  if (op === '>' || op === '<') {
+    return ATTACHED_REDIR_RE.test(checkStr) || (op === '>' && /[^\s=->]>[^\s=]/.test(checkStr));
+  }
+  if (op === ';') {
+    return checkStr.startsWith(';') || (!checkStr.startsWith('-') && !checkStr.startsWith('/') && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(checkStr));
+  }
   return false;
 }

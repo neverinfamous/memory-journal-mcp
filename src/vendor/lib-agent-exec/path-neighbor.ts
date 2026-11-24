@@ -1,5 +1,6 @@
 // @ts-nocheck
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   CANDIDATE_EXTENSIONS,
@@ -75,11 +76,13 @@ function matchCollapsedModule(grandparentDir: string, parentDir: string, filenam
   const parentBase = path.basename(parentDir);
   const ext = path.extname(filename);
   const targetFile = ext.length > 0 ? `${parentBase}${ext}` : parentBase;
-  const parentFile = uniqueCandidate(getFileCandidates(grandparentDir, targetFile, false));
+  let preRead: readonly fs.Dirent[] | undefined;
+  try { preRead = fs.readdirSync(grandparentDir, { withFileTypes: true }); } catch { preRead = undefined; }
+  const parentFile = uniqueCandidate(getFileCandidates(grandparentDir, targetFile, false, true, preRead));
   if (parentFile !== null) return parentFile;
   if (ext.length > 0) return null;
   for (const trialExt of TRIAL_EXTS) {
-    const trial = uniqueCandidate(getFileCandidates(grandparentDir, `${parentBase}${trialExt}`, false));
+    const trial = uniqueCandidate(getFileCandidates(grandparentDir, `${parentBase}${trialExt}`, false, true, preRead));
     if (trial !== null) return trial;
   }
   return null;
@@ -130,7 +133,12 @@ function matchSiblingDirect(siblingModuleDir: string, filename: string, allowDir
 }
 
 function matchGreatGrandparent(parentIsRoot: boolean, grandparentIsRoot: boolean, grandparentDir: string, greatGrandparentDir: string, resolved: string, filename: string, allowDirectories: boolean): string | null {
-  if (parentIsRoot || grandparentIsRoot || !isDirectoryPath(greatGrandparentDir)) return null;
+  if (parentIsRoot || grandparentIsRoot || isFileSystemRoot(greatGrandparentDir) || isRepositoryRoot(greatGrandparentDir) || !isDirectoryPath(greatGrandparentDir)) {
+    return null;
+  }
+  if (isIgnoredEntryName(path.basename(grandparentDir), true) || isIgnoredEntryName(path.basename(greatGrandparentDir), true)) {
+    return null;
+  }
   try {
     const relFromGrandparent = path.relative(grandparentDir, resolved);
     const parentDir = parentDirFrom(resolved);
@@ -138,7 +146,7 @@ function matchGreatGrandparent(parentIsRoot: boolean, grandparentIsRoot: boolean
     const subtreeMatches: string[] = [];
     const directMatches: string[] = [];
     for (const entry of entries) {
-      if (!entry.isDirectory() || isIgnoredEntryName(entry.name)) continue;
+      if (!entry.isDirectory() || isIgnoredEntryName(entry.name, true)) continue;
       const siblingModuleDir = path.join(greatGrandparentDir, entry.name);
       if (siblingModuleDir.toLowerCase() === grandparentDir.toLowerCase()) continue;
       const subtreeFound = matchSiblingSubtree(siblingModuleDir, parentDir, filename, relFromGrandparent, allowDirectories);
@@ -187,10 +195,20 @@ function scanShallow(dir: string, depth: number, filename: string, normTarget: s
   }
 }
 
+function isTempRoot(dir: string): boolean {
+  const resolved = path.resolve(dir);
+  const tmpRoot = path.resolve(os.tmpdir());
+  return process.platform === 'win32' ? resolved.toLowerCase() === tmpRoot.toLowerCase() : resolved === tmpRoot;
+}
+
+function isBoundaryRoot(dir: string): boolean {
+  return isFileSystemRoot(dir) || isRepositoryRoot(dir) || isTempRoot(dir);
+}
+
 function shallowSearchRoots(parentDir: string, grandparentDir: string, parentIsRoot: boolean, grandparentIsRoot: boolean): string[] {
   // [INVARIANT]: Never climb out of a top-level directory (e.g., src/) across the repository root into sibling trees (e.g., test-server/).
   const pending = [parentDir, parentIsRoot || grandparentIsRoot ? null : grandparentDir];
-  return pending.filter((dir): dir is string => dir !== null && isDirectoryPath(dir));
+  return pending.filter((dir): dir is string => dir !== null && !isTempRoot(dir) && !isIgnoredEntryName(path.basename(dir), true) && isDirectoryPath(dir));
 }
 
 function matchShallowScan(parentDir: string, grandparentDir: string, parentIsRoot: boolean, grandparentIsRoot: boolean, filename: string, allowDirectories: boolean): string | null {
@@ -211,12 +229,12 @@ export function findNeighborFilePath(resolved: string, allowDirectories = false)
   const parentDir = path.dirname(resolved);
   const grandparentDir = path.dirname(parentDir);
   const greatGrandparentDir = path.dirname(grandparentDir);
-  const parentIsRoot = isFileSystemRoot(parentDir) || isRepositoryRoot(parentDir);
-  const grandparentIsRoot = isFileSystemRoot(grandparentDir) || isRepositoryRoot(grandparentDir);
+  const parentIsRoot = isBoundaryRoot(parentDir);
+  const grandparentIsRoot = isBoundaryRoot(grandparentDir);
   return matchInParent(parentDir, filename, allowDirectories)
     ?? matchInGrandparent(parentIsRoot, grandparentDir, filename, allowDirectories)
     ?? matchInParentSubdirs(parentDir, filename, allowDirectories)
     ?? matchMissingParent(parentIsRoot, parentDir, grandparentDir, filename, allowDirectories)
-    ?? matchGreatGrandparent(parentIsRoot, grandparentIsRoot, grandparentDir, greatGrandparentDir, resolved, filename, allowDirectories)
+    ?? (isTempRoot(greatGrandparentDir) ? null : matchGreatGrandparent(parentIsRoot, grandparentIsRoot, grandparentDir, greatGrandparentDir, resolved, filename, allowDirectories))
     ?? matchShallowScan(parentDir, grandparentDir, parentIsRoot, grandparentIsRoot, filename, allowDirectories);
 }

@@ -44,16 +44,44 @@ export function normalizeTarget(raw: string): "windows" | "wsl2" | null {
   return result.success ? result.data : null;
 }
 
-const envKeySchema = safeString.min(1, 'env key must not be empty').refine(
-  val => !/[=\r\n\0]/.test(val),
-  'env variable name must not contain = or control characters',
-);
+const FORBIDDEN_ENV_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const UNSAFE_CONTEXT_CHARS_RE = /[\0\r\uFEFF]/;
+
+function hasUnsafeControlChars(val: unknown, depth = 0, seen = new WeakSet<object>()): boolean {
+  if (depth > 16) return true;
+  if (typeof val === 'string') return UNSAFE_CONTEXT_CHARS_RE.test(val);
+  if (val === null || typeof val !== 'object') return false;
+  if (seen.has(val)) return false;
+  seen.add(val);
+  if (Array.isArray(val)) return val.some(item => hasUnsafeControlChars(item, depth + 1, seen));
+  for (const [k, v] of Object.entries(val)) {
+    if (UNSAFE_CONTEXT_CHARS_RE.test(k) || hasUnsafeControlChars(v, depth + 1, seen)) return true;
+  }
+  return false;
+}
+
+const envKeySchema = safeString.min(1, 'env key must not be empty')
+  .refine(val => !/[=\r\n\0]/.test(val), 'env variable name must not contain = or control characters')
+  .refine(val => !FORBIDDEN_ENV_KEYS.has(val), 'env variable name must not be a reserved prototype property');
+const envValueSchema = z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString);
+const envRecordSchema = z.unknown()
+  .refine(
+    (raw): raw is Record<string, unknown> => typeof raw === 'object' && raw !== null && !Array.isArray(raw),
+    'env must be an object',
+  )
+  .refine(
+    (raw) => !Object.keys(raw).some(k => FORBIDDEN_ENV_KEYS.has(k)),
+    'env variable name must not be a reserved prototype property',
+  )
+  .pipe(z.record(envKeySchema, envValueSchema));
 
 const basePayloadSchema = z.object({
   args: safeStringArray.optional(),
   cwd: safeString.max(1024).refine(val => val.trim().length > 0, "cwd must not be empty").optional(),
-  env: z.record(envKeySchema, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
-  integrationContext: z.record(z.string(), z.unknown()).optional(),
+  env: envRecordSchema.optional(),
+  integrationContext: z.record(z.string(), z.unknown())
+    .refine(val => !hasUnsafeControlChars(val), 'integrationContext values must not contain null bytes, CR, or BOM')
+    .optional(),
   templateOverride: safeString.max(1024).optional(),
   target: targetNormalizeSchema.optional(),
   timeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, INT32_MAX)).optional(),
@@ -166,7 +194,28 @@ export function tokenizeCommandLine(input: string): string[] {
     const ch = input[i];
     if (ch === undefined) continue;
     if (escaped) { current += ch; escaped = false; hasToken = true; continue; }
-    if (ch === '\\' && quote !== "'" && input[i + 1] === '"') { escaped = true; continue; }
+    if (ch === '\\' && quote !== "'") {
+      let runLen = 1;
+      while (input[i + runLen] === '\\') runLen++;
+      if (input[i + runLen] === '"') {
+        const pairCount = Math.floor(runLen / 2);
+        if (pairCount > 0) {
+          current += '\\'.repeat(pairCount);
+          hasToken = true;
+        }
+        if (runLen % 2 === 1) {
+          escaped = true;
+          i += runLen - 1;
+          continue;
+        }
+        i += runLen - 1;
+        continue;
+      }
+      current += '\\'.repeat(runLen);
+      hasToken = true;
+      i += runLen - 1;
+      continue;
+    }
     if ((ch === '"' || ch === "'") && quote === null) { quote = ch; hasToken = true; continue; }
     if (ch === quote) { quote = null; continue; }
     if (/\s/.test(ch) && quote === null) {
@@ -288,8 +337,8 @@ export const PayloadSchema = z.preprocess((val) => {
   if (typeof val !== 'object' || val === null || Array.isArray(val)) return val;
   const obj: Record<string, unknown> = Object.fromEntries(Object.entries(val));
   stripMetadataAndWarnArgs(obj);
-  tryTranslateSearchPayload(obj);
   normalizeFieldSynonyms(obj);
+  tryTranslateSearchPayload(obj);
   if (typeof obj.type === 'string') resolveExplicitTypeString(obj, obj.type);
   else inferMissingPayloadType(obj);
   finalizeTypedPayloadFields(obj);

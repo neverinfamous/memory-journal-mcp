@@ -24,37 +24,91 @@ import {
   TUI_REGEX,
   WATCH_REGEX,
   WATCH_TOOL_REGEX,
+  findInteractiveDbOrSshInBody,
 } from './repl-tui-constants.js';
 import type { ExecutionContext } from './types.js';
 import { AGENT_EXEC_README_URL } from './utils.js';
 
 const DOCKER_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS);
-const JS_TS_INTERPRETERS = new Set(['node', 'bun', 'tsx', 'ts-node', 'js', 'ts', 'javascript', 'typescript']);
-const CODE_INTERPRETERS = new Set([...JS_TS_INTERPRETERS, 'python', 'python3', 'py']);
+const CODE_INTERPRETERS = new Set(['node', 'nodejs', 'bun', 'tsx', 'ts-node', 'js', 'ts', 'javascript', 'typescript', 'python', 'python3', 'py']);
 const CODE_FILE_EXTS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.py']);
+const GLOBAL_REPL_REGEX = new RegExp(REPL_REGEX.source, `${REPL_REGEX.flags.replace(/g/g, '')}g`);
 
-function isJsTsPayload(payload: ExecutionContext['payload']): boolean {
-  if (!('interpreter' in payload) || payload.interpreter === undefined) return false;
-  const baseInterp = path.basename(payload.interpreter.toLowerCase()).replace(/\.(?:exe|cmd|bat)$/i, '');
-  return JS_TS_INTERPRETERS.has(baseInterp);
+const WRAPPER_ASSIGN_OR_CMD = `(?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+|(?:sudo|env|su|doas|time|timeout|stdbuf|nohup|exec)(?:\\s+(?:-[^\\s;|&]+|\\d+(?:\\.\\d+)?[smhd]?))*\\s+)*`;
+const SHELL_HEAD_WRAPPER_RE = new RegExp(`(?:^|[;\\n&|{\`]|\\$\\()\\s*${WRAPPER_ASSIGN_OR_CMD}$`);
+const NESTED_POSIX_SHELL_C_RE = new RegExp(
+  `(?:^|[;\\n&|{\`]|\\$\\()\\s*${WRAPPER_ASSIGN_OR_CMD}['"]?(?:[^\\s;|&\`'"]*[\\\\/])?(?:bash|sh|zsh)(?:\\.exe)?['"]?(?:\\s+(?:--(?:rcfile|init-file)(?:=\\S+|\\s+\\S+)|--[a-zA-Z0-9-]+(?:=\\S+)?|[-+][a-zA-Z]*[oO]\\s+\\S+|[-+][a-zA-Z]+))*\\s+(?:-[a-zA-Z]*(?:[oO][a-zA-Z]*c|c[a-zA-Z]*[oO])\\s+\\S+|(?:-[a-zA-Z]*c|-c|--command)(?:\\s+[-+][oO]\\s+\\S+)?)\\s*$`,
+  'i',
+);
+
+function unescapeDoubleQuotedInner(raw: string): string {
+  return raw.replace(/\\(["\\$`])/g, '$1');
 }
 
-function stripCommentAndQuoteSpansForShellScan(body: string, includeRegexLiterals: boolean = false): string {
-  const spans = buildNonCodeSpans(body, { includeHashComments: true, includeSlashComments: includeRegexLiterals, includeRegexLiterals });
-  if (spans.length === 0) return body;
-  let result = '';
+function findSegmentStartBefore(body: string, pos: number): number {
+  const dollarParenIdx = body.lastIndexOf('$(', pos - 1);
+  return Math.max(
+    body.lastIndexOf('\n', pos - 1),
+    body.lastIndexOf(';', pos - 1),
+    body.lastIndexOf('&', pos - 1),
+    body.lastIndexOf('|', pos - 1),
+    body.lastIndexOf('{', pos - 1),
+    body.lastIndexOf('`', pos - 1),
+    dollarParenIdx === -1 ? -1 : dollarParenIdx + 1,
+  ) + 1;
+}
+
+function inspectShellQuoteSpans(body: string): { sanitized: string; dbSanitized: string; nestedBodies: string[] } {
+  const spans = buildNonCodeSpans(body, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
+  if (spans.length === 0) return { sanitized: body, dbSanitized: body, nestedBodies: [] };
+  let sanitized = '';
+  let dbSanitized = '';
   let last = 0;
+  const nestedBodies: string[] = [];
   for (const span of spans) {
-    result += body.slice(last, span.start);
-    result += ' '.repeat(span.end - span.start);
+    const segStart = findSegmentStartBefore(body, span.start);
+    const prefix = body.slice(segStart, span.start);
+    const quote = body[span.start];
+    const hasClosed = span.end - span.start >= 2 && body[span.end - 1] === quote;
+    const inner = hasClosed ? body.slice(span.start + 1, span.end - 1) : body.slice(span.start + 1);
+    const plainChunk = body.slice(last, span.start);
+    sanitized += plainChunk;
+    dbSanitized += plainChunk;
+    const blank = ' '.repeat(span.end - span.start);
+    if ((quote === '"' || quote === "'") && NESTED_POSIX_SHELL_C_RE.test(prefix)) {
+      nestedBodies.push(quote === '"' ? unescapeDoubleQuotedInner(inner) : inner);
+      sanitized += blank;
+      dbSanitized += blank;
+    } else if ((quote === '"' || quote === "'") && SHELL_HEAD_WRAPPER_RE.test(prefix) && !inner.includes('\n')) {
+      sanitized += ` ${inner} `;
+      dbSanitized += ` ${inner} `;
+    } else {
+      sanitized += blank;
+      dbSanitized += (quote === '"' || quote === "'") && span.end - span.start >= 3 ? ' __arg__ ' : blank;
+    }
     last = span.end;
   }
-  result += body.slice(last);
-  return result;
+  const rest = body.slice(last);
+  sanitized += rest;
+  dbSanitized += rest;
+  return { sanitized, dbSanitized, nestedBodies };
 }
 
-function isNonShellCodeBody(payload: ExecutionContext['payload'], rawBody: string): boolean {
+export function stripCommentAndQuoteSpansForShellScan(body: string): string {
+  return inspectShellQuoteSpans(body).sanitized;
+}
+
+function isNonShellCodeBody(
+  payload: ExecutionContext['payload'],
+  rawBody: string,
+  evalInterpreterDefaulted = false,
+): boolean {
   if (payload.type === 'eval') {
+    if (!evalInterpreterDefaulted) {
+      const interp = (payload.interpreter ?? '').toLowerCase();
+      const baseInterp = path.basename(interp).replace(/\.(?:exe|cmd|bat)$/i, '');
+      if (baseInterp.length > 0 && CODE_INTERPRETERS.has(baseInterp)) return true;
+    }
     return isJavaScriptOrTypeScriptCode(rawBody) || isPythonCode(rawBody);
   }
   if (payload.type === 'script') {
@@ -68,10 +122,25 @@ function isNonShellCodeBody(payload: ExecutionContext['payload'], rawBody: strin
   return false;
 }
 
+function unwrapBalancedOuterQuotes(text: string): string {
+  const q = text[0];
+  if (text.length < 2 || (q !== '"' && q !== "'") || text[text.length - 1] !== q) return text;
+  let escape = false;
+  for (let i = 1; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (q === '"' && ch === '\\') { escape = true; continue; }
+    if (ch === q) return i === text.length - 1 ? text.slice(1, -1).trim() : text;
+  }
+  return text;
+}
+
 function extractDockerContainerBody(cmdArgs: readonly string[]): string | null {
   const runExecIdx = cmdArgs.findIndex(a => a === 'run' || a === 'exec');
   if (runExecIdx === -1) return null;
   let skipNextValue = false;
+  let capturedEntrypoint: string | null = null;
+  let expectingEntrypointVal = false;
   let containerName: string | null = null;
   let containerCmd: string | null = null;
   const containerCmdArgs: string[] = [];
@@ -79,25 +148,43 @@ function extractDockerContainerBody(cmdArgs: readonly string[]): string | null {
   for (let i = runExecIdx + 1; i < cmdArgs.length; i++) {
     const arg = cmdArgs[i];
     if (arg === undefined) continue;
+    if (expectingEntrypointVal) {
+      expectingEntrypointVal = false;
+      if (arg.trim().length > 0) capturedEntrypoint = arg;
+      continue;
+    }
     if (skipNextValue) { skipNextValue = false; continue; }
     if (arg === '-T' || arg === '--no-TTY') continue;
     if (containerName === null && arg.startsWith('-')) {
-      if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.startsWith('--') && arg.includes('='))) {
+      if (arg === '--entrypoint') {
+        expectingEntrypointVal = true;
+      } else if (arg.startsWith('--entrypoint=')) {
+        const val = arg.slice('--entrypoint='.length);
+        if (val.trim().length > 0) capturedEntrypoint = val;
+      } else if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.startsWith('--') && arg.includes('='))) {
         if (!arg.includes('=')) skipNextValue = true;
       }
       continue;
     }
-    if (containerName === null) { containerName = arg; continue; }
+    if (containerName === null) {
+      containerName = arg;
+      if (capturedEntrypoint !== null) containerCmd = capturedEntrypoint;
+      continue;
+    }
     if (containerCmd === null) { containerCmd = arg; continue; }
     containerCmdArgs.push(arg);
   }
 
   if (containerCmd === null) return null;
   const baseCmd = path.posix.basename(containerCmd.replace(/\\/g, '/')).toLowerCase().replace(/\.exe$/, '');
-  if (['sh', 'bash', 'zsh', 'pwsh', 'powershell', 'cmd'].includes(baseCmd)) {
+  if (['sh', 'bash', 'zsh'].includes(baseCmd)) {
+    const cIdx = findPosixShellCIndex(containerCmdArgs);
+    return cIdx !== -1 && cIdx + 1 < containerCmdArgs.length ? (containerCmdArgs[cIdx + 1] ?? null) : null;
+  }
+  if (['pwsh', 'powershell', 'cmd'].includes(baseCmd)) {
     const cIdx = containerCmdArgs.findIndex(a => ['-c', '-command', '/c'].includes(a.toLowerCase()));
     if (cIdx !== -1 && cIdx + 1 < containerCmdArgs.length) {
-      return containerCmdArgs.slice(cIdx + 1).join(' ').replace(/^['"]|['"]$/g, '').trim();
+      return unwrapBalancedOuterQuotes(containerCmdArgs.slice(cIdx + 1).join(' ').trim());
     }
   }
   return [containerCmd, ...containerCmdArgs].join(' ');
@@ -112,13 +199,16 @@ const WRAPPER_VALUE_FLAGS_BY_CMD: Readonly<Record<string, ReadonlySet<string>>> 
   timeout: new Set(['-k', '--kill-after', '-s', '--signal']),
   stdbuf: new Set(['-i', '--input', '-o', '--output', '-e', '--error']),
 };
-const PM_WRAPPER_VALUE_FLAGS = new Set(['-C', '--dir', '--cwd', '--prefix', '--filter', '-F', '-p', '--package', '-c', '--call', '--userconfig']);
+const PM_WRAPPER_VALUE_FLAGS = new Set(['-C', '--dir', '--cwd', '--prefix', '--filter', '-F', '-p', '--package', '-c', '--call', '--userconfig', '-w', '--workspace']);
+
+const PWSH_SCAN_BOUNDARY_FLAGS = new Set(['--', '-file', '-f', '-encodedcommand', '-ec', '-en']);
 
 function findPwshCommandFlagIndex(args: readonly string[]): number {
   for (let i = 0; i < args.length; i++) {
     const low = (args[i] ?? '').toLowerCase();
-    if (low === '--' || low === '-file' || low === '-f' || low === '-encodedcommand' || low === '-ec' || low === '-en') return -1;
-    if (low === '-c' || low === '-command') return i;
+    const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
+    if (PWSH_SCAN_BOUNDARY_FLAGS.has(head)) return -1;
+    if (head === '-c' || head === '-command') return i;
   }
   return -1;
 }
@@ -127,8 +217,16 @@ function findPosixShellCIndex(args: readonly string[]): number {
   for (let i = 0; i < args.length; i++) {
     const a = args[i] ?? '';
     if (a === '--') return -1;
-    if (a === '-o' || a === '+o') { i++; continue; }
-    if (a === '-c' || (/^-[a-zA-Z]+$/.test(a) && a.includes('c'))) return i;
+    if (a === '--rcfile' || a === '--init-file') {
+      i++;
+      continue;
+    }
+    if (!a.startsWith('--') && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(a)) {
+      if (a.startsWith('-') && a.slice(1).includes('c')) return i + 1;
+      i++;
+      continue;
+    }
+    if (a === '-c' || a === '--command' || (/^-[a-zA-Z]+$/.test(a) && a.includes('c'))) return i;
     if (!a.startsWith('-') && !a.startsWith('+')) return -1;
   }
   return -1;
@@ -139,12 +237,14 @@ function extractScriptFileBody(payload: Extract<ExecutionContext['payload'], { t
     const rawCwd = payload.cwd !== undefined && payload.cwd.length > 0
       ? (process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(payload.cwd) ? convertToWindowsPath(payload.cwd) : payload.cwd)
       : undefined;
+    if (process.platform === 'win32' && rawCwd !== undefined && (rawCwd.startsWith('/') || rawCwd.startsWith('~'))) return null;
     const baseCwd = rawCwd !== undefined
       ? path.resolve(rawCwd)
       : (fallbackCwd !== undefined && fallbackCwd.length > 0 ? path.resolve(fallbackCwd) : process.cwd());
     const rawScript = process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(payload.scriptPath)
       ? convertToWindowsPath(payload.scriptPath)
       : payload.scriptPath;
+    if (process.platform === 'win32' && (rawScript.startsWith('/') || rawScript.startsWith('~'))) return null;
     const resolved = path.resolve(baseCwd, rawScript);
     const stat = fs.statSync(resolved, { throwIfNoEntry: false });
     return stat !== undefined && stat.isFile() && stat.size <= 512 * 1024 ? fs.readFileSync(resolved, 'utf8') : null;
@@ -154,26 +254,39 @@ function extractScriptFileBody(payload: Extract<ExecutionContext['payload'], { t
 }
 
 function extractWrapperScriptBody(baseNoExt: string, args: readonly string[]): string | null {
+  if (baseNoExt === 'vitest' || baseNoExt === 'jest') {
+    return `${baseNoExt} ${args.join(' ')}`.trim();
+  }
   if (baseNoExt === 'wsl') {
-    const eIdx = args.findIndex(a => a === '-e' || a === '--exec');
-    if (eIdx !== -1 && eIdx + 1 < args.length) return args.slice(eIdx + 1).join(' ');
     const WSL_VALUE_FLAGS = new Set(['-d', '--distribution', '-u', '--user', '--cd', '--shell-type']);
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
       if (a === undefined) continue;
-      if (a === '--') return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
+      if (a === '--' || a === '-e' || a === '--exec') {
+        return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
+      }
       if (WSL_VALUE_FLAGS.has(a)) { i++; continue; }
       if (!a.startsWith('-')) return args.slice(i).join(' ');
     }
     return null;
   }
-  if (['npx', 'pnpx', 'bunx', 'yarn'].includes(baseNoExt)) {
+  if (['npx', 'pnpx', 'bunx', 'yarn', 'pnpm', 'npm', 'bun'].includes(baseNoExt)) {
+    const isSubcmdRunner = baseNoExt === 'pnpm' || baseNoExt === 'npm' || baseNoExt === 'bun';
+    let sawDelegateSub = !isSubcmdRunner;
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
       if (a === undefined) continue;
       if (a === '--') return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
       if (PM_WRAPPER_VALUE_FLAGS.has(a)) { i++; continue; }
-      if (!a.startsWith('-')) return args.slice(i).join(' ');
+      if (a.startsWith('-')) continue;
+      const low = a.toLowerCase();
+      if (!sawDelegateSub) {
+        if (low === 'test') return `${baseNoExt} ${args.slice(i).join(' ')}`;
+        if (['exec', 'x', 'dlx', 'run'].includes(low)) { sawDelegateSub = true; continue; }
+        return null;
+      }
+      if (low === 'test') return `${baseNoExt} ${args.slice(i).join(' ')}`;
+      return args.slice(i).join(' ');
     }
     return null;
   }
@@ -202,7 +315,11 @@ export function extractRawScriptBody(ctx: ExecutionContext): string | null {
   const baseNoExt = cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/, '');
   if (baseNoExt === 'pwsh' || baseNoExt === 'powershell') {
     const idx = findPwshCommandFlagIndex(args);
-    return idx !== -1 && idx + 1 < args.length ? args.slice(idx + 1).join(' ').replace(/^['"]|['"]$/g, '').trim() : null;
+    if (idx === -1) return null;
+    const tok = args[idx] ?? '';
+    const colonBody = tok.includes(':') ? tok.slice(tok.indexOf(':') + 1) : '';
+    const parts = colonBody.length > 0 ? [colonBody, ...args.slice(idx + 1)] : args.slice(idx + 1);
+    return parts.length > 0 ? unwrapBalancedOuterQuotes(parts.join(' ').trim()) : null;
   }
   if (baseNoExt === 'sh' || baseNoExt === 'bash' || baseNoExt === 'zsh') {
     const idx = findPosixShellCIndex(args);
@@ -216,14 +333,17 @@ export function extractRawScriptBody(ctx: ExecutionContext): string | null {
   return extractWrapperScriptBody(baseNoExt, args);
 }
 
-function isBlockedReplInBody(body: string): boolean {
-  if (INTERACTIVE_FLAG_REGEX.test(body) || NODE_INSPECT_SUBCMD_REGEX.test(body)) return true;
-  const m = REPL_REGEX.exec(body);
-  if (m === null) return false;
-  const delimiter = (m[1] ?? '').trim();
-  if (delimiter.startsWith('|') || delimiter.startsWith('<')) return false;
-  const before = body.slice(0, m.index);
-  return !before.trim().endsWith('|') && !before.trim().endsWith('<');
+function findBlockedReplMatch(body: string): RegExpExecArray | null {
+  const interactive = INTERACTIVE_FLAG_REGEX.exec(body) ?? NODE_INSPECT_SUBCMD_REGEX.exec(body);
+  if (interactive !== null) return interactive;
+  GLOBAL_REPL_REGEX.lastIndex = 0;
+  for (const m of body.matchAll(GLOBAL_REPL_REGEX)) {
+    const delimiter = (m[1] ?? '').trim();
+    if (delimiter.startsWith('|') || delimiter.startsWith('<')) continue;
+    const before = body.slice(0, m.index ?? 0).trim();
+    if (!before.endsWith('|') && !before.endsWith('<')) return m;
+  }
+  return null;
 }
 
 function blockScriptPattern(hint: string, detail?: string): never {
@@ -233,20 +353,20 @@ function blockScriptPattern(hint: string, detail?: string): never {
   process.exit(1);
 }
 
-export function scanExtractedScriptBody(ctx: ExecutionContext): void {
-  const rawBody = extractRawScriptBody(ctx);
-  if (rawBody === null || isNonShellCodeBody(ctx.payload, rawBody)) return;
-
-  const body = stripCommentAndQuoteSpansForShellScan(rawBody, isJsTsPayload(ctx.payload));
-  const label = ctx.payload.type === 'eval' ? 'an eval payload' : 'an inline script';
-
+function scanShellBody(ctx: ExecutionContext, rawBody: string, label: string, depth = 0): void {
+  const { sanitized: body, dbSanitized, nestedBodies } = inspectShellQuoteSpans(rawBody);
   if (TUI_REGEX.test(body)) {
     const m = TUI_REGEX.exec(body);
     blockScriptPattern(`You passed '${m?.[3]?.toLowerCase() ?? 'tui-app'}' inside ${label}.`, `Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications will hang indefinitely.`);
   }
-  if (isBlockedReplInBody(body)) {
-    const m = REPL_REGEX.exec(body) ?? INTERACTIVE_FLAG_REGEX.exec(body) ?? NODE_INSPECT_SUBCMD_REGEX.exec(body);
-    blockScriptPattern(`You passed '${m?.[3]?.toLowerCase() ?? 'repl-app'}' inside ${label}.`, `Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications will hang indefinitely.`);
+  const replMatch = findBlockedReplMatch(body);
+  if (replMatch !== null) {
+    const matchedCmd = (replMatch[3] ?? replMatch[4] ?? 'repl-app').toLowerCase();
+    blockScriptPattern(`You passed '${matchedCmd}' inside ${label}.`, `Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications will hang indefinitely.`);
+  }
+  const dbOrSshCmd = findInteractiveDbOrSshInBody(dbSanitized);
+  if (dbOrSshCmd !== null) {
+    blockScriptPattern(`You passed '${dbOrSshCmd}' inside ${label}.`, `Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications will hang indefinitely.`);
   }
   if (WATCH_REGEX.test(body)) blockScriptPattern(`You passed 'watch' inside ${label}.`, `Continuous watch commands will hang indefinitely.`);
   if (TAIL_F_REGEX.test(body)) blockScriptPattern(`You passed 'tail -f' inside ${label}.`);
@@ -273,4 +393,14 @@ export function scanExtractedScriptBody(ctx: ExecutionContext): void {
       blockScriptPattern(`You attempted to run an inline shell command implicitly via powershell.`, `This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
     }
   }
+  if (depth < 3) {
+    for (const nested of nestedBodies) scanShellBody(ctx, nested, label, depth + 1);
+  }
+}
+
+export function scanExtractedScriptBody(ctx: ExecutionContext): void {
+  const rawBody = extractRawScriptBody(ctx);
+  if (rawBody === null || isNonShellCodeBody(ctx.payload, rawBody, ctx.evalInterpreterDefaulted)) return;
+  const label = ctx.payload.type === 'eval' ? 'an eval payload' : 'an inline script';
+  scanShellBody(ctx, rawBody, label);
 }

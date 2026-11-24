@@ -2,59 +2,15 @@
 import { ExecPayload } from './schema.js';
 import { renderWebhookTemplate } from './webhook-template.js';
 import fs from 'node:fs';
+import dns from 'node:dns';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import dotenv from 'dotenv';
 
-const SECRET_FIELD_RE = /(?:token|secret|passw(?:or)?d|passphrase|credential|api[_-]?key|private[_-]?key|(?:^|[-_])key$|^auth$|(?:proxy[-_])?authorization$|(?:^|[-_])auth(?:[-_]|$)|^stdin$|^cookie$|^set[-_]?cookie$|^x-(?:auth|api|key|token|secret))/i;
-const MAX_LOGGED_STRING = 2000;
-
-const URL_CREDENTIAL_RE = /([a-z][a-z0-9+.-]*:\/\/)([^:@\s/]+):([^@\s/]+)@|([a-z][a-z0-9+.-]*:\/\/)([^:@\s/]+)@/gi;
-const BEARER_RE = /\b(Bearer|Basic|Token|ApiKey|Digest|AWS4-HMAC-SHA256)\s+[A-Za-z0-9._\-+/=,]+/gi;
-const COOKIE_HEADER_RE = /\b((?:Set-)?Cookie\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\r\n]+)/gi;
-const TELEMETRY_SECRET_RE = /((?:token|secret|passw(?:or)?d|passphrase|credential|api[-_]?key|(?:proxy[-_])?authorization|private[-_]?key|x-(?:auth|api|key|token|secret)[^\s:=\\]*)(?:\\?['"])?\s*[:=]\s*(?:(?:Bearer|Basic|Token|ApiKey|Digest|AWS4-HMAC-SHA256)\s+)?)(?:(\\"|")((?:[^"\\]|\\.)*)(?:\2|$)|(\\'|')((?:[^'\\]|\\.)*)(?:\4|$)|([^\s'",}\]]+))/gi;
-
-function truncateForLog(value: string): string {
-  return value.length > MAX_LOGGED_STRING ? `${value.substring(0, MAX_LOGGED_STRING)}... [truncated]` : value;
-}
-
-export function redactTelemetryText(value: string): string {
-  const redacted = value
-    .replace(URL_CREDENTIAL_RE, (_m, s1?: string, u1?: string, _p1?: string, s2?: string) => (
-      s1 !== undefined ? `${s1}${u1 ?? ''}:[REDACTED]@` : `${s2 ?? ''}[REDACTED]@`
-    ))
-    .replace(COOKIE_HEADER_RE, '$1[REDACTED]')
-    .replace(BEARER_RE, '$1 [REDACTED]')
-    .replace(TELEMETRY_SECRET_RE, (_m, prefix: string, dq?: string, _dv?: string, sq?: string) => (
-      dq !== undefined ? `${prefix}${dq}[REDACTED]${dq}` : (sq !== undefined ? `${prefix}${sq}[REDACTED]${sq}` : `${prefix}[REDACTED]`)
-    ));
-  return truncateForLog(redacted);
-}
-
-/**
- * [INTENT]: Redacted, size-bounded deep copy of an arbitrary payload for issue logs.
- * [INVARIANT]: Never writes values of secret-like keys (env tokens, API keys) or secret strings to disk.
- */
-export function redactPayloadForLog(value: unknown, depth = 0): unknown {
-  if (typeof value === 'string') return redactTelemetryText(value);
-  if (typeof value === 'bigint') return String(value);
-  if (value === null || typeof value !== 'object') return value;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString();
-  if (value instanceof URL) return redactTelemetryText(value.href);
-  if (Error.isError(value) || value instanceof Error) {
-    return { name: value.name, message: redactTelemetryText(value.message) };
-  }
-  if (depth > 6) return '[depth-limit]';
-  if (Array.isArray(value)) {
-    return value.slice(0, 200).map(v => redactPayloadForLog(v, depth + 1));
-  }
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) {
-    out[k] = SECRET_FIELD_RE.test(k) && v !== null && v !== undefined && v !== '' ? '[REDACTED]' : redactPayloadForLog(v, depth + 1);
-  }
-  return out;
-}
+import { redactTelemetryText, redactPayloadForLog, sanitizeLoggedIssuePayload } from './redaction.js';
+export { redactTelemetryText, redactPayloadForLog, sanitizeLoggedIssuePayload };
 
 let lastStderrTail = '';
 
@@ -73,36 +29,6 @@ export function emitInterceptBanner(message: string): void {
   if (v !== undefined && v !== '' && v !== '0' && v.toLowerCase() !== 'false') {
     console.error(message);
   }
-}
-
-export function sanitizeLoggedIssuePayload(payload: unknown, extra?: Record<string, unknown>): { safePayload: unknown; internalStallBypass: boolean } {
-  const safePayload = redactPayloadForLog(payload);
-  const pre = extra?.preInterceptorPayload;
-  const callerSentBypass =
-    pre !== null &&
-    pre !== undefined &&
-    typeof pre === 'object' &&
-    'bypassInterceptors' in pre &&
-    pre.bypassInterceptors === true;
-  if (
-    safePayload !== null &&
-    safePayload !== undefined &&
-    typeof safePayload === 'object' &&
-    !Array.isArray(safePayload) &&
-    'bypassInterceptors' in safePayload &&
-    safePayload.bypassInterceptors === true &&
-    !callerSentBypass &&
-    pre !== undefined
-  ) {
-    const cleaned: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(safePayload)) {
-      if (k !== 'bypassInterceptors') {
-        cleaned[k] = v;
-      }
-    }
-    return { safePayload: cleaned, internalStallBypass: true };
-  }
-  return { safePayload, internalStallBypass: false };
 }
 
 export function recordAgentIssue(issueType: string, message: string, payload?: unknown, extra?: Record<string, unknown>) {
@@ -231,12 +157,12 @@ export const AUTONOMOUS_HEALING_MSG = '\x1b[38;5;208m   🛠️ AUTONOMOUS HEALI
 export function replaceIntegrationContext(str: string, payload: ExecPayload): string {
   if (!('integrationContext' in payload) || !payload.integrationContext) return str;
   const contextStr = JSON.stringify(payload.integrationContext);
-  return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
+  return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match: string, pathStr: string | undefined) => {
     if (!pathStr) return contextStr;
     let current: unknown = payload.integrationContext;
     const keys = pathStr.split('.');
     for (const key of keys) {
-      if (current == null || typeof current !== 'object' || !hasKey(current, key)) return match;
+      if (current === null || current === undefined || typeof current !== 'object' || !hasKey(current, key)) return match;
       current = current[key];
     }
     return typeof current === 'object' 
@@ -248,27 +174,99 @@ export function replaceIntegrationContext(str: string, payload: ExecPayload): st
 const METADATA_HOSTS: ReadonlySet<string> = new Set([
   '169.254.169.254',
   '169.254.170.2',
+  '100.100.100.200',
   'fd00:ec2::254',
   'metadata.google.internal',
   'metadata.goog',
   'metadata.azure.internal',
 ]);
 
+function normalizeWebhookHost(rawHost: string): string {
+  return rawHost.toLowerCase().replace(/^\[|\]$/g, '').replace(/%.*$/, '').replace(/\.+$/, '');
+}
+
+function parseIPv4Octets(ip: string): [number, number, number, number] | null {
+  if (net.isIPv4(ip) === false) return null;
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0, parts[3] ?? 0];
+}
+
+function parseIPv6Groups(raw: string): number[] | null {
+  if (net.isIPv6(raw) === false) return null;
+  let expanded = raw;
+  const lastColon = expanded.lastIndexOf(':');
+  if (lastColon !== -1 && expanded.includes('.')) {
+    const tailOctets = parseIPv4Octets(expanded.slice(lastColon + 1));
+    if (tailOctets === null) return null;
+    const hi = ((tailOctets[0] << 8) | tailOctets[1]).toString(16);
+    const lo = ((tailOctets[2] << 8) | tailOctets[3]).toString(16);
+    expanded = `${expanded.slice(0, lastColon)}:${hi}:${lo}`;
+  }
+  const halves = expanded.split('::');
+  if (halves.length > 2) return null;
+  const left = (halves[0] ?? '').length > 0 ? (halves[0] ?? '').split(':') : [];
+  const right = halves.length === 2 && (halves[1] ?? '').length > 0 ? (halves[1] ?? '').split(':') : [];
+  const missing = 8 - left.length - right.length;
+  if (halves.length === 1 && missing !== 0) return null;
+  if (halves.length === 2 && missing < 0) return null;
+  const groups = [...left, ...Array<string>(Math.max(0, missing)).fill('0'), ...right].map(g => Number.parseInt(g, 16));
+  return groups.length === 8 && groups.every(n => Number.isInteger(n) && n >= 0 && n <= 0xffff) ? groups : null;
+}
+
+function isBlockedIPv4Octets(octets: readonly [number, number, number, number]): boolean {
+  const [a, b] = octets;
+  if (a === 0 || a === 10 || a >= 224) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  return false;
+}
+
+export function isBlockedWebhookIp(rawIp: string): boolean {
+  const host = normalizeWebhookHost(rawIp);
+  if (host.length === 0 || METADATA_HOSTS.has(host)) return true;
+  const ipv4 = parseIPv4Octets(host);
+  if (ipv4 !== null) return isBlockedIPv4Octets(ipv4);
+  const v6 = parseIPv6Groups(host);
+  if (v6 === null) return false;
+  const [w0, w1, w2, w3, w4, w5, w6, w7] = v6;
+  if (w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0 && w6 === 0) {
+    return w7 !== 1; // Block unspecified ::; allow loopback ::1
+  }
+  if ((w0 !== undefined && (w0 & 0xfe00) === 0xfc00) || (w0 !== undefined && (w0 & 0xffc0) === 0xfe80)) return true;
+  if (w0 === 0x0064 && w1 === 0xff9b && ((w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0) || w2 === 1)) return true;
+  if (w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0 && (w5 === 0 || w5 === 0xffff) && w6 !== undefined && w7 !== undefined) {
+    return isBlockedIPv4Octets([w6 >> 8, w6 & 0xff, w7 >> 8, w7 & 0xff]);
+  }
+  if (w0 === 0x2002 && w1 !== undefined && w2 !== undefined) {
+    return isBlockedIPv4Octets([w1 >> 8, w1 & 0xff, w2 >> 8, w2 & 0xff]);
+  }
+  return false;
+}
+
 export function validateWebhookUrl(rawUrl: string): URL | null {
   try {
     const parsed = new URL(rawUrl);
     const proto = parsed.protocol.toLowerCase();
     if (proto !== 'http:' && proto !== 'https:') return null;
-    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-    if (host.length === 0) return null;
-    if (
-      METADATA_HOSTS.has(host) ||
-      host.startsWith('169.254.') ||
-      host.startsWith('::ffff:169.254.') ||
-      /^fe[89ab][0-9a-f]:/i.test(host)
-    ) {
-      return null;
-    }
+    const host = normalizeWebhookHost(parsed.hostname);
+    if (host.length === 0 || isBlockedWebhookIp(host)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveAndValidateWebhookUrl(rawUrl: string): Promise<URL | null> {
+  const parsed = validateWebhookUrl(rawUrl);
+  if (parsed === null) return null;
+  const host = normalizeWebhookHost(parsed.hostname);
+  if (host === 'localhost' || net.isIP(host) !== 0) return parsed;
+  try {
+    const entries = await dns.promises.lookup(host, { all: true, verbatim: true });
+    if (entries.length === 0 || entries.some(entry => isBlockedWebhookIp(entry.address))) return null;
     return parsed;
   } catch {
     return null;
@@ -280,7 +278,11 @@ export async function sendWebhook(
   urls: string | string[],
   vars: { stdout: string, stderr: string, code: number | null, signal: NodeJS.Signals | null, success: boolean, envData: Record<string, unknown> | null }
 ) {
-  const headers = { 'Content-Type': 'application/json', ...(payload.webhookHeaders || {}) };
+  const rawHeaders = payload.webhookHeaders ?? {};
+  const hasExplicitContentType = Object.keys(rawHeaders).some(k => k.toLowerCase() === 'content-type');
+  const headers: Record<string, string> = hasExplicitContentType
+    ? { ...rawHeaders }
+    : { 'Content-Type': 'application/json', ...rawHeaders };
   let body: string;
 
   if ('webhookPayloadTemplate' in payload && payload.webhookPayloadTemplate) {
@@ -300,34 +302,28 @@ export async function sendWebhook(
   }
 
   const urlArray = Array.isArray(urls) ? urls : [urls];
-  for (const u of urlArray) {
+  await Promise.allSettled(urlArray.map(async (u) => {
     const targetUrl = replaceIntegrationContext(u, payload);
     const method = payload.webhookMethod || 'POST';
     const timeoutMs = payload.webhookTimeoutMs ?? 5000;
-    const validatedUrl = validateWebhookUrl(targetUrl);
+    const validatedUrl = await resolveAndValidateWebhookUrl(targetUrl);
 
     if (validatedUrl === null) {
-      console.error(`❌ Webhook Error: Invalid or unsafe target URL for webhook. Only http/https non-metadata endpoints allowed.`);
-    } else {
-      const fetchOptions: RequestInit = { method, headers, redirect: 'error' };
-      if (timeoutMs > 0) {
-        fetchOptions.signal = AbortSignal.timeout(timeoutMs);
-      }
-      if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') fetchOptions.body = body;
-      try { 
-        await fetch(validatedUrl.href, fetchOptions).then(async res => {
-          if (!res.ok) {
-            console.error(`❌ Webhook Error: HTTP ${res.status} ${res.statusText}`);
-          }
-          return res.arrayBuffer();
-        }).catch((err: unknown) => { 
-          console.error(`❌ Webhook Error: Failed to invoke webhook: ${err instanceof Error ? err.message : String(err)}`); 
-        }); 
-      } catch (err) { 
-        console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); 
-      }
+      console.error(`❌ Webhook Error: Invalid or unsafe target URL for webhook. Only public http/https endpoints allowed.`);
+      return;
     }
-  }
+    const fetchOptions: RequestInit = { method, headers, redirect: 'error' };
+    if (timeoutMs > 0) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+    if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') fetchOptions.body = body;
+    try {
+      const res = await fetch(validatedUrl.href, fetchOptions);
+      if (!res.ok) console.error(`❌ Webhook Error: HTTP ${res.status} ${res.statusText}`);
+      await res.arrayBuffer();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`❌ Webhook Error: ${redactTelemetryText(msg)}`);
+    }
+  }));
 }
 
 export function findEcosystemRoot(startDir: string): string | null {
@@ -374,12 +370,12 @@ export async function sendDatadogTelemetry(
   try {
     const cwdRoot = findEcosystemRoot(cwd);
     const scriptRoot = findEcosystemRoot(fileURLToPath(import.meta.url));
-    const root = (cwdRoot && fs.existsSync(path.join(cwdRoot, 'secrets.env')))
-      ? cwdRoot
-      : scriptRoot;
+    const cwdEnvPath = cwdRoot !== null ? path.join(cwdRoot, 'secrets.env') : undefined;
+    const hasCwdEnv = cwdEnvPath !== undefined && fs.statSync(cwdEnvPath, { throwIfNoEntry: false })?.isFile() === true;
+    const root = hasCwdEnv ? cwdRoot : scriptRoot;
     if (!root) return;
     const envPath = path.join(root, 'secrets.env');
-    if (!fs.existsSync(envPath)) return;
+    if (envPath !== cwdEnvPath && fs.statSync(envPath, { throwIfNoEntry: false })?.isFile() !== true) return;
     const envConfig = dotenv.parse(fs.readFileSync(envPath));
     const apiKey = envConfig.DD_API_KEY;
     if (!apiKey) return;
@@ -417,23 +413,20 @@ export async function sendDatadogTelemetry(
       'DD-API-KEY': apiKey
     };
 
-    const reqs = [];
-    
-    // Send Metric
-    reqs.push(fetch('https://api.datadoghq.com/api/v2/series', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(seriesPayload),
-      signal: AbortSignal.timeout(1500)
-    }).catch(() => {}));
-    
-    // Send Log
-    reqs.push(fetch('https://http-intake.logs.datadoghq.com/api/v2/logs', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(logPayload),
-      signal: AbortSignal.timeout(1500)
-    }).catch(() => {}));
+    const reqs = [
+      fetch('https://api.datadoghq.com/api/v2/series', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(seriesPayload),
+        signal: AbortSignal.timeout(1500)
+      }),
+      fetch('https://http-intake.logs.datadoghq.com/api/v2/logs', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(logPayload),
+        signal: AbortSignal.timeout(1500)
+      }),
+    ];
 
     await Promise.allSettled(reqs);
   } catch {

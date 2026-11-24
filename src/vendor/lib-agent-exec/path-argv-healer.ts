@@ -2,7 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ExecutionContext } from './interceptors/types.js';
-import { RG_VALUE_FLAGS, findPatternExprIndex } from './command-utils.js';
+import {
+  RG_VALUE_FLAGS,
+  findPatternExprIndex,
+  inspectCombinedShortFlag,
+} from './command-utils.js';
 import { resolveEvalExecutionTarget } from './eval-healer.js';
 import {
   BARREL_CANDIDATES,
@@ -11,31 +15,21 @@ import {
   isDirectoryPath,
   isFilePath,
   logPathHeal,
-  normalizeMntPath,
+  normalizeMntPathForHost,
   preserveQuotes,
+  splitJoinedFileArg,
+  WSL_DRIVE_MNT_RE,
 } from './path-healer.js';
 import { findNeighborFilePath } from './path-neighbor.js';
 import { resolveBuildSrcSwap, resolvePathWithDirectorySynonyms } from './path-synonym.js';
 import { healEvalCodePathHallucinations } from './path-eval-healer.js';
 
 const FILE_TOOLS: ReadonlySet<string> = new Set([
-  'rg', 'rg.exe',
-  'grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe',
-  'cat', 'cat.exe',
-  'head', 'head.exe',
-  'tail', 'tail.exe',
-  'wc', 'wc.exe',
-  'diff', 'diff.exe',
-  'cmp', 'cmp.exe',
-  'eslint', 'eslint.cmd',
-  'node', 'node.exe',
-  'bun', 'bun.exe',
-  'prettier', 'prettier.cmd',
-  'sed', 'sed.exe',
-  'awk', 'awk.exe',
-  'ls', 'ls.exe',
-  'find', 'find.exe',
-  'dir', 'dir.exe',
+  'rg', 'rg.exe', 'grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe',
+  'cat', 'cat.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'wc', 'wc.exe',
+  'diff', 'diff.exe', 'cmp', 'cmp.exe', 'eslint', 'eslint.cmd', 'node', 'node.exe',
+  'bun', 'bun.exe', 'prettier', 'prettier.cmd', 'sed', 'sed.exe', 'awk', 'awk.exe',
+  'ls', 'ls.exe', 'find', 'find.exe', 'dir', 'dir.exe',
 ]);
 
 const GENERIC_VALUE_TAKING_FLAGS: ReadonlySet<string> = new Set([
@@ -47,13 +41,9 @@ const GENERIC_VALUE_TAKING_FLAGS: ReadonlySet<string> = new Set([
 
 const VALUE_TAKING_FLAGS: Record<string, ReadonlySet<string>> = {
   rg: new Set([...RG_VALUE_FLAGS, '-d']),
-  grep: new Set([
-    '-e', '--regexp', '-f', '--file', '-m', '--max-count',
-    '-A', '--after-context', '-B', '--before-context', '-C', '--context',
-    '--exclude', '--exclude-dir', '--exclude-from', '--include', '--label', '--color', '--colour',
-  ]),
-  egrep: new Set(['-e', '--regexp', '-f', '--file', '-m', '--max-count', '-A', '-B', '-C', '--exclude', '--exclude-dir', '--exclude-from', '--include', '--color', '--label']),
-  fgrep: new Set(['-e', '--regexp', '-f', '--file', '-m', '--max-count', '-A', '-B', '-C', '--exclude', '--exclude-dir', '--exclude-from', '--include', '--color', '--label']),
+  grep: new Set(['-e', '--regexp', '-f', '--file', '-m', '--max-count', '-d', '--directories', '-D', '--devices', '-A', '--after-context', '-B', '--before-context', '-C', '--context', '--exclude', '--exclude-dir', '--exclude-from', '--include', '--include-from', '--label', '--color', '--colour']),
+  egrep: new Set(['-e', '--regexp', '-f', '--file', '-m', '--max-count', '-d', '--directories', '-D', '--devices', '-A', '-B', '-C', '--exclude', '--exclude-dir', '--exclude-from', '--include', '--include-from', '--color', '--label']),
+  fgrep: new Set(['-e', '--regexp', '-f', '--file', '-m', '--max-count', '-d', '--directories', '-D', '--devices', '-A', '-B', '-C', '--exclude', '--exclude-dir', '--exclude-from', '--include', '--include-from', '--color', '--label']),
   head: new Set(['-n', '--lines', '-c', '--bytes']),
   tail: new Set(['-n', '--lines', '-c', '--bytes', '-s', '--sleep-interval']),
   eslint: new Set(['-c', '--config', '--ignore-path', '--rule', '--parser', '-o', '--output-file', '-f', '--format', '--cache-location']),
@@ -61,29 +51,30 @@ const VALUE_TAKING_FLAGS: Record<string, ReadonlySet<string>> = {
   sed: new Set(['-e', '--expression', '-f', '--file', '-i', '--in-place']),
   awk: new Set(['-F', '--field-separator', '-v', '--assign', '-f', '--file']),
   find: new Set(['-maxdepth', '-mindepth', '-name', '-iname', '-path', '-ipath', '-regex', '-iregex', '-type', '-size', '-mtime']),
-  bun: new Set([
-    '-e', '--eval', '-p', '--print', '--cwd', '--env-file', '-c', '--config', '--port',
-    '--define', '-r', '--preload', '--filter', '--outfile', '--outdir', '--tsconfig-override',
-    '--public-path', '--root', '--external', '--target', '--format', '--sourcemap',
-    '-t', '--test-name-pattern', '--timeout', '--entry-naming', '--chunk-naming', '--asset-naming',
-  ]),
-  node: new Set(['-e', '--eval', '-p', '--print', '-r', '--require', '--import', '--env-file', '-C', '--conditions']),
+  cat: new Set<string>(),
+  wc: new Set<string>(),
+  ls: new Set(['-w', '--width', '--tabsize', '-T', '--time', '--time-style', '--sort', '--color', '--format', '--indicator-style', '--quoting-style', '-I', '--ignore', '--hide']),
+  dir: new Set(['-Filter', '-Include', '-Exclude', '-Depth', '-w', '--width', '--time-style', '--sort', '--color', '-I', '--ignore']),
+  diff: new Set(['-U', '--unified', '-C', '--context', '-L', '--label', '-I', '--ignore-matching-lines', '-S', '--starting-file', '-x', '--exclude', '-X', '--exclude-from', '--palette', '--color', '--tabsize', '-W', '--width', '-F', '--show-function-line']),
+  cmp: new Set(['-n', '--bytes', '-i', '--ignore-initial']),
+  bun: new Set(['-e', '--eval', '-p', '--print', '--cwd', '--env-file', '-c', '--config', '--port', '--define', '-r', '--preload', '--filter', '--outfile', '--outdir', '--tsconfig-override', '--public-path', '--root', '--external', '--target', '--format', '--sourcemap', '-t', '--test-name-pattern', '--timeout', '--entry-naming', '--chunk-naming', '--asset-naming']),
+  node: new Set(['-e', '--eval', '-p', '--print', '-r', '--require', '--import', '--env-file', '--env-file-if-exists', '--loader', '--experimental-loader', '--input-type', '-C', '--conditions']),
 };
 
 const BUN_SUBCOMMANDS: ReadonlySet<string> = new Set([
-  'test', 'run', 'add', 'remove', 'rm', 'install', 'i', 'build', 'create', 'init', 'upgrade', 'update',
-  'outdated', 'link', 'unlink', 'pm', 'patch', 'x', 'exec', 'repl', 'dev', 'publish', 'help',
+  'test', 'run', 'add', 'remove', 'rm', 'install', 'i', 'build', 'create', 'init', 'upgrade', 'update', 'outdated', 'link', 'unlink', 'pm', 'patch', 'x', 'exec', 'repl', 'dev', 'publish', 'help',
 ]);
-
 const BUN_PKG_SUBCOMMANDS: ReadonlySet<string> = new Set([
-  'add', 'remove', 'rm', 'install', 'i', 'upgrade', 'update', 'outdated', 'link', 'unlink', 'pm',
-  'create', 'init', 'patch', 'publish', 'help',
+  'add', 'remove', 'rm', 'install', 'i', 'upgrade', 'update', 'outdated', 'link', 'unlink', 'pm', 'create', 'init', 'patch', 'publish', 'help',
 ]);
 
 const CODE_MODULE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.js', '.tsx', '.jsx', '.mts', '.cts', '.mjs', '.cjs']);
 const GREP_TOOLS: ReadonlySet<string> = new Set(['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe']);
 const SEARCH_TOOLS: ReadonlySet<string> = new Set([...GREP_TOOLS, 'rg', 'rg.exe']);
 const SEARCH_OR_LIST: ReadonlySet<string> = new Set([...SEARCH_TOOLS, 'ls', 'ls.exe', 'dir', 'dir.exe', 'find', 'find.exe']);
+const MULTI_TARGET_FILE_TOOLS: ReadonlySet<string> = new Set([
+  ...SEARCH_OR_LIST, 'cat', 'cat.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'wc', 'wc.exe', 'eslint', 'eslint.cmd', 'prettier', 'prettier.cmd',
+]);
 const RUNNER_NAMES: ReadonlySet<string> = new Set(['tsx', 'ts-node', 'node', 'bun', 'deno', 'nodemon']);
 const SCRIPT_EXTS: ReadonlySet<string> = new Set(['.ts', '.js', '.mjs', '.cjs', '.tsx', '.jsx']);
 
@@ -102,28 +93,40 @@ function healEvalPayload(ctx: ExecutionContext, cwd: string): void {
   for (const line of deferredLogs) console.error(line);
 }
 
-function healBackupPaths(args: string[], skip: ReadonlySet<number>, cwd: string): void {
+function healBackupPaths(args: string[], skip: ReadonlySet<number>, cwd: string, syncArgs: () => void): void {
   for (let index = 0; index < args.length; index += 1) {
     if (skip.has(index)) continue;
     const arg = args[index];
-    if (arg === undefined || arg.startsWith('-') || !/(?:^|[\\/])memory-journal-mcp[\\/]backups(?=[\\/]|$)/.test(arg)) continue;
+    if (arg === undefined || arg.startsWith('-')) continue;
+    if (!/(^|['"]|[\\/])backups(?=[\\/]|['"]|$)/i.test(arg)) continue;
     const raw = arg.replace(/^['"]|['"]$/g, '');
-    const resolved = path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(cwd, raw);
+    if (/(?:^|[\\/])data[\\/]backups(?=[\\/]|$)/i.test(raw)) continue;
+    const isWslPath = WSL_DRIVE_MNT_RE.test(raw);
+    const hostRaw = isWslPath ? normalizeMntPathForHost(raw) : raw;
+    const resolved = path.isAbsolute(hostRaw) ? path.normalize(hostRaw) : path.resolve(cwd, hostRaw);
     if (fs.existsSync(resolved)) continue;
-    args[index] = arg.replace(/memory-journal-mcp[\\/]backups(?=[\\/]|$)/g, 'memory-journal-mcp/data/backups');
-    console.error(`\n   💡 AGENT HINT: 'backups' directory is located at 'data/backups', not the repository root.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to data/backups.\x1b[0m`);
+    const sep = raw.includes('\\') && !isWslPath ? '\\' : '/';
+    const candidateRaw = raw.replace(/(^|[\\/])backups(?=[\\/]|$)/i, `$1data${sep}backups`);
+    const candidateHost = isWslPath ? normalizeMntPathForHost(candidateRaw) : candidateRaw;
+    const candidateResolved = path.isAbsolute(candidateHost) ? path.normalize(candidateHost) : path.resolve(cwd, candidateHost);
+    if (!fs.existsSync(candidateResolved)) continue;
+    args[index] = preserveQuotes(arg, candidateRaw);
+    syncArgs();
+    console.error(`\n   💡 AGENT HINT: 'backups' directory was found at 'data/backups'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to data/backups.\x1b[0m`);
   }
 }
 
-function healMcpConfigPaths(args: string[], skip: ReadonlySet<number>, cwd: string): void {
+function healMcpConfigPaths(args: string[], skip: ReadonlySet<number>, cwd: string, syncArgs: () => void): void {
   for (let index = 0; index < args.length; index += 1) {
     if (skip.has(index)) continue;
     const arg = args[index];
     if (arg === undefined || arg.startsWith('-') || (!arg.includes('.gemini\\mcp_config.json') && !arg.includes('.gemini/mcp_config.json')) || arg.includes('antigravity-ide')) continue;
     const raw = arg.replace(/^['"]|['"]$/g, '');
-    const resolved = path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(cwd, raw);
+    const hostRaw = normalizeMntPathForHost(raw);
+    const resolved = path.isAbsolute(hostRaw) ? path.normalize(hostRaw) : path.resolve(cwd, hostRaw);
     if (fs.existsSync(resolved)) continue;
     args[index] = arg.replace(/\.gemini[\\/]mcp_config\.json/g, '.gemini/antigravity-ide/mcp_config.json');
+    syncArgs();
     console.error(`\n   💡 AGENT HINT: 'mcp_config.json' is located in '.gemini/antigravity-ide/mcp_config.json', not directly under '.gemini'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to .gemini/antigravity-ide/mcp_config.json... (Frictionless Recovery)\x1b[0m`);
   }
 }
@@ -151,7 +154,18 @@ function skipBunRunArgs(args: string[], skip: Set<number>, firstPositionalIdx: n
   addSkipRange(skip, start, args.length);
 }
 
+function hasInlineEvalFlag(args: readonly string[], skip: ReadonlySet<number>, checkCwd = false): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') return false;
+    if (/^--(?:eval|print)(?:=|$)|^-(?:e|p)$/.test(a) || (checkCwd && !skip.has(i) && (a === '--cwd' || a.startsWith('--cwd=')))) return true;
+    if (!a.startsWith('-') && !skip.has(i)) return false;
+  }
+  return false;
+}
+
 function skipBunPositionals(args: string[], skip: Set<number>): boolean {
+  if (hasInlineEvalFlag(args, skip, true)) return true;
   const firstPositionalIdx = args.findIndex((item, idx) => !skip.has(idx) && !item.startsWith('-'));
   if (firstPositionalIdx === -1) return false;
   const firstPositional = args[firstPositionalIdx];
@@ -167,6 +181,10 @@ function skipBunPositionals(args: string[], skip: Set<number>): boolean {
     }
     return false;
   }
+  if (isPackageJsonScript(firstPositional)) {
+    addSkipRange(skip, firstPositionalIdx, args.length);
+    return true;
+  }
   if (SCRIPT_EXTS.has(path.extname(firstPositional).toLowerCase()) || firstPositional.includes('/') || firstPositional.includes('\\')) {
     addSkipRange(skip, firstPositionalIdx + 1, args.length);
   }
@@ -174,9 +192,17 @@ function skipBunPositionals(args: string[], skip: Set<number>): boolean {
 }
 
 function skipNodeTail(args: string[], skip: Set<number>): void {
+  if (hasInlineEvalFlag(args, skip)) {
+    addSkipRange(skip, 0, args.length);
+    return;
+  }
   const scriptIdx = args.findIndex((item, idx) => !skip.has(idx) && !item.startsWith('-'));
   if (scriptIdx !== -1) addSkipRange(skip, scriptIdx + 1, args.length);
 }
+
+const DIR_LOWER_VALUE_FLAGS: ReadonlySet<string> = new Set(
+  [...(VALUE_TAKING_FLAGS['dir'] ?? [])].map(f => f.toLowerCase()),
+);
 
 function skipFlagValues(base: string, args: string[], skip: Set<number>): void {
   const toolKey = base.replace(/\.(?:exe|cmd)$/i, '');
@@ -186,7 +212,7 @@ function skipFlagValues(base: string, args: string[], skip: Set<number>): void {
   for (let index = 0; index < args.length - 1; index += 1) {
     const flag = args[index];
     if (flag === '--') break;
-    if (flag !== undefined && valueFlags.has(flag)) {
+    if (flag !== undefined && (inspectCombinedShortFlag(toolKey, flag, valueFlags).takesSeparateValue || (toolKey === 'dir' && DIR_LOWER_VALUE_FLAGS.has(flag.toLowerCase())))) {
       skip.add(index + 1);
       index += 1;
     }
@@ -195,16 +221,29 @@ function skipFlagValues(base: string, args: string[], skip: Set<number>): void {
 
 function resolveArgForCompare(value: string, cwd: string): string {
   const raw = value.replace(/^['"]|['"]$/g, '');
-  const norm = raw.startsWith('/mnt/') ? normalizeMntPath(raw) : raw;
+  const norm = normalizeMntPathForHost(raw);
   return (path.isAbsolute(norm) ? path.normalize(norm) : path.resolve(cwd, norm)).replace(/[\\/]+$/, '').toLowerCase();
 }
 
-function applyHeal(args: string[], idx: number, healed: string, cwd: string): boolean {
+function isDuplicateArg(args: string[], idx: number, healed: string, cwd: string, skip?: ReadonlySet<number>): boolean {
   const target = resolveArgForCompare(healed, cwd);
-  const duplicate = args.some((other, otherIdx) => otherIdx !== idx && !other.startsWith('-') && resolveArgForCompare(other, cwd) === target);
-  if (duplicate) return false;
+  return args.some((other, otherIdx) =>
+    otherIdx !== idx && !(skip?.has(otherIdx) ?? false) && !other.startsWith('-') && resolveArgForCompare(other, cwd) === target
+  );
+}
+
+function applyHeal(args: string[], idx: number, healed: string, cwd: string, skip?: ReadonlySet<number>): boolean {
+  if (healed.replace(/^['"]|['"]$/g, '').trim().length === 0) return false;
+  if (isDuplicateArg(args, idx, healed, cwd, skip)) return false;
   args[idx] = healed;
   return true;
+}
+
+function shiftSkipIndices(skip: Set<number>, afterIdx: number, delta: number): void {
+  if (delta <= 0) return;
+  const shifted = [...skip].map((idx) => (idx > afterIdx ? idx + delta : idx));
+  skip.clear();
+  for (const idx of shifted) skip.add(idx);
 }
 
 function looksLikeStructuredArg(trimmed: string): boolean {
@@ -216,68 +255,90 @@ function looksLikeStructuredArg(trimmed: string): boolean {
 function shouldSkipArg(arg: string | undefined): boolean {
   if (arg === undefined || arg.length === 0 || arg.startsWith('-')) return true;
   const trimmed = arg.trim();
+  const unquoted = trimmed.replace(/^['"]|['"]$/g, '');
   if (trimmed.startsWith('!') || /^['"]!/.test(trimmed)) return true;
-  if (arg.startsWith('/') && !arg.startsWith('/mnt/')) return true;
+  if (unquoted === '~' || unquoted.startsWith('~/')) return true;
+  if (unquoted.startsWith('/') && !WSL_DRIVE_MNT_RE.test(unquoted)) return true;
   if (arg.includes('*') || arg.includes('?') || arg.includes('://')) return true;
   return looksLikeStructuredArg(trimmed);
 }
 
 function hasGrepRecurse(args: readonly string[]): boolean {
-  return args.some((item) => item === '-r' || item === '-R' || item === '--recursive' || (item.startsWith('-') && !item.startsWith('--') && (item.includes('r') || item.includes('R'))));
+  const valueFlags = VALUE_TAKING_FLAGS['grep'] ?? [];
+  for (let i = 0; i < args.length; i++) {
+    const item = args[i];
+    if (item === undefined || item === '--') break;
+    if (item === '-r' || item === '-R' || item === '--recursive') return true;
+    const info = inspectCombinedShortFlag('grep', item, valueFlags);
+    if (info.shortPrefix.length > 1 && (info.shortPrefix.includes('r') || info.shortPrefix.includes('R'))) return true;
+    if (info.takesSeparateValue) i++;
+  }
+  return false;
 }
 
 function findBarrelName(dirPath: string): string | null {
   for (const barrel of BARREL_CANDIDATES) {
-    if (fs.existsSync(path.join(dirPath, barrel))) return barrel;
+    if (isFilePath(path.join(dirPath, barrel))) return barrel;
   }
   return null;
 }
 
-function healModularDirectory(args: string[], base: string, index: number, arg: string, rawPath: string, isWslPath: boolean, cwd: string): { handled: boolean; needsRecurse: boolean } {
+function healModularDirectory(args: string[], base: string, index: number, arg: string, rawPath: string, isWslPath: boolean, cwd: string, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): { handled: boolean; needsRecurse: boolean } {
   const extMatch = rawPath.match(/\.(?:ts|js|tsx|jsx|mjs|cjs)$/i);
   if (extMatch === null) return { handled: false, needsRecurse: false };
   const withoutExt = rawPath.slice(0, -extMatch[0].length);
   if (withoutExt.length === 0 || /[\\/]$/.test(withoutExt)) return { handled: false, needsRecurse: false };
-  const normalizedWithoutExt = isWslPath ? normalizeMntPath(withoutExt) : withoutExt;
+  const normalizedWithoutExt = isWslPath ? normalizeMntPathForHost(withoutExt) : withoutExt;
   const resolvedWithoutExt = path.isAbsolute(normalizedWithoutExt) ? path.normalize(normalizedWithoutExt) : path.resolve(cwd, normalizedWithoutExt);
   if (!isDirectoryPath(resolvedWithoutExt)) return { handled: false, needsRecurse: false };
   if (SEARCH_TOOLS.has(base)) {
-    return { handled: true, needsRecurse: healSearchDirectory(args, base, index, arg, withoutExt, cwd) };
+    return { handled: true, needsRecurse: healSearchDirectory(args, base, index, arg, withoutExt, cwd, skip, syncArgs, duplicateIndices) };
   }
   const foundBarrel = findBarrelName(resolvedWithoutExt);
   if (foundBarrel === null) return { handled: false, needsRecurse: false };
   const sep = withoutExt.includes('\\') ? '\\' : '/';
   const healedBarrel = preserveQuotes(arg, `${withoutExt}${sep}${foundBarrel}`);
-  if (applyHeal(args, index, healedBarrel, cwd)) {
+  if (applyHeal(args, index, healedBarrel, cwd, skip)) {
+    syncArgs();
     logPathHeal(`File '${arg}' not found on disk, but directory '${withoutExt}' exists with entrypoint '${foundBarrel}'.`, `Auto-correcting path to '${healedBarrel}'... (Frictionless Recovery)`);
   }
   return { handled: true, needsRecurse: false };
 }
 
-function healSearchDirectory(args: string[], base: string, index: number, arg: string, withoutExt: string, cwd: string): boolean {
+function healSearchDirectory(args: string[], base: string, index: number, arg: string, withoutExt: string, cwd: string, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): boolean {
   const healedDir = preserveQuotes(arg, withoutExt);
-  if (applyHeal(args, index, healedDir, cwd)) {
+  if (applyHeal(args, index, healedDir, cwd, skip)) {
+    syncArgs();
     logPathHeal(`File '${arg}' not found, but modular directory '${withoutExt}' exists.`, `Auto-correcting path to '${healedDir}'... (Frictionless Recovery)`);
     return GREP_TOOLS.has(base) && !hasGrepRecurse(args);
+  }
+  if (duplicateIndices !== undefined && isDuplicateArg(args, index, healedDir, cwd, skip)) {
+    duplicateIndices.add(index);
   }
   return false;
 }
 
-function healAddedExtension(args: string[], index: number, arg: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean): 'healed' | 'blocked' | 'none' {
+function healAddedExtension(args: string[], index: number, arg: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean, isSearchOrListTool: boolean, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): 'healed' | 'blocked' | 'none' {
   const cleanResolved = resolved.replace(/[\\/]+$/, '');
   for (const ext of CANDIDATE_EXTENSIONS) {
     if (hadTrailingSlash && !CODE_MODULE_EXTENSIONS.has(ext)) continue;
     const candidate = cleanResolved + ext;
     if (!isFilePath(candidate)) continue;
     const healedArg = formatHealedPath(arg, candidate, cwd, isWslPath);
-    if (!applyHeal(args, index, healedArg, cwd)) return 'blocked';
+    if (!applyHeal(args, index, healedArg, cwd, skip)) {
+      if (isSearchOrListTool && duplicateIndices !== undefined && isDuplicateArg(args, index, healedArg, cwd, skip)) {
+        duplicateIndices.add(index);
+      }
+      return 'blocked';
+    }
+    syncArgs();
     logPathHeal(`Path '${arg}' not found on disk, but '${healedArg}' exists.`, `Auto-correcting path to '${healedArg}'... (Frictionless Recovery)`);
     return 'healed';
   }
   return 'none';
 }
 
-function healNeighborArg(args: string[], base: string, index: number, arg: string, rawPath: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean): boolean {
+function healNeighborArg(args: string[], base: string, index: number, arg: string, rawPath: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): boolean {
   const isSearchOrListTool = SEARCH_OR_LIST.has(base);
   if (!isSearchOrListTool && !rawPath.includes('/') && !rawPath.includes('\\')) return false;
   const candidatePath = resolvePathWithDirectorySynonyms(resolved, isSearchOrListTool)
@@ -287,23 +348,31 @@ function healNeighborArg(args: string[], base: string, index: number, arg: strin
   const isDir = isDirectoryPath(candidatePath);
   if (hadTrailingSlash && !isDir) return false;
   const healedArg = formatHealedPath(arg, candidatePath, cwd, isWslPath);
-  if (!applyHeal(args, index, healedArg, cwd)) return false;
+  if (!applyHeal(args, index, healedArg, cwd, skip)) {
+    if (isSearchOrListTool && duplicateIndices !== undefined && isDuplicateArg(args, index, healedArg, cwd, skip)) {
+      duplicateIndices.add(index);
+    }
+    return false;
+  }
+  syncArgs();
   const kind = isDir ? 'Directory' : 'File';
   logPathHeal(`${kind} '${arg}' not found on disk, but found at '${healedArg}'.`, `Auto-correcting path to '${healedArg}'... (Frictionless Recovery)`);
   return isDir && GREP_TOOLS.has(base) && !hasGrepRecurse(args);
 }
 
-function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<number>): void {
+function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<number>, syncArgs: () => void): void {
   let recurseDirArg: string | null = null;
   let pendingGrepRecurse = false;
+  const isSearchOrListTool = SEARCH_OR_LIST.has(base);
+  const duplicateIndices = new Set<number>();
   for (let index = 0; index < args.length; index += 1) {
     if (skip.has(index)) continue;
     const arg = args[index];
     if (shouldSkipArg(arg) || arg === undefined) continue;
     const rawPath = arg.replace(/^['"]|['"]$/g, '');
     const hadTrailingSlash = /[\\/]$/.test(rawPath);
-    const isWslPath = rawPath.startsWith('/mnt/');
-    const wslNormalized = isWslPath ? normalizeMntPath(rawPath) : rawPath;
+    const isWslPath = WSL_DRIVE_MNT_RE.test(rawPath);
+    const wslNormalized = isWslPath ? normalizeMntPathForHost(rawPath) : rawPath;
     const resolved = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(cwd, wslNormalized);
     if (fs.existsSync(resolved)) {
       if (isDirectoryPath(resolved) && GREP_TOOLS.has(base) && !hasGrepRecurse(args)) {
@@ -312,19 +381,50 @@ function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<n
       }
       continue;
     }
-    const modularResult = healModularDirectory(args, base, index, arg, rawPath, isWslPath, cwd);
+    if (MULTI_TARGET_FILE_TOOLS.has(base)) {
+      const splitParts = splitJoinedFileArg(arg, cwd);
+      if (splitParts !== null) {
+        args.splice(index, 1, ...splitParts);
+        shiftSkipIndices(skip, index, splitParts.length - 1);
+        syncArgs();
+        logPathHeal(
+          `Single argument '${arg.slice(0, 80)}${arg.length > 80 ? '...' : ''}' contains ${splitParts.length} space-separated paths.`,
+          `Splitting into ${splitParts.length} individual path arguments... (Frictionless Recovery)`,
+        );
+        index -= 1;
+        continue;
+      }
+    }
+    const modularResult = healModularDirectory(args, base, index, arg, rawPath, isWslPath, cwd, skip, syncArgs, duplicateIndices);
     if (modularResult.handled) {
       if (modularResult.needsRecurse) pendingGrepRecurse = true;
       continue;
     }
-    const extensionResult = healAddedExtension(args, index, arg, resolved, hadTrailingSlash, cwd, isWslPath);
-    if (extensionResult === 'healed') continue;
-    if (healNeighborArg(args, base, index, arg, rawPath, resolved, hadTrailingSlash, cwd, isWslPath)) {
+    const extensionResult = healAddedExtension(args, index, arg, resolved, hadTrailingSlash, cwd, isWslPath, isSearchOrListTool, skip, syncArgs, duplicateIndices);
+    if (extensionResult !== 'none') continue;
+    if (healNeighborArg(args, base, index, arg, rawPath, resolved, hadTrailingSlash, cwd, isWslPath, skip, syncArgs, duplicateIndices)) {
       pendingGrepRecurse = true;
+    }
+  }
+  if (isSearchOrListTool && duplicateIndices.size > 0) {
+    const sorted = [...duplicateIndices].sort((a, b) => b - a);
+    const removedArgs: string[] = [];
+    for (const rmIdx of sorted) {
+      if (args.length <= 1) break;
+      const [removed] = args.splice(rmIdx, 1);
+      if (removed !== undefined) removedArgs.push(removed);
+    }
+    if (removedArgs.length > 0) {
+      syncArgs();
+      logPathHeal(
+        `Search target(s) '${removedArgs.join(', ')}' do not exist on disk and resolve to sibling path(s) already present in arguments.`,
+        `Removed redundant broken search path(s) so search proceeds against existing target(s)... (Frictionless Recovery)`,
+      );
     }
   }
   if (pendingGrepRecurse && !hasGrepRecurse(args)) {
     args.unshift('-r');
+    syncArgs();
     if (recurseDirArg !== null) {
       logPathHeal(`'grep' called on directory '${recurseDirArg}' without recursive flag.`, `Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)`);
     } else {
@@ -342,15 +442,24 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
     && payloadCwd !== undefined
     && ((payloadCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(payloadCwd)) || payloadCwd.startsWith('~'));
   const nonPosixPayloadCwd = payloadCwd !== undefined && !isNonHostWslCwd ? payloadCwd : undefined;
-  const rawCwd = (ctx.cwd !== undefined && ctx.cwd.length > 0 ? ctx.cwd : nonPosixPayloadCwd) ?? process.cwd();
+  const hostCtxCwd = ctx.cwd !== undefined && ctx.cwd.length > 0 &&
+    !(process.platform === 'win32' && ((ctx.cwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(ctx.cwd)) || ctx.cwd.startsWith('~')))
+    ? ctx.cwd
+    : undefined;
+  const rawCwd = nonPosixPayloadCwd ?? hostCtxCwd ?? process.cwd();
   // [INVARIANT]: cli-loader substitutes Windows process.cwd() when payload.cwd targets a WSL internal/tilde path,
-  // so host-relative Win32 path probing must always be skipped whenever payload.cwd itself is a non-host WSL path.
-  const skipHostRelative = isNonHostWslCwd;
-  const cwd = path.resolve(rawCwd.startsWith('/mnt/') ? normalizeMntPath(rawCwd) : rawCwd);
+  // so host-relative Win32 path probing must always be skipped whenever payload.cwd (or fallback ctx.cwd) is a non-host WSL path.
+  const skipHostRelative = isNonHostWslCwd || (payloadCwd === undefined && ctx.cwd !== undefined && ctx.cwd.length > 0 && hostCtxCwd === undefined);
+  const normRawCwd = normalizeMntPathForHost(rawCwd);
+  const normBaseCwd = hostCtxCwd !== undefined ? normalizeMntPathForHost(hostCtxCwd) : hostCtxCwd;
+  const cwd = nonPosixPayloadCwd !== undefined && normBaseCwd !== undefined
+    ? path.resolve(normBaseCwd, normRawCwd)
+    : path.resolve(normRawCwd);
   if (!skipHostRelative) healEvalPayload(ctx, cwd);
   else if (ctx.payload.type === 'eval' && typeof ctx.payload.code === 'string') resolveEvalExecutionTarget(ctx.payload);
   if (skipHostRelative) return;
   const { args } = ctx;
+  const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = args; };
   const rawBase = ctx.cmdBasename.toLowerCase();
   const base = rawBase.replace(/\.(?:exe|cmd)$/i, '');
   if (!FILE_TOOLS.has(rawBase) && !FILE_TOOLS.has(base)) return;
@@ -361,8 +470,8 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
   skipFlagValues(base, args, skip);
   if (base === 'bun' && skipBunPositionals(args, skip)) return;
   if (base === 'node') skipNodeTail(args, skip);
-  healBackupPaths(args, skip, cwd);
-  healMcpConfigPaths(args, skip, cwd);
+  healBackupPaths(args, skip, cwd, syncArgs);
+  healMcpConfigPaths(args, skip, cwd, syncArgs);
   // [INVARIANT]: Never heal an arg into a duplicate of another existing arg (e.g. two copies of the same file).
-  healFileToolArgs(args, base, cwd, skip);
+  healFileToolArgs(args, base, cwd, skip, syncArgs);
 }

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, findPatternExprIndex, getPositionalArgs } from '../command-utils.js';
+import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, convertToWindowsPath, extractLeadingShortFlags, findPatternExprIndex } from '../command-utils.js';
 import { ExecutionContext } from './types.js';
 import {
   KNOWN_POSIX_ROOT_DIRS_REGEX,
@@ -16,6 +16,25 @@ import {
 } from './search-path-utils.js';
 
 const RG_VALUE_FLAGS = new Set<string>(RG_VALUE_FLAGS_LIST);
+
+function isRgSeparateValueFlag(arg: string): boolean {
+  if (RG_VALUE_FLAGS.has(arg)) return true;
+  if (!arg.startsWith('-') || arg.startsWith('--') || arg.length <= 2) return false;
+  const shortPrefix = extractLeadingShortFlags('rg', arg);
+  if (arg.length !== shortPrefix.length) return false;
+  const lastShort = `-${shortPrefix[shortPrefix.length - 1]}`;
+  return RG_VALUE_FLAGS.has(lastShort);
+}
+
+function getRgCombinedShortKind(arg: string): { isGlob: boolean; isPattern: boolean } {
+  if (!arg.startsWith('-') || arg.startsWith('--')) return { isGlob: false, isPattern: false };
+  const shortPrefix = extractLeadingShortFlags('rg', arg);
+  const tailChar = shortPrefix.length > 1 ? shortPrefix[shortPrefix.length - 1] : '';
+  return {
+    isGlob: tailChar === 'g',
+    isPattern: tailChar === 'e' || tailChar === 'f',
+  };
+}
 
 const KNOWN_RG_LONG_FLAGS = new Set([
   '--auto-hybrid-regex', '--binary', '--block-buffered', '--byte-offset', '--case-sensitive',
@@ -64,30 +83,46 @@ function scanPreDoubleDashFlags(args: readonly string[]): {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
     if (arg === '--files') hasFiles = true;
-    if (arg === '-g' || arg === '--glob' || arg === '--iglob' || arg.startsWith('-g=') || arg.startsWith('--glob=') || arg.startsWith('--iglob=')) {
+    const shortKind = getRgCombinedShortKind(arg);
+    if (
+      arg === '-g' || arg === '--glob' || arg === '--iglob' ||
+      arg.startsWith('-g=') || arg.startsWith('--glob=') || arg.startsWith('--iglob=') ||
+      shortKind.isGlob
+    ) {
       hasGlob = true;
     }
     if (
       arg === '-e' || (arg.startsWith('-e') && !arg.startsWith('--')) ||
       arg === '--regexp' || arg.startsWith('--regexp=') ||
       arg === '-f' || (arg.startsWith('-f') && !arg.startsWith('--')) ||
-      arg === '--file' || arg.startsWith('--file=')
+      arg === '--file' || arg.startsWith('--file=') ||
+      shortKind.isPattern
     ) {
       hasPatternFlag = true;
     }
-    if (RG_VALUE_FLAGS.has(arg)) i++;
+    if (isRgSeparateValueFlag(arg)) i++;
   }
   return { hasPatternFlag, hasFiles, hasGlob };
 }
 
 function resolveCtxCwd(ctx: ExecutionContext): string | undefined {
-  return ctx.payload.cwd ?? ctx.cwd;
+  const raw = ctx.payload.cwd;
+  if (raw !== undefined && raw.length > 0) {
+    if (process.platform === 'win32') {
+      if ((raw.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(raw)) || raw.startsWith('~')) {
+        return ctx.cwd;
+      }
+      if (/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(raw)) return convertToWindowsPath(raw);
+    }
+    return raw;
+  }
+  return ctx.cwd;
 }
 
 export function readRipgrepSearchFlags(ctx: ExecutionContext): RipgrepSearchFlags {
   const pre = scanPreDoubleDashFlags(ctx.args);
   return {
-    positionalArgs: getPositionalArgs(ctx.cmdBasename, ctx.args),
+    positionalArgs: collectRgPositionalIndices(ctx.args).map(idx => ctx.args[idx] ?? ''),
     ...pre,
   };
 }
@@ -108,8 +143,7 @@ function isConfirmedDirForFiles(arg: string, cwd?: string): boolean {
   try {
     const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
     if (!fs.existsSync(baseDir)) return true;
-    const resolved = path.resolve(baseDir, arg);
-    return fs.existsSync(resolved) && fs.statSync(resolved).isDirectory();
+    return fs.statSync(path.resolve(baseDir, arg), { throwIfNoEntry: false })?.isDirectory() === true;
   } catch {
     return false;
   }
@@ -145,7 +179,7 @@ function collectRgPositionalIndices(args: readonly string[]): number[] {
     const arg = args[i];
     if (arg === undefined) continue;
     if (!seenDoubleDash && arg === '--') { seenDoubleDash = true; continue; }
-    if (!seenDoubleDash && RG_VALUE_FLAGS.has(arg)) { i++; continue; }
+    if (!seenDoubleDash && isRgSeparateValueFlag(arg)) { i++; continue; }
     if (!seenDoubleDash && arg.startsWith('-')) continue;
     indices.push(i);
   }
@@ -225,24 +259,25 @@ function recombineRipgrepPositionalPattern(
   if (lastArg === undefined || !isRipgrepPathLike(lastArg, cwd)) return;
   if (intermediateArgs.some((arg) => isRipgrepPathLike(arg, cwd))) return;
   const patternParts = positionalArgs.slice(0, -1);
-  const candidateIdxs = collectNonFlagIndices(ctx.args, RG_VALUE_FLAGS).slice(0, patternParts.length);
+  const candidateIdxs = collectNonFlagIndices(ctx.args).slice(0, patternParts.length);
   if (candidateIdxs.length !== patternParts.length) return;
   recombineIndexedPattern(ctx, candidateIdxs, patternParts);
 }
 
-function collectNonFlagIndices(args: string[], toolFlagsWithVal: Set<string>): number[] {
+function collectNonFlagIndices(args: string[]): number[] {
   const nonFlagIndices: number[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
     if (arg === '--') break;
-    if (toolFlagsWithVal.has(arg)) {
+    if (isRgSeparateValueFlag(arg)) {
       i++;
       continue;
     }
+    const shortPrefix = arg.startsWith('-') && !arg.startsWith('--') ? extractLeadingShortFlags('rg', arg) : arg;
     if (
       /^-[a-zA-Z0-9]+=/.test(arg) ||
-      /^-(?:A|B|C|m|M|d|j|e|f|g|t|T|r|E)./.test(arg) ||
+      shortPrefix.length < arg.length ||
       /^-[a-zA-Z0-9]+$/.test(arg) ||
       (arg.startsWith('--') && /^--[a-zA-Z0-9-]+(?:=|$)/.test(arg))
     ) {
@@ -266,7 +301,7 @@ function recombineIndexedPattern(ctx: ExecutionContext, candidateIdxs: number[],
 
 function recombineRipgrepNonFlagPattern(ctx: ExecutionContext, hasPatternFlag: boolean, hasFiles: boolean): void {
   if (hasPatternFlag || hasFiles) return;
-  const nonFlagIndices = collectNonFlagIndices(ctx.args, RG_VALUE_FLAGS);
+  const nonFlagIndices = collectNonFlagIndices(ctx.args);
   const lastPosIdx = nonFlagIndices.length > 0 ? nonFlagIndices[nonFlagIndices.length - 1] : undefined;
   if (lastPosIdx === undefined) return;
   const lastArg = ctx.args[lastPosIdx];
@@ -287,7 +322,7 @@ function unquoteArg(arg: string): string {
   return arg.replace(/^(['"])(.*)\1$/, '$2');
 }
 
-function listNonFlagArgs(args: string[], toolFlagsWithVal: Set<string>): string[] {
+function listNonFlagArgs(args: string[]): string[] {
   const result: string[] = [];
   for (let idx = 0; idx < args.length; idx++) {
     const arg = args[idx];
@@ -296,7 +331,7 @@ function listNonFlagArgs(args: string[], toolFlagsWithVal: Set<string>): string[
       result.push(...args.slice(idx + 1));
       break;
     }
-    if (toolFlagsWithVal.has(arg)) {
+    if (isRgSeparateValueFlag(arg)) {
       idx++;
       continue;
     }
@@ -314,7 +349,7 @@ function scanForHyphenPatternIndex(
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
-    if (RG_VALUE_FLAGS.has(arg)) {
+    if (isRgSeparateValueFlag(arg)) {
       i++;
       continue;
     }
@@ -325,7 +360,12 @@ function scanForHyphenPatternIndex(
       && unquoted.length > 2
       && !RG_VALUE_FLAGS.has(baseFlag)
       && !KNOWN_RG_LONG_FLAGS.has(baseFlag);
-    if (unquoted.startsWith('\\-') || (isUnknownLongFlag && (allNonFlagArePaths || nonFlagCount === 0))) return i;
+    const isSingleHyphenRegex = !unquoted.startsWith('--')
+      && unquoted.startsWith('-')
+      && unquoted.length > 2
+      && !RG_VALUE_FLAGS.has(unquoted)
+      && (/[|()[\]^$+{}]/.test(unquoted) || /\\[bBwWdDsS]/.test(unquoted));
+    if (unquoted.startsWith('\\-') || ((isUnknownLongFlag || isSingleHyphenRegex) && (allNonFlagArePaths || nonFlagCount === 0))) return i;
   }
   return -1;
 }
@@ -334,7 +374,7 @@ function resolveHyphenCandidate(ctx: ExecutionContext, patternIdx: number): numb
   const current = patternIdx !== -1 ? ctx.args[patternIdx] : undefined;
   const currentUnquoted = current !== undefined ? unquoteArg(current) : '';
   if (patternIdx !== -1 && currentUnquoted.startsWith('-')) return patternIdx;
-  const nonFlagArgs = listNonFlagArgs(ctx.args, RG_VALUE_FLAGS);
+  const nonFlagArgs = listNonFlagArgs(ctx.args);
   const cwd = resolveCtxCwd(ctx);
   const allNonFlagArePaths = nonFlagArgs.length > 0 && nonFlagArgs.every((arg) => isRipgrepPathLike(arg, cwd));
   return scanForHyphenPatternIndex(ctx.args, allNonFlagArePaths, nonFlagArgs.length);
@@ -366,7 +406,7 @@ function hasRipgrepMetaFlag(args: readonly string[]): boolean {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
     if (RG_META_FLAGS.has(arg)) return true;
-    if (RG_VALUE_FLAGS.has(arg)) i++;
+    if (isRgSeparateValueFlag(arg)) i++;
   }
   return false;
 }

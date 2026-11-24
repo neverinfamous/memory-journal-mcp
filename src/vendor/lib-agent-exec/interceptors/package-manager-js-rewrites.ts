@@ -6,7 +6,11 @@ import { ExecutionContext } from './types.js';
 import { findFirstPkgSubcmdIndex, getPkgNonFlagArgs } from './utils.js';
 
 const LOCKFILE_DIR_FLAGS = new Set(['--dir', '-C', '--cwd', '--prefix']);
-const NON_DIR_PKG_VALUE_FLAGS = new Set(['--filter', '-F', '--config', '-c']);
+const NON_DIR_PKG_VALUE_FLAGS = new Set([
+  '--filter', '-F', '--config', '-c',
+  '--registry', '--userconfig', '--globalconfig', '--cache', '--store-dir',
+  '--loglevel', '--reporter', '--mutex', '--network-timeout', '-w', '--workspace',
+]);
 const LOCKFILE_DIR_EQ_RE = /^(?:--dir|--cwd|--prefix|-C)=(.+)$/;
 const INTERACTIVE_STRIP_SUBCMDS = new Set([
   'update', 'up', 'upgrade', 'outdated', 'init',
@@ -46,6 +50,18 @@ export function resolvePackageProjectDir(args: readonly string[], defaultDir: st
   return defaultDir;
 }
 
+function pushFlagBeforeDash(args: string[], flag: string): void {
+  const ddIdx = args.indexOf('--');
+  if (ddIdx !== -1) args.splice(ddIdx, 0, flag);
+  else args.push(flag);
+}
+
+function hasFlagBeforeDash(args: readonly string[], flag: string): boolean {
+  const ddIdx = args.indexOf('--');
+  const slice = ddIdx === -1 ? args : args.slice(0, ddIdx);
+  return slice.includes(flag);
+}
+
 function translateToBunArgs(args: string[], subCmd: string | undefined, isNpm: boolean, isYarn: boolean): void {
   const firstPosIdx = findFirstPkgSubcmdIndex(args);
   const flagScanLimit = firstPosIdx === -1 ? args.length : firstPosIdx;
@@ -61,7 +77,7 @@ function translateToBunArgs(args: string[], subCmd: string | undefined, isNpm: b
   if (isNpm && subCmd === 'uninstall' && firstPosIdx !== -1) args[firstPosIdx] = 'remove';
   if (isNpm && subCmd === 'ci' && firstPosIdx !== -1) {
     args[firstPosIdx] = 'install';
-    if (!args.includes('--frozen-lockfile')) args.push('--frozen-lockfile');
+    if (!hasFlagBeforeDash(args, '--frozen-lockfile')) pushFlagBeforeDash(args, '--frozen-lockfile');
   }
   if (isYarn && !subCmd && args.length === 0) args.push('install');
 }
@@ -73,6 +89,17 @@ function platformPmBinary(base: 'pnpm' | 'bun', target: ExecutionContext['payloa
   return base;
 }
 
+function normalizeCwdFlagForPnpm(args: string[]): void {
+  const firstPosIdx = findFirstPkgSubcmdIndex(args);
+  const scanLimit = firstPosIdx === -1 ? args.length : firstPosIdx;
+  for (let i = 0; i < scanLimit; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (a === '--cwd') args[i] = '--dir';
+    else if (a.startsWith('--cwd=')) args[i] = `--dir=${a.slice('--cwd='.length)}`;
+  }
+}
+
 function applyNpmOrYarnToPnpm(
   args: string[],
   nonFlagArgs: readonly string[],
@@ -81,23 +108,23 @@ function applyNpmOrYarnToPnpm(
   isYarn: boolean,
 ): boolean {
   const subCmd = nonFlagArgs[0];
+  let converted = false;
   if (isNpm) {
-    if (subCmd === 'install' && nonFlagArgs.length === 1) return true;
-    if (subCmd === 'install' && nonFlagArgs.length > 1 && firstPosIdx !== -1) { args[firstPosIdx] = 'add'; return true; }
-    if (subCmd === 'uninstall' && nonFlagArgs.length > 1 && firstPosIdx !== -1) { args[firstPosIdx] = 'remove'; return true; }
-    if (subCmd !== undefined && ['run', 'test', 'start'].includes(subCmd)) return true;
-    if (subCmd === 'ci' && firstPosIdx !== -1) {
+    if (subCmd === 'install' && nonFlagArgs.length === 1) converted = true;
+    else if (subCmd === 'install' && nonFlagArgs.length > 1 && firstPosIdx !== -1) { args[firstPosIdx] = 'add'; converted = true; }
+    else if (subCmd === 'uninstall' && nonFlagArgs.length > 1 && firstPosIdx !== -1) { args[firstPosIdx] = 'remove'; converted = true; }
+    else if (subCmd !== undefined && ['run', 'test', 'start'].includes(subCmd)) converted = true;
+    else if (subCmd === 'ci' && firstPosIdx !== -1) {
       args[firstPosIdx] = 'install';
-      if (!args.includes('--frozen-lockfile')) args.push('--frozen-lockfile');
-      return true;
+      if (!hasFlagBeforeDash(args, '--frozen-lockfile')) pushFlagBeforeDash(args, '--frozen-lockfile');
+      converted = true;
     }
-    return false;
+  } else if (isYarn) {
+    if (!subCmd && args.length === 0) { args.push('install'); converted = true; }
+    else if (subCmd !== undefined && ['add', 'remove'].includes(subCmd) && nonFlagArgs.length > 1) converted = true;
   }
-  if (isYarn) {
-    if (!subCmd && args.length === 0) { args.push('install'); return true; }
-    if (subCmd !== undefined && ['add', 'remove'].includes(subCmd) && nonFlagArgs.length > 1) return true;
-  }
-  return false;
+  if (converted) normalizeCwdFlagForPnpm(args);
+  return converted;
 }
 
 function toHostFsPath(p: string): string {

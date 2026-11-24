@@ -37,7 +37,7 @@ function commandBasename(command: string): string {
   return path.basename(command).toLowerCase();
 }
 
-function splitUnquotedTokens(segment: string): string[] {
+function splitUnquotedTokens(segment: string, isWindowsShell = false): string[] {
   const tokens: string[] = [];
   let current = '';
   let quote: '"' | "'" | null = null;
@@ -46,7 +46,7 @@ function splitUnquotedTokens(segment: string): string[] {
     const ch = segment[i];
     if (ch === undefined) continue;
     if (escape) { current += ch; escape = false; continue; }
-    if (ch === '\\' && quote !== "'") { escape = true; continue; }
+    if (!isWindowsShell && ch === '\\' && quote !== "'") { escape = true; continue; }
     if ((ch === '"' || ch === "'") && quote === null) { quote = ch; continue; }
     if (ch === quote) { quote = null; continue; }
     if (/\s/.test(ch) && quote === null) {
@@ -61,7 +61,7 @@ function splitUnquotedTokens(segment: string): string[] {
 
 const BENIGN_AND_SETUP_RE = /^(?:cd|export|shopt|mkdir|true)\b/;
 
-function splitUnquotedOperators(segment: string, op: '||' | '&&' | '|'): string[] {
+function splitUnquotedOperators(segment: string, op: '||' | '&&' | '|', isWindowsShell = false): string[] {
   const parts: string[] = [];
   let quote: '"' | "'" | null = null;
   let escape = false;
@@ -69,7 +69,7 @@ function splitUnquotedOperators(segment: string, op: '||' | '&&' | '|'): string[
   for (let i = 0; i < segment.length; i++) {
     const ch = segment[i];
     if (escape) { escape = false; continue; }
-    if (ch === '\\' && quote !== "'") { escape = true; continue; }
+    if (!isWindowsShell && ch === '\\' && quote !== "'") { escape = true; continue; }
     if ((ch === '"' || ch === "'") && quote === null) { quote = ch; continue; }
     if (ch === quote) { quote = null; continue; }
     if (quote !== null) continue;
@@ -84,7 +84,7 @@ function splitUnquotedOperators(segment: string, op: '||' | '&&' | '|'): string[
   return parts;
 }
 
-function stripUnquotedHashComments(rawScript: string): string {
+function stripUnquotedHashComments(rawScript: string, isWindowsShell = false): string {
   let out = '';
   let quote: '"' | "'" | null = null;
   let escape = false;
@@ -92,7 +92,7 @@ function stripUnquotedHashComments(rawScript: string): string {
     const ch = rawScript[i];
     if (ch === undefined) continue;
     if (escape) { out += ch; escape = false; continue; }
-    if (ch === '\\' && quote !== "'") { out += ch; escape = true; continue; }
+    if (!isWindowsShell && ch === '\\' && quote !== "'") { out += ch; escape = true; continue; }
     if ((ch === '"' || ch === "'") && quote === null) { quote = ch; out += ch; continue; }
     if (ch === quote) { quote = null; out += ch; continue; }
     if (quote === null && ch === '#') {
@@ -108,10 +108,10 @@ function stripUnquotedHashComments(rawScript: string): string {
   return out;
 }
 
-const PRIOR_EARLY_EXIT_RE = /\b(?:set\s+(?:-[a-zA-Z]*[eu]|-o\s+(?:errexit|pipefail|nounset))|exit|return)\b|\$ErrorActionPreference\s*=\s*['"]?Stop['"]?/i;
+const PRIOR_EARLY_EXIT_RE = /\b(?:set\s+(?:-[a-zA-Z]*[eu]|-o\s+(?:errexit|pipefail|nounset))|exit|return|throw)\b|\$ErrorActionPreference\s*=\s*['"]?Stop['"]?/i;
 
-function splitUnquotedStatements(rawScript: string): string[] {
-  const commentFree = stripUnquotedHashComments(rawScript);
+function splitUnquotedStatements(rawScript: string, isWindowsShell = false): string[] {
+  const commentFree = stripUnquotedHashComments(rawScript, isWindowsShell);
   const stmts: string[] = [];
   let quote: '"' | "'" | null = null;
   let escape = false;
@@ -119,14 +119,28 @@ function splitUnquotedStatements(rawScript: string): string[] {
   for (let i = 0; i < commentFree.length; i++) {
     const ch = commentFree[i];
     if (escape) { escape = false; continue; }
-    if (ch === '\\' && quote !== "'") { escape = true; continue; }
+    if (!isWindowsShell && ch === '\\' && quote !== "'") { escape = true; continue; }
     if ((ch === '"' || ch === "'") && quote === null) { quote = ch; continue; }
     if (ch === quote) { quote = null; continue; }
     if (quote !== null) continue;
-    if (ch === ';' || ch === '\n') {
+    if (ch === ';') {
       const piece = commentFree.slice(start, i).trim();
       if (piece.length > 0) stmts.push(piece);
       start = i + 1;
+    } else if (ch === '\n') {
+      const piece = commentFree.slice(start, i).trim();
+      if (piece.length > 0 && !/(?:&&|\|\||[|\\])$/.test(piece)) {
+        stmts.push(piece);
+        start = i + 1;
+      }
+    } else if (ch === '&') {
+      const prev = commentFree[i - 1];
+      const next = commentFree[i + 1];
+      if (prev !== '&' && next !== '&' && prev !== '>' && prev !== '<' && next !== '>') {
+        const piece = commentFree.slice(start, i).trim();
+        if (piece.length > 0) stmts.push(piece);
+        start = i + 1;
+      }
     }
   }
   const last = commentFree.slice(start).trim();
@@ -134,33 +148,120 @@ function splitUnquotedStatements(rawScript: string): string[] {
   return stmts;
 }
 
-function extractFinalShellSegment(rawScript: string): string {
-  const stmts = splitUnquotedStatements(rawScript);
-  if (stmts.length > 1 && stmts.slice(0, -1).some(stmt => PRIOR_EARLY_EXIT_RE.test(stmt))) {
-    return '';
+function extractFinalShellSegment(rawScript: string, isWindowsShell = false, implicitStopOnError = false): string {
+  const stmts = splitUnquotedStatements(rawScript, isWindowsShell);
+  if (stmts.length > 1) {
+    const prior = stmts.slice(0, -1);
+    if (prior.some(stmt => PRIOR_EARLY_EXIT_RE.test(stmt) || (implicitStopOnError && !BENIGN_AND_SETUP_RE.test(stmt.trim())))) {
+      return '';
+    }
   }
   const lastStmt = stmts[stmts.length - 1] ?? '';
   if (lastStmt.length === 0) return '';
-  const orParts = splitUnquotedOperators(lastStmt, '||');
+  const orParts = splitUnquotedOperators(lastStmt, '||', isWindowsShell);
   const activeBranch = (orParts[orParts.length - 1] ?? '').trim();
-  const andParts = splitUnquotedOperators(activeBranch, '&&');
+  const andParts = splitUnquotedOperators(activeBranch, '&&', isWindowsShell);
   for (let i = 0; i < andParts.length - 1; i++) {
     const prefix = (andParts[i] ?? '').trim();
     if (PRIOR_EARLY_EXIT_RE.test(prefix) || !BENIGN_AND_SETUP_RE.test(prefix)) return '';
   }
   const finalChain = (andParts[andParts.length - 1] ?? '').trim();
-  const pipeParts = splitUnquotedOperators(finalChain, '|');
+  const pipeParts = splitUnquotedOperators(finalChain, '|', isWindowsShell);
   return (pipeParts[pipeParts.length - 1] ?? '').trim();
 }
 
-function hasWrapperStrictShellFlags(preFlagArgs: readonly string[]): boolean {
-  for (let i = 0; i < preFlagArgs.length; i++) {
-    const a = preFlagArgs[i];
-    if (a === undefined || a === '--') break;
-    if (a === '-o' && /^(?:errexit|pipefail|nounset)$/i.test(preFlagArgs[i + 1] ?? '')) return true;
-    if (/^-[a-zA-Z]*[eu]/.test(a)) return true;
+const POSIX_WRAPPER_SHELLS = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe']);
+const WIN_PWSH_SHELLS = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe']);
+const PWSH_WRAPPER_VALUE_FLAGS = new Set([
+  '-executionpolicy', '-ep', '-workingdirectory', '-wd', '-inputformat', '-if',
+  '-outputformat', '-of', '-configurationname', '-settingsfile', '-custompipename',
+]);
+const WSL_VALUE_FLAGS = new Set(['-d', '--distribution', '-u', '--user', '--cd', '--shell-type']);
+
+function extractPosixShellScriptText(args: readonly string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') return null;
+    if (/^-[a-zA-Z]*[eu]/.test(a) && !a.startsWith('--')) return null;
+    if (a.startsWith('-') && !a.startsWith('--') && /^-[a-zA-Z]*o[a-zA-Z]*$/.test(a) && a.includes('c')) {
+      if (/^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
+      return args[i + 2] ?? '';
+    }
+    if (/^[-+][a-zA-Z]*o$/.test(a)) {
+      if (a.startsWith('-') && /^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
+      i += 1;
+      continue;
+    }
+    if (a === '-c' || (a.startsWith('-') && !a.startsWith('--') && /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a))) {
+      return args[i + 1] ?? '';
+    }
+    if (!a.startsWith('-') && !a.startsWith('+')) return null;
   }
-  return false;
+  return null;
+}
+
+function extractPwshScriptText(args: readonly string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined) continue;
+    const low = a.toLowerCase();
+    if (low === '--' || low === '-f' || low === '-file' || low === '-ec' || low === '-encodedcommand' || low === '-en') {
+      return null;
+    }
+    if (low === '-version' && /^\d+(?:\.\d+)*$/.test(args[i + 1] ?? '')) { i += 1; continue; }
+    if (PWSH_WRAPPER_VALUE_FLAGS.has(low)) { i += 1; continue; }
+    if (low === '-c' || low === '-command') return args.slice(i + 1).join(' ');
+    if (!a.startsWith('-')) return null;
+  }
+  return null;
+}
+
+function extractWslInnerTokens(args: readonly string[]): string[] {
+  const tokens: string[] = [];
+  let afterExecOrDd = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined) continue;
+    if (afterExecOrDd) { tokens.push(a); continue; }
+    if (a === '--' || a === '-e' || a === '--exec') { afterExecOrDd = true; continue; }
+    if (WSL_VALUE_FLAGS.has(a)) { i += 1; continue; }
+    if (a.startsWith('-')) continue;
+    tokens.push(...args.slice(i));
+    break;
+  }
+  return tokens;
+}
+
+function extractWrapperFinalTokens(cmd: string, args: readonly string[]): { tool: string; args: string[] } | null {
+  if (cmd === 'wsl' || cmd === 'wsl.exe') {
+    const inner = extractWslInnerTokens(args);
+    const first = inner[0];
+    if (first === undefined) return null;
+    const innerBase = commandBasename(first);
+    if (POSIX_WRAPPER_SHELLS.has(innerBase)) {
+      const innerScript = extractPosixShellScriptText(inner.slice(1));
+      if (innerScript === null) return null;
+      const tokens = splitUnquotedTokens(extractFinalShellSegment(innerScript, false), false);
+      const rawTool = tokens[0];
+      return rawTool !== undefined ? { tool: commandBasename(rawTool), args: tokens.slice(1) } : null;
+    }
+    return { tool: innerBase, args: inner.slice(1) };
+  }
+  const isWinShell = cmd === 'cmd' || cmd === 'cmd.exe' || WIN_PWSH_SHELLS.has(cmd);
+  let scriptText: string | null = null;
+  if (POSIX_WRAPPER_SHELLS.has(cmd)) {
+    scriptText = extractPosixShellScriptText(args);
+  } else if (cmd === 'cmd' || cmd === 'cmd.exe') {
+    const cIdx = args.findIndex(a => a.toLowerCase() === '/c');
+    const preCmdNonFlag = cIdx > 0 && args.slice(0, cIdx).some(a => !a.startsWith('/'));
+    if (cIdx !== -1 && !preCmdNonFlag) scriptText = args.slice(cIdx + 1).join(' ');
+  } else if (WIN_PWSH_SHELLS.has(cmd)) {
+    scriptText = extractPwshScriptText(args);
+  }
+  if (scriptText === null) return null;
+  const tokens = splitUnquotedTokens(extractFinalShellSegment(scriptText, isWinShell, WIN_PWSH_SHELLS.has(cmd)), isWinShell);
+  const rawTool = tokens[0];
+  return rawTool !== undefined ? { tool: commandBasename(rawTool), args: tokens.slice(1) } : null;
 }
 
 function extractGitSubcommand(args: readonly string[]): string | null {
@@ -180,7 +281,9 @@ function extractFinalTokensFromPayload(payload: ExecPayload): { tool: string; ar
     const interp = (payload.interpreter ?? (payload.target === 'wsl2' ? 'bash' : 'bun')).toLowerCase();
     const baseInterp = path.basename(interp);
     if (!SHELL_EVAL_INTERPRETERS.has(baseInterp)) return null;
-    const tokens = splitUnquotedTokens(extractFinalShellSegment(payload.code));
+    const isPwshEval = WIN_PWSH_SHELLS.has(baseInterp);
+    const isWinShell = baseInterp === 'cmd' || baseInterp === 'cmd.exe' || isPwshEval;
+    const tokens = splitUnquotedTokens(extractFinalShellSegment(payload.code, isWinShell, isPwshEval), isWinShell);
     if (tokens.length === 0) return null;
     const rawTool = tokens[0] ?? '';
     return { tool: commandBasename(rawTool), args: tokens.slice(1) };
@@ -188,16 +291,7 @@ function extractFinalTokensFromPayload(payload: ExecPayload): { tool: string; ar
   if (payload.type !== 'command') return null;
   const cmd = commandBasename(payload.command);
   const args = payload.args ?? [];
-  if (WRAPPER_BASENAMES.has(cmd)) {
-    const cIdx = args.findIndex((a) => a === '-c' || a === '-lc' || /^-[a-zA-Z]*c$/.test(a) || a === '/c' || a.toLowerCase() === '-command');
-    const preArgs = cIdx !== -1 ? args.slice(0, cIdx + 1) : args;
-    if (hasWrapperStrictShellFlags(preArgs)) return null;
-    const scriptText = cIdx !== -1 ? (args[cIdx + 1] ?? '') : args.filter(a => !a.startsWith('-')).join(' ');
-    const tokens = splitUnquotedTokens(extractFinalShellSegment(scriptText));
-    if (tokens.length === 0) return null;
-    const rawTool = tokens[0] ?? '';
-    return { tool: commandBasename(rawTool), args: tokens.slice(1) };
-  }
+  if (WRAPPER_BASENAMES.has(cmd)) return extractWrapperFinalTokens(cmd, args);
   return { tool: cmd, args };
 }
 
@@ -208,15 +302,26 @@ const NPM_PNPM_GLOBAL_VALUE_FLAGS = new Set([
 
 function stderrHasShellOrFsError(stderr: string): boolean {
   return stderr.includes('fatal:') || stderr.includes('mkdir:') ||
-    stderr.includes('Permission denied') || stderr.includes('No such file or directory') || stderr.includes('cd:');
+    stderr.includes('Permission denied') || stderr.includes('No such file or directory') || stderr.includes('cd:') ||
+    stderr.includes('Set-Location:') || stderr.includes('New-Item:') ||
+    stderr.includes('Cannot find path') ||
+    stderr.includes('The system cannot find the path specified') ||
+    stderr.includes('The system cannot find the file specified') ||
+    stderr.includes('Access is denied') || stderr.includes('Access to the path') ||
+    stderr.includes('A subdirectory or file') ||
+    stderr.includes('is not recognized') ||
+    stderr.includes('command not found') ||
+    stderr.includes(': not found');
 }
 
 function stderrBlocksGrep(stderr: string): boolean {
-  return stderrHasShellOrFsError(stderr) || stderr.includes('grep:');
+  return stderrHasShellOrFsError(stderr) || stderr.includes('grep:') || stderr.includes('rg:') ||
+    stderr.includes('error:') || stderr.includes('Error:') || stderr.includes('usage:');
 }
 
 function stderrBlocksDiff(stderr: string): boolean {
-  return stderrHasShellOrFsError(stderr) || stderr.includes('diff:');
+  return stderrHasShellOrFsError(stderr) || stderr.includes('diff:') ||
+    stderr.includes('error:') || stderr.includes('Error:') || stderr.includes('usage:');
 }
 
 function stderrBlocksOutdated(stderr: string): boolean {

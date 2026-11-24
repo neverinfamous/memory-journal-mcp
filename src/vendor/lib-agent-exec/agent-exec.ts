@@ -15,6 +15,7 @@ import {
   hasTopLevelCliFlag,
   loadWorkspacePlugins,
   mergeFinalEnvironment,
+  normalizeTopLevelVersionArg,
   parseTimeoutOverride,
   resolveAndValidateCwd,
   splitRawCommandInvocation,
@@ -22,6 +23,7 @@ import {
 
 const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
 let payloadPath = '';
+let hasExplicitPayloadFlag = false;
 let interceptorsPaths: string[] = [];
 let targetOverride: string | undefined;
 let cwdOverride: string | undefined;
@@ -29,10 +31,6 @@ let timeoutOverrideRaw: string | number | undefined;
 let hasBlankTimeoutMs = false;
 let positionals: string[] = [];
 let isJson = hasTopLevelCliFlag(process.argv.slice(2), (tok) => tok === '--json');
-
-function hasTopLevelVersionFlag(argv: readonly string[]): boolean {
-  return hasTopLevelCliFlag(argv, (tok) => tok === '--version' || tok === '-v' || tok === '-V');
-}
 
 function fatalError(msg: string, details?: string[]): never {
   if (isJson) {
@@ -60,47 +58,56 @@ function unwrapQuotedJsonInput(rawArg: string): string {
   if ((cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length >= 2) ||
       (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2)) {
     const inner = cleaned.slice(1, -1).trim();
-    if (inner.startsWith('{') && inner.endsWith('}')) return inner;
+    if (inner.startsWith('{') || inner.startsWith('```')) return inner;
   }
   return cleaned;
 }
 
 function readPayloadInput(rawArg: string): string {
   const maxPayloadSize = getMaxPayloadSize();
-  const absPayloadPath = path.resolve(rawArg);
-  if (!fs.existsSync(absPayloadPath)) {
-    if (rawArg.startsWith('base64:')) {
-      const buf = Buffer.from(rawArg.slice(7), 'base64');
-      if (buf.length > maxPayloadSize) fatalError(`Payload exceeds ${maxPayloadSize} bytes limit.`);
-      return decodePayloadBuffer(buf);
+  const unwrapped = unwrapQuotedJsonInput(rawArg);
+  if (unwrapped.startsWith('base64:')) {
+    const buf = Buffer.from(unwrapped.slice(7), 'base64');
+    if (buf.length > maxPayloadSize) fatalError(`Payload exceeds ${maxPayloadSize} bytes limit.`);
+    return decodePayloadBuffer(buf);
+  }
+  if (unwrapped.startsWith('{') || unwrapped.startsWith('```')) {
+    if (Buffer.byteLength(unwrapped, 'utf8') > maxPayloadSize) fatalError(`Payload exceeds ${maxPayloadSize} bytes limit.`);
+    return unwrapped;
+  }
+  const absPayloadPath = path.resolve(rawArg.trim());
+  let stats: fs.Stats | undefined;
+  try {
+    stats = fs.statSync(absPayloadPath, { throwIfNoEntry: false });
+  } catch {
+    stats = undefined;
+  }
+  if (stats === undefined) {
+    if (/^['"]\s*(?:\{|```)/.test(unwrapped)) {
+      const stripped = unwrapped.slice(1).trim();
+      if (Buffer.byteLength(stripped, 'utf8') > maxPayloadSize) fatalError(`Payload exceeds ${maxPayloadSize} bytes limit.`);
+      return stripped;
     }
-    const unwrapped = unwrapQuotedJsonInput(rawArg);
-    if (unwrapped.startsWith('{') || unwrapped.startsWith('```')) return unwrapped;
-    if (!positionals[0] || path.extname(rawArg).toLowerCase() === '.json') {
+    if (hasExplicitPayloadFlag || !positionals[0] || path.extname(rawArg).toLowerCase() === '.json') {
       fatalError(`Payload file not found: ${rawArg}`);
     }
     console.error(`\n   💡 AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
     return JSON.stringify({ type: 'command', target: 'windows', command: positionals[0], args: positionals.slice(1) });
   }
+  if (!stats.isFile()) fatalError(`Payload path must be a regular file.`);
+  if (stats.size > maxPayloadSize) fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
   let payloadBuf: Buffer;
   try {
-    const stats = fs.statSync(absPayloadPath);
-    if (!stats.isFile()) fatalError(`Payload path must be a regular file.`);
-    if (stats.size > maxPayloadSize) fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
     payloadBuf = fs.readFileSync(absPayloadPath);
   } catch (err) {
-    fatalError(`Payload path must be a regular file. ${err instanceof Error ? err.message : String(err)}`);
+    fatalError(`Failed to read payload file: ${err instanceof Error ? err.message : String(err)}`);
   }
   if (payloadBuf.length > maxPayloadSize) fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
   return decodePayloadBuffer(payloadBuf);
 }
 
 try {
-  const rawArgv = process.argv.slice(2);
-  if (hasTopLevelVersionFlag(rawArgv)) {
-    console.log(isJson ? JSON.stringify({ version: '1.0.0' }) : '1.0.0');
-    process.exit(0);
-  }
+  const rawArgv = normalizeTopLevelVersionArg(process.argv.slice(2));
   const options = {
     interceptors: { type: 'string', multiple: true },
     plugin: { type: 'string' },
@@ -125,7 +132,10 @@ try {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('Unknown option')) {
-      fatalError(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: You passed a CLI flag to 'agent-exec.ts' (${msg}).\n   'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.\n   Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+      const text = isJson
+        ? `You passed a CLI flag to 'agent-exec.ts' (${msg}). 'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.`
+        : `\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: You passed a CLI flag to 'agent-exec.ts' (${msg}).\n   'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.\n   Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`;
+      fatalError(text);
     }
     throw err;
   }
@@ -133,8 +143,12 @@ try {
   cwdOverride = typeof values['cwd'] === 'string' ? values['cwd'] : undefined;
   const rawTimeoutMs = values['timeoutMs'];
   const rawTimeout = values['timeout'];
-  hasBlankTimeoutMs = typeof rawTimeoutMs === 'string' && rawTimeoutMs.trim().length === 0 && rawTimeout === undefined;
-  timeoutOverrideRaw = (typeof rawTimeoutMs === 'string' && rawTimeoutMs.trim().length > 0) ? rawTimeoutMs : (typeof rawTimeout === 'string' ? rawTimeout : undefined);
+  hasBlankTimeoutMs = typeof rawTimeoutMs === 'string' && rawTimeoutMs.trim().length === 0;
+  const validTimeoutMs = typeof rawTimeoutMs === 'string' && !hasBlankTimeoutMs ? parseTimeoutOverride(rawTimeoutMs) : undefined;
+  const hasInvalidSecondaryTimeout = typeof rawTimeout === 'string' && (rawTimeout.trim().length === 0 || parseTimeoutOverride(rawTimeout) === undefined);
+  timeoutOverrideRaw = typeof rawTimeoutMs === 'string' && !hasBlankTimeoutMs
+    ? (validTimeoutMs === undefined ? rawTimeoutMs : (hasInvalidSecondaryTimeout ? rawTimeout : rawTimeoutMs))
+    : (typeof rawTimeout === 'string' ? rawTimeout : undefined);
 
   if (typeof values['base64'] === 'string' && values['base64'].trim().length === 0) {
     fatalError('Invalid --base64 value: must not be empty.');
@@ -146,7 +160,7 @@ try {
   if (parsedArgs.json === true) isJson = true;
   const rawBase64 = typeof parsedArgs.base64 === 'string' ? `base64:${parsedArgs.base64}` : undefined;
   const firstPos = (positionals[0] ?? '').trim();
-  const isJsonStart = firstPos.startsWith('{') || firstPos.startsWith("'{") || firstPos.startsWith('"{') || firstPos.startsWith("'{\\");
+  const isJsonStart = /^['"]?\s*(?:\{|```)/.test(firstPos);
   const posInput = positionals.length > 0 ? (isJsonStart ? positionals.join(' ') : positionals[0]) : undefined;
   const resolvedInput = rawBase64 ?? parsedArgs.payload ?? parsedArgs.payloadPath ?? posInput;
   const result = match({ help: parsedArgs.help, version: parsedArgs.version, resolvedInput })
@@ -161,11 +175,12 @@ try {
         ? [...parsedArgs.interceptors]
         : (typeof parsedArgs.interceptors === 'string' ? [parsedArgs.interceptors] : []);
       if (typeof parsedArgs.plugin === 'string') interceptors.push(parsedArgs.plugin);
-      return { path: validInput, interceptors };
+      return { path: validInput, interceptors, explicitPayload: parsedArgs.payload !== undefined || parsedArgs.payloadPath !== undefined };
     })
     .otherwise(() => showUsageError('Missing payload JSON file path.', isJson));
 
   payloadPath = result.path;
+  hasExplicitPayloadFlag = result.explicitPayload;
   interceptorsPaths = result.interceptors;
 } catch (err: unknown) {
   showUsageError(err instanceof Error ? err.message : String(err), isJson);

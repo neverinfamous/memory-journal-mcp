@@ -51,6 +51,7 @@ const INTERPRETER_VALUE_FLAGS: Record<string, readonly string[]> = {
 export interface InlineScriptDetails {
   flagIdx: number;
   isPrint: boolean;
+  isAttachedEq: boolean;
   scriptContent: string;
   inputType: 'module' | 'commonjs' | null;
   stripIndices: number[];
@@ -95,7 +96,7 @@ function tryHealStringRawAt(code: string, idx: number): { startIdx: number; endI
 }
 
 // [INTENT]: Restores backtick template literals on String.raw`...` path expressions stripped by PowerShell double-quoting (e.g. String.rawC:\path\file -> String.raw`C:\path\file`).
-export function healStrippedStringRawLiterals(code: string): string {
+export function healStrippedStringRawLiterals(code: string, deferredLogs?: string[]): string {
   let result = '';
   let lastCopied = 0;
   let healedCount = 0;
@@ -118,7 +119,9 @@ export function healStrippedStringRawLiterals(code: string): string {
   if (healedCount === 0) return code;
 
   result += code.slice(lastCopied);
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected unquoted String.raw path from PowerShell backtick stripping. Restoring template literal... (Frictionless Recovery)\x1b[0m`);
+  const banner = `\n   🛠️ AUTONOMOUS HEALING: Detected unquoted String.raw path from PowerShell backtick stripping. Restoring template literal... (Frictionless Recovery)\x1b[0m`;
+  if (deferredLogs !== undefined) deferredLogs.push(banner);
+  else console.error(banner);
   return result;
 }
 
@@ -203,35 +206,45 @@ export function getInlineScriptDetails(interpreter: string, args: readonly strin
   const valueFlags = Object.hasOwn(INTERPRETER_VALUE_FLAGS, lower) ? (INTERPRETER_VALUE_FLAGS[lower] ?? []) : [];
   let inputType: 'module' | 'commonjs' | null = null;
   const stripIndices: number[] = [];
+  let foundFlagIdx = -1;
+  let isPrint = false;
+  let isAttachedEq = false;
+  let scriptContent: string | null = null;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === undefined || arg === '--') return null;
+    if (arg === undefined || arg === '--') break;
 
-    if (allowed.includes(arg)) {
-      const scriptContent = args[i + 1];
-      if (scriptContent !== undefined) {
-        return {
-          flagIdx: i,
-          isPrint: arg === '-p' || arg === '--print',
-          scriptContent,
-          inputType,
-          stripIndices,
-        };
+    if (foundFlagIdx === -1) {
+      if (allowed.includes(arg)) {
+        const candidate = args[i + 1];
+        if (candidate === undefined) return null;
+        foundFlagIdx = i;
+        isPrint = arg === '-p' || arg === '--print';
+        scriptContent = candidate;
+        i++;
+        continue;
       }
-      return null;
+      const eqFlag = allowed.find(f => f.startsWith('--') && arg.startsWith(`${f}=`));
+      if (eqFlag !== undefined) {
+        foundFlagIdx = i;
+        isPrint = eqFlag === '-p' || eqFlag === '--print';
+        isAttachedEq = true;
+        scriptContent = arg.slice(eqFlag.length + 1);
+        continue;
+      }
     }
 
-    if (arg.startsWith('--input-type=')) {
+    if (lower === 'node' && arg.startsWith('--input-type=')) {
       const val = arg.slice('--input-type='.length).toLowerCase();
       if (val === 'module' || val === 'commonjs') {
         inputType = val;
+        stripIndices.push(i);
+        continue;
       }
-      stripIndices.push(i);
-      continue;
     }
 
-    if (arg === '--input-type') {
+    if (lower === 'node' && arg === '--input-type') {
       const nextVal = args[i + 1]?.toLowerCase();
       if (nextVal === 'module' || nextVal === 'commonjs') {
         inputType = nextVal;
@@ -241,24 +254,28 @@ export function getInlineScriptDetails(interpreter: string, args: readonly strin
       }
     }
 
-    if (!arg.startsWith('-')) {
-      return null;
-    }
-
-    if (valueFlags.includes(arg) && i + 1 < args.length) {
-      i++;
-    }
+    if (!arg.startsWith('-')) break;
+    if (valueFlags.includes(arg) && i + 1 < args.length) i++;
   }
 
-  return null;
+  return foundFlagIdx !== -1 && scriptContent !== null
+    ? { flagIdx: foundFlagIdx, isPrint, isAttachedEq, scriptContent, inputType, stripIndices }
+    : null;
 }
 
 function prependPythonSysPath(scriptContent: string): string {
   const lines = scriptContent.split('\n');
   let insertIdx = 0;
   let inFutureParens = false;
+  let inDocstring: string | null = null;
+  let pastHeader = false;
   while (insertIdx < lines.length) {
     const trimmed = (lines[insertIdx] ?? '').trim();
+    if (inDocstring !== null) {
+      if (trimmed.includes(inDocstring)) inDocstring = null;
+      insertIdx++;
+      continue;
+    }
     if (inFutureParens) {
       if (trimmed.includes(')')) inFutureParens = false;
       insertIdx++;
@@ -268,8 +285,16 @@ function prependPythonSysPath(scriptContent: string): string {
       insertIdx++;
       continue;
     }
+    if (!pastHeader && (trimmed.startsWith('"""') || trimmed.startsWith("'''"))) {
+      const q = trimmed.slice(0, 3);
+      if (trimmed.indexOf(q, 3) === -1) inDocstring = q;
+      pastHeader = true;
+      insertIdx++;
+      continue;
+    }
     if (/^from\s+__future__\s+import\b/.test(trimmed)) {
       if (trimmed.includes('(') && !trimmed.includes(')')) inFutureParens = true;
+      pastHeader = true;
       insertIdx++;
       continue;
     }
@@ -284,18 +309,20 @@ export function rewriteInlineScriptToTempFile(params: {
   args: string[];
   envOverrides: Record<string, string>;
   cwd: string;
+  skipHostProbe?: boolean;
   target?: 'windows' | 'wsl2';
   payloadEnv?: Record<string, string | undefined>;
   startIdx?: number;
+  onSync?: () => void;
 }): string | null {
-  const { interpreterName, args, envOverrides, cwd, target, payloadEnv, startIdx = 0 } = params;
+  const { interpreterName, args, envOverrides, cwd, skipHostProbe = false, target, payloadEnv, startIdx = 0, onSync } = params;
   const subArgs = startIdx > 0 ? args.slice(startIdx) : args;
   const details = getInlineScriptDetails(interpreterName, subArgs);
   if (details === null) {
     return null;
   }
 
-  const { flagIdx, isPrint, scriptContent, inputType, stripIndices } = details;
+  const { flagIdx, isPrint, isAttachedEq, scriptContent, inputType, stripIndices } = details;
   emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Transparently rewriting inline ${interpreterName} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)`);
 
   const ext = interpreterName.startsWith('python')
@@ -310,19 +337,22 @@ export function rewriteInlineScriptToTempFile(params: {
   );
 
   const skipValidFileRewrite = target !== 'wsl2' && ['node', 'tsx', 'ts-node'].includes(interpreterName);
+  const deferredLogs: string[] = [];
+  const pathCheckedContent = skipHostProbe
+    ? scriptContent
+    : healEvalCodePathHallucinations(scriptContent, cwd, target, { skipValidFileRewrite, interpreter: interpreterName, deferredLogs });
   let fileContent = interpreterName.startsWith('python')
-    ? prependPythonSysPath(scriptContent)
+    ? prependPythonSysPath(pathCheckedContent)
     : healStrippedStringRawLiterals(
-        healStrippedSqlTemplateLiterals(
-          healEvalCodePathHallucinations(scriptContent, cwd, target, { skipValidFileRewrite, interpreter: interpreterName })
-        )
+        healStrippedSqlTemplateLiterals(pathCheckedContent, deferredLogs),
+        deferredLogs,
       );
 
   if (isPrint) {
     fileContent = `try {\n  const __res = eval(${JSON.stringify(fileContent)});\n  if (__res !== undefined) console.log(__res);\n} catch (__err) {\n  if (!(__err instanceof SyntaxError)) throw __err;\n  ${fileContent}\n}\n`;
   }
 
-  if (!interpreterName.startsWith('python')) {
+  if (!skipHostProbe && !interpreterName.startsWith('python')) {
     configureCwdModuleResolution(envOverrides, cwd, interpreterName, target, payloadEnv);
   }
 
@@ -330,16 +360,23 @@ export function rewriteInlineScriptToTempFile(params: {
   registerTempScriptCleanup(tmpFile);
 
   const absFlagIdx = startIdx + flagIdx;
-  args.splice(absFlagIdx, 2, tmpFile);
-
+  const flagSpan = isAttachedEq ? 1 : 2;
   const sortedStrip = [...stripIndices]
     .map(idx => startIdx + idx)
     .sort((a, b) => b - a);
+  for (const absStripIdx of sortedStrip) {
+    if (absStripIdx >= absFlagIdx + flagSpan) {
+      args.splice(absStripIdx, 1);
+    }
+  }
+  args.splice(absFlagIdx, flagSpan, tmpFile);
   for (const absStripIdx of sortedStrip) {
     if (absStripIdx < absFlagIdx) {
       args.splice(absStripIdx, 1);
     }
   }
+  onSync?.();
+  for (const line of deferredLogs) console.error(line);
 
   return tmpFile;
 }

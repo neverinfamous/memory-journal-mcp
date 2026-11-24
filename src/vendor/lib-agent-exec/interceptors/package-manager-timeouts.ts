@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { convertToWindowsPath, getUnderlyingPackageScript } from '../command-utils.js';
 import { emitInterceptBanner } from '../utils.js';
-import { resolvePackageProjectDir } from './package-manager-js-rewrites.js';
 import { windowsQualityTimeout, wslQualityTimeout } from './system-timeout-flags.js';
 import { stripInlineCodeArgs } from './utils.js';
 import type { ExecutionContext } from './types.js';
@@ -18,11 +17,10 @@ export function applyPackageManagerTimeouts(
   targetScript: string | undefined,
 ): void {
   const baseDir = ctx.payload.cwd ?? ctx.cwd ?? process.cwd();
-  const effectiveDir = resolvePackageProjectDir(args, baseDir);
-  const hostEffectiveDir = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(effectiveDir)
-    ? convertToWindowsPath(effectiveDir)
-    : effectiveDir;
-  const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, hostEffectiveDir);
+  const hostBaseDir = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(baseDir)
+    ? convertToWindowsPath(baseDir)
+    : baseDir;
+  const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, hostBaseDir);
   const nonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
   const isKnownDeterministic = nonInlineArgs.some(a => /(?:commit\.(?:ts|js)|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
   const isBackupConversations = nonInlineArgs.some(a => /backup-conversations\.ts/i.test(a));

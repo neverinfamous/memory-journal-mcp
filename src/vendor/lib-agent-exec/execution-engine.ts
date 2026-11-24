@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { ProcessController } from './process-controller.js';
 import { isPidAlive } from './process-manager.js';
+import { convertToWindowsPath } from './command-utils.js';
 import { resolvePackageProjectDir } from './interceptors/package-manager-js-rewrites.js';
 import { acquireValidationLock, classifyValidationCommand } from './validation-lock.js';
 import { ExecPayload } from './schema.js';
@@ -29,7 +30,7 @@ function pruneExpiredMutexDir(mutexPath: string): void {
 }
 
 async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<boolean> {
-  while (Date.now() < deadlineMs) {
+  do {
     try {
       fs.mkdirSync(mutexPath); // Atomic operation
       return true;
@@ -37,9 +38,10 @@ async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<b
       const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
       if (code !== undefined && code !== 'EEXIST') return false;
       pruneExpiredMutexDir(mutexPath);
+      if (Date.now() >= deadlineMs) break;
       await new Promise(r => setTimeout(r, 20 + Math.random() * 50));
     }
-  }
+  } while (Date.now() < deadlineMs);
   return false;
 }
 
@@ -78,7 +80,7 @@ function countActiveAndPruneStaleLocks(): number {
 export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Promise<string> {
   try {
     if (!fs.existsSync(WSL_LOCK_DIR)) {
-      fs.mkdirSync(WSL_LOCK_DIR, { recursive: true });
+      fs.mkdirSync(WSL_LOCK_DIR, { recursive: true, mode: 0o700 });
     }
   } catch (err: unknown) {
     console.error(`⚠️ WSL lock dir creation failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -89,7 +91,7 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
   const lockFile = path.join(WSL_LOCK_DIR, `${Date.now()}-${crypto.randomUUID()}.lock`);
   const deadlineMs = Date.now() + timeoutMs;
 
-  while (Date.now() < deadlineMs) {
+  do {
     const acquiredMutex = await tryAcquireMutex(mutexPath, deadlineMs);
     if (!acquiredMutex) break;
     let writeFailed = false;
@@ -105,9 +107,9 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
     } finally {
       releaseMutexDir(mutexPath);
     }
-    if (writeFailed) break;
+    if (writeFailed || Date.now() >= deadlineMs) break;
     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
-  }
+  } while (Date.now() < deadlineMs);
   // If we timeout or cannot persist a lock file, proceed without poisoning activeLockCount
   return '';
 }
@@ -124,12 +126,20 @@ function registerProcessCleanup(cleanupFn: () => void): void {
     process.off('uncaughtException', onUncaught);
   };
   const onSignal = (sig: NodeJS.Signals) => {
-    releaseAll();
-    if (process.listenerCount(sig) === 0) process.kill(process.pid, sig);
+    if (process.listenerCount(sig) === 0) {
+      releaseAll();
+      process.kill(process.pid, sig);
+    }
   };
   const onSigint = () => onSignal('SIGINT');
   const onSigterm = () => onSignal('SIGTERM');
-  const onUncaught = () => { releaseAll(); };
+  const onUncaught = (err: unknown) => {
+    releaseAll();
+    if (process.listenerCount('uncaughtException') === 0) {
+      console.error(err);
+      process.exit(1);
+    }
+  };
   process.once('exit', releaseAll);
   process.once('SIGINT', onSigint);
   process.once('SIGTERM', onSigterm);
@@ -142,6 +152,12 @@ function deductTimeout(baseTimeoutMs: number | undefined, elapsedMs: number): nu
   return Math.max(floor, baseTimeoutMs - elapsedMs);
 }
 
+function runCleanupHandlers(cleanups: readonly (() => void)[]): void {
+  for (let i = cleanups.length - 1; i >= 0; i--) {
+    try { cleanups[i]?.(); } catch { /* ignore */ }
+  }
+}
+
 async function acquireExecutionLocks(
   payload: ExecPayload,
   cwd: string,
@@ -151,25 +167,28 @@ async function acquireExecutionLocks(
   isJson: boolean,
 ): Promise<number | undefined> {
   let effectiveTimeoutMs: number | undefined;
-  if (payload.target === 'wsl2') {
-    const parsedConcurrency = parsePositiveSafeInt(process.env['AGENT_WSL_CONCURRENCY'] ?? '');
-    const maxConcurrency = parsedConcurrency ?? 4;
-    const lockWaitMs = payload.timeoutMs !== undefined && payload.timeoutMs > 0
-      ? Math.min(Math.max(1000, Math.floor(payload.timeoutMs * 0.5)), 45000)
-      : 30000;
-    const lockStartMs = Date.now();
-    const lockFile = await acquireWslLock(maxConcurrency, lockWaitMs);
-    effectiveTimeoutMs = deductTimeout(payload.timeoutMs, Date.now() - lockStartMs);
-    if (lockFile.length > 0) {
-      registerProcessCleanup(() => { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile); });
+  const cleanups: Array<() => void> = [];
+  let cleanupRegistered = false;
+  const addCleanup = (fn: () => void): void => {
+    cleanups.push(fn);
+    if (!cleanupRegistered) {
+      cleanupRegistered = true;
+      registerProcessCleanup(() => runCleanupHandlers(cleanups));
     }
-  }
+  };
 
   const logicalCmd = payload.type === 'command' ? payload.command : cmd;
   const logicalArgs = payload.type === 'command' ? (payload.args ?? []) : args;
   const classification = classifyValidationCommand(logicalCmd, logicalArgs);
   if (classification !== null) {
-    const projectDir = resolvePackageProjectDir(logicalArgs, cwd);
+    const rawPayloadCwd = typeof payload.cwd === 'string' ? payload.cwd.trim() : '';
+    const isWslPosixCwd = payload.target === 'wsl2' && rawPayloadCwd.length > 0
+      && ((rawPayloadCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(rawPayloadCwd)) || rawPayloadCwd.startsWith('~'));
+    const projectBaseCwd = isWslPosixCwd ? rawPayloadCwd : cwd;
+    const rawProjectDir = resolvePackageProjectDir(logicalArgs, projectBaseCwd);
+    const projectDir = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(rawProjectDir)
+      ? convertToWindowsPath(rawProjectDir)
+      : rawProjectDir;
     const baseTimeout = effectiveTimeoutMs ?? payload.timeoutMs;
     const customWaitMs = parsePositiveSafeInt(env['AGENT_EXEC_VALIDATION_LOCK_TIMEOUT_MS'] ?? process.env['AGENT_EXEC_VALIDATION_LOCK_TIMEOUT_MS'] ?? '');
     const defaultWaitMs = baseTimeout !== undefined && baseTimeout > 0
@@ -184,7 +203,22 @@ async function acquireExecutionLocks(
       env,
     });
     effectiveTimeoutMs = deductTimeout(baseTimeout, Date.now() - lockStartMs) ?? effectiveTimeoutMs;
-    if (handle !== null) registerProcessCleanup(handle.release);
+    if (handle !== null) addCleanup(handle.release);
+  }
+
+  if (payload.target === 'wsl2') {
+    const parsedConcurrency = parsePositiveSafeInt(process.env['AGENT_WSL_CONCURRENCY'] ?? '');
+    const maxConcurrency = parsedConcurrency ?? 4;
+    const baseWaitTimeout = effectiveTimeoutMs ?? payload.timeoutMs;
+    const lockWaitMs = baseWaitTimeout !== undefined && baseWaitTimeout > 0
+      ? Math.min(Math.max(1000, Math.floor(baseWaitTimeout * 0.5)), 45000)
+      : 30000;
+    const lockStartMs = Date.now();
+    const lockFile = await acquireWslLock(maxConcurrency, lockWaitMs);
+    effectiveTimeoutMs = deductTimeout(baseWaitTimeout, Date.now() - lockStartMs) ?? effectiveTimeoutMs;
+    if (lockFile.length > 0) {
+      addCleanup(() => { fs.unlinkSync(lockFile); });
+    }
   }
   return effectiveTimeoutMs;
 }

@@ -57,20 +57,37 @@ export function resolvePathWithDirectorySynonyms(resolvedPath: string, allowDire
   return null;
 }
 
+const COMPILED_JS_EXT_RE = /\.(?:js|mjs|cjs)$/i;
+
 function firstSwapHit(resolvedPath: string, regex: RegExp, from: string, toList: readonly string[], sep1: string, sep2: string, allowDirectories: boolean): string | null {
+  const isSrcToBuild = from.toLowerCase() === 'src';
   for (const to of toList) {
     const swapped = resolvedPath.replace(regex, `${sep1}${to}${sep2}`);
+    if (isSrcToBuild && BUILD_OUTPUT_DIRS.has(to.toLowerCase())) {
+      // [INVARIANT]: Never hijack missing src/ directories or TS source files to compiled dist/build/out output.
+      if (!allowDirectories && COMPILED_JS_EXT_RE.test(resolvedPath) && isFilePath(swapped)) return swapped;
+      continue;
+    }
     if (isFilePath(swapped) || (allowDirectories && isDirectoryPath(swapped))) return swapped;
-    if (from.toLowerCase() === 'src' && BUILD_OUTPUT_DIRS.has(to.toLowerCase())) continue;
     const neighbor = findNeighborFilePath(swapped, allowDirectories);
     if (neighbor !== null) return neighbor;
   }
   return null;
 }
 
+let cachedBuildSwapRegexes: ReadonlyArray<[string, readonly string[], RegExp]> | null = null;
+
+function getBuildSwapRegexes(): ReadonlyArray<[string, readonly string[], RegExp]> {
+  if (cachedBuildSwapRegexes === null) {
+    cachedBuildSwapRegexes = Object.entries(BUILD_TO_SRC_SWAPS).map(
+      ([from, toList]) => [from, toList, new RegExp(`([\\\\/])${from}([\\\\/])`, 'i')],
+    );
+  }
+  return cachedBuildSwapRegexes;
+}
+
 export function resolveBuildSrcSwap(resolvedPath: string, allowDirectories = false): string | null {
-  for (const [from, toList] of Object.entries(BUILD_TO_SRC_SWAPS)) {
-    const regex = new RegExp(`([\\\\/])${from}([\\\\/])`, 'i');
+  for (const [from, toList, regex] of getBuildSwapRegexes()) {
     const matchResult = resolvedPath.match(regex);
     const sep1 = matchResult?.[1];
     const sep2 = matchResult?.[2];

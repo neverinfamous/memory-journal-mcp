@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { IOController } from './io-controller.js';
 import { killProcessTree } from './process-manager.js';
 import { ExecPayload } from './schema.js';
-import { sendWebhook, sendDatadogTelemetry, BUILT_INS, AUTONOMOUS_HEALING_MSG, setLastStderrTail } from './utils.js';
+import { sendWebhook, sendDatadogTelemetry, BUILT_INS, AUTONOMOUS_HEALING_MSG, setLastStderrTail, recordAgentIssue } from './utils.js';
 import { analyzeExitCode1, isGracefulExitAnalysis, type ExitCodeAnalysis } from './exit-code-policy.js';
 export { analyzeExitCode1 };
 
@@ -27,6 +27,8 @@ export class ProcessController {
   private isFinished = false;
   private timedOut = false;
   private abortedInternally = false;
+  private spawnFailed = false;
+  private spawnErrorMessage: string | null = null;
   private hasRetriedWsl = false;
   private timeoutTimer: NodeJS.Timeout | null = null;
   private forceKillTimer: NodeJS.Timeout | null = null;
@@ -55,14 +57,11 @@ export class ProcessController {
       if (this.child && !this.isFinished) killProcessTree(this.child);
       this.clearActiveTimersAndHandlers();
       this.cleanupTempScript();
-      if (err instanceof Error) {
-        if (isErrnoException(err) && (err.code || err.syscall === 'uv_spawn')) {
-          this.onChildError(err);
-          return;
-        }
+      if (err instanceof Error && isErrnoException(err) && (err.code || err.syscall === 'uv_spawn')) {
+        this.onChildError(err);
+        return;
       }
-      if (!this.isJson) console.error(`❌ Unexpected error during spawn setup:`, err);
-      process.exit(1);
+      this.failFatal('Unexpected error during spawn setup', err);
     }
   }
 
@@ -142,14 +141,14 @@ export class ProcessController {
       this.isFinished = true;
       this.abortedInternally = true;
       this.clearActiveTimersAndHandlers();
-      if (!this.isJson) console.error(`❌ ${label}:`, err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (this.isJson) recordAgentIssue('EXECUTION_ERROR', `❌ ${label}: ${errMsg}`, this.payload);
+      else console.error(`❌ ${label}:`, err);
       if (typeof this.ioController?.flushAll === 'function') this.ioController.flushAll();
       if (typeof this.ioController?.destroyStreams === 'function') this.ioController.destroyStreams();
       if (this.child) killProcessTree(this.child);
       this.cleanupTempScript();
-      const finish = () => {
-        process.exit(1);
-      };
+      const finish = () => { if (this.isJson) console.log(JSON.stringify({ status: 'error', code: 1, message: `${label}: ${errMsg}` })); process.exit(1); };
       if (this.ioController) this.ioController.closeFileStreams().then(finish, finish);
       else finish();
     };
@@ -177,9 +176,9 @@ export class ProcessController {
       () => process.off('SIGTERM', onSigterm),
     );
 
-    child.on('exit', (code, signal) => this.onChildExit(code, signal));
-    child.on('close', (code, signal) => this.handleFinish(code, signal, false));
-    child.on('error', (error) => this.onChildError(error));
+    child.on('exit', (code, signal) => { if (this.child === child) this.onChildExit(code, signal); });
+    child.on('close', (code, signal) => { if (this.child === child) this.handleFinish(code, signal, false); });
+    child.on('error', (error) => { if (this.child === child) this.onChildError(error); });
   }
 
   // [INTENT]: Resolves zombie processes where the main shell exits but leaves a background daemon holding stdout/stderr open.
@@ -252,6 +251,7 @@ export class ProcessController {
 
   private onChildError(error: unknown) {
     if (this.isFinished) return;
+    this.spawnFailed = true;
     this.abortedInternally = true;
     this.isFinished = true;
     this.clearActiveTimersAndHandlers();
@@ -260,9 +260,11 @@ export class ProcessController {
 
     const handleError = () => {
       const msg = error instanceof Error ? error.message : String(error);
+      this.spawnErrorMessage = msg;
       const errCode = error instanceof Error && isErrnoException(error) && error.code ? String(error.code) : undefined;
       const errSyscall = error instanceof Error && isErrnoException(error) && error.syscall ? String(error.syscall) : undefined;
-      if (!this.isJson) console.error(`❌ Execution Error: ${msg}`);
+      if (this.isJson) recordAgentIssue('EXECUTION_ERROR', `❌ Execution Error: ${msg}`, this.payload);
+      else console.error(`❌ Execution Error: ${msg}`);
       this.printSpawnHints(errCode, errSyscall);
       this.isFinished = false;
       this.handleFinish(1, null, false);
@@ -304,43 +306,52 @@ export class ProcessController {
     }, timeoutMs);
   }
 
+  private executeWslRetry() {
+    try {
+      this.spawnChild();
+      this.setupIOController();
+      this.setupEventHandlers();
+      this.setupTimeouts();
+    } catch (retryErr: unknown) {
+      if (this.child) killProcessTree(this.child);
+      const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      this.spawnFailed = true;
+      this.spawnErrorMessage = msg;
+      if (this.isJson) recordAgentIssue('EXECUTION_ERROR', `❌ WSL retry spawn failed: ${msg}`, this.payload);
+      else console.error('❌ WSL retry spawn failed:', retryErr);
+      this.abortedInternally = true;
+      this.handleFinish(1, null, false);
+    }
+  }
+
   private retryWslLaunch() {
     this.hasRetriedWsl = true;
+    this.child = undefined;
     const ioCtrl = this.ioController;
-    if (ioCtrl) {
-      ioCtrl.flushAll();
-      ioCtrl.destroyStreams();
-    }
+    if (ioCtrl) { ioCtrl.flushAll(); ioCtrl.destroyStreams(); }
     console.error(`\n   💡 AGENT HINT: 'wsl.exe' exited with code 255 (transient WSL VM startup/pipe issue).`);
     console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically retrying command in WSL2 after 500ms... (Frictionless Recovery)\x1b[0m`);
 
     const scheduleRetry = () => {
-      this.isFinished = false;
+      const onRetryExit = () => this.cleanupTempScript();
+      process.on('exit', onRetryExit);
+      const removeRetryExit = () => process.off('exit', onRetryExit);
+      this.cleanupProcessHandlers.push(removeRetryExit);
       this.retryTimer = setTimeout(() => {
         this.retryTimer = null;
-        try {
-          this.spawnChild();
-          this.setupIOController();
-          this.setupEventHandlers();
-          this.setupTimeouts();
-        } catch (retryErr: unknown) {
-          if (this.child) killProcessTree(this.child);
-          if (!this.isJson) console.error('❌ WSL retry spawn failed:', retryErr);
-          this.abortedInternally = true;
-          this.handleFinish(1, null, false);
-        }
+        this.isFinished = false;
+        removeRetryExit();
+        this.executeWslRetry();
       }, 500);
     };
 
-    if (ioCtrl) {
-      ioCtrl.closeFileStreams().then(scheduleRetry, scheduleRetry);
-    } else {
-      scheduleRetry();
-    }
+    if (ioCtrl) ioCtrl.closeFileStreams().then(scheduleRetry, scheduleRetry);
+    else scheduleRetry();
   }
 
   private computeFinalCode(code: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null): number | null {
     if (this.timedOut || this.abortedInternally) {
+      if (code === null && signal !== null) return null;
       return typeof code === 'number' && code !== 0 ? code : 1;
     }
     if (envData === null) return code;
@@ -355,12 +366,18 @@ export class ProcessController {
     return code;
   }
 
+  private failFatal(label: string, err: unknown): never {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (this.isJson) {
+      recordAgentIssue('EXECUTION_ERROR', `❌ ${label}: ${msg}`, this.payload);
+      console.log(JSON.stringify({ status: 'error', code: 1, message: msg }));
+    } else console.error(`❌ ${label}:`, err);
+    process.exit(1);
+  }
+
   private async dispatchWebhook(target: string | string[] | undefined, finalCode: number | null, signal: NodeJS.Signals | null, success: boolean, envData: Record<string, unknown> | null): Promise<void> {
     if (!target) return;
-    await sendWebhook(this.payload, target, {
-      stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '',
-      code: finalCode, signal, success, envData,
-    });
+    await sendWebhook(this.payload, target, { stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '', code: finalCode, signal, success, envData });
   }
 
   private logGracefulReason(code: number, analysis: ExitCodeAnalysis): void {
@@ -373,7 +390,9 @@ export class ProcessController {
   private async finishJsonMode(computedCode: number | null, signal: NodeJS.Signals | null, envData: Record<string, unknown> | null, analysis: ExitCodeAnalysis | null): Promise<never> {
     const finalCode = analysis !== null && isGracefulExitAnalysis(analysis) ? 0 : computedCode;
     await this.dispatchWebhook(finalCode !== 0 ? this.payload.onFailure : this.payload.onSuccess, finalCode, signal, finalCode === 0, envData);
-    console.log(JSON.stringify({ status: finalCode === 0 ? 'success' : 'error', code: finalCode, signal, stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '', envData }));
+    const jsonOut: Record<string, unknown> = { status: finalCode === 0 ? 'success' : 'error', code: finalCode, signal, stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '', envData };
+    if (this.spawnErrorMessage !== null) jsonOut['message'] = this.spawnErrorMessage;
+    console.log(JSON.stringify(jsonOut));
     process.exit(finalCode === 0 ? 0 : (finalCode ?? 1));
   }
 
@@ -395,11 +414,10 @@ export class ProcessController {
     }
     await this.dispatchWebhook(this.payload.onFailure, code, signal, false, envData);
     const rawCmdBase = this.payload.type === 'command' && typeof this.payload.command === 'string'
-      ? path.basename(this.payload.command).replace(/\.(cmd|exe)$/i, '').toLowerCase()
-      : '';
+      ? path.basename(this.payload.command).replace(/\.(cmd|exe)$/i, '').toLowerCase() : '';
     const suppressRedundantExit = ['pnpm', 'npm', 'bun', 'yarn', 'node'].includes(rawCmdBase);
     setLastStderrTail(this.ioController?.stderrTail || '');
-    if (!this.isJson && !suppressRedundantExit) console.error(`\n❌ Command exited with code ${code}`);
+    if (!this.isJson && !suppressRedundantExit && !this.spawnFailed && !this.timedOut) console.error(`\n❌ Command exited with code ${code}`);
     if (process.platform === 'win32' && BUILT_INS.includes(this.cmd.toLowerCase()) && !this.isJson) {
       console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
     }
@@ -423,20 +441,10 @@ export class ProcessController {
         ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '')
         : null;
       const telemetryCode = analysis !== null && isGracefulExitAnalysis(analysis) ? 0 : computedCode;
-      await sendDatadogTelemetry(
-        this.payload, this.cwd, 'agent_exec.command.count',
-        telemetryCode === 0 ? 'success' : 'error', computedCode,
-        this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '',
-      );
-      if (this.isJson) return this.finishJsonMode(computedCode, signal, envData, analysis);
-      return this.finishTextMode(computedCode, signal, envData, isDaemon, analysis);
+      await sendDatadogTelemetry(this.payload, this.cwd, 'agent_exec.command.count', telemetryCode === 0 ? 'success' : 'error', computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
+      return this.isJson ? this.finishJsonMode(computedCode, signal, envData, analysis) : this.finishTextMode(computedCode, signal, envData, isDaemon, analysis);
     };
-    const finishPromise = this.ioController
-      ? this.ioController.closeFileStreams().then(finalizeFinish, finalizeFinish)
-      : finalizeFinish();
-    return finishPromise.catch((err: unknown) => {
-      if (!this.isJson) console.error('❌ Finalization error:', err);
-      process.exit(1);
-    });
+    const finishPromise = this.ioController ? this.ioController.closeFileStreams().then(finalizeFinish, finalizeFinish) : finalizeFinish();
+    return finishPromise.catch((err: unknown) => this.failFatal('Finalization error', err));
   }
 }

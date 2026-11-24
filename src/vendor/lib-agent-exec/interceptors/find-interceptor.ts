@@ -9,11 +9,13 @@ const FIND_ACTIONS = [
   '-delete', '-ls', '-fls', '-fprint', '-fprint0', '-fprintf',
 ];
 
+const WIN_FIND_SWITCH_RE = /^\/(?:[sSbBwWpPqQcC4ivn?]|[aA](?::[dhrsalio-]+|[dhrsalio]{1,3})?|[oO](?::[nesdg-]+|[nesdg]{1,3})?)$/;
+
 function findFindTargetPath(args: string[], filterIdx: number): string {
   for (let i = 0; i < args.length; i++) {
     if (i === filterIdx || i === filterIdx + 1) continue;
     const arg = args[i];
-    if (arg !== undefined && !arg.startsWith('-') && !(arg.startsWith('/') && !arg.startsWith('/mnt/') && /^\/[a-zA-Z?][a-zA-Z0-9-]{0,4}$/.test(arg))) {
+    if (arg !== undefined && !arg.startsWith('-') && !(arg.startsWith('/') && !arg.startsWith('/mnt/') && WIN_FIND_SWITCH_RE.test(arg))) {
       return convertToWslPath(arg);
     }
   }
@@ -30,6 +32,7 @@ function rewritePowerShellFindFilter(ctx: ExecutionContext): boolean {
   if (!hasRecurse) newArgs.push('-maxdepth', '1');
   newArgs.push('-name', pattern);
   ctx.args = newArgs;
+  syncFindPayloadArgs(ctx);
   return !hasRecurse;
 }
 
@@ -45,10 +48,12 @@ function healFindTypeValues(ctx: ExecutionContext): void {
     const typeVal = ctx.args[i + 1];
     if (typeVal === 'file') {
       ctx.args[i + 1] = 'f';
+      syncFindPayloadArgs(ctx);
       continue;
     }
     if (typeVal === 'dir' || typeVal === 'directory') {
       ctx.args[i + 1] = 'd';
+      syncFindPayloadArgs(ctx);
       continue;
     }
     if (typeVal !== undefined && !/^[bcdpflsD](?:,[bcdpflsD])*$/.test(typeVal)) {
@@ -74,20 +79,17 @@ function healFindExecEmptyArgs(ctx: ExecutionContext): void {
 function healFindMissingNameFlag(ctx: ExecutionContext): void {
   const execIdx = ctx.args.findIndex((arg) => ['-exec', '-execdir', '-ok', '-okdir'].includes(arg));
   const scanLimit = execIdx === -1 ? ctx.args.length : execIdx;
-  const patternIndex = ctx.args.findIndex((arg, idx) => {
-    if (idx === 0 || idx >= scanLimit || arg.startsWith('-') || arg === '(' || arg === '!' || arg === '\\(') return false;
-    const prevArg = ctx.args[idx - 1];
-    if (prevArg === '-D') return false;
-    return arg.includes('*') || arg.includes('?');
-  });
-  if (patternIndex === -1) return;
-  const prev = ctx.args[patternIndex - 1];
-  if (prev !== undefined && FIND_NAME_FLAGS.includes(prev)) return;
-  const pattern = ctx.args[patternIndex];
-  if (pattern === undefined) return;
-  ctx.args.splice(patternIndex, 1, '-name', pattern);
-  syncFindPayloadArgs(ctx);
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected wildcard pattern '${pattern}' without -name flag. Auto-injecting '-name' flag... (Frictionless Recovery)\x1b[0m`);
+  for (let idx = 1; idx < scanLimit; idx++) {
+    const arg = ctx.args[idx];
+    if (arg === undefined || arg.startsWith('-') || arg === '(' || arg === '!' || arg === '\\(') continue;
+    const prev = ctx.args[idx - 1];
+    if (prev === '-D' || (prev !== undefined && (FIND_NAME_FLAGS.includes(prev) || ['-printf', '-fprintf', '-fprint', '-fprint0', '-fls'].includes(prev)))) continue;
+    if (arg.includes('/') || arg.includes('\\') || (!arg.includes('*') && !arg.includes('?'))) continue;
+    ctx.args.splice(idx, 1, '-name', arg);
+    syncFindPayloadArgs(ctx);
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected wildcard pattern '${arg}' without -name flag. Auto-injecting '-name' flag... (Frictionless Recovery)\x1b[0m`);
+    break;
+  }
 }
 
 function stripFindTrailingWildcard(targetPath: string, banners: string[]): string {
@@ -143,11 +145,12 @@ function splitFindTargets(args: string[]): FindTargetSplit {
 }
 
 function pathTargetsDir(targetPath: string, dirLower: string): boolean {
-  const segments = targetPath.replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean);
+  const cleaned = targetPath.trim().replace(/^(['"])(.*)\1$/, '$2');
+  const segments = cleaned.replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean);
   return segments.includes(dirLower);
 }
 
-const FIND_PATH_PREDICATES = new Set(['-path', '-ipath', '-wholename', '-iwholename']);
+const FIND_PATH_PREDICATES = new Set(['-path', '-ipath', '-wholename', '-iwholename', '-name', '-iname']);
 
 function dirIsExplicitlyTargeted(args: string[], effectivePaths: string[], dir: string): boolean {
   const dirLower = dir.toLowerCase();
@@ -210,7 +213,16 @@ function applyBroadFindPrune(
 }
 
 function injectFindDirectoryPruning(ctx: ExecutionContext): void {
-  if (ctx.args.includes('--help') || ctx.args.includes('--version') || ctx.args.includes('-prune') || ctx.args.includes('-maxdepth')) return;
+  if (
+    ctx.args.includes('--help') ||
+    ctx.args.includes('--version') ||
+    ctx.args.includes('-prune') ||
+    ctx.args.includes('-maxdepth') ||
+    ctx.args.includes('-depth') ||
+    ctx.args.includes('-delete')
+  ) {
+    return;
+  }
   const split = splitFindTargets(ctx.args);
   if (split.targetPaths.length > 0) {
     ctx.args = [...split.prePathOpts, ...split.effectivePaths, ...split.restOfArgs];

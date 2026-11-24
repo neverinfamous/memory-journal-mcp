@@ -48,6 +48,7 @@ If you are a **human user** attempting to run interactive commands natively in y
 2. **Native Passthrough Alias**: Prepend `native` to any command.
    *Example*: `native gh auth login`
 3. **Interactive Session Toggle (Current Shell Only)**: In a persistent PowerShell session, run `Disable-AgentExec` / `Enable-AgentExec` (sets `$global:AgentExecBypass` for that shell session). Note that single-command agent shells start cleanly without cross-process bypass files.
+4. **Dist Bundle vs. Source Routing (`AGENT_EXEC_USE_SOURCE=1`)**: The PowerShell proxy prefers the pre-built bundle (`dist/agent-exec/agent-exec.js`, falling back to `agent-exec.ts`) so in-progress source edits never break active terminals. Set `$env:AGENT_EXEC_USE_SOURCE = '1'` in one shell to test unbuilt source changes, and run `bun run build` after verified edits to smoke-test and atomically promote the bundle live.
 
 ## Payload Schemas
 
@@ -65,7 +66,7 @@ Used for executing standard CLI binaries.
   "args": ["rev-parse", "HEAD"],
   "cwd": "C:\\path\\to\\dir", // Optional
   "env": { "CUSTOM_VAR": "value", "IS_TRUE": true, "PORT": 8080 }, // Optional (numbers and booleans are automatically coerced to strings)
-  "stdin": "input string", // Optional (max 10MB UTF-8 string; safeString/noNullString schemas enforce valid characters)
+  "stdin": "input string", // Optional (max 10MB UTF-8 string; validated via z.string().max(10MB))
   "stdoutFile": "C:\\path\\to\\out.log", // Optional
   "stderrFile": "C:\\path\\to\\err.log", // Optional
   "maxBuffer": 10485760, // Optional
@@ -83,7 +84,7 @@ Used for executing standard CLI binaries.
   "webhookHeaders": { "Authorization": "Bearer my-token" }, // Optional
   "webhookPayloadTemplate": { "status": "{{envelope.status}}", "data": "{{envelope.data}}" }, // Optional (Accepts string, object, or array)
   "webhookTimeoutMs": 5000, // Optional
-  "target": "wsl2" // Optional ("wsl2" | "windows"; preprocessors auto-map "wsl"/"linux"/"ubuntu" to "wsl2", and "native"/"win"/"win32" to "windows")
+  "target": "wsl2" // Optional ("wsl2" | "windows"; preprocessors auto-map "wsl"/"linux"/"ubuntu"/"debian"/"posix"/"bash"/"sh" to "wsl2", and "native"/"win"/"win32"/"pwsh"/"powershell"/"cmd" to "windows")
 }
 ```
 **CRITICAL**: Do NOT pass arguments containing spaces as part of the `command` string. Use the `args` array. (e.g. `{"command": "gh pr view"}` is invalid. Use `{"command": "gh", "args": ["pr", "view"]}`).
@@ -105,7 +106,7 @@ Used for executing raw code snippets dynamically.
 {
   "type": "eval",
   "code": "console.log('Hello from eval!');",
-  "interpreter": "bun" // Optional (defaults to bun, can be python, node, bash, pwsh)
+  "interpreter": "bun" // Optional (auto-detected by code syntax; defaults to bun on Windows / bash on wsl2)
 }
 ```
 
@@ -141,9 +142,9 @@ If you interrupt tests (or if a specific stress test fails), you might leave orp
 To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging and false positives (`bypassInterceptors` in the schema is reserved strictly for internal interceptor stall-bypass exemptions — AI agents MUST NEVER pass `"bypassInterceptors": true` in payloads):
 
 
-- **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, `diff`, and `git diff` return exit code `1` when no matches/differences are found. Similarly, package manager commands like `npm outdated` or `pnpm outdated` return `1` when updates are available. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures. This behavior correctly applies even when these commands are executed indirectly via shell wrappers (e.g. `wsl`, `bash -c`, or `powershell`), within `eval` snippets and `script` payloads, AND when the agent requests a JSON envelope (e.g., `--json`), outputting `status: "success"` instead of an error.
+- **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, `diff`, and `git diff` return exit code `1` when no matches/differences are found. Similarly, package manager commands like `npm outdated` or `pnpm outdated` return `1` when updates are available. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures. This behavior correctly applies even when these commands are executed indirectly via shell wrappers (e.g. `wsl`, `bash -c`, or `powershell`), within command and shell `eval` payloads, AND when the agent requests a JSON envelope (e.g., `--json`), outputting `status: "success"` instead of an error.
 - **Quiet Interception, Target Routing & Piped Stdin**: Per-command `💡 AGENT INTERCEPT` forwarding banners are quiet by default (`AGENT_EXEC_VERBOSE=1` opts in; `🛠️ AUTONOMOUS HEALING` errors/hints are always emitted). Piped PowerShell input forwards inside `payload.stdin` over UTF-8 without Windows BOM corruption. WSL2-targeted `pwsh -c ...` invocations rewrite transparently to `bash -c`, `sudo` / `ping` receive `-n` / `-c 4` on `wsl2`, and `docker` auto-routes to `wsl2` when neither the Windows `docker_engine` named pipe nor an explicit `DOCKER_HOST` is present.
-- **Search & Filter Safety**: `rg` preserves `--` end-of-flags, known `-E <encoding>` values (e.g. `utf-8`), `-r <replacement>`, and `--files-with-matches`; `grep`/`eval` recursive exclusions skip directories explicitly targeted by path; `ls -R <dir>` only rewrites to `find` when a glob pattern is present; and unmatched Win32 `rg` target globs rewrite to `-g <glob> .`.
+- **Search & Filter Safety**: `rg` preserves `--` end-of-flags, known `-E <encoding>` values (e.g. `utf-8`), `-r <replacement>`, and `--files-with-matches`, auto-injects `--pcre2` for look-around assertions (`(?=`, `(?!`, `(?<=`, `(?<!`), injects `--` before single-hyphen regex patterns, splits space-separated multi-target path strings into individual arguments, skips unhealed non-existent extra targets (with an explicit warning) when concrete targets exist, and drops 0-match Win32 globs alongside concrete targets instead of injecting a global `-g` filter (while standalone unmatched Win32 `rg` globs still rewrite to `-g <glob> <dir>`). Path healing guards `.test`/`.spec` files against stripping to production source files or compound directories and never hijacks missing `src/` directories or TypeScript files to compiled `dist/`/`build/`/`out/` output. `grep`/`eval` recursive exclusions skip directories explicitly targeted by path, and `ls -R <dir>` only rewrites to `find` when a glob pattern is present.
 - **Telemetry Secret Redaction & Quoting**: `redactPayloadForLog` / `redactTelemetryText` redact URL credentials, `Bearer`/`Basic` tokens, `cookie`/`set-cookie`/`x-*`/key/token/secret headers and fields before writing `.agents/agent-exec-issues.jsonl` or Datadog logs; `formatForCmdExe` doubles trailing backslashes before closing quotes; and `escapePwshSingleQuoted` escapes PowerShell single quotes cleanly.
 - **TTY Flag Stripping**: Docker TTY flags (`-t`, `--tty`) and interactive flags (`-i`) are automatically stripped (while skipping value-flag operands like `-w /work`).
 - **PowerShell Padding**: If `pwsh` is called, `-NonInteractive -NoProfile` flags are forcefully injected.
@@ -152,7 +153,7 @@ To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and m
 - **Interactive REPL Blocks**: Attempting to launch `node`, `python`, or `bash` without arguments or a script file will be intercepted and terminated immediately to prevent hanging.
 - **Shell Wrapper Blocking**: Wrapping standard tools (`git`, `docker`, `gh`, `npm`, `npx`, `bunx`, etc.) inside inline shell invocations (e.g., `pwsh -c "git log"`) bypasses the interceptor pipeline and is strictly blocked across native commands, `eval` snippets, and `script` payloads. Invoke the tool directly via a `command` payload, or write the raw script commands without an inline shell wrapper.
 - **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash$`, `sh$`, and `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging. Long-running quality gates (`lint`, `typecheck`, `test`, `build`) and package installation/resolution commands (`install`, `ci`, `add`, `update`, `dedupe` across `pnpm`, `npm`, `yarn`, and `bun`) automatically receive extended timeouts and internal runtime stall-bypass exemptions.
-- **Per-Repo Validation Lock Queue (`validation-lock.ts`)**: Heavy repo-wide or shared-artifact validation commands (`build`, `tsup`, `typecheck`/`tsc`, `playwright`/`test:e2e`, `check`, and repo-wide `lint` or `test`/`bench`) automatically acquire an atomic per-repository lock file under the OS temp directory (reclaiming dead-PID or expired locks) so concurrent agents queue cleanly rather than racing on `dist/`, `.tsbuildinfo`, or E2E ports. Targeted file checks (`eslint <files>` and `vitest`/`bun test <files>`) stay lock-free; set `AGENT_EXEC_VALIDATION_LOCK=0` to opt out.
+- **Per-Repo Validation Lock Queue (`validation-lock.ts`)**: Heavy repo-wide or shared-artifact validation commands (`build`, `tsup`, `typecheck`/`tsc`, `playwright`/`test:e2e`, `check`, and repo-wide or directory-containing `lint` / `eslint src/ ...` or `test`/`bench`) automatically acquire an atomic per-repository lock file under the OS temp directory (reclaiming dead-PID or expired locks) so concurrent agents queue cleanly rather than racing on `dist/`, `.tsbuildinfo`, or E2E ports. Targeted file-only checks (`eslint <files>` and `vitest`/`bun test <files>`) stay lock-free; set `AGENT_EXEC_VALIDATION_LOCK=0` to opt out.
 - **Git Interception**: History/inspection commands (`git log`, `git shortlog`, `git show`, `git diff`, `git status`) are transparently rewritten to `get-git-history-json.ts` (Frictionless Recovery), while raw `git commit` without `-m`, `--amend`, interactive patching (`-p`), and interactive rebasing (`-i`) are blocked in favor of the deterministic wrappers (the host's `get-git-history-json.ts` wrapper and `pnpm exec tsx scripts/commit.ts`), and already-staged deletions (`D <path>`) in `git rm`, `git add [-u]`, and `commit.ts --add` are healed idempotently without exit-128 pathspec errors. Additionally, `resolveAgentScriptFallback` transparently resolves missing `.agents/scripts/<name>` calls to repo-local `scripts/<name>` (such as `scripts/commit.ts`) or upstream `.agents/scripts/<name>`. In `commit.ts`, you MUST explicitly pass `--impact <0.0-1.0>`, `--confidence <0.0-1.0>`, and `--validation <passed|none|failed>` (they are strictly required and never defaulted). `commit.ts` also supports **Autonomous Healing** (auto-corrects conventional commit message formatting, maps deprecated `--trust` to `--confidence`, normalizes `--relate` aliases `resolves`/`depends_on`/`relates_to`, auto-enables `--journal` when `--journal-project` is provided, emits `auto_link: true` unless `--no-auto-link` is passed, supports `--dry-run-links`, auto-resolves `workspace_id` and `project_number` from `memory-journal.config.json`, supports `--session-id`, and auto-recovers `--add` paths containing spaces).
 - **Quote Stripping**: Spurious quotes around arguments are stripped since the shell execution is bypassed.
 
@@ -164,14 +165,14 @@ Agents frequently hallucinate Unix tools or specific flags that break natively i
    * **Fix**: Prefer native `search_web`. When CLI HTTP requests are needed, `lib-agent-exec` automatically routes `curl`/`wget` to WSL2 (Frictionless Recovery), or you may invoke `curl.exe` explicitly.
 2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content` and `ls` to `Get-ChildItem`, and lacks native Unix `grep` (`Select-String`).
    * **Fix**: **ALWAYS** prefer declared agent-native tools first (`read_file`, `edit_file`, `write_file`), and use `Get-ChildItem` or `rg` for directory discovery and code search.
-   * **WSL2 & Native Search Recovery**: Standalone `ls`, `grep`, `cat`, `find`, `sed`, and `awk` route to WSL2 with Windows-to-WSL path conversion (`C:\...` -> `/mnt/c/...`) and recursive exclusions (`node_modules`, `.git`, `dist`). Native `rg` and `jq` binaries run directly on Windows whenever installed on `PATH` (falling back to WSL2 only when absent or targeting Linux-only POSIX paths).
+   * **WSL2 & Native Search Recovery**: Inside `agent-exec` payloads/`eval`, standalone `ls`, `dir`, `grep`, `cat`, `find`, `sed`, and `awk` route to WSL2 with Windows-to-WSL path conversion (`C:\...` -> `/mnt/c/...`) and recursive exclusions (`node_modules`, `.git`, `dist`) (bare interactive PowerShell `ls`/`dir`/`cat` remain native cmdlets). Native `rg` and `jq` binaries run directly on Windows whenever installed on `PATH` (falling back to WSL2 only when absent or targeting Linux-only POSIX paths).
    * **Workspace Boundary Fallback**: For paths outside workspace roots, use `rg -n "pattern" "C:\path\outside\workspace"` or `Get-ChildItem`.
 3. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
    * **Fix**: Do NOT poll this in a loop. Use the `schedule` tool to set an asynchronous timer to check back later.
 
 ## Environment Variables & Immutability
 
-The bridge standardizes the environment to enforce non-interactive behaviors. The following environment variables are **immutable** and cannot be overridden by your payload. Attempting to override them will result in a warning, but the execution will continue:
+The bridge standardizes the environment to enforce non-interactive behaviors. Key **immutable** environment variables enforced by `environment.ts` (over 40 total; attempts to override emit a warning and are ignored) include:
 
 - `CI` (Always `1`)
 - `NO_COLOR` (Always `1`)
@@ -189,7 +190,7 @@ The bridge standardizes the environment to enforce non-interactive behaviors. Th
 ## 🧪 Usability & Hallucination Testing
 
 If you modify interceptors or execution logic, programmatic `bun test` passes are **not enough**. You MUST run the usability testing suite to ensure actual agents don't get trapped by false positives (e.g. `&&` chains or pipeline character bugs).
-- **Run the Fuzzing Suite:** Follow `skills/lib-agent-exec/references/usability-audit.md`, or manually trigger the subagents defined in the host's `usability/coordinator-workflow.md`.
+- **Run the Fuzzing Suite:** In the upstream host workspace, follow the usability audit guide or manually trigger the subagents defined in the host's `usability/coordinator-workflow.md`.
 - **Test Auto-Generation:** The tests in `test-usability-*.md` are **auto-generated**. Do not edit them directly. Update the host's `usability/scripts/test-manifest.ts` or the `content/` partials instead, then run the host's `usability/scripts/generate-tests.ts` wrapper.
 
 ---

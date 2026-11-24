@@ -38,7 +38,10 @@ function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escap
   if (key === 'stdout') return formatJsonStringFragment(String(vars['stdout'] ?? ''), escapeForRawJson);
   if (key === 'stderr') return formatJsonStringFragment(String(vars['stderr'] ?? ''), escapeForRawJson);
   if (key === 'code') return String(vars['code'] ?? 'null');
-  if (key === 'signal') return String(vars['signal'] ?? 'null');
+  if (key === 'signal') {
+    const sig = vars['signal'];
+    return typeof sig === 'string' ? formatJsonStringFragment(sig, escapeForRawJson) : (sig !== undefined && sig !== null ? String(sig) : 'null');
+  }
   if (key === 'success') return vars['success'] === true ? 'true' : 'false';
   if (key === 'envelope.data') {
     const data = safeGet(vars['envData'], 'data');
@@ -48,7 +51,8 @@ function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escap
   }
   if (key === 'envelope.status') {
     const status = safeGet(vars['envData'], 'status');
-    return status !== undefined ? String(status) : 'null';
+    if (status === undefined || status === null) return 'null';
+    return typeof status === 'string' ? formatJsonStringFragment(status, escapeForRawJson) : String(status);
   }
   return null;
 }
@@ -88,7 +92,7 @@ function walkTemplateNode(node: unknown, integrationContext: unknown, vars: Reco
   if (typeof node === 'string') return substituteTemplateString(node, integrationContext, vars);
   if (Array.isArray(node)) return node.map((item) => walkTemplateNode(item, integrationContext, vars));
   if (node !== null && typeof node === 'object') {
-    const out: Record<string, unknown> = {};
+    const out = Object.create(null) as Record<string, unknown>;
     for (const [k, v] of Object.entries(node)) {
       out[k] = walkTemplateNode(v, integrationContext, vars);
     }

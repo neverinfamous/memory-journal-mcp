@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, healFragmentedQuotes } from '../command-utils.js';
+import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, extractLeadingShortFlags, healFragmentedQuotes, inspectCombinedShortFlag } from '../command-utils.js';
 import { unbundleSearchCommandArgs } from './search-flag-unpack.js';
 import { ExecutionContext } from './types.js';
 
@@ -23,15 +23,18 @@ function countRgNonValuePositionals(args: readonly string[]): { count: number; h
     if (arg === undefined) continue;
     if (!sawEndOfFlags && arg === '--') { sawEndOfFlags = true; continue; }
     if (!sawEndOfFlags && arg.startsWith('-')) {
+      const info = inspectCombinedShortFlag('rg', arg, RG_VALUE_FLAGS);
+      const sp = info.shortPrefix;
       if (
         arg === '-e' || (arg.startsWith('-e') && !arg.startsWith('--')) ||
         arg === '--regexp' || arg.startsWith('--regexp=') ||
         arg === '-f' || (arg.startsWith('-f') && !arg.startsWith('--')) ||
-        arg === '--file' || arg.startsWith('--file=')
+        arg === '--file' || arg.startsWith('--file=') ||
+        (sp.length > 1 && (sp.includes('e') || sp.includes('f')))
       ) {
         hasPatternFlag = true;
       }
-      if (RG_VALUE_FLAGS.has(arg) || arg === '-r') i++;
+      if (info.takesSeparateValue || arg === '-r') i++;
       continue;
     }
     count++;
@@ -89,10 +92,21 @@ function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped:
       cleaned.push(arg);
       continue;
     }
-    if (!/^-(?:t|T|e|f|g|E|m|M|A|B|C|j).+/.test(arg) && /^-[a-zA-Z0-9]+$/.test(arg) && (arg.includes('R') || arg.includes('r'))) {
+    const shortPrefix = extractLeadingShortFlags('rg', arg);
+    const hasAttachedOperand = shortPrefix.length < arg.length && !shortPrefix.endsWith('r') && !shortPrefix.endsWith('R');
+    const isRecursiveCluster = /^-[rRniIlLwFvcqHsSoxu]+$/.test(arg)
+      && arg !== '-r'
+      && !arg.endsWith('r')
+      && new Set(arg.slice(1)).size === arg.length - 1;
+    if (!hasAttachedOperand && /^-[a-zA-Z0-9]+$/.test(arg) && (shortPrefix.includes('R') || (shortPrefix.includes('r') && isRecursiveCluster))) {
       stripped = true;
       const withoutR = arg.replace(/[Rr]/g, '');
       if (withoutR !== '-') cleaned.push(withoutR);
+      continue;
+    }
+    if (arg.length === shortPrefix.length && shortPrefix.length > 1 && RG_VALUE_FLAGS.has(`-${shortPrefix[shortPrefix.length - 1]}`) && idx + 1 < args.length) {
+      cleaned.push(arg, args[idx + 1] ?? '');
+      idx++;
       continue;
     }
     cleaned.push(arg);
@@ -129,12 +143,40 @@ function translateExtendedRegex(args: string[], index: number): FlagStep {
   return { handled: false, convertedGlob: false, convertedExtReason: null, pushed: [], extra: 0 };
 }
 
+const GREP_E_CLUSTER_BOOL_RE = /^[rRniIlLwFvcqHsSoxuPU]+$/;
+
+/**
+ * [INTENT]: Split bundled grep-style `-E` clusters (`-nE`, `-En`, `-iEn`, `-EP`, `-EU`) into remaining flags while skipping real `--encoding` values.
+ */
+export function splitRgExtendedCluster(arg: string): { leadFlags: string; hadAttachedBoolSuffix: boolean } | null {
+  if (arg === '-E') return { leadFlags: '', hadAttachedBoolSuffix: false };
+  if (!arg.startsWith('-') || arg.startsWith('--')) return null;
+  const shortInfo = inspectCombinedShortFlag('rg', arg, RG_VALUE_FLAGS);
+  if (shortInfo.tailChar !== 'E') return null;
+  const prefixWithoutE = shortInfo.shortPrefix.slice(0, -1);
+  const afterE = arg.slice(shortInfo.shortPrefix.length);
+  if (afterE.length === 0) return { leadFlags: prefixWithoutE, hadAttachedBoolSuffix: false };
+  if (GREP_E_CLUSTER_BOOL_RE.test(afterE) && !isKnownRgEncoding(afterE)) {
+    return { leadFlags: `${prefixWithoutE}${afterE}`, hadAttachedBoolSuffix: true };
+  }
+  return null;
+}
+
 function translateGrepStyleArg(args: string[], index: number, arg: string): FlagStep {
   const untouched: FlagStep = { handled: false, convertedGlob: false, convertedExtReason: null, pushed: [], extra: 0 };
-  if (RG_VALUE_FLAGS.has(arg) && arg !== '-E' && index + 1 < args.length) {
+  const eSplit = splitRgExtendedCluster(arg);
+  if (eSplit !== null) {
+    const step = translateExtendedRegex(args, index);
+    return {
+      ...step,
+      handled: true,
+      pushed: eSplit.leadFlags.length > 0 ? [eSplit.leadFlags, ...step.pushed] : step.pushed,
+    };
+  }
+  const shortInfo = inspectCombinedShortFlag('rg', arg, RG_VALUE_FLAGS);
+  if (shortInfo.takesSeparateValue && arg !== '-E' && index + 1 < args.length) {
     return { handled: true, convertedGlob: false, convertedExtReason: null, pushed: [arg, args[index + 1] ?? ''], extra: 1 };
   }
-  if (arg === '-E') return translateExtendedRegex(args, index);
   if (arg === '--include' && index + 1 < args.length) {
     const nextArg = args[index + 1];
     if (nextArg === undefined) return untouched;

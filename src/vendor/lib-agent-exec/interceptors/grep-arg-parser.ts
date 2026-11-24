@@ -45,7 +45,7 @@ function normalizeBundledGrepParserArgs(args: string[]): string[] {
   for (const arg of args) {
     if (arg.startsWith('-') && arg.includes(' ')) {
       const tokens = tokenizeArgs(arg);
-      if (tokens.length > 1 && tokens[0] !== undefined && tokens[0].startsWith('-')) {
+      if (tokens.length > 1 && tokens[0] !== undefined && /^--?[a-zA-Z0-9-]+$/.test(tokens[0])) {
         normalizedArgs.push(...tokens);
         continue;
       }
@@ -57,13 +57,13 @@ function normalizeBundledGrepParserArgs(args: string[]): string[] {
 
 function isCaseInsensitiveFlag(arg: string, lower: string): boolean {
   if (lower === '-i' || lower === '-ri' || lower === '-ir' || lower === '--case-insensitive') return true;
-  return arg.length <= 5 && /^-[a-zA-Z]+$/.test(arg) && !arg.startsWith('--') && arg.includes('i');
+  return arg.length <= 5 && /^-[rnwivclLqhHsoEFGP]+$/.test(arg) && !arg.startsWith('--') && arg.includes('i');
 }
 
 function consumeRegexFlag(state: GrepScanState, args: string[], index: number, lower: string): number {
   state.isRegex = true;
   const nextArg = args[index + 1];
-  if (lower !== '--is-regex' && nextArg !== undefined && !nextArg.startsWith('-')) {
+  if (lower !== '--is-regex' && nextArg !== undefined && (lower === '-e' || lower === '--regexp' || !nextArg.startsWith('-'))) {
     state.pattern = nextArg;
     return index + 1;
   }
@@ -108,6 +108,11 @@ function consumeAmbiguousP(state: GrepScanState, args: string[], index: number):
   return index + 1;
 }
 
+function parseOptionalBoolFlagVal(val: string): boolean {
+  const normalized = val.trim().toLowerCase();
+  return normalized !== 'false' && normalized !== '0' && normalized !== 'no';
+}
+
 function applyGrepSearchFlag(state: GrepScanState, args: string[], index: number, arg: string): number {
   const eqIdx = arg.indexOf('=');
   if (eqIdx > 0 && arg.startsWith('-')) {
@@ -116,6 +121,18 @@ function applyGrepSearchFlag(state: GrepScanState, args: string[], index: number
     if (flagKey === '-e' || flagKey === '--regexp') {
       state.isRegex = true;
       state.pattern = flagVal;
+      return index;
+    }
+    if (flagKey === '--is-regex') {
+      state.isRegex = parseOptionalBoolFlagVal(flagVal);
+      return index;
+    }
+    if (flagKey === '--case-insensitive') {
+      state.isCaseInsensitive = parseOptionalBoolFlagVal(flagVal);
+      return index;
+    }
+    if (flagKey === '--word-regexp') {
+      state.isWord = parseOptionalBoolFlagVal(flagVal);
       return index;
     }
     if (GREP_PATTERN_VALUE_FLAGS.includes(flagKey)) {

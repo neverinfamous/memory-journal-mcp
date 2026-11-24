@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUTONOMOUS_HEALING_MSG, findEcosystemScript, resolveFreshCompiledCommitBundle } from '../utils.js';
-import { convertToWindowsPath } from '../command-utils.js';
+import { convertToWindowsPath, convertToWslPath } from '../command-utils.js';
 import type { ExecutionContext } from './types.js';
 
 const COMMIT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -17,9 +17,9 @@ const COMMIT_READONLY_FLAGS = new Set(['--dry-run', '--short', '--porcelain', '-
 const GIT_TOP_VALUE_FLAGS = new Set([
   '-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
 ]);
-const SHORT_MSG_CLUSTER_RE = /^-[asnqvoie]+m$/;
-const SHORT_ATTACHED_MSG_RE = /^-[asnqvoie]*m(.+)$/;
-const SHORT_VALUE_CLUSTER_RE = /^-[asnqvoie]+[FCct]$/;
+const SHORT_MSG_CLUSTER_RE = /^-[asnqvoiep]+m$/;
+const SHORT_ATTACHED_MSG_RE = /^-[asnqvoiep]*m(.+)$/;
+const SHORT_VALUE_CLUSTER_RE = /^-[asnqvoiep]+[FCct]$/;
 
 interface GitTopLevelPrefix {
   commitStartIdx: number;
@@ -30,11 +30,28 @@ interface GitTopLevelPrefix {
 interface ParsedGitCommitArgs {
   message: string | undefined;
   hasAmend: boolean;
+  hasAll: boolean;
+  hasMessageFile: boolean;
+  hasInteractiveOrPatch: boolean;
+  hasNonInteractiveMsgSource: boolean;
   isDryRun: boolean;
   hasPathspecFromFile: boolean;
   pathspecs: string[];
   gitDir: string | undefined;
   workTree: string | undefined;
+}
+
+const SHORT_ALL_CLUSTER_RE = /^-[snqvoiep]*a[snqvoiep]*$/;
+const SHORT_ALL_MSG_CLUSTER_RE = /^-[snqvoiep]*a[snqvoiep]*m/;
+const SHORT_FILE_CLUSTER_RE = /^-[asnqvoiep]*F/;
+const SHORT_PATCH_OR_INTERACTIVE_RE = /^-[asnqvoiep]*(?:p|i)[asnqvoiep]*(?:$|[FCctm])/;
+const COMMIT_REUSE_VALUE_FLAGS = new Set(['-C', '--reuse-message', '-c', '--reedit-message', '--fixup', '--squash']);
+const COMMIT_REUSE_EQ_RE = /^(?:--reuse-message|--reedit-message|--fixup|--squash)=/;
+
+function isPathspecFromFileFlag(arg: string): boolean {
+  const eqIdx = arg.indexOf('=');
+  const flagPart = eqIdx === -1 ? arg : arg.slice(0, eqIdx);
+  return flagPart.startsWith('--pathspec-fr') && '--pathspec-from-file'.startsWith(flagPart);
 }
 
 function parseGitTopLevelPrefix(args: readonly string[]): GitTopLevelPrefix {
@@ -71,11 +88,60 @@ function parseGitTopLevelPrefix(args: readonly string[]): GitTopLevelPrefix {
   return { commitStartIdx: 0, gitDir: undefined, workTree: undefined };
 }
 
+interface CommitParseState {
+  messages: string[];
+  pathspecs: string[];
+  hasAll: boolean;
+  hasNonInteractiveMsgSource: boolean;
+}
+
+function parseCommitMessageOrValueFlag(
+  arg: string,
+  args: readonly string[],
+  idx: number,
+  state: CommitParseState,
+): number {
+  if (arg === '-m' || arg === '--message' || arg === '-am' || SHORT_MSG_CLUSTER_RE.test(arg)) {
+    if (arg === '-am' || SHORT_ALL_MSG_CLUSTER_RE.test(arg)) state.hasAll = true;
+    const nextMsg = args[idx + 1];
+    if (nextMsg !== undefined) state.messages.push(nextMsg);
+    return idx + 1;
+  }
+  if (arg.startsWith('-am') && arg.length > 3) {
+    state.hasAll = true;
+    state.messages.push(arg.slice(3));
+    return idx;
+  }
+  if (arg.startsWith('--message=')) {
+    state.messages.push(arg.slice(10));
+    return idx;
+  }
+  if (!arg.startsWith('--')) {
+    if (SHORT_ALL_MSG_CLUSTER_RE.test(arg)) state.hasAll = true;
+    const attachedMatch = SHORT_ATTACHED_MSG_RE.exec(arg);
+    if (attachedMatch?.[1] !== undefined) {
+      state.messages.push(attachedMatch[1]);
+    } else if (COMMIT_VALUE_FLAGS.has(arg) || SHORT_VALUE_CLUSTER_RE.test(arg)) {
+      if (COMMIT_REUSE_VALUE_FLAGS.has(arg) || (!arg.startsWith('--') && /C$/.test(arg))) state.hasNonInteractiveMsgSource = true;
+      return idx + 1;
+    } else if (!arg.startsWith('-')) {
+      state.pathspecs.push(arg);
+    }
+    return idx;
+  }
+  if (COMMIT_VALUE_FLAGS.has(arg)) {
+    if (COMMIT_REUSE_VALUE_FLAGS.has(arg)) state.hasNonInteractiveMsgSource = true;
+    return idx + 1;
+  }
+  return idx;
+}
+
 function parseGitCommitArgs(args: readonly string[]): ParsedGitCommitArgs {
   const prefix = parseGitTopLevelPrefix(args);
-  const messages: string[] = [];
-  const pathspecs: string[] = [];
+  const state: CommitParseState = { messages: [], pathspecs: [], hasAll: false, hasNonInteractiveMsgSource: false };
   let hasAmend = false;
+  let hasMessageFile = false;
+  let hasInteractiveOrPatch = false;
   let isDryRun = false;
   let hasPathspecFromFile = false;
   let pastDoubleDash = false;
@@ -83,47 +149,51 @@ function parseGitCommitArgs(args: readonly string[]): ParsedGitCommitArgs {
     const arg = args[i];
     if (arg === undefined) continue;
     if (pastDoubleDash) {
-      pathspecs.push(arg);
+      state.pathspecs.push(arg);
       continue;
     }
     if (arg === '--') {
       pastDoubleDash = true;
-    } else if (arg === '--amend') {
+      continue;
+    }
+    if (arg === '-p' || arg === '--patch' || arg === '-i' || arg === '--interactive' || SHORT_PATCH_OR_INTERACTIVE_RE.test(arg)) {
+      hasInteractiveOrPatch = true;
+    }
+    if (arg.startsWith('--am') && '--amend'.startsWith(arg)) {
       hasAmend = true;
+    } else if (arg === '-p' || arg === '--patch' || arg === '-i' || arg === '--interactive') {
+      continue;
+    } else if (arg === '--all' || SHORT_ALL_CLUSTER_RE.test(arg)) {
+      state.hasAll = true;
     } else if (COMMIT_READONLY_FLAGS.has(arg)) {
       isDryRun = true;
-    } else if (arg === '--pathspec-from-file') {
+    } else if (arg.startsWith('--no-dry') && '--no-dry-run'.startsWith(arg)) {
+      isDryRun = false;
+    } else if (arg === '--no-edit' || COMMIT_REUSE_EQ_RE.test(arg)) {
+      state.hasNonInteractiveMsgSource = true;
+    } else if (isPathspecFromFileFlag(arg)) {
       hasPathspecFromFile = true;
-      i += 1;
-    } else if (arg.startsWith('--pathspec-from-file=')) {
-      hasPathspecFromFile = true;
-    } else if (arg === '-m' || arg === '--message' || arg === '-am' || arg === '-ma' || SHORT_MSG_CLUSTER_RE.test(arg)) {
-      const nextMsg = args[i + 1];
-      if (nextMsg !== undefined) messages.push(nextMsg);
-      i += 1;
-    } else if ((arg.startsWith('-am') || arg.startsWith('-ma')) && arg.length > 3) {
-      messages.push(arg.slice(3));
-    } else if (arg.startsWith('--message=')) {
-      messages.push(arg.slice(10));
-    } else if (!arg.startsWith('--')) {
-      const attachedMatch = SHORT_ATTACHED_MSG_RE.exec(arg);
-      if (attachedMatch?.[1] !== undefined) {
-        messages.push(attachedMatch[1]);
-      } else if (COMMIT_VALUE_FLAGS.has(arg) || SHORT_VALUE_CLUSTER_RE.test(arg)) {
-        i += 1;
-      } else if (!arg.startsWith('-')) {
-        pathspecs.push(arg);
-      }
-    } else if (COMMIT_VALUE_FLAGS.has(arg)) {
-      i += 1;
+      if (!arg.includes('=')) i += 1;
+    } else if (arg === '-F' || arg === '--file' || SHORT_FILE_CLUSTER_RE.test(arg)) {
+      hasMessageFile = true;
+      if (!arg.startsWith('--') && arg.slice(1, arg.indexOf('F')).includes('a')) state.hasAll = true;
+      if (arg.startsWith('--') || arg.length <= 2 || arg.indexOf('F') === arg.length - 1) i += 1;
+    } else if (arg.startsWith('--file=')) {
+      hasMessageFile = true;
+    } else {
+      i = parseCommitMessageOrValueFlag(arg, args, i, state);
     }
   }
   return {
-    message: messages.length > 0 ? messages.join('\n\n') : undefined,
+    message: state.messages.length > 0 ? state.messages.join('\n\n') : undefined,
     hasAmend,
+    hasAll: state.hasAll,
+    hasMessageFile,
+    hasInteractiveOrPatch,
+    hasNonInteractiveMsgSource: state.hasNonInteractiveMsgSource,
     isDryRun,
     hasPathspecFromFile,
-    pathspecs,
+    pathspecs: state.pathspecs,
     gitDir: prefix.gitDir,
     workTree: prefix.workTree,
   };
@@ -193,6 +263,7 @@ function isPosixStylePath(p: string): boolean {
 function resolvePrefixPath(baseDir: string, rawVal: string, isWsl2: boolean): string {
   if (isWsl2) {
     if (rawVal === '~' || rawVal.startsWith('~/')) return rawVal;
+    if (path.win32.isAbsolute(rawVal)) return path.posix.resolve(convertToWslPath(rawVal));
     if (rawVal.startsWith('/')) return path.posix.resolve(rawVal);
     if (baseDir === '~' || baseDir.startsWith('~/')) return path.posix.join(baseDir, rawVal);
     if (baseDir.startsWith('/')) return path.posix.resolve(baseDir, rawVal);
@@ -253,6 +324,7 @@ function applyCommitWrapper(
   explicitCwd: string | undefined,
   pathspecs: readonly string[],
   spawnCwd: string,
+  ignoredFlags: { hasAll: boolean; hasMessageFile: boolean },
 ): void {
   const compiledCommit = ctx.payload.target !== 'wsl2' ? resolveFreshCompiledCommitBundle(script, targetCwd) : null;
   const entryScript = compiledCommit ?? script;
@@ -269,7 +341,8 @@ function applyCommitWrapper(
   if (ctx.payload.timeoutMs !== 0 && (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < minTimeout)) {
     ctx.payload.timeoutMs = minTimeout;
   }
-  if (explicitCwd !== undefined || !isSameResolvedPath(targetCwd, spawnCwd) || !isSameResolvedPath(targetCwd, process.cwd())) {
+  const isWslTildeCwd = ctx.payload.target === 'wsl2' && (targetCwd === '~' || targetCwd.startsWith('~/'));
+  if (!isWslTildeCwd && (explicitCwd !== undefined || !isSameResolvedPath(targetCwd, spawnCwd) || !isSameResolvedPath(targetCwd, process.cwd()))) {
     ctx.args.push('--cwd', targetCwd);
   }
   if ('command' in ctx.payload) {
@@ -277,6 +350,12 @@ function applyCommitWrapper(
     ctx.payload.args = ctx.args;
   }
   console.error(`\n   💡 AGENT HINT: 'git commit' is intercepted for safety.`);
+  if (ignoredFlags.hasAll) {
+    console.error(`   ⚠️ AUTONOMOUS HEALING: '-a/--all' is not forwarded by commit.ts; pass explicit '--add <path>' flags if modified files need staging.`);
+  }
+  if (ignoredFlags.hasMessageFile) {
+    console.error(`   ⚠️ AUTONOMOUS HEALING: '-F/--file' is not forwarded when rewriting with '-m'; pass '--history-file <path>' or inline '--msg' directly to commit.ts.`);
+  }
   console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to '${script}' with default scores... (Frictionless Recovery)`);
 }
 
@@ -304,6 +383,11 @@ export function rewriteGitCommit(
     console.error(`   Because 'agent-exec.ts' requires strict tracking, this is blocked. Please create a new commit or bypass the interceptor if you must amend.`);
     process.exit(1);
   }
+  if (parsed.hasInteractiveOrPatch) {
+    console.error(`\n   💡 AGENT HINT: 'git commit -p'/'-i' (interactive patch commit) will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, interactive commit flags are blocked.`);
+    process.exit(1);
+  }
   if (parsed.hasPathspecFromFile && commitScript !== null) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: 'git commit --pathspec-from-file' is not supported by the commit.ts wrapper because reading pathspecs externally can omit or mis-stage files.`);
     console.error(`   Use '${commitScript}' with explicit '--add <path>' flags instead.`);
@@ -313,10 +397,19 @@ export function rewriteGitCommit(
     if (parsed.gitDir !== undefined) ctx.envOverrides['GIT_DIR'] = resolvePrefixPath(targetCwd, parsed.gitDir, isWsl2);
     if (effectiveWorkTree !== undefined) ctx.envOverrides['GIT_WORK_TREE'] = effectiveWorkTree;
     if (switchedToWorkTree) ctx.payload.cwd = effectiveTargetCwd;
-    applyCommitWrapper(ctx, commitScript, parsed.message, effectiveTargetCwd, effectiveExplicitCwd, parsed.pathspecs, nextSpawnCwd);
+    applyCommitWrapper(
+      ctx,
+      commitScript,
+      parsed.message,
+      effectiveTargetCwd,
+      effectiveExplicitCwd,
+      parsed.pathspecs,
+      nextSpawnCwd,
+      { hasAll: parsed.hasAll, hasMessageFile: parsed.hasMessageFile }
+    );
     return;
   }
-  if (parsed.message !== undefined) return;
+  if (commitScript === null && (parsed.message !== undefined || parsed.hasMessageFile || parsed.hasNonInteractiveMsgSource)) return;
   if (commitScript !== null) {
     console.error(`\n   💡 AGENT HINT: 'git commit' is strictly forbidden via the shell.\n${AUTONOMOUS_HEALING_MSG}`);
     console.error(`   You must use the designated wrapper instead: bun ${commitScript}`);

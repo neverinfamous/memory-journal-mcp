@@ -1,8 +1,53 @@
 // @ts-nocheck
+import fs from 'node:fs';
+import path from 'node:path';
 import { Writable } from 'node:stream';
 import { ExecPayload, JsonEnvelopeSchema } from './schema.js';
 import { renderWebhookTemplate } from './webhook-template.js';
-import { recordAgentIssue, validateWebhookUrl } from './utils.js';
+import { recordAgentIssue, redactTelemetryText, replaceIntegrationContext, resolveAndValidateWebhookUrl, validateWebhookUrl } from './utils.js';
+
+export function hasWebhookStream(payload: ExecPayload): boolean {
+  return [payload.stdoutFile, payload.stderrFile].some((f) => {
+    if (typeof f !== 'string') return false;
+    const expanded = replaceIntegrationContext(f, payload);
+    return /^https?:\/\//i.test(expanded);
+  });
+}
+
+export function createConfiguredOutputStream(
+  kind: 'STDOUT' | 'STDERR',
+  rawPath: string,
+  payload: ExecPayload,
+  cwd: string,
+  isJson: boolean,
+): fs.WriteStream | Writable | undefined {
+  const safeFileForLog = redactTelemetryText(rawPath);
+  try {
+    const expanded = replaceIntegrationContext(rawPath, payload);
+    let stream: fs.WriteStream | Writable;
+    if (/^https?:\/\//i.test(expanded)) {
+      if (validateWebhookUrl(expanded) === null) throw new Error('Invalid or unsafe webhook stream URL.');
+      stream = createWebhookStream(expanded, payload);
+    } else {
+      const outPath = path.resolve(cwd, expanded);
+      const dir = path.dirname(outPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      stream = fs.createWriteStream(outPath);
+    }
+    stream.on('error', (err) => {
+      if (isJson) recordAgentIssue('IO_STREAM_ERROR', `${kind} File Stream Error: ${err.message}`, payload, { file: safeFileForLog });
+      else console.error(`❌ ${kind} File Stream Error: ${err.message}. Agent execution will continue, but output capturing to file may be incomplete.`);
+      stream.destroy();
+    });
+    if (!isJson) console.error(`\n✅ ${kind} successfully streaming to ${redactTelemetryText(expanded)}`);
+    return stream;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (isJson) recordAgentIssue('IO_STREAM_ERROR', `${kind} File Setup Error: ${msg}`, payload, { file: safeFileForLog });
+    else console.error(`❌ ${kind} File Setup Error: ${msg}. Output will not be captured to file.`);
+    return undefined;
+  }
+}
 
 export const WEBHOOK_FLUSH_INTERVAL_MS = 100;
 export const TAIL_MAX_LENGTH = 2048;
@@ -132,7 +177,9 @@ function dispatchWebhookChunk(
   let bodyPayload: BodyInit = new Blob([new Uint8Array(data)]);
 
   if (payload.webhookPayloadTemplate) {
-    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    if (!Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
+      headers['Content-Type'] = 'application/json';
+    }
     const chunkStr = data.toString('utf8');
     bodyPayload = renderWebhookTemplate(
       payload.webhookPayloadTemplate,
@@ -141,30 +188,27 @@ function dispatchWebhookChunk(
     );
   }
   const fetchOptions: RequestInit = { method, headers, redirect: 'error' };
-  if (method !== 'GET') fetchOptions.body = bodyPayload;
+  if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') fetchOptions.body = bodyPayload;
   const timeoutMs = payload.webhookTimeoutMs ?? 5000;
   if (timeoutMs > 0) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
 
-  const validated = validateWebhookUrl(filePath);
-  if (validated === null) {
-    recordAgentIssue('WEBHOOK_DELIVERY_FAILED', 'Invalid or unsafe webhook stream URL', payload, { targetUrl: filePath, method });
-    return Promise.resolve();
-  }
-  const req = fetch(validated.href, fetchOptions)
-    .then(async (res) => {
-      const body = await res.arrayBuffer();
-      if (!res.ok) {
-        recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream returned HTTP ${res.status}`, payload, { targetUrl: filePath, method });
-      }
-      return body;
-    })
-    .then(() => {})
-    .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream request failed: ${msg}`, payload, { targetUrl: filePath, method });
-    });
+  const req = (async (): Promise<void> => {
+    const validated = await resolveAndValidateWebhookUrl(filePath);
+    if (validated === null) {
+      recordAgentIssue('WEBHOOK_DELIVERY_FAILED', 'Invalid or unsafe webhook stream URL', payload, { targetUrl: filePath, method });
+      return;
+    }
+    const res = await fetch(validated.href, fetchOptions);
+    await res.arrayBuffer();
+    if (!res.ok) {
+      recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream returned HTTP ${res.status}`, payload, { targetUrl: filePath, method });
+    }
+  })().catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream request failed: ${msg}`, payload, { targetUrl: filePath, method });
+  });
   inFlightReqs.add(req);
-  req.finally(() => inFlightReqs.delete(req));
+  void req.finally(() => inFlightReqs.delete(req));
   return req;
 }
 

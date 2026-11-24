@@ -1,6 +1,8 @@
 // @ts-nocheck
+import fs from 'node:fs';
 import path from 'node:path';
 import { hasBalancedWrappingQuotes } from './regex-healer.js';
+import { BUILT_INS } from './utils.js';
 import {
   FLAGS_WITH_ARG_BY_TOOL,
   convertToWslPath,
@@ -8,8 +10,10 @@ import {
   findPatternExprIndex,
   hasSearchFixedStringsFlag,
   hasSearchPcre2Flag,
-  extractLeadingShortFlags,
+  inspectCombinedShortFlag,
   buildWslEnvArgs,
+  buildPwshWrapper,
+  escapeUnixArg,
   isPwsh,
   isCmd,
 } from './command-utils.js';
@@ -24,11 +28,11 @@ const WSL_PATTERN_VALUE_FLAGS: Readonly<Record<string, ReadonlySet<string>>> = {
   grep: new Set(['-e', '--regexp']),
   egrep: new Set(['-e', '--regexp']),
   fgrep: new Set(['-e', '--regexp']),
-  rg: new Set(['-e', '--regexp']),
+  rg: new Set(['-e', '--regexp', '-r', '--replace', '--path-separator', '--context-separator', '--field-context-separator', '--field-match-separator']),
   find: new Set(['-name', '-iname', '-path', '-ipath', '-wholename', '-iwholename', '-regex', '-iregex']),
 };
 const JQ_TWO_VALUE_EXEMPT_FLAGS = new Set(['--arg', '--argjson']);
-const JQ_ONE_VALUE_EXEMPT_FLAGS = new Set(['--rawfile', '--slurpfile']);
+const JQ_ONE_VALUE_EXEMPT_FLAGS = new Set(['--rawfile', '--slurpfile', '--argfile']);
 
 export function collectWslPathExemptIndices(cmd: string, args: readonly string[]): Set<number> {
   const exempt = new Set<number>();
@@ -36,6 +40,7 @@ export function collectWslPathExemptIndices(cmd: string, args: readonly string[]
   if (patternIdx !== -1) exempt.add(patternIdx);
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
   const valueFlags = Object.hasOwn(WSL_PATTERN_VALUE_FLAGS, base) ? WSL_PATTERN_VALUE_FLAGS[base] : undefined;
+  const toolValueFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, base) ? FLAGS_WITH_ARG_BY_TOOL[base] : undefined;
   const isJq = base === 'jq' || base === 'yq';
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -51,8 +56,14 @@ export function collectWslPathExemptIndices(cmd: string, args: readonly string[]
       i += 2;
       continue;
     }
-    if (valueFlags !== undefined && valueFlags.has(a) && i + 1 < args.length) {
+    const shortInfo = inspectCombinedShortFlag(base, a, toolValueFlags);
+    const tailFlag = shortInfo.tailChar.length > 0 ? `-${shortInfo.tailChar}` : '';
+    const isPatternValue = (valueFlags !== undefined && (valueFlags.has(a) || (shortInfo.takesSeparateValue && tailFlag.length > 0 && valueFlags.has(tailFlag))))
+      || (base === 'rg' && shortInfo.takesSeparateValue && ['e', 'r', 'g'].includes(shortInfo.tailChar));
+    if (isPatternValue && i + 1 < args.length) {
       exempt.add(i + 1);
+      i += 1;
+    } else if (shortInfo.takesSeparateValue && i + 1 < args.length) {
       i += 1;
     }
   }
@@ -87,14 +98,14 @@ function hasAnyGrepExplicitMatcherFlag(cmd: string, args: readonly string[]): bo
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
-    if (valueFlags !== undefined && valueFlags.includes(a)) { i++; continue; }
+    const shortInfo = inspectCombinedShortFlag(base, a, valueFlags);
     if (['-E', '--extended-regexp', '-G', '--basic-regexp', '-P', '--perl-regexp', '-F', '--fixed-strings'].includes(a)) {
       return true;
     }
-    const head = extractLeadingShortFlags(base, a);
-    if (head.startsWith('-') && !head.startsWith('--') && /^-[a-zA-Z]*[EGPF][a-zA-Z]*$/.test(head)) {
+    if (shortInfo.shortPrefix.length > 1 && /^-[a-zA-Z]*[EGPF][a-zA-Z]*$/.test(shortInfo.shortPrefix)) {
       return true;
     }
+    if (shortInfo.takesSeparateValue) i++;
   }
   return false;
 }
@@ -105,10 +116,10 @@ function hasGrepBasicRegexpFlag(cmd: string, args: readonly string[]): boolean {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
-    if (valueFlags !== undefined && valueFlags.includes(a)) { i++; continue; }
+    const shortInfo = inspectCombinedShortFlag(base, a, valueFlags);
     if (a === '-G' || a === '--basic-regexp') return true;
-    const head = extractLeadingShortFlags(base, a);
-    if (head.startsWith('-') && !head.startsWith('--') && /^-[a-zA-Z]*G[a-zA-Z]*$/.test(head)) return true;
+    if (shortInfo.shortPrefix.length > 1 && /^-[a-zA-Z]*G[a-zA-Z]*$/.test(shortInfo.shortPrefix)) return true;
+    if (shortInfo.takesSeparateValue) i++;
   }
   return false;
 }
@@ -117,23 +128,24 @@ function switchGrepMatcherToPcre2(cmd: string, args: string[]): boolean {
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
   const valueFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, base) ? FLAGS_WITH_ARG_BY_TOOL[base] : undefined;
   let switched = false;
+  let hasPcre2 = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
-    if (valueFlags !== undefined && valueFlags.includes(a)) { i++; continue; }
-    const head = extractLeadingShortFlags(base, a);
-    if (a === '-P' || a === '--perl-regexp' || (head.startsWith('-') && !head.startsWith('--') && /^-[a-zA-Z]*P[a-zA-Z]*$/.test(head))) {
-      return false;
-    }
-    if (a === '-E' || a === '--extended-regexp') {
+    const shortInfo = inspectCombinedShortFlag(base, a, valueFlags);
+    const head = shortInfo.shortPrefix;
+    if (a === '-P' || a === '--perl-regexp' || (head.length > 1 && /^-[a-zA-Z]*P[a-zA-Z]*$/.test(head))) {
+      hasPcre2 = true;
+    } else if (a === '-E' || a === '--extended-regexp') {
       args[i] = '-P';
       switched = true;
-    } else if (head.startsWith('-') && !head.startsWith('--') && /^-[a-zA-Z]*E[a-zA-Z]*$/.test(head)) {
+    } else if (head.length > 1 && /^-[a-zA-Z]*E[a-zA-Z]*$/.test(head)) {
       args[i] = head.replace(/E/g, 'P') + a.slice(head.length);
       switched = true;
     }
+    if (shortInfo.takesSeparateValue) i++;
   }
-  if (!switched) {
+  if (!switched && !hasPcre2) {
     args.unshift('-P');
     return true;
   }
@@ -143,6 +155,9 @@ function switchGrepMatcherToPcre2(cmd: string, args: string[]): boolean {
 function escapeWslRegexLineEndings(localCmd: string, localArgs: string[], patternIdx: number): string {
   const base = path.basename(localCmd).toLowerCase();
   if (patternIdx === -1 || hasSearchFixedStringsFlag(localCmd, localArgs) || base === 'fgrep') {
+    return localCmd;
+  }
+  if (GREP_BASENAMES.has(base) && hasGrepBasicRegexpFlag(localCmd, localArgs)) {
     return localCmd;
   }
   const originalPattern = localArgs[patternIdx];
@@ -190,7 +205,13 @@ export function findWslShellInlineScriptIndex(cmdName: string, cmdArgs: readonly
   for (let i = 0; i < cmdArgs.length; i++) {
     const a = cmdArgs[i];
     if (a === undefined || a === '--') break;
-    if (a === '-o' || a === '+o') { i += 1; continue; }
+    if (!a.startsWith('--') && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(a)) {
+      if (a.startsWith('-') && a.slice(1).includes('c')) {
+        return i + 2 < cmdArgs.length ? i + 2 : -1;
+      }
+      i += 1;
+      continue;
+    }
     if (a === '-c' || (/^-[a-zA-Z]+$/.test(a) && a.includes('c'))) {
       return i + 1 < cmdArgs.length ? i + 1 : -1;
     }
@@ -221,15 +242,103 @@ export function normalizeWslCommandArgs(cmd: string, args: string[]): { cmd: str
 
   let finalCmd = wslCmd;
   const lowerCmd = wslCmd.toLowerCase();
-  if (lowerCmd === 'diff' || lowerCmd === 'diff.exe') {
+  const baseCmd = path.basename(lowerCmd);
+  if (baseCmd === 'diff' || baseCmd === 'diff.exe') {
     if (!wslArgs.includes('--strip-trailing-cr')) {
       wslArgs.unshift('--strip-trailing-cr');
     }
-  } else if (SEARCH_BASENAMES.has(path.basename(lowerCmd))) {
+  } else if (SEARCH_BASENAMES.has(baseCmd)) {
     finalCmd = escapeWslRegexLineEndings(wslCmd, wslArgs, patternExprIdx);
   }
 
   return { cmd: finalCmd, args: wslArgs };
+}
+
+const SHELL_OPERATORS = ['&&', '||', '|', '|&', '>', '>>', '<', '<<', '<<<', ';', '2>', '1>', '2>&1', '&'];
+const SHELL_OPERATORS_SET = new Set(SHELL_OPERATORS);
+const SHELL_OP_VALUE_FLAGS = new Set([
+  '-d', '--delimiter', '-e', '-f', '-F', '-t', '--field-separator',
+  '-m', '--message', '--msg', '-b', '--body', '--title',
+]);
+
+function matchAttachedRedirection(trimmed: string): RegExpMatchArray | null {
+  const m = trimmed.match(/^([0-9]?>>?|[0-9]?<)(.+)$/);
+  if (m === null || m[1] === undefined || m[2] === undefined) return null;
+  const target = m[2];
+  if (target.startsWith('=') || target.startsWith('<') || target.startsWith('>') || target.includes('>')) return null;
+  if ((m[1] === '>' || m[1] === '<') && /^\d+\.\d+(?:\.\d+)*(?:-[A-Za-z0-9.]+)?$/.test(target)) return null;
+  return m;
+}
+
+function isShellWrapExemptArg(
+  idx: number,
+  trimmed: string,
+  localBase: string,
+  localArgs: readonly string[],
+  exemptIndices: ReadonlySet<number>,
+): boolean {
+  if (exemptIndices.has(idx)) return true;
+  const prev = idx > 0 ? localArgs[idx - 1] : undefined;
+  if (prev !== undefined && SHELL_OP_VALUE_FLAGS.has(prev)) return true;
+  return localBase === 'find'
+    && trimmed === ';'
+    && localArgs.slice(0, idx).some(x => x === '-exec' || x === '-execdir' || x === '-ok' || x === '-okdir');
+}
+
+export function wrapBuiltinOrShellCommand(
+  localCmd: string,
+  localArgs: string[],
+  target: ExecPayload['target'],
+): { cmd: string; args: string[] } {
+  const localBase = path.basename(localCmd).toLowerCase().replace(/\.exe$/, '');
+  if (findWslShellInlineScriptIndex(localCmd, localArgs) !== -1) return { cmd: localCmd, args: localArgs };
+  const exemptIndices = collectWslPathExemptIndices(localCmd, localArgs);
+  const hasHardShellMeta = /[|&;<>$`{}\r\n]/.test(localCmd);
+  const isRootedPath = /^(?:\/|[a-zA-Z]:[\\/])/.test(localCmd);
+  const hasParenCmdMeta = /[()]/.test(localCmd) && !(isRootedPath && !hasHardShellMeta);
+  const isPlainSpacedPath = localCmd.includes(' ') && !hasHardShellMeta && !hasParenCmdMeta
+    && (isRootedPath || fs.existsSync(localCmd));
+  const hasCmdMeta = hasHardShellMeta || hasParenCmdMeta || (localCmd.includes(' ') && !isPlainSpacedPath);
+  const hasArgMeta = localArgs.some((a, idx) => {
+    const trimmed = a.trim();
+    if (isShellWrapExemptArg(idx, trimmed, localBase, localArgs, exemptIndices)) return false;
+    return SHELL_OPERATORS_SET.has(trimmed) || matchAttachedRedirection(trimmed) !== null;
+  });
+  if (!BUILT_INS.includes(localCmd.toLowerCase()) && !(target === 'wsl2' && (hasCmdMeta || hasArgMeta))) {
+    return { cmd: localCmd, args: localArgs };
+  }
+  console.error(`\n   💡 AGENT HINT: '${localCmd}' is a shell built-in or contains shell metacharacters.`);
+  console.error(`   🛠️ AUTONOMOUS HEALING: Automatically routing through system shell to prevent execution failure...`);
+  if (process.platform === 'win32' && target !== 'wsl2') return buildPwshWrapper(localCmd, localArgs);
+  const isCompoundCmd = /[|&;<>]/.test(localCmd) || (!isPlainSpacedPath && localCmd.includes(' '));
+  const renderedArgs = localArgs.map((a, idx) => {
+    const trimmed = a.trim();
+    const skipOp = isShellWrapExemptArg(idx, trimmed, localBase, localArgs, exemptIndices);
+    if (!skipOp && SHELL_OPERATORS_SET.has(trimmed)) return trimmed;
+    const redir = !skipOp ? matchAttachedRedirection(trimmed) : null;
+    if (redir?.[1] !== undefined && redir[2] !== undefined) {
+      return /^&(?:\d+|-)$/.test(redir[2]) ? trimmed : `${redir[1]}${escapeUnixArg(redir[2], false)}`;
+    }
+    return escapeUnixArg(a, false);
+  });
+  return { cmd: 'sh', args: ['-c', [isCompoundCmd ? localCmd : escapeUnixArg(localCmd, false), ...renderedArgs].join(' ')] };
+}
+
+function findEmbeddedShellInlineIdx(cmdBase: string, args: readonly string[]): number {
+  const isCmdShell = isCmd(cmdBase);
+  for (let i = 0; i < args.length; i++) {
+    const low = (args[i] ?? '').toLowerCase();
+    if (low === '--') return -1;
+    if (isCmdShell) {
+      if (low === '/k') return -1;
+      if (low === '/c') return i;
+      continue;
+    }
+    const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
+    if (head === '-file' || head === '-f' || head === '-encodedcommand' || head === '-ec' || head === '-en') return -1;
+    if (head === '-c' || head === '-command') return i;
+  }
+  return -1;
 }
 
 export function wrapFinalWslCommand(
@@ -240,11 +349,16 @@ export function wrapFinalWslCommand(
   envOverrides: Record<string, string>,
   tempScriptPath: string | null,
 ): { cmd: string; args: string[] } {
-  const isPosixInternalCwd = payload.cwd !== undefined && typeof payload.cwd === 'string' &&
-    (payload.cwd.startsWith('/') || payload.cwd.startsWith('~'));
-  const wslCwd = isPosixInternalCwd
-    ? (payload.cwd ?? cwd)
-    : convertToWslPath(payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : cwd);
+  const trimmedPayloadCwd = typeof payload.cwd === 'string' ? payload.cwd.trim().replace(/^['"]|['"]$/g, '').trim() : undefined;
+  const isPosixInternalCwd = trimmedPayloadCwd !== undefined &&
+    (trimmedPayloadCwd.startsWith('/') || trimmedPayloadCwd.startsWith('~'));
+  const isTildeSubdir = isPosixInternalCwd && trimmedPayloadCwd.startsWith('~/') && trimmedPayloadCwd.length > 2;
+  const resolvedHostCwd = trimmedPayloadCwd !== undefined && trimmedPayloadCwd.length > 0
+    ? path.resolve(cwd, trimmedPayloadCwd)
+    : cwd;
+  const wslCwd = isTildeSubdir
+    ? '~'
+    : (isPosixInternalCwd ? (trimmedPayloadCwd ?? cwd) : convertToWslPath(resolvedHostCwd));
 
   const wslEnvArgs = buildWslEnvArgs(payload.env, envOverrides);
   const exempt = collectWslPathExemptIndices(path.basename(cmd), args);
@@ -254,19 +368,56 @@ export function wrapFinalWslCommand(
     : args.map((arg, idx) => (exempt.has(idx) ? arg : convertToWslPath(arg)));
 
   let wslCmd = cmd;
+  const wslCmdBase = path.posix.basename(wslCmd.replace(/\\/g, '/')).toLowerCase();
   if (/[a-zA-Z]:[/\\]/.test(wslCmd)) {
     wslCmd = convertToWslPath(wslCmd);
-  } else if (wslCmd === 'python') {
-    wslCmd = 'python3';
-  } else if (isPwsh(wslCmd) || isCmd(wslCmd)) {
-    wslCmd = 'bash';
+  } else if (/^python(?:\.exe)?$/i.test(wslCmdBase)) {
+    wslCmd = wslCmd.includes('/') || wslCmd.includes('\\')
+      ? `${wslCmd.slice(0, wslCmd.length - wslCmdBase.length)}python3`
+      : 'python3';
+  } else if (isPwsh(wslCmdBase) || isCmd(wslCmdBase)) {
     if (tempScriptPath !== null && tempScriptPath.length > 0) {
-      wslArgs = [convertToWslPath(tempScriptPath)];
+      wslCmd = 'bash';
+      const trailingScriptArgs = payload.type === 'script' && Array.isArray(payload.args)
+        ? payload.args.map(a => convertToWslPath(a))
+        : [];
+      wslArgs = [convertToWslPath(tempScriptPath), ...trailingScriptArgs];
+    } else {
+      const inlineIdx = findEmbeddedShellInlineIdx(wslCmdBase, wslArgs);
+      if (inlineIdx !== -1 && inlineIdx + 1 < wslArgs.length) {
+        wslCmd = 'bash';
+        wslArgs = ['-c', wslArgs.slice(inlineIdx + 1).join(' ')];
+      }
     }
   }
 
+  const tildeScriptPath = payload.type === 'script' && tempScriptPath === null && payload.scriptPath.startsWith('~/')
+    ? payload.scriptPath
+    : undefined;
+  const tildeScriptIdx = tildeScriptPath !== undefined ? wslArgs.indexOf(tildeScriptPath) : -1;
+  const innerArgs: string[] = tildeScriptPath !== undefined && tildeScriptIdx !== -1
+    ? (tildeScriptIdx === 0
+      ? ['sh', '-c', 'c="$1"; s="$HOME/$2"; shift 2; exec "$c" "$s" "$@"', '_', wslCmd, tildeScriptPath.slice(2), ...wslArgs.slice(1)]
+      : [
+          'sh',
+          '-c',
+          'n="$1"; m="$2"; s="$HOME/$3"; shift 3; while [ "$n" -gt 0 ]; do set -- "$@" "$1"; shift; n=$((n - 1)); done; set -- "$@" "$s"; while [ "$m" -gt 0 ]; do set -- "$@" "$1"; shift; m=$((m - 1)); done; exec "$@"',
+          '_',
+          String(tildeScriptIdx + 1),
+          String(wslArgs.length - tildeScriptIdx - 1),
+          tildeScriptPath.slice(2),
+          wslCmd,
+          ...wslArgs.slice(0, tildeScriptIdx),
+          ...wslArgs.slice(tildeScriptIdx + 1),
+        ])
+    : [wslCmd, ...wslArgs];
+
+  const execArgs = isTildeSubdir
+    ? ['sh', '-c', 'cd -- "$1" && shift && exec "$@"', '_', trimmedPayloadCwd.slice(2), 'env', ...wslEnvArgs, ...innerArgs]
+    : ['env', ...wslEnvArgs, ...innerArgs];
+
   return {
     cmd: 'wsl.exe',
-    args: ['--cd', wslCwd, '-e', 'env', ...wslEnvArgs, wslCmd, ...wslArgs],
+    args: ['--cd', wslCwd, '-e', ...execArgs],
   };
 }

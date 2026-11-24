@@ -12,13 +12,13 @@ import {
   replTuiInterceptor,
   systemInterceptor,
 } from './interceptors/index.js';
-import { replaceIntegrationContext, BUILT_INS, emitInterceptBanner, recordAgentIssue } from './utils.js';
+import { BUILT_INS, replaceIntegrationContext, emitInterceptBanner, recordAgentIssue } from './utils.js';
 import { DEFAULT_ENV_VARS, IMMUTABLE_ENV_OVERRIDES } from './environment.js';
 import {
   isCmd,
   buildPwshWrapper,
   applyTemplateOverride,
-  escapeUnixArg,
+  convertToWindowsPath,
   formatForCmdExe,
   sanitizeWslRegex,
   resolveWindowsCommand,
@@ -27,8 +27,8 @@ import {
   hasSearchPcre2Flag,
   handleWindowsUnixCommandWrappers,
 } from './command-utils.js';
-import { buildEvalPayload, buildScriptPayload } from './command-payload-builders.js';
-import { collectArgJsonValueIndices, collectWslPathExemptIndices, findWslShellInlineScriptIndex, normalizeWslCommandArgs, wrapFinalWslCommand } from './wsl-command-wrapper.js';
+import { buildEvalPayload, buildScriptPayload, rejectUnsafePosixPipes } from './command-payload-builders.js';
+import { collectArgJsonValueIndices, findWslShellInlineScriptIndex, normalizeWslCommandArgs, wrapBuiltinOrShellCommand, wrapFinalWslCommand } from './wsl-command-wrapper.js';
 
 export const customInterceptors: Array<(ctx: ExecutionContext) => void> = [];
 
@@ -78,25 +78,10 @@ function expandIntegrationTemplates(
   }
 }
 
-function rejectUnsafePosixPipes(payload: ExecPayload, isJson: boolean, exitWithError: (message: string) => never): void {
-  if (process.platform !== 'win32' || payload.target === 'wsl2') return;
-  const hasPipeCommand = payload.type === 'command' && (
-    payload.command.includes(' && ') || payload.command.includes(' || ') ||
-    payload.command.includes(' | ') || payload.command.includes(' > ')
-  );
-  const hasPipeArg = payload.args?.some(a => ['&&', '||', '|', '>'].includes(a.trim())) === true;
-  if (!hasPipeCommand && !hasPipeArg) return;
-  recordAgentIssue('POSIX_PIPES_IN_POWERSHELL', 'Native PowerShell does NOT support && or ||', { payload });
-  if (isJson) {
-    exitWithError(`Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.`);
-  }
-  console.error(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.\x1b[0m`);
-  process.exit(1);
-}
-
 function splitEmbeddedCommandTokens(payload: ExecPayload, cwd: string): void {
   if (payload.type !== 'command') return;
   const c = payload.command.trim();
+  if (c !== payload.command) payload.command = c;
   const doubleQuoteMatch = c.match(/^"([^"]+)"(?:\s+(.*))?$/);
   const singleQuoteMatch = c.match(/^'([^']+)'(?:\s+(.*))?$/);
   const quoted = doubleQuoteMatch ?? singleQuoteMatch;
@@ -105,87 +90,14 @@ function splitEmbeddedCommandTokens(payload: ExecPayload, cwd: string): void {
     if (quoted[2]) payload.args = [...tokenizeCommandLine(quoted[2]), ...(payload.args ?? [])];
     return;
   }
-  if (c.includes(' ') && !fs.existsSync(c) && !fs.existsSync(path.resolve(cwd, c))) {
+  const cmdProbe = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(c) ? convertToWindowsPath(c) : c;
+  if (c.includes(' ') && !fs.existsSync(c) && !fs.existsSync(cmdProbe) && !fs.existsSync(path.resolve(cwd, c))) {
     const tokens = tokenizeCommandLine(c);
     if (tokens.length > 1 && tokens[0] !== undefined) {
       payload.command = tokens[0];
       payload.args = [...tokens.slice(1), ...(payload.args ?? [])];
     }
   }
-}
-
-const SHELL_OPERATORS = ['&&', '||', '|', '|&', '>', '>>', '<', '<<', '<<<', ';', '2>', '1>', '2>&1', '&'];
-const SHELL_OPERATORS_SET = new Set(SHELL_OPERATORS);
-const SHELL_OP_VALUE_FLAGS = new Set(['-d', '--delimiter', '-e', '-f', '-F', '-t', '--field-separator']);
-
-function matchAttachedRedirection(trimmed: string): RegExpMatchArray | null {
-  const m = trimmed.match(/^([0-9]?>>?|[0-9]?<)(.+)$/);
-  if (m === null || m[1] === undefined || m[2] === undefined) return null;
-  const target = m[2];
-  if (target.startsWith('=') || target.startsWith('<') || target.startsWith('>') || target.includes('>')) {
-    return null;
-  }
-  if ((m[1] === '>' || m[1] === '<') && /^\d+\.\d+(?:\.\d+)*(?:-[A-Za-z0-9.]+)?$/.test(target)) {
-    return null;
-  }
-  return m;
-}
-
-function isShellWrapExemptArg(
-  idx: number,
-  trimmed: string,
-  localBase: string,
-  localArgs: readonly string[],
-  exemptIndices: ReadonlySet<number>,
-): boolean {
-  if (exemptIndices.has(idx)) return true;
-  const prev = idx > 0 ? localArgs[idx - 1] : undefined;
-  if (prev !== undefined && SHELL_OP_VALUE_FLAGS.has(prev)) return true;
-  return localBase === 'find'
-    && trimmed === ';'
-    && localArgs.slice(0, idx).some(x => x === '-exec' || x === '-execdir' || x === '-ok' || x === '-okdir');
-}
-
-function wrapBuiltinOrShellCommand(
-  localCmd: string,
-  localArgs: string[],
-  target: ExecPayload['target'],
-): { cmd: string; args: string[] } {
-  const localBase = path.basename(localCmd).toLowerCase().replace(/\.exe$/, '');
-  if (findWslShellInlineScriptIndex(localCmd, localArgs) !== -1) {
-    return { cmd: localCmd, args: localArgs };
-  }
-  const exemptIndices = collectWslPathExemptIndices(localCmd, localArgs);
-  const hasCmdMeta = /[|&;<>$`{}()]/.test(localCmd) || localCmd.includes(' ');
-  const hasArgMeta = localArgs.some((a, idx) => {
-    const trimmed = a.trim();
-    if (isShellWrapExemptArg(idx, trimmed, localBase, localArgs, exemptIndices)) return false;
-    return SHELL_OPERATORS_SET.has(trimmed) || matchAttachedRedirection(trimmed) !== null;
-  });
-  const hasShellMeta = hasCmdMeta || hasArgMeta;
-  if (!BUILT_INS.includes(localCmd.toLowerCase()) && !(target === 'wsl2' && hasShellMeta)) {
-    return { cmd: localCmd, args: localArgs };
-  }
-  console.error(`\n   💡 AGENT HINT: '${localCmd}' is a shell built-in or contains shell metacharacters.`);
-  console.error(`   🛠️ AUTONOMOUS HEALING: Automatically routing through system shell to prevent execution failure...`);
-  if (process.platform === 'win32' && target !== 'wsl2') {
-    return buildPwshWrapper(localCmd, localArgs);
-  }
-  const isCompoundCmd = /\s+(?:&&|\|\||\|)\s+/.test(localCmd);
-  const originalCmd = [
-    isCompoundCmd ? localCmd : escapeUnixArg(localCmd, false),
-    ...localArgs.map((a, idx) => {
-      const trimmed = a.trim();
-      const skipOp = isShellWrapExemptArg(idx, trimmed, localBase, localArgs, exemptIndices);
-      if (!skipOp && SHELL_OPERATORS_SET.has(trimmed)) return trimmed;
-      const redir = !skipOp ? matchAttachedRedirection(trimmed) : null;
-      if (redir?.[1] !== undefined && redir[2] !== undefined) {
-        return /^&(?:\d+|-)$/.test(redir[2]) ? trimmed : `${redir[1]}${escapeUnixArg(redir[2], false)}`;
-      }
-      return escapeUnixArg(a, false);
-    }),
-  ].join(' ');
-  return { cmd: 'sh', args: ['-c', originalCmd] };
 }
 
 function buildDirectCommandPayload(
@@ -248,7 +160,7 @@ function runCommandInterceptors(
   for (const interceptor of customInterceptors) interceptor(ctx);
 }
 
-function stripRedundantArgQuotes(cmd: string, args: string[]): string[] {
+function stripRedundantArgQuotes(cmd: string, args: string[], payload?: ExecPayload): string[] {
   const exemptArgJson = collectArgJsonValueIndices(cmd, args);
   const inlineScriptIdx = findWslShellInlineScriptIndex(cmd, args);
   let stripped = false;
@@ -262,7 +174,7 @@ function stripRedundantArgQuotes(cmd: string, args: string[]): string[] {
     return arg;
   });
   if (stripped) {
-    recordAgentIssue('UNNECESSARY_QUOTES', 'Arguments wrapped in quotes were detected', { args });
+    recordAgentIssue('UNNECESSARY_QUOTES', 'Arguments wrapped in quotes were detected', payload ?? { args });
     console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.`);
     console.error(`   Because 'shell: false' is used, quotes are NOT needed for spaces. Auto-healing by stripping wrapping quotes...`);
   }
@@ -298,6 +210,75 @@ interface FinalizedCommandParams {
   envOverrides: Record<string, string>;
   callerBypassedInterceptors: boolean;
   initialInterceptedBase: string;
+  evalInterpreterDefaulted: boolean;
+}
+
+function applyPlatformAndBatchWraps(
+  cmdIn: string,
+  argsIn: string[],
+  payload: ExecPayload,
+  cwd: string,
+  envOverrides: Record<string, string>,
+  tempScriptPath: string | null,
+  callerBypassedInterceptors: boolean,
+): { cmd: string; args: string[] } {
+  let cmd = cmdIn;
+  let args = argsIn;
+  if (payload.type === 'command' && !payload.templateOverride) {
+    const shellWrapped = wrapBuiltinOrShellCommand(cmd, args, payload.target);
+    cmd = shellWrapped.cmd;
+    args = shellWrapped.args;
+  }
+  if (!callerBypassedInterceptors && !payload.templateOverride) {
+    args = stripRedundantArgQuotes(cmd, args, payload);
+  }
+  if (payload.target !== 'wsl2' && isCmd(path.basename(cmd)) && args[0]?.toLowerCase() === '/c') args = formatForCmdExe(args);
+  if (payload.target !== 'wsl2') {
+    const lowerCmd = cmd.toLowerCase();
+    const isWinBatch = lowerCmd.endsWith('.bat') || lowerCmd.endsWith('.cmd') || lowerCmd.endsWith('.ps1') ||
+      (process.platform === 'win32' && ['pnpm', 'npm', 'yarn', 'npx', 'pnpx'].includes(lowerCmd));
+    if (isWinBatch) {
+      emitInterceptBanner(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
+      const pwshWrapped = buildPwshWrapper(cmd, args);
+      cmd = pwshWrapped.cmd;
+      args = pwshWrapped.args;
+    }
+  }
+  if (payload.target === 'wsl2') {
+    const wslWrapped = wrapFinalWslCommand(cmd, args, payload, cwd, envOverrides, tempScriptPath);
+    cmd = wslWrapped.cmd;
+    args = wslWrapped.args;
+  }
+  return { cmd, args };
+}
+
+const NESTED_RUNNER_VALUE_FLAGS = new Set([
+  '--cwd', '--dir', '-C', '--prefix', '--filter', '-F', '--tsconfig', '--tsconfig-override',
+  '--preload', '-r', '--require', '--import', '--env-file', '--conditions', '-p', '--package', '--config',
+]);
+const NESTED_JS_PRINT_RUNNERS = new Set(['bun', 'bun.exe', 'node', 'node.exe', 'tsx', 'tsx.cmd', 'ts-node', 'ts-node.cmd']);
+const NESTED_CONFIG_C_RUNNERS = new Set(['bun', 'bun.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe']);
+
+function isNestedAgentExecArgs(cmdBasename: string, args: readonly string[]): boolean {
+  let sawSubcmd = false;
+  const isJsRuntime = NESTED_JS_PRINT_RUNNERS.has(cmdBasename);
+  const hasShortConfigC = NESTED_CONFIG_C_RUNNERS.has(cmdBasename);
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') return false;
+    const low = a.toLowerCase();
+    if (low === '-e' || low === '--eval' || low === '--print' || low.startsWith('--eval=') || low.startsWith('--print=') || (isJsRuntime && low === '-p')) {
+      return false;
+    }
+    if (NESTED_RUNNER_VALUE_FLAGS.has(a) || (hasShortConfigC && a === '-c')) { i++; continue; }
+    if (a.startsWith('-')) continue;
+    if (!sawSubcmd && (low === 'run' || low === 'exec' || low === 'dlx' || low === 'x')) {
+      sawSubcmd = true;
+      continue;
+    }
+    return path.basename(a).toLowerCase() === 'agent-exec.ts';
+  }
+  return false;
 }
 
 function finalizeBuiltCommand(params: FinalizedCommandParams): {
@@ -308,13 +289,13 @@ function finalizeBuiltCommand(params: FinalizedCommandParams): {
   resolvedCwd: string;
 } {
   let { cmd, args } = params;
-  const { tempScriptPath, payload, cwd, envOverrides, callerBypassedInterceptors, initialInterceptedBase } = params;
+  const { tempScriptPath, payload, cwd, envOverrides, callerBypassedInterceptors, initialInterceptedBase, evalInterpreterDefaulted } = params;
 
   const wasWsl = payload.target === 'wsl2';
   const origCmdBeforeWinResolve = cmd;
   let resolvedWinCmd: string | null = null;
   if (!wasWsl) {
-    if (['bunx', 'bunx.cmd', 'bunx.exe'].includes(cmd.toLowerCase())) {
+    if (['bunx', 'bunx.cmd', 'bunx.exe'].includes(path.basename(cmd).toLowerCase())) {
       cmd = 'bun';
       args = ['x', ...args];
     }
@@ -328,7 +309,7 @@ function finalizeBuiltCommand(params: FinalizedCommandParams): {
   }
   applyDefaultEnvOverrides(envOverrides, payload.env);
 
-  const wrapped = handleWindowsUnixCommandWrappers(cmd, args, payload, cwd);
+  const wrapped = callerBypassedInterceptors ? { cmd, args } : handleWindowsUnixCommandWrappers(cmd, args, payload, cwd);
   cmd = wrapped.cmd;
   args = wrapped.args;
 
@@ -338,46 +319,38 @@ function finalizeBuiltCommand(params: FinalizedCommandParams): {
     'pnpm', 'pnpm.cmd', 'npm', 'npm.cmd', 'npx', 'npx.cmd', 'yarn', 'yarn.cmd',
     'bunx', 'bunx.cmd', 'bunx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe',
   ]);
-  const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload, cwd };
+  const preInterceptorCmd = cmd;
+  const preInterceptorTarget = payload.target;
+  const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload, cwd, evalInterpreterDefaulted };
   const isNestedAgentExec = payload.type === 'command' &&
     cmdRunners.has(cmdBasename) &&
-    args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts');
+    isNestedAgentExecArgs(cmdBasename, args);
   runCommandInterceptors(ctx, callerBypassedInterceptors, isNestedAgentExec, initialInterceptedBase);
 
   if (ctx.cmdBasename && ctx.cmdBasename !== path.basename(cmd).toLowerCase()) cmd = ctx.cmdBasename;
-  const reconciled = reconcilePostInterceptorWslTarget(cmd, ctx.args, wasWsl, resolvedWinCmd, origCmdBeforeWinResolve, payload);
-  cmd = reconciled.cmd;
-  args = reconciled.args;
-  if (payload.type === 'command' && !payload.templateOverride) {
-    const shellWrapped = wrapBuiltinOrShellCommand(cmd, args, payload.target);
-    cmd = shellWrapped.cmd;
-    args = shellWrapped.args;
-  }
-  if (!callerBypassedInterceptors) {
-    args = stripRedundantArgQuotes(cmd, args);
-  }
-
-  if (isCmd(path.basename(cmd)) && args[0]?.toLowerCase() === '/c') args = formatForCmdExe(args);
-  if (payload.type === 'command' && payload.target !== 'wsl2') {
-    const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd') ||
-      (process.platform === 'win32' && ['pnpm', 'npm', 'yarn', 'npx'].includes(cmd.toLowerCase()));
-    if (isWinBatch) {
-      emitInterceptBanner(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
-      const pwshWrapped = buildPwshWrapper(cmd, args);
-      cmd = pwshWrapped.cmd;
-      args = pwshWrapped.args;
+  if (cmd !== preInterceptorCmd || payload.target !== preInterceptorTarget) {
+    if (payload.target !== 'wsl2' && !BUILT_INS.includes(cmd.toLowerCase()) && cmd !== preInterceptorCmd) {
+      const candidate = resolveWindowsCommand(cmd, cwd, payload.env);
+      if (candidate !== cmd) {
+        resolvedWinCmd = candidate;
+        cmd = candidate;
+      }
     }
+    const postWrapped = callerBypassedInterceptors ? { cmd, args: ctx.args } : handleWindowsUnixCommandWrappers(cmd, ctx.args, payload, cwd);
+    cmd = postWrapped.cmd;
+    ctx.args = postWrapped.args;
   }
-  if (payload.target === 'wsl2') {
-    const wslWrapped = wrapFinalWslCommand(cmd, args, payload, cwd, envOverrides, tempScriptPath);
-    cmd = wslWrapped.cmd;
-    args = wslWrapped.args;
-  }
-
-  const isPosixInternalCwd = payload.target === 'wsl2' && payload.cwd !== undefined && typeof payload.cwd === 'string' &&
-    (payload.cwd.startsWith('/') || payload.cwd.startsWith('~'));
-  const resolvedCwd = isPosixInternalCwd ? cwd : (payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : cwd);
-  return { cmd, args, tempScriptPath, envOverrides, resolvedCwd };
+  const reconciled = reconcilePostInterceptorWslTarget(cmd, ctx.args, wasWsl, resolvedWinCmd, origCmdBeforeWinResolve, payload);
+  const platformWrapped = applyPlatformAndBatchWraps(
+    reconciled.cmd, reconciled.args, payload, cwd, envOverrides, tempScriptPath, callerBypassedInterceptors,
+  );
+  const rawPayloadCwd = typeof payload.cwd === 'string' ? payload.cwd.trim().replace(/^['"]|['"]$/g, '').trim() : undefined;
+  const isMntPath = rawPayloadCwd !== undefined && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(rawPayloadCwd);
+  const isPosixInternalCwd = payload.target === 'wsl2' && rawPayloadCwd !== undefined && !isMntPath &&
+    (rawPayloadCwd.startsWith('/') || rawPayloadCwd.startsWith('~'));
+  const hostCwd = isMntPath && process.platform === 'win32' ? convertToWindowsPath(rawPayloadCwd) : rawPayloadCwd;
+  const resolvedCwd = isPosixInternalCwd ? cwd : (hostCwd !== undefined && hostCwd.length > 0 ? path.resolve(cwd, hostCwd) : cwd);
+  return { cmd: platformWrapped.cmd, args: platformWrapped.args, tempScriptPath, envOverrides, resolvedCwd };
 }
 
 export function buildCommand(
@@ -395,12 +368,15 @@ export function buildCommand(
   splitEmbeddedCommandTokens(payload, cwd);
   rejectUnsafePosixPipes(payload, isJson, exitWithError);
 
+  const evalInterpreterDefaulted = payload.type === 'eval'
+    && (payload.interpreter === undefined || payload.interpreter.trim().length === 0);
+
   let initialInterceptedBase = '';
   if (!callerBypassedInterceptors) {
     const initialCmdBasename = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
     const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args !== undefined ? [...payload.args] : [], envOverrides, payload, cwd };
     systemInterceptor(initialCtx);
-    initialInterceptedBase = initialCtx.cmdBasename.toLowerCase().replace(/\.(exe|cmd|bat|com|ps1)$/i, '');
+    initialInterceptedBase = initialCmdBasename.toLowerCase().replace(/\.(exe|cmd|bat|com|ps1)$/i, '');
     if (payload.type === 'command') {
       payload.args = initialCtx.args;
       if (initialCtx.cmdBasename.length > 0 && initialCtx.cmdBasename !== initialCmdBasename) {
@@ -424,5 +400,6 @@ export function buildCommand(
     envOverrides,
     callerBypassedInterceptors,
     initialInterceptedBase,
+    evalInterpreterDefaulted,
   });
 }

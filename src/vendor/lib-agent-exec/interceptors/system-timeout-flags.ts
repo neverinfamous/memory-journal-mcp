@@ -50,8 +50,39 @@ export function maybeSplitJoinedTestArgs(
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
 }
 
-export function nestedAgentExec(args: string[]): boolean {
-  return args.some(arg => path.basename(arg).toLowerCase() === 'agent-exec.ts');
+const NESTED_RUNNER_VALUE_FLAGS = new Set([
+  '-C', '--dir', '--cwd', '--prefix', '-F', '--filter', '--package',
+  '-r', '--require', '--import', '--preload', '--env-file', '--conditions',
+  '--tsconfig', '--tsconfig-override', '--config', '-c',
+]);
+const NESTED_RUNNER_SUBCMDS = new Set(['run', 'exec', 'x', 'dlx']);
+const NESTED_JS_WRAPPERS = new Set(['bun', 'node', 'tsx', 'ts-node', 'deno']);
+
+export function nestedAgentExec(args: readonly string[], startIdx = 0): boolean {
+  let sawSubcmd = false;
+  let sawWrapper = false;
+  let seenDoubleDash = false;
+  for (let i = startIdx; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    const low = arg.toLowerCase();
+    if (!seenDoubleDash && arg === '--') { seenDoubleDash = true; continue; }
+    if (!seenDoubleDash && arg.startsWith('-')) {
+      if (low === '-e' || low === '--eval' || low === '--print' || low.startsWith('--eval=') || low.startsWith('--print=')) {
+        return false;
+      }
+      if (low === '-p') { i++; continue; }
+      if (!arg.includes('=') && NESTED_RUNNER_VALUE_FLAGS.has(arg)) i++;
+      continue;
+    }
+    if (!sawSubcmd && !sawWrapper && NESTED_RUNNER_SUBCMDS.has(low)) { sawSubcmd = true; continue; }
+    const base = path.basename(arg).toLowerCase();
+    if (base === 'agent-exec.ts') return true;
+    const noExt = base.replace(/\.(?:exe|cmd)$/i, '');
+    if (!sawWrapper && NESTED_JS_WRAPPERS.has(noExt)) { sawWrapper = true; continue; }
+    return false;
+  }
+  return false;
 }
 
 export function wslCommandProfile(
@@ -170,6 +201,36 @@ interface QualityGate {
   isFullLintOrCheck: boolean;
 }
 
+const LINT_DIR_TARGET_RE = /^(?:\.{1,2}|src|tests?|__tests__|scripts|packages|apps|lib|\.agents)$/i;
+const LINT_RUNNER_WORDS = new Set(['run', 'exec', 'x', 'dlx', 'eslint', 'lint', 'check']);
+const LINT_SKIP_VALUE_FLAGS = new Set([
+  '-C', '--dir', '--cwd', '--prefix', '-F', '--filter',
+  '-c', '--config', '-f', '--format', '--ext', '-o', '--output-file',
+  '--cache-location', '--cache-strategy', '--ignore-path', '--ignore-pattern', '--max-warnings',
+]);
+
+function isLintDirTargetArg(arg: string): boolean {
+  if (arg.startsWith('-') || LINT_RUNNER_WORDS.has(arg.toLowerCase())) return false;
+  if (/\.(?:ts|js|tsx|jsx|json|mjs|cjs|mts|cts)$/i.test(arg)) return false;
+  if (arg.endsWith('/') || arg.endsWith('\\')) return true;
+  const trimmed = arg.replace(/[\\/]+$/, '');
+  return LINT_DIR_TARGET_RE.test(trimmed);
+}
+
+function hasLintDirTargetArg(nonInlineArgs: readonly string[]): boolean {
+  for (let i = 0; i < nonInlineArgs.length; i++) {
+    const arg = nonInlineArgs[i];
+    if (arg === undefined) continue;
+    if (arg === '--') return nonInlineArgs.slice(i + 1).some(isLintDirTargetArg);
+    if (arg.startsWith('-')) {
+      if (!arg.includes('=') && LINT_SKIP_VALUE_FLAGS.has(arg)) i += 1;
+      continue;
+    }
+    if (isLintDirTargetArg(arg)) return true;
+  }
+  return false;
+}
+
 function qualityGate(cmdBasename: string, nonInlineArgs: string[], underlyingScript: string): QualityGate {
   const testFiles = nonInlineArgs.filter(arg => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(arg));
   const testDirs = nonInlineArgs.filter(arg => isTestDirArg(arg));
@@ -177,13 +238,14 @@ function qualityGate(cmdBasename: string, nonInlineArgs: string[], underlyingScr
   const isTestRunner = isNamedTestRunner(cmdBasename, nonInlineArgs, underlyingScript);
   const isFullSuite = isTestRunner && testFiles.length === 0 && testDirs.length === 0;
   const isLintOrCheck = matchesLintOrCheck(cmdBasename, nonInlineArgs, underlyingScript);
+  const hasLintDirTarget = isLintOrCheck && hasLintDirTargetArg(nonInlineArgs);
   return {
     testFiles,
     testDirs,
     targetFiles,
     hasLargeFile: targetFiles.some(arg => /(?:api\.ts|codemode|bundle|generated)/i.test(arg)),
     isFullSuite,
-    isFullLintOrCheck: isLintOrCheck && targetFiles.length === 0,
+    isFullLintOrCheck: isLintOrCheck && (targetFiles.length === 0 || hasLintDirTarget),
   };
 }
 
