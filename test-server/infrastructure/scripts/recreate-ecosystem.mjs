@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { setTimeout } from 'timers/promises';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -182,7 +182,8 @@ try {
             'WantedBy=default.target',
             'EOF_UNIT',
             'systemctl --user daemon-reload',
-            'systemctl --user enable --now mj-metrics-relay.service',
+            'systemctl --user enable mj-metrics-relay.service',
+            'systemctl --user restart mj-metrics-relay.service',
         ].join('\n');
 
         if (dockerCmd === 'wsl') {
@@ -210,7 +211,7 @@ try {
     let healthy = false;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-            execSync(`node "${join(__dirname, 'check-status.mjs')}"`, {
+            execFileSync(process.execPath, [join(__dirname, 'check-status.mjs')], {
                 cwd: REPO_ROOT,
                 stdio: attempt === maxAttempts ? 'inherit' : 'pipe',
             });

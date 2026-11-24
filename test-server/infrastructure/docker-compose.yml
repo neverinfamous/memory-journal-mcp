@@ -36,7 +36,7 @@ services:
       - prometheus_data:/prometheus
     extra_hosts:
       - "host.docker.internal:${MJ_SCRAPE_HOST:-host-gateway}"
-    stop_grace_period: 15s
+    stop_grace_period: 30s
     mem_limit: 256m
     logging:
       driver: json-file
@@ -58,8 +58,8 @@ services:
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards
-    stop_grace_period: 15s
-    mem_limit: 384m
+    stop_grace_period: 30s
+    mem_limit: 512m
     logging:
       driver: json-file
       options:
@@ -70,6 +70,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 120s
 
   loki:
     image: grafana/loki:3.7.10
@@ -80,7 +81,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     environment:
       - GOMEMLIMIT=400MiB
-    stop_grace_period: 15s
+    stop_grace_period: 30s
     mem_limit: 512m
     logging:
       driver: json-file
@@ -96,9 +97,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./config/alloy/alloy-config.alloy:/etc/alloy/config.alloy:ro
-      - ../../../memory-journal-mcp/logs:/var/log/memory-journal-mcp:ro
+      - ../../logs:/var/log/memory-journal-mcp:ro
     command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
-    stop_grace_period: 15s
+    stop_grace_period: 30s
     mem_limit: 128m
     logging:
       driver: json-file
@@ -134,11 +135,13 @@ services:
     environment:
       - DD_API_KEY=${DD_API_KEY}
       - DD_SITE=datadoghq.com
-      - DD_HOSTNAME=${DD_HOSTNAME:-memory-journal-local}
+      - DD_HOSTNAME=${DD_HOSTNAME:-adamic-wsl2}
       - DD_TAGS=env:development source:wsl2
-      # Logs
+      - DD_EXTRA_PERFORMANCE_METRICS=false
+      # Logs & Containers (strictly scope to mj-* containers)
       - DD_LOGS_ENABLED=true
-      - DD_CONTAINER_EXCLUDE=name:proxysql name:mysql-router name:mysql-router-telemetry name:mysql-node1 name:mysql-node2 name:mysql-node3 name:mysql-async-replica name:mysql-mcp-exporter name:db-mcp-monitoring name:cluster-healer name:redis-server name:datadog-unified
+      - DD_CONTAINER_INCLUDE=name:^mj-.*
+      - DD_CONTAINER_EXCLUDE=name:.*
       - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
       # Process monitoring
       - DD_PROCESS_CONFIG_CONTAINER_COLLECTION_ENABLED=true
@@ -159,15 +162,15 @@ services:
       - /proc/:/host/proc/:ro
       - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /etc/passwd:/etc/passwd:ro
+      - /etc/passwd:/host/etc/passwd:ro
       - /etc/os-release:/host/etc/os-release:ro
       - /sys/kernel/debug:/sys/kernel/debug
       - ./config/datadog-integration-configs:/etc/datadog-agent/conf.d:ro
-      - ../../../memory-journal-mcp/logs:/var/log/memory-journal-mcp:ro
+      - ../../logs:/var/log/memory-journal-mcp:ro
     networks:
       - default
     stop_grace_period: 30s
-    mem_limit: 1024m
+    mem_limit: 1536m
     logging:
       driver: json-file
       options:

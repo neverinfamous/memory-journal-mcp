@@ -124,7 +124,7 @@
             "uid": "prometheus_datasource"
           },
           "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 2)",
-          "legendFormat": "{{tool}}",
+          "legendFormat": "Gemini 3.1 ($)",
           "refId": "A"
         }
       ],
@@ -184,7 +184,7 @@
             "uid": "prometheus_datasource"
           },
           "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 5)",
-          "legendFormat": "{{tool}}",
+          "legendFormat": "Claude 4.8 ($)",
           "refId": "A"
         }
       ],
@@ -244,7 +244,7 @@
             "uid": "prometheus_datasource"
           },
           "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 5)",
-          "legendFormat": "{{tool}}",
+          "legendFormat": "GPT-5.5 ($)",
           "refId": "A"
         }
       ],
@@ -304,7 +304,7 @@
             "uid": "prometheus_datasource"
           },
           "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 6)",
-          "legendFormat": "{{tool}}",
+          "legendFormat": "Claude Sonnet 5 ($)",
           "refId": "A"
         }
       ],
@@ -364,7 +364,7 @@
             "uid": "prometheus_datasource"
           },
           "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 30)",
-          "legendFormat": "{{tool}}",
+          "legendFormat": "Claude Fable 5 ($)",
           "refId": "A"
         }
       ],
@@ -623,7 +623,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(mcp_tool_calls_total[$__rate_interval])) by (tool)",
+          "expr": "sum(increase(mcp_tool_calls_by_name_total[$__rate_interval])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -683,8 +683,8 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(mcp_tool_tokens_by_name_total[$__range])) / sum(increase(mcp_tool_calls_total[$__range]))",
-          "legendFormat": "{{tool}}",
+          "expr": "sum(increase(mcp_tool_tokens_by_name_total[$__range])) / clamp_min(sum(increase(mcp_tool_calls_total[$__range])), 1)",
+          "legendFormat": "Tokens / Call",
           "refId": "A"
         }
       ],
@@ -809,7 +809,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(sum(increase(mcp_tool_errors_total[$__range])) / sum(increase(mcp_tool_calls_total[$__range]))) * 100",
+          "expr": "(sum(increase(mcp_tool_errors_total[$__range])) / clamp_min(sum(increase(mcp_tool_calls_total[$__range])), 1)) * 100",
           "legendFormat": "Error Rate",
           "refId": "A"
         }
@@ -903,435 +903,12 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(mcp_tool_errors_total[$__rate_interval])) by (tool)",
+          "expr": "sum(increase(mcp_tool_errors_by_name_total[$__rate_interval])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
       ],
       "title": "Agent Quality (Error Classification)",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 14
-      },
-      "id": 15,
-      "title": "Database Telemetry",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus_datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 0,
-        "y": 15
-      },
-      "id": 16,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "memory_journal_mcp_pool_connections_active",
-          "legendFormat": "Active",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "memory_journal_mcp_pool_connections_idle",
-          "legendFormat": "Idle",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "memory_journal_mcp_pool_connections_total",
-          "legendFormat": "Total",
-          "refId": "C"
-        }
-      ],
-      "title": "Connection Pool",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus_datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 8,
-        "y": 15
-      },
-      "id": 17,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "(sum(memory_journal_mcp_pool_connections_active) / sum(memory_journal_mcp_pool_connections_total)) * 100",
-          "legendFormat": "Util%",
-          "refId": "A"
-        }
-      ],
-      "title": "Pool Utilization (%)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus_datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 12,
-        "y": 15
-      },
-      "id": 18,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "sum(increase(memory_journal_mcp_pool_queries_total[$__range]))",
-          "legendFormat": "{{tool}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Pool Queries",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus_datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 16,
-        "y": 15
-      },
-      "id": 19,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "(sum(increase(memory_journal_mcp_cache_hits_total[$__range])) / (sum(increase(memory_journal_mcp_cache_hits_total[$__range])) + sum(increase(memory_journal_mcp_cache_misses_total[$__range])))) * 100",
-          "legendFormat": "Hit Rate",
-          "refId": "A"
-        }
-      ],
-      "title": "Schema Cache Hit Rate (%)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus_datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 20,
-        "y": 15
-      },
-      "id": 20,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "sum(increase(memory_journal_mcp_cache_hits_total[$__rate_interval]))",
-          "legendFormat": "Hits",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "expr": "sum(increase(memory_journal_mcp_cache_misses_total[$__rate_interval]))",
-          "legendFormat": "Misses",
-          "refId": "B"
-        }
-      ],
-      "title": "Cache Performance",
       "type": "timeseries"
     }
   ],
@@ -1351,7 +928,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "MySQL-MCP AI Efficiency",
+  "title": "Memory-Journal-MCP AI Efficiency",
   "uid": "memory-journal-mcp-ai-efficiency",
   "version": 1,
   "weekStart": ""

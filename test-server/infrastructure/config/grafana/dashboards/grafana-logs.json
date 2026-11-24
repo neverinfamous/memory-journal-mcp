@@ -88,12 +88,12 @@
             "uid": "loki_datasource"
           },
           "editorMode": "builder",
-          "expr": "{job=\"memory_journal_mcp_logs\"} | json | status=`error`",
+          "expr": "{job=\"memory_journal_mcp_logs\"} | json | success=\"false\"",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "MySQL-MCP Error Log",
+      "title": "Memory-Journal-MCP Error Log",
       "type": "logs"
     },
     {
@@ -130,7 +130,7 @@
           "refId": "A"
         }
       ],
-      "title": "MySQL-MCP Audit Log",
+      "title": "Memory-Journal-MCP Audit Log",
       "type": "logs"
     }
   ],
@@ -146,7 +146,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "MySQL-MCP Logs (Loki)",
+  "title": "Memory-Journal-MCP Logs (Loki)",
   "uid": "bde3gq184s",
   "version": 1,
   "weekStart": ""

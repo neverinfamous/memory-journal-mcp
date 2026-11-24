@@ -189,6 +189,11 @@ export function formatPrometheusMetrics(
     const system = metrics.getSystemMetrics()
     const includeUsers = options?.includeUserBreakdown !== false
 
+    const resourceEntries = Object.entries(summary.resourceBreakdown).map(([uri, data]) => ({
+        value: data.readCount,
+        labels: { resource: uri },
+    }))
+
     const blocks: string[] = [
         formatMetricBlock(
             'mcp_server_info',
@@ -222,6 +227,12 @@ export function formatPrometheusMetrics(
             'Total estimated output tokens across all tool invocations',
             'counter',
             [{ value: summary.totalOutputTokens }]
+        ),
+        formatMetricBlock(
+            'mcp_resource_reads_total',
+            'Total number of MCP resource reads by URI',
+            'counter',
+            resourceEntries
         ),
         formatMetricBlock('mcp_process_memory_bytes', 'Process RSS memory usage in bytes', 'gauge', [
             { value: system.processMemoryMb * 1024 * 1024 },

@@ -162,7 +162,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(rate(mcp_tool_calls_total{tool=~\"$tool\"}[1m])) by (tool)",
+          "expr": "sum(rate(mcp_tool_calls_by_name_total{tool=~\"$tool\"}[1m])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -356,7 +356,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(rate(mcp_tool_errors_total{tool=~\"$tool\"}[1m])) by (tool)",
+          "expr": "sum(rate(mcp_tool_errors_by_name_total{tool=~\"$tool\"}[1m])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -861,7 +861,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(sum(mcp_tool_errors_total{tool=~\"$tool\"}) by (tool) / sum(mcp_tool_calls_total{tool=~\"$tool\"}) by (tool)) * 100",
+          "expr": "(sum(mcp_tool_errors_by_name_total{tool=~\"$tool\"}) by (tool) / clamp_min(sum(mcp_tool_calls_by_name_total{tool=~\"$tool\"}) by (tool), 1e-9)) * 100",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -1153,7 +1153,7 @@
           "type": "prometheus",
           "uid": "prometheus_datasource"
         },
-        "definition": "label_values(mcp_tool_calls_total, tool)",
+        "definition": "label_values(mcp_tool_calls_by_name_total, tool)",
         "hide": 0,
         "includeAll": true,
         "label": "Tool",
@@ -1161,7 +1161,7 @@
         "name": "tool",
         "options": [],
         "query": {
-          "query": "label_values(mcp_tool_calls_total, tool)",
+          "query": "label_values(mcp_tool_calls_by_name_total, tool)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -1178,7 +1178,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "MySQL-MCP Token & Tool Metrics",
+  "title": "Memory-Journal-MCP Token & Tool Metrics",
   "uid": "memory-journal-mcp-overview",
   "version": 3,
   "weekStart": ""

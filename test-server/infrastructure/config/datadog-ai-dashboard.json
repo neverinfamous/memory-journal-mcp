@@ -1,17 +1,11 @@
 {
-  "author_handle": "admin@adamic.tech",
-  "author_name": "Adamic.tech",
-  "created_at": "2026-07-19T06:24:43.774855Z",
   "description": "AI Efficiency metrics for memory-journal-mcp server (Opus 4.8 Standard pricing)\n\n*Note: Datadog automatically formats values less than 0.01 in scientific notation. During low-traffic periods, micro-costs may appear in scientific format (e.g., 5e-5 $) until the accumulated cost exceeds $0.01.*",
-  "id": "79q-b3r-jhu",
   "layout_type": "ordered",
-  "modified_at": "2026-07-19T07:31:31.698519Z",
   "notify_list": [],
   "reflow_type": "fixed",
   "restricted_roles": [],
   "template_variables": [],
   "title": "memory-journal-mcp AI Efficiency",
-  "url": "/dashboard/79q-b3r-jhu/memory-journal-mcp-ai-efficiency",
   "widgets": [
     {
       "definition": {
@@ -537,75 +531,6 @@
         "legend_layout": "auto",
         "requests": [
           {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Cache Hits",
-                "formula": "default_zero(query1)"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_cache_hits.count{*}.as_count()"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "palette": "green"
-            }
-          },
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Cache Misses",
-                "formula": "default_zero(query2)"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query2",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_cache_misses.count{*}.as_count()"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "palette": "red"
-            }
-          }
-        ],
-        "show_legend": true,
-        "title": "Cache Performance",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries"
-      },
-      "id": 61728394058271,
-      "layout": {
-        "height": 6,
-        "width": 4,
-        "x": 4,
-        "y": 6
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
             "display_type": "bars",
             "formulas": [
               {
@@ -616,13 +541,13 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*} by {error_type}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*} by {tool}.as_count()"
               }
             ],
             "response_format": "timeseries"
           }
         ],
-        "show_legend": false,
+        "show_legend": true,
         "title": "Agent Quality (Error Classification)",
         "title_align": "left",
         "title_size": "16",
@@ -634,63 +559,6 @@
         "width": 4,
         "x": 8,
         "y": 6
-      }
-    },
-    {
-      "definition": {
-        "sizing": "zoom",
-        "type": "image",
-        "url": "/static/images/logos/proxysql_large.svg"
-      },
-      "id": 2524995767004926,
-      "layout": {
-        "height": 2,
-        "width": 4,
-        "x": 0,
-        "y": 8
-      }
-    },
-    {
-      "definition": {
-        "check": "proxysql.can_connect",
-        "group": "proxysql_port:6032,proxysql_server:localhost,host:memory-journal-local",
-        "group_by": [
-          "proxysql_server",
-          "proxysql_port"
-        ],
-        "grouping": "cluster",
-        "tags": [],
-        "title": "Monitored instances status",
-        "title_align": "center",
-        "title_size": "16",
-        "type": "check_status"
-      },
-      "id": 4740005024234863,
-      "layout": {
-        "height": 1,
-        "width": 4,
-        "x": 0,
-        "y": 10
-      }
-    },
-    {
-      "definition": {
-        "check": "proxysql.backend.status",
-        "group": "*",
-        "group_by": [],
-        "grouping": "cluster",
-        "tags": [],
-        "title": "Backends status",
-        "title_align": "center",
-        "title_size": "16",
-        "type": "check_status"
-      },
-      "id": 2452699725061914,
-      "layout": {
-        "height": 1,
-        "width": 4,
-        "x": 0,
-        "y": 11
       }
     }
   ]

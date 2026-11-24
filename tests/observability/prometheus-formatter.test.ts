@@ -60,4 +60,17 @@ describe('formatPrometheusMetrics', () => {
         expect(output).toContain('mcp_tool_latency_ms_p50{tool="create_entry"} 150')
         expect(output).toContain('mcp_tool_latency_ms_p95{tool="create_entry"} 150')
     })
+
+    it('formats resource read counters when resource reads are recorded', () => {
+        metrics.recordResourceRead('memory://briefing')
+        metrics.recordResourceRead('memory://briefing')
+        metrics.recordResourceRead('memory://recent')
+
+        const output = formatPrometheusMetrics(metrics)
+
+        expect(output).toContain('# HELP mcp_resource_reads_total')
+        expect(output).toContain('# TYPE mcp_resource_reads_total counter')
+        expect(output).toContain('mcp_resource_reads_total{resource="memory://briefing"} 2')
+        expect(output).toContain('mcp_resource_reads_total{resource="memory://recent"} 1')
+    })
 })

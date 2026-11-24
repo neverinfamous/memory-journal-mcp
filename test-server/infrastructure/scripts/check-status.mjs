@@ -103,18 +103,25 @@ function parseExpectedContainers() {
     }
 }
 
-async function checkHttpEndpoint(label, url) {
+async function checkHttpEndpoint(label, url, fallbackContainer = null, fallbackArgs = []) {
     try {
         const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
         if (res.ok) {
             console.log(`✅ ${label.padEnd(24)} : HTTP ${res.status} (${url})`);
-            return true;
+            return { ok: true, usedFallback: false };
         }
         console.log(`❌ ${label.padEnd(24)} : HTTP ${res.status} (${url})`);
-        return false;
+        return { ok: false, usedFallback: false };
     } catch (err) {
+        if (fallbackContainer && fallbackArgs.length > 0) {
+            const out = execDocker(['exec', fallbackContainer, ...fallbackArgs], true);
+            if (out !== null) {
+                console.log(`✅ ${label.padEnd(24)} : OK via docker exec (${fallbackContainer})`);
+                return { ok: true, usedFallback: true };
+            }
+        }
         console.log(`❌ ${label.padEnd(24)} : Unreachable (${err instanceof Error ? err.message : String(err)})`);
-        return false;
+        return { ok: false, usedFallback: false };
     }
 }
 
@@ -187,19 +194,48 @@ for (const { service, containerName } of targets) {
 
 console.log('\nHTTP Endpoint & Scrape Target Health:');
 console.log('----------------------------------------');
-const promOk = await checkHttpEndpoint('Prometheus (:9091)', 'http://localhost:9091/-/healthy');
-const grafOk = await checkHttpEndpoint('Grafana (:3002)', 'http://localhost:3002/api/health');
-if (!promOk || !grafOk) {
+const promStatus = await checkHttpEndpoint(
+    'Prometheus (:9091)',
+    'http://localhost:9091/-/healthy',
+    'mj-prometheus',
+    ['wget', '-qO-', 'http://localhost:9090/-/healthy']
+);
+const grafStatus = await checkHttpEndpoint(
+    'Grafana (:3002)',
+    'http://localhost:3002/api/health',
+    'mj-grafana',
+    ['curl', '-sf', 'http://localhost:3000/api/health']
+);
+const lokiStatus = await checkHttpEndpoint(
+    'Loki (:3102)',
+    'http://localhost:3102/ready',
+    'mj-prometheus',
+    ['wget', '-qO-', 'http://loki:3100/ready']
+);
+if (!promStatus.ok || !grafStatus.ok || !lokiStatus.ok) {
     allUp = false;
 }
 
-if (promOk) {
+if (promStatus.ok) {
     try {
-        const targetsRes = await fetch('http://localhost:9091/api/v1/targets?state=active', {
-            signal: AbortSignal.timeout(4000),
-        });
-        if (targetsRes.ok) {
-            const payload = await targetsRes.json();
+        let payload = null;
+        if (!promStatus.usedFallback) {
+            const targetsRes = await fetch('http://localhost:9091/api/v1/targets?state=active', {
+                signal: AbortSignal.timeout(4000),
+            });
+            if (targetsRes.ok) {
+                payload = await targetsRes.json();
+            }
+        } else {
+            const raw = execDocker(
+                ['exec', 'mj-prometheus', 'wget', '-qO-', 'http://localhost:9090/api/v1/targets?state=active'],
+                true
+            );
+            if (raw) {
+                payload = JSON.parse(raw);
+            }
+        }
+        if (payload) {
             const activeTargets = payload?.data?.activeTargets || [];
             const downTargets = activeTargets.filter((t) => t.health !== 'up');
             if (activeTargets.length > 0 && downTargets.length === 0) {

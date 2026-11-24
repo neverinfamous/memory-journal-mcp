@@ -33,7 +33,6 @@ loki.process "mcp_logs" {
       tool       = "tool",
       category   = "category",
       scope      = "scope",
-      status     = "status",
       success    = "success",
       durationMs = "durationMs",
       requestId  = "requestId",
@@ -46,7 +45,6 @@ loki.process "mcp_logs" {
       tool     = "",
       category = "",
       scope    = "",
-      status   = "",
       success  = "",
     }
   }

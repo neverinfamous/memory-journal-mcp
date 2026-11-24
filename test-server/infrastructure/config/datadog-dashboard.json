@@ -1,11 +1,6 @@
 {
-  "author_handle": "admin@adamic.tech",
-  "author_name": "Adamic.tech",
-  "created_at": "2026-07-19T06:24:41.856221Z",
   "description": "Real-time observability for memory-journal-mcp MCP server: token usage, tool latency, error rates, and resource reads.",
-  "id": "my6-q9k-682",
   "layout_type": "ordered",
-  "modified_at": "2026-07-19T07:32:45.110336Z",
   "notify_list": [],
   "reflow_type": "fixed",
   "restricted_roles": [],
@@ -18,7 +13,6 @@
     }
   ],
   "title": "memory-journal-mcp Token & Tool Metrics",
-  "url": "/dashboard/my6-q9k-682/memory-journal-mcp-token--tool-metrics",
   "widgets": [
     {
       "definition": {
@@ -359,7 +353,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {resource}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_resource_reads.count{*} by {resource}.as_count()"
               }
             ],
             "response_format": "timeseries",
@@ -406,18 +400,13 @@
             "display_type": "line",
             "formulas": [
               {
-                "formula": "default_zero(query1) + default_zero(query2)"
+                "formula": "default_zero(query1)"
               }
             ],
             "queries": [
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"
-              },
-              {
-                "data_source": "metrics",
-                "name": "query2",
                 "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"
               }
             ],
@@ -550,18 +539,13 @@
             "display_type": "line",
             "formulas": [
               {
-                "formula": "default_zero(query1) + default_zero(query2)"
+                "formula": "default_zero(query1)"
               }
             ],
             "queries": [
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*}.as_count()"
-              },
-              {
-                "data_source": "metrics",
-                "name": "query2",
                 "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*}.as_count()"
               }
             ],
@@ -619,7 +603,7 @@
             "query": {
               "data_source": "logs_stream",
               "indexes": [],
-              "query_string": "service:memory_journal_mcp (status:error OR log_type:agent_issues)",
+              "query_string": "service:memory_journal_mcp (@success:false OR status:error OR log_type:agent_issues)",
               "sort": {
                 "column": "timestamp",
                 "order": "desc"
@@ -668,32 +652,22 @@
             "formulas": [
               {
                 "alias": "Total Calls",
-                "formula": "default_zero(calls) + default_zero(old_calls)"
+                "formula": "default_zero(calls)"
               },
               {
                 "alias": "Total Errors",
-                "formula": "default_zero(errors) + default_zero(old_errors)"
+                "formula": "default_zero(errors)"
               }
             ],
             "queries": [
               {
                 "data_source": "metrics",
                 "name": "calls",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{$tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{$tool}.as_count()"
               },
               {
                 "data_source": "metrics",
                 "name": "errors",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{$tool}.as_count()"
-              },
-              {
-                "data_source": "metrics",
-                "name": "old_calls",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{$tool}.as_count()"
-              },
-              {
-                "data_source": "metrics",
-                "name": "old_errors",
                 "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{$tool}.as_count()"
               }
             ],
@@ -801,7 +775,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_resource_reads.count{*}.as_count()"
               }
             ],
             "response_format": "timeseries",

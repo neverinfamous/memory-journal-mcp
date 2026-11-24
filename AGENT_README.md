@@ -166,7 +166,7 @@ memory-journal-mcp/
 │   └── version.ts                           # Runtime package.json version loader
 ├── test-server/                             # Manual QA coordinators, Docker infra, and code maps
 │   ├── codemode/ (57 files)                 # Code Mode manual test prompts and coordinator workflow
-│   ├── infrastructure/ (30 files)           # Docker Compose observability stack (:3002/:9091/:3102/:8082)
+│   ├── infrastructure/ (32 files)           # Docker Compose observability stack (:3002/:9091/:3102/:8082)
 │   ├── scripts/ (13 files)                  # Prompt standardization generator and tool-map.json
 │   ├── standard/ (68 files)                 # Direct MCP tool manual test prompts and coordinator workflow
 │   ├── usability/ (69 files)                # Hallucination/fuzzing prompts and coordinator workflow

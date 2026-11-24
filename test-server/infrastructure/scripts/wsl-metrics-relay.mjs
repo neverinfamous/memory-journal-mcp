@@ -11,8 +11,21 @@ import http from 'node:http';
 import { execFile } from 'node:child_process';
 
 const LISTEN_HOST = process.env.MJ_RELAY_HOST || '172.17.0.1';
-const LISTEN_PORT = Number(process.env.MJ_RELAY_PORT || '9465');
-const UPSTREAM_PORT = Number(process.env.MJ_METRICS_PORT || '9465');
+
+function parsePort(rawValue, envName, fallback) {
+    const raw = rawValue ?? fallback;
+    if (!/^[1-9]\d*$/.test(raw)) {
+        throw new Error(`Invalid ${envName}: expected integer 1..65535, got ${JSON.stringify(rawValue)}`);
+    }
+    const port = Number(raw);
+    if (!Number.isSafeInteger(port) || port < 1 || port > 65535) {
+        throw new Error(`Invalid ${envName}: port out of range 1..65535 (${raw})`);
+    }
+    return port;
+}
+
+const LISTEN_PORT = parsePort(process.env.MJ_RELAY_PORT, 'MJ_RELAY_PORT', '9465');
+const UPSTREAM_PORT = parsePort(process.env.MJ_METRICS_PORT, 'MJ_METRICS_PORT', '9465');
 const WIN_CURL = process.env.WIN_CURL_BIN || '/mnt/c/Windows/System32/curl.exe';
 
 function fetchFromWindowsLoopback(pathname) {
