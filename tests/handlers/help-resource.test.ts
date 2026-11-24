@@ -6,22 +6,19 @@ import {
 } from '../../src/handlers/resources/help.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { ResourceContext } from '../../src/handlers/resources/shared.js'
-import * as fs from 'fs'
 
 describe('Help Resource Handlers', () => {
     let db: DatabaseAdapter
 
     beforeAll(async () => {
-        const dbPath = './.test-output/vitest/test-help-resource.db'
-        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
-        db = new DatabaseAdapter(dbPath)
+        // Pre-warm lazy 108-tool module graph outside individual it() timeout budgets
+        await import('../../src/handlers/tools/index.js')
+        db = new DatabaseAdapter(':memory:')
         await db.initialize()
-    })
+    }, 60_000)
 
     afterAll(() => {
         db.close()
-        const dbPath = './.test-output/vitest/test-help-resource.db'
-        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
     })
 
     const getContext = (): ResourceContext => ({ db })
