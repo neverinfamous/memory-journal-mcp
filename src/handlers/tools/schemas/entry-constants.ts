@@ -145,6 +145,23 @@ export const RELATIONSHIP_TYPE_KEYS = [
     'type',
 ] as const
 
+export const CAUSED_BY_RELATIONSHIP_ERROR =
+    "[ANTI-HALLUCINATION] 'caused_by' is not a canonical relationship type. Invert source/target with 'caused', or use 'resolved' / 'evolves_from' / 'blocked_by'."
+
+/**
+ * Targeted Zod v4 enum error mapper for relationship type fields.
+ * Returns a specific recovery hint for `'caused_by'` variants and falls back to Zod's default error otherwise.
+ */
+export function relationshipTypeEnumError(issue: { readonly input?: unknown }): string | undefined {
+    if (typeof issue.input !== 'string') return undefined
+    const normalized = issue.input
+        .trim()
+        .replace(/([a-z])([A-Z])/g, '$1_$2')
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+    return normalized === 'caused_by' ? CAUSED_BY_RELATIONSHIP_ERROR : undefined
+}
+
 /** Pick the first defined value matching `keys` from a plain record. */
 export function pickRecordField(obj: Record<string, unknown>, keys: readonly string[]): unknown {
     for (const key of keys) {

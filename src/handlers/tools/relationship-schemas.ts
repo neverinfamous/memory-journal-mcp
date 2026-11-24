@@ -3,7 +3,12 @@
  */
 
 import { z } from 'zod'
-import { RelationshipOutputSchema, relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
+import {
+    RelationshipOutputSchema,
+    relaxedNumber,
+    StrictProjectNumberSchema,
+    relationshipTypeEnumError,
+} from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
@@ -33,16 +38,19 @@ export const LinkEntriesSchema = z.object({
     from_entry_id: z.number().int().positive(),
     to_entry_id: z.number().int().positive(),
     relationship_type: z
-        .enum([
-            'evolves_from',
-            'references',
-            'implements',
-            'clarifies',
-            'response_to',
-            'blocked_by',
-            'resolved',
-            'caused',
-        ])
+        .enum(
+            [
+                'evolves_from',
+                'references',
+                'implements',
+                'clarifies',
+                'response_to',
+                'blocked_by',
+                'resolved',
+                'caused',
+            ],
+            { error: relationshipTypeEnumError }
+        )
         .optional()
         .default('references'),
     description: z.string().optional(),

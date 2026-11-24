@@ -65,6 +65,25 @@ function repairSingleQuotedJson(raw: string): string | undefined {
     }
 }
 
+function isEmptyAutoContextJson(rawStr: string): boolean {
+    const trimmed = rawStr.trim()
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return false
+    try {
+        const parsed: unknown = JSON.parse(trimmed)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false
+        const rec = parsed as Record<string, unknown>
+        const keys = Object.keys(rec)
+        if (keys.length === 0) return true
+        if (keys.length === 1 && keys[0] === 'commits') {
+            return Array.isArray(rec['commits']) && rec['commits'].length === 0
+        }
+        return false
+    } catch {
+        // Leave non-JSON strings untouched so downstream Zod validation reports a structured error.
+        return false
+    }
+}
+
 /** Normalise object-valued, key-aliased, or single-quoted `auto_context` into a JSON string (or drop empties). */
 function healAutoContextField(obj: Record<string, unknown>): boolean {
     if (!('auto_context' in obj)) return false
@@ -89,18 +108,21 @@ function healAutoContextField(obj: Record<string, unknown>): boolean {
     }
     if (typeof obj['auto_context'] !== 'string') return modified
 
-    const rawStr = obj['auto_context']
-    const ac = rawStr.trim().toLowerCase()
-    if (ac === 'none' || ac === '{}' || ac === '{"commits":[]}') {
-        delete obj['auto_context']
-        return true
-    }
-    if (ac.startsWith('{') && ac.includes("'")) {
+    let rawStr = obj['auto_context']
+    const trimmedLower = rawStr.trim().toLowerCase()
+    if (trimmedLower.startsWith('{') && trimmedLower.includes("'")) {
         const repaired = repairSingleQuotedJson(rawStr)
         if (repaired !== undefined) {
             obj['auto_context'] = repaired
+            rawStr = repaired
             modified = true
         }
+    }
+
+    const ac = rawStr.trim().toLowerCase()
+    if (ac === 'none' || ac === '{}' || ac === '{"commits":[]}' || isEmptyAutoContextJson(rawStr)) {
+        delete obj['auto_context']
+        return true
     }
 
     return modified
@@ -162,6 +184,8 @@ const RELATION_KEY_MAP: Record<string, string> = {
     resolved: 'resolved',
     resolves: 'resolves',
     caused: 'caused',
+    caused_by: 'caused_by',
+    causedBy: 'caused_by',
     relates_to: 'relates_to',
     relatesTo: 'relates_to',
     related_to: 'relates_to',

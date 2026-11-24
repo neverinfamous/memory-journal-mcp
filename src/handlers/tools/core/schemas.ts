@@ -14,6 +14,7 @@ import {
     healAgentHallucinations,
     StrictProjectNumberSchema,
     preprocessRelationshipItem,
+    relationshipTypeEnumError,
 } from '../schemas.js'
 
 // ============================================================================
@@ -62,19 +63,22 @@ export const CreateEntrySchema = z.preprocess(
                 z.object({
                     targetId: z.number().int().positive(),
                     relationType: z
-                        .enum([
-                            'evolves_from',
-                            'references',
-                            'implements',
-                            'clarifies',
-                            'response_to',
-                            'blocked_by',
-                            'resolved',
-                            'resolves',
-                            'caused',
-                            'relates_to',
-                            'depends_on',
-                        ])
+                        .enum(
+                            [
+                                'evolves_from',
+                                'references',
+                                'implements',
+                                'clarifies',
+                                'response_to',
+                                'blocked_by',
+                                'resolved',
+                                'resolves',
+                                'caused',
+                                'relates_to',
+                                'depends_on',
+                            ],
+                            { error: relationshipTypeEnumError }
+                        )
                         .optional()
                         .default('references'),
                 })

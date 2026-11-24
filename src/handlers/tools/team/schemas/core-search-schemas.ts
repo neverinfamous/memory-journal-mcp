@@ -17,6 +17,7 @@ import {
     StrictProjectNumberSchema,
     healAgentHallucinations,
     preprocessRelationshipItem,
+    relationshipTypeEnumError,
 } from '../../schemas.js'
 import {
     TeamEntryOutputSchema,
@@ -88,7 +89,7 @@ export const TeamCreateEntrySchema = z.preprocess(
                         z.object({
                             targetId: z.number().int().positive(),
                             relationType: z
-                                .enum(TEAM_RELATION_TYPES)
+                                .enum(TEAM_RELATION_TYPES, { error: relationshipTypeEnumError })
                                 .optional()
                                 .default('references'),
                         })

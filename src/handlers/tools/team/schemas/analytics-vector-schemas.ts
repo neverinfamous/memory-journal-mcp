@@ -8,6 +8,7 @@ import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
     StrictProjectNumberSchema,
+    relationshipTypeEnumError,
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { TeamEntryOutputSchema } from './core-search-schemas.js'
@@ -57,16 +58,19 @@ export const TeamLinkEntriesSchema = z.preprocess(
             relationship_type: z.preprocess(
                 normalizeTeamLinkRelationshipType,
                 z
-                    .enum([
-                        'evolves_from',
-                        'references',
-                        'implements',
-                        'clarifies',
-                        'response_to',
-                        'blocked_by',
-                        'resolved',
-                        'caused',
-                    ])
+                    .enum(
+                        [
+                            'evolves_from',
+                            'references',
+                            'implements',
+                            'clarifies',
+                            'response_to',
+                            'blocked_by',
+                            'resolved',
+                            'caused',
+                        ],
+                        { error: relationshipTypeEnumError }
+                    )
                     .optional()
                     .default('references')
             ),

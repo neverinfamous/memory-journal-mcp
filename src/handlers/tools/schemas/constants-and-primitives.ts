@@ -19,6 +19,8 @@ export {
     DATE_FORMAT_MESSAGE,
     RELATIONSHIP_TARGET_KEYS,
     RELATIONSHIP_TYPE_KEYS,
+    CAUSED_BY_RELATIONSHIP_ERROR,
+    relationshipTypeEnumError,
     pickRecordField,
     preprocessRelationshipItem,
     KEY_ALIAS_MAP,
