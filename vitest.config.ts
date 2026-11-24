@@ -72,6 +72,7 @@ export default defineConfig({
                 extends: true,
                 test: {
                     name: 'isolated',
+                    pool: 'forks',
                     isolate: true,
                     include: isolatedTestFiles,
                 },

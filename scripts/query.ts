@@ -5,8 +5,9 @@ const dbPath =
     process.env['MEMORY_JOURNAL_DB_PATH'] ??
     process.env['DB_PATH'] ??
     path.resolve(process.cwd(), 'data/memory_journal.db')
-const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+let db: Database.Database | undefined
 try {
+    db = new Database(dbPath, { readonly: true, fileMustExist: true })
     const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] ?? process.env['DB_ENCRYPTION_KEY']
     if (rawKey !== undefined && rawKey !== '') {
         if (rawKey.includes('\0')) {
@@ -39,5 +40,5 @@ try {
     console.error(`Query script failed: ${safeMsg}`)
     process.exitCode = 1
 } finally {
-    db.close()
+    db?.close()
 }

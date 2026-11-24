@@ -394,15 +394,15 @@ describe('Pass 79 Audit — Code Mode, Scope, Converters, CLI & Prompts', () => 
         expect(() => timeoutFn('not-a-fn', 0)).toThrow(TypeError)
         expect(normalizeParams('getEntryById', [42, { entry_id: undefined }])).toEqual({ entry_id: 42 })
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass83')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass83')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
         const cqDef = getCodeQualityAuditPromptDefinition()
         const cqRes = await cqDef.handler(
             { target: 'src', copilot: 'false' },
             { searchByDateRange: () => [] } as unknown as Parameters<typeof cqDef.handler>[1]
         )
         const cqText = (cqRes as { messages?: { content?: { text?: string } }[] }).messages?.[0]?.content?.text ?? ''
-        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass83')
+        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass84')
         expect(cqText).toContain('normalizePromptAliasForScope')
         expect(cqText).toContain('createAppendInterceptor')
         expect(cqText).toContain('parseYamlFrontmatter')

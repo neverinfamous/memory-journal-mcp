@@ -155,8 +155,8 @@ function runChecksMain(): void {
         }
         lintOk = existing.lintOk ?? true
         typecheckOk = existing.typecheckOk ?? true
-    } catch {
-        // missing or unreadable health file
+    } catch (error) {
+        if (!isEnoent(error)) throw error
     }
 
     mkdirSync(testOutputDir, { recursive: true })

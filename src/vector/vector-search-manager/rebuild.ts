@@ -29,6 +29,7 @@ export function verifyVecTableSchema(
     dimensions: number
 ): void {
     let needsRecreation = false
+    let missingModelMetadata = false
     try {
         const existingDimStr = dbAdapter.getVectorMetadata('dimensions')
         const existingModel = dbAdapter.getVectorMetadata('model_name')
@@ -48,6 +49,8 @@ export function verifyVecTableSchema(
                     oldDimensions: existingDim,
                     newDimensions: dimensions,
                 })
+            } else if (!existingModel || existingModel.trim() === '') {
+                missingModelMetadata = true
             }
         } else {
             needsRecreation = true
@@ -77,6 +80,9 @@ export function verifyVecTableSchema(
         }
     } else {
         dbAdapter.createVecTable(dimensions)
+        if (missingModelMetadata) {
+            dbAdapter.setVectorMetadata('model_name', modelName)
+        }
     }
 }
 

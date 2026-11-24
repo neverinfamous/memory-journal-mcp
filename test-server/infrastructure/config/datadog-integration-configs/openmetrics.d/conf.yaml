@@ -3,7 +3,7 @@ init_config:
 instances:
   - openmetrics_endpoint: http://host.docker.internal:9465/metrics
     namespace: memory_journal_mcp
-    reported_hostname: adamic-wsl2
+    reported_hostname: memory-journal-host
     tags:
       - service:memory_journal_mcp
       - env:development

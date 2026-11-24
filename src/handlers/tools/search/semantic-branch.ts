@@ -117,7 +117,11 @@ export function rankByImportance(
     scored.sort((a, b) => {
         const left = typeof a['importanceScore'] === 'number' ? a['importanceScore'] : 0
         const right = typeof b['importanceScore'] === 'number' ? b['importanceScore'] : 0
-        return right - left
+        if (right !== left) return right - left
+        const aId = typeof a['id'] === 'number' ? a['id'] : -1
+        const bId = typeof b['id'] === 'number' ? b['id'] : -1
+        if (bId !== aId) return bId - aId
+        return (a.source ?? 'personal').localeCompare(b.source ?? 'personal')
     })
     return scored
 }
@@ -140,7 +144,10 @@ export function rankByBlendedScore(
         const bRel = relevanceMap.get(bKey) ?? (typeof b['similarity'] === 'number' ? b['similarity'] : 0)
         const aImp = typeof a['importanceScore'] === 'number' ? a['importanceScore'] : 0
         const bImp = typeof b['importanceScore'] === 'number' ? b['importanceScore'] : 0
-        return bRel * (1.0 + 0.35 * bImp) - aRel * (1.0 + 0.35 * aImp)
+        const diff = bRel * (1.0 + 0.35 * bImp) - aRel * (1.0 + 0.35 * aImp)
+        if (diff !== 0) return diff
+        if (bId !== aId) return bId - aId
+        return (a.source ?? 'personal').localeCompare(b.source ?? 'personal')
     })
     return scored
 }

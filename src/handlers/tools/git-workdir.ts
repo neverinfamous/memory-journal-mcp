@@ -52,7 +52,6 @@ function formatRegisteredReposHint(registry: ToolHandlerConfig['projectRegistry'
 
 export function parseGitProjectNumber(raw: number | string | undefined): number | undefined {
     if (raw === undefined) return undefined
-    if (typeof raw === 'string' && raw.trim() === '') return undefined
     const parsed = parsePositiveProjectNumber(raw)
     if (parsed === undefined) {
         throw new ValidationError(
@@ -68,7 +67,7 @@ function findMatchedRegistryKey(
 ): string | undefined {
     return (
         findCanonicalRegistryKey(target, registry) ??
-        (Object.prototype.hasOwnProperty.call(registry, target) ? target : undefined) ??
+        (Object.hasOwn(registry, target) ? target : undefined) ??
         Object.entries(registry).find(
             ([, entry]) => Boolean(entry.path) && cwdMatchesRegistryPath(entry.path, target)
         )?.[0]
@@ -169,7 +168,7 @@ export function resolveFallbackGitCwd(
     if (defaultWs !== undefined && defaultWs !== '' && defaultWs !== '*' && defaultWs.toLowerCase() !== 'default') {
         const canonicalKey = registry
             ? (findCanonicalRegistryKey(defaultWs, registry) ??
-              (Object.prototype.hasOwnProperty.call(registry, defaultWs) ? defaultWs : undefined))
+              (Object.hasOwn(registry, defaultWs) ? defaultWs : undefined))
             : undefined
         const defaultEntry = canonicalKey !== undefined && registry !== undefined ? registry[canonicalKey] : undefined
         if (defaultEntry?.path !== undefined && defaultEntry.path !== '' && fs.existsSync(defaultEntry.path)) {
@@ -207,22 +206,26 @@ export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHan
             : trimmedRawTarget
     const pNum = parseGitProjectNumber(input.project_number)
     assertConsistentGitScope(registry, pNum, trimmedRawTarget, target)
-    if (input.cwd !== undefined && input.cwd !== '') {
+    if (input.cwd !== undefined) {
+        const cwdPath = input.cwd.trim()
+        if (cwdPath === '') {
+            throw new ValidationError("Invalid cwd '': expected a non-empty directory path.")
+        }
         const roots = buildAllowedGitRoots(config, registry)
         if (roots.length === 0) {
             throw new Error('Git working directory must be a registered repository path or an allowed I/O root')
         }
-        assertSafeDirectoryPath(input.cwd, roots)
-        if (!fs.existsSync(input.cwd)) {
-            throw new Error(`Git working directory does not exist: ${input.cwd}`)
+        assertSafeDirectoryPath(cwdPath, roots)
+        if (!fs.existsSync(cwdPath)) {
+            throw new Error(`Git working directory does not exist: ${cwdPath}`)
         }
         if (registry && (pNum !== undefined || target !== undefined)) {
-            const cwdMatch = findMatchedRegistryKey(registry, input.cwd)
+            const cwdMatch = findMatchedRegistryKey(registry, cwdPath)
             if (cwdMatch === undefined) {
                 const targetReg = target !== undefined ? findMatchedRegistryKey(registry, target) : undefined
                 if (targetReg !== undefined) {
                     throw new ValidationError(
-                        `cwd '${input.cwd}' is not registered for workspace '${targetReg}'.`
+                        `cwd '${cwdPath}' is not registered for workspace '${targetReg}'.`
                     )
                 }
                 const matchedByProj =
@@ -231,7 +234,7 @@ export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHan
                         : undefined
                 if (matchedByProj !== undefined) {
                     throw new ValidationError(
-                        `cwd '${input.cwd}' is not registered for project_number ${String(pNum)} (expected workspace '${matchedByProj}').`
+                        `cwd '${cwdPath}' is not registered for project_number ${String(pNum)} (expected workspace '${matchedByProj}').`
                     )
                 }
             }
@@ -255,12 +258,12 @@ export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHan
                 const targetMatch = findMatchedRegistryKey(registry, target) ?? target
                 if (targetMatch.toLowerCase() !== cwdMatch.toLowerCase()) {
                     throw new ValidationError(
-                        `cwd '${input.cwd}' (workspace '${cwdMatch}') does not match target workspace '${target}'.`
+                        `cwd '${cwdPath}' (workspace '${cwdMatch}') does not match target workspace '${target}'.`
                     )
                 }
             }
         }
-        return input.cwd
+        return cwdPath
     }
     if (trimmedRawTarget !== undefined && (trimmedRawTarget === '*' || trimmedRawTarget.toLowerCase() === 'default') && pNum === undefined) {
         throw new ValidationError(

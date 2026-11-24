@@ -228,7 +228,7 @@ const UNRECOVERABLE_PAYLOAD_MSG =
     'Could not recover executable code from the supplied payload/entry. Pass JavaScript in `code` (e.g. `return await mj.core.createEntry({...})`).'
 
 const NON_JS_DISCRIMINATOR_FALLBACK_KEYS = new Set([
-    'content', 'text', 'body', 'instruction', 'instructions', 'input', 'payload',
+    'content', 'text', 'body', 'instruction', 'instructions', 'input', 'payload', 'source',
 ])
 
 function isUnrecoverableStructuredJsonObject(trimmedCode: string): boolean {

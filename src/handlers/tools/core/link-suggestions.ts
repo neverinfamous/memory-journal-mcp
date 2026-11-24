@@ -3,6 +3,7 @@ import type { JournalEntry, RelationshipType } from '../../../types/index.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import { isoDaysAgo } from '../../../database/sqlite-adapter/graph-pivots.js'
 import { previewLabel } from '../../resources/core/briefing/graph-pivots-section.js'
+import { logger } from '../../../utils/logger.js'
 
 export interface SuggestedLink {
     targetId: number
@@ -164,8 +165,11 @@ async function appendSemanticLinkSuggestions(params: {
                 preview: previewLabel(candidate.content),
             })
         }
-    } catch {
+    } catch (err: unknown) {
         // Semantic suggestions are best-effort; never fail entry creation if vector index is degraded.
+        logger.debug('Best-effort semantic link suggestion skipped', {
+            error: err instanceof Error ? err.message : String(err),
+        })
     }
 }
 

@@ -35,7 +35,7 @@ export const SearchEntriesSchema = z.preprocess(
     limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(10),
     workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.preprocess(coerceIntString, z.number().int().min(0)).optional(),
+    project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
@@ -62,12 +62,12 @@ export const SearchEntriesSchema = z.preprocess(
     include_facets: z.boolean().optional().default(false).describe('Include facet distributions (tags, entry types) for the search results'),
     include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
     fts_weight: z
-        .preprocess(coerceFiniteNumberString, z.number())
+        .preprocess(coerceFiniteNumberString, z.number().min(0).max(100))
         .optional()
         .default(1.0)
         .describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
     semantic_weight: z
-        .preprocess(coerceFiniteNumberString, z.number())
+        .preprocess(coerceFiniteNumberString, z.number().min(0).max(100))
         .optional()
         .default(1.0)
         .describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
@@ -155,7 +155,7 @@ export const SearchByDateRangeSchema = z.preprocess(
         .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.preprocess(coerceIntString, z.number().int().min(0)).optional(),
+    project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
@@ -223,11 +223,11 @@ export const SemanticSearchSchema = z.preprocess(
             'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
         ),
     limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(10),
-    similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number()).optional().default(0.25),
+    similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional().default(0.25),
     workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
     project_number: z
-        .preprocess(coerceIntString, z.number().int().min(0))
+        .preprocess(coerceIntString, z.number().int().positive())
         .optional()
         .describe('Filter results by project number'),
     issue_number: z

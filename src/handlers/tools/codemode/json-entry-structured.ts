@@ -7,9 +7,11 @@ import { appendOptionalQuerySearchFields } from '../../../codemode/shared-contex
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import {
     assignMissingScope,
+    assignScopedOpExtraFields,
     firstDefinedAlias,
     hasStructuredDiscriminator,
     hasUseTestDbFlag,
+    parseExpectedVersionValue,
     readEntryIdField,
     readProjectNumber,
     readWorkspaceId,
@@ -99,7 +101,7 @@ function resolveNamedToolIdentifier(
 
 /** Runner/wrapper keys excluded when recovering flat `{ tool | method | function, ... }` payloads. */
 const NAMED_TOOL_OMIT_KEYS = new Set([
-    'tool', 'method', 'function', 'params', 'args',
+    'tool', 'method', 'function', 'params', 'args', 'payload', 'entry', 'input',
     'dry_run', 'dryRun', 'readonly', 'readOnly', 'read_only',
     'timeout', 'timeout_ms', 'timeoutMs',
     'max_result_size', 'maxResultSize', 'max_result_size_bytes', 'maxResultSizeBytes',
@@ -115,12 +117,17 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
         : isRecord(target['args'])
           ? target['args']
           : undefined
-    const toolParams: Record<string, unknown> = explicitParams !== undefined ? { ...explicitParams } : {}
-    if (explicitParams === undefined) {
-        for (const [k, v] of Object.entries(target)) {
-            if (!NAMED_TOOL_OMIT_KEYS.has(k) && v !== undefined) {
-                toolParams[k] = v
-            }
+    const toolParams: Record<string, unknown> = {}
+    const copyDefined = (src: Record<string, unknown>): void => {
+        for (const [k, v] of Object.entries(src)) {
+            if (!NAMED_TOOL_OMIT_KEYS.has(k) && v !== undefined) toolParams[k] = v
+        }
+    }
+    if (original !== target) copyDefined(original)
+    copyDefined(target)
+    if (explicitParams !== undefined) {
+        for (const [k, v] of Object.entries(explicitParams)) {
+            if (v !== undefined) toolParams[k] = v
         }
     }
     assignMissingScope(toolParams, target, original)
@@ -174,7 +181,8 @@ const UPDATE_META_KEYS = [
     'tags', 'significance_type', 'significanceType', 'validation_status', 'validationStatus',
     'impact_score', 'impactScore', 'impact', 'trust_score', 'trustScore', 'trust',
     'target_workspace_id', 'targetWorkspaceId', 'is_personal', 'isPersonal',
-    'share_with_team', 'shareWithTeam', 'relationships', 'anchors', 'auto_context', 'autoContext',
+    'share_with_team', 'shareWithTeam', 'is_archived', 'isArchived', 'auto_link', 'autoLink',
+    'relationships', 'anchors', 'auto_context', 'autoContext',
 ] as const
 
 function hasEntryUpdateMetadata(
@@ -199,12 +207,8 @@ function formatScopedMutationOp(
     if (scope.workspaceId !== undefined) params['workspace_id'] = scope.workspaceId
     if (scope.projectNumber !== undefined) params['project_number'] = scope.projectNumber
     if (hasUseTestDbFlag(target, original)) params['use_test_db'] = true
-    if (
-        fnPath === 'mj.core.getEntryById' &&
-        scope.workspaceId === undefined &&
-        scope.projectNumber === undefined &&
-        params['use_test_db'] !== true
-    ) {
+    assignScopedOpExtraFields(fnPath, params, target, original)
+    if (fnPath === 'mj.core.getEntryById' && Object.keys(params).length === 1) {
         return `return await mj.core.getEntryById({ entry_id: ${JSON.stringify(entryId)} });`
     }
     return `return await ${fnPath}(${JSON.stringify(params)});`
@@ -222,7 +226,7 @@ function recoverEntryMutation(
     const explicitIdForMutation = entryId ?? invalidExplicitEntryId
     const rawOp = readOperation(target) || (original !== target ? readOperation(original) : '')
     const op = rawOp.trim().toLowerCase()
-    if (explicitIdForMutation !== undefined) {
+    if (explicitIdForMutation !== undefined && explicitIdForMutation !== '') {
         if (op === 'delete' || op === 'delete_entry') {
             return formatScopedMutationOp('mj.admin.deleteEntry', explicitIdForMutation, target, original)
         }
@@ -239,10 +243,11 @@ function recoverEntryMutation(
     const signals = readPayloadSignals(target, op, original)
     const canUpdateMeta =
         explicitIdForMutation !== undefined &&
+        explicitIdForMutation !== '' &&
         (op === '' || SUPPORTED_ENTRY_MUTATION_OPS.has(op)) &&
         hasEntryUpdateMetadata(signals, target, original)
     if (!hasJournalFields(signals) && !canUpdateMeta) {
-        if (explicitIdForMutation === undefined || !SUPPORTED_READ_BY_ID_OPS.has(op)) return null
+        if (explicitIdForMutation === undefined || explicitIdForMutation === '' || !SUPPORTED_READ_BY_ID_OPS.has(op)) return null
         const readFn = op === 'team_get_entry_by_id' ? 'mj.team.teamGetEntryById' : 'mj.core.getEntryById'
         return formatScopedMutationOp(readFn, explicitIdForMutation, target, original)
     }
@@ -327,7 +332,7 @@ function buildEntryParams(
     }
     const autoContext = collectAutoContext(target)
     if (Object.keys(autoContext).length > 0) entryParams['auto_context'] = autoContext
-    copyOptionalEntryFields(target, entryParams, fb)
+    copyOptionalEntryFields(target, entryParams, fb, isUpdate)
     return entryParams
 }
 
@@ -414,20 +419,23 @@ function collectAutoContext(target: Record<string, unknown>): Record<string, unk
 function copyOptionalEntryFields(
     target: Record<string, unknown>,
     entryParams: Record<string, unknown>,
-    fallback?: Record<string, unknown>
+    fallback?: Record<string, unknown>,
+    isUpdate = false
 ): void {
     const wsId = readWorkspaceId(target)
     if (wsId !== undefined) entryParams['workspace_id'] = wsId
     const projNum = readProjectNumber(target)
     if (projNum !== undefined) entryParams['project_number'] = projNum
-    for (const [outKey, aliases, nonBlank] of [
-        ['target_workspace_id', ['target_workspace_id', 'targetWorkspaceId'], true],
-        ['session_id', ['session_id', 'sessionId'], false],
-        ['validation_status', ['validation_status', 'validationStatus'], false],
-        ['significance_type', ['significance_type', 'significanceType'], false],
+    for (const [outKey, aliases, nonBlank, nullableOnUpdate] of [
+        ['target_workspace_id', ['target_workspace_id', 'targetWorkspaceId'], true, false],
+        ['session_id', ['session_id', 'sessionId'], false, true],
+        ['validation_status', ['validation_status', 'validationStatus'], false, false],
+        ['significance_type', ['significance_type', 'significanceType'], false, true],
     ] as const) {
         const raw = firstDefinedAlias(target, fallback, aliases)
-        if (typeof raw === 'string' && (!nonBlank || raw.trim() !== '')) {
+        if (raw === null && isUpdate && nullableOnUpdate) {
+            entryParams[outKey] = null
+        } else if (typeof raw === 'string' && (!nonBlank || raw.trim() !== '')) {
             entryParams[outKey] = nonBlank ? raw.trim() : raw
         }
     }
@@ -441,18 +449,22 @@ function copyOptionalEntryFields(
     for (const [outKey, aliases] of [
         ['is_personal', ['is_personal', 'isPersonal']],
         ['share_with_team', ['share_with_team', 'shareWithTeam']],
+        ['is_archived', ['is_archived', 'isArchived']],
+        ['auto_link', ['auto_link', 'autoLink']],
     ] as const) {
         const raw = firstDefinedAlias(target, fallback, aliases)
         if (typeof raw === 'boolean') entryParams[outKey] = raw
     }
     if (hasUseTestDbFlag(target, fallback)) entryParams['use_test_db'] = true
     const rawExpectedVersion = firstDefinedAlias(target, fallback, ['expected_version', 'expectedVersion'])
-    if (typeof rawExpectedVersion === 'number' && Number.isSafeInteger(rawExpectedVersion) && rawExpectedVersion >= 1) {
-        entryParams['expected_version'] = rawExpectedVersion
+    if (rawExpectedVersion !== undefined) {
+        entryParams['expected_version'] = parseExpectedVersionValue(rawExpectedVersion)
     }
     if (entryParams['auto_context'] === undefined) {
         const rawAutoCtx = firstDefinedAlias(target, fallback, ['auto_context', 'autoContext'])
-        if ((typeof rawAutoCtx === 'string' && rawAutoCtx.trim() !== '') || isRecord(rawAutoCtx)) {
+        if (rawAutoCtx === null && isUpdate) {
+            entryParams['auto_context'] = null
+        } else if ((typeof rawAutoCtx === 'string' && rawAutoCtx.trim() !== '') || isRecord(rawAutoCtx)) {
             entryParams['auto_context'] = rawAutoCtx
         }
     }

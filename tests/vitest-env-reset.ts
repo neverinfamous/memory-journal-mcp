@@ -1,4 +1,4 @@
-import { afterAll } from 'vitest'
+import { afterAll, afterEach, vi } from 'vitest'
 
 const BASELINE_ENV_KEY = Symbol.for('memory-journal-mcp.vitest.baselineEnv')
 
@@ -10,6 +10,10 @@ function getBaselineEnv(): Record<string, string | undefined> {
 
 // Capture once at worker boot before any test file runs
 const baselineEnv = getBaselineEnv()
+
+afterEach(() => {
+    vi.restoreAllMocks()
+})
 
 afterAll(() => {
     for (const key of Object.keys(process.env)) {

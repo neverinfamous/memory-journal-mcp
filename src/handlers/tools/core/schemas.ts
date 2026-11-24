@@ -250,12 +250,12 @@ function preprocessGetEntryById(val: unknown): unknown {
 export const GetEntryByIdSchema = z.preprocess(
     preprocessGetEntryById,
     z.object({
-        entry_id: z.preprocess(coerceIntString, z.number().int()),
+        entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
         include_relationships: z.boolean().optional().default(true),
         project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
         source: z.enum(['personal', 'team']).optional(),
-    })
+    }).strict()
 )
 
 export const GetEntryByIdSchemaMcp = z.object({
@@ -313,7 +313,7 @@ export const GetRecentEntriesSchema = z.preprocess(
         cursor: z.string().optional(),
         offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
         include_archived: z.boolean().optional().default(false),
-    })
+    }).strict()
 )
 
 export const GetRecentEntriesSchemaMcp = z.preprocess(

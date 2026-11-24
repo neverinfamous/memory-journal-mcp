@@ -299,8 +299,17 @@ export async function handleListDir(
             recoverable: true,
         }
     }
+    if (targetDir?.trim() === '') {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: '${toolName}' requires a non-empty directory path for 'dir_path' or 'path'.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: false,
+        }
+    }
 
-    const dirToRead = typeof targetDir === 'string' && targetDir.trim() !== '' ? path.resolve(targetDir.trim()) : process.cwd()
+    const dirToRead = targetDir !== undefined ? path.resolve(targetDir.trim()) : process.cwd()
     const allowedRoots = context?.config?.allowedIoRoots ?? []
     try {
         assertSafeDirectoryPath(dirToRead, allowedRoots)

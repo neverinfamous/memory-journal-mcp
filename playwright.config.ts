@@ -3,7 +3,18 @@ import path from 'node:path'
 
 process.env['DISABLE_ISSUE_LOGGING'] ??= 'true'
 
-const WORKERS = Number(process.env.PLAYWRIGHT_WORKERS || 4)
+const rawPlaywrightWorkers = process.env.PLAYWRIGHT_WORKERS
+let WORKERS = 4
+if (rawPlaywrightWorkers !== undefined && rawPlaywrightWorkers.trim() !== '') {
+    const trimmedWorkers = rawPlaywrightWorkers.trim()
+    const parsedWorkers = Number(trimmedWorkers)
+    if (!/^[1-9]\d*$/.test(trimmedWorkers) || !Number.isSafeInteger(parsedWorkers) || parsedWorkers < 1) {
+        throw new Error(
+            `Invalid PLAYWRIGHT_WORKERS '${rawPlaywrightWorkers}': expected a positive integer.`
+        )
+    }
+    WORKERS = parsedWorkers
+}
 
 const createWebServerConfig = (workerIndex: number) => {
     const port = 3105 + workerIndex

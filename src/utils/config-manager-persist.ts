@@ -115,3 +115,28 @@ export function writeTempAndRenameConfig(
         throw writeErr
     }
 }
+
+export function persistDynamicConfigToFile(
+    configPath: string,
+    isYaml: boolean,
+    config: DynamicConfig,
+    provenance: PersistProvenanceFlags,
+    onYamlCommentWarning: () => void
+): void {
+    const loaded = readSafeRegularConfigTextSync(configPath)
+    if (loaded === undefined) {
+        throw new Error('Configuration file not found')
+    }
+    const rawParsed: unknown = isYaml
+        ? (parseYaml as (text: string) => unknown)(loaded.content)
+        : JSON.parse(loaded.content)
+    if (typeof rawParsed !== 'object' || rawParsed === null || Array.isArray(rawParsed)) {
+        throw new Error('Configuration file root must be a JSON/YAML object')
+    }
+    const parsed = rawParsed as Record<string, unknown>
+    applyPersistableConfigKeys(parsed, config, provenance)
+    if (isYaml) onYamlCommentWarning()
+    const serialized = serializeConfigObject(parsed, isYaml)
+    // [INVARIANT] Atomic temp+rename so a crash or concurrent reader never sees a truncated config.
+    writeTempAndRenameConfig(configPath, serialized)
+}

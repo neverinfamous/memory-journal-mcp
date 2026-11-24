@@ -1,6 +1,5 @@
 import * as fs from 'node:fs'
 import { EventEmitter } from 'node:events'
-import { parse as parseYaml } from 'yaml'
 import { logger } from './logger.js'
 import { parseToolFilter } from '../filtering/tool-filter.js'
 import { activeProjectRegistry, pairStoredScope } from './write-scope.js'
@@ -18,12 +17,9 @@ import {
     type MutatedConfigFields,
     type UpdateConfigOptions,
 } from './config-manager-helpers.js'
-import { readSafeRegularConfigTextSync } from './config-file-safety.js'
 import {
-    applyPersistableConfigKeys,
     parseRawConfigObjectFromFile,
-    serializeConfigObject,
-    writeTempAndRenameConfig,
+    persistDynamicConfigToFile,
 } from './config-manager-persist.js'
 
 export type {
@@ -47,6 +43,7 @@ export class ConfigManager extends EventEmitter {
     private watcher: fs.FSWatcher | undefined
     private debounceTimer?: ReturnType<typeof setTimeout>
     private isWriting = false
+    private suppressSelfWatchUntil = 0
     private closed = false
     /** True when the current rawToolFilter originated from the config file or was explicitly mutated. */
     private toolFilterFromFile = false
@@ -67,7 +64,8 @@ export class ConfigManager extends EventEmitter {
         this.configFilePath = configFilePath
 
         const initialFile =
-            configFilePath !== undefined && fs.existsSync(configFilePath)
+            configFilePath !== undefined &&
+            fs.lstatSync(configFilePath, { throwIfNoEntry: false }) !== undefined
                 ? this.readRawConfigObject()
                 : null
         const effectiveInitial = seedInitialBriefingScopeFromFile(initialConfig, initialFile)
@@ -88,7 +86,10 @@ export class ConfigManager extends EventEmitter {
         this.defaultWorkspaceIdFromFile = baselines.defaultWorkspaceIdFromFile
         this.defaultProjectNumberFromFile = baselines.defaultProjectNumberFromFile
 
-        if (this.configFilePath && fs.existsSync(this.configFilePath)) {
+        if (
+            this.configFilePath &&
+            fs.lstatSync(this.configFilePath, { throwIfNoEntry: false }) !== undefined
+        ) {
             this.watchFile()
         }
     }
@@ -301,36 +302,23 @@ export class ConfigManager extends EventEmitter {
         if (!this.configFilePath) return undefined
         this.isWriting = true
         try {
-            const loaded = readSafeRegularConfigTextSync(this.configFilePath)
-            if (loaded === undefined) {
-                throw new Error('Configuration file not found')
-            }
-            const content = loaded.content
-            const isYaml = this.isYamlConfigPath()
-            const rawParsed: unknown = isYaml
-                ? (parseYaml as (text: string) => unknown)(content)
-                : JSON.parse(content)
-            if (typeof rawParsed !== 'object' || rawParsed === null || Array.isArray(rawParsed)) {
-                throw new Error('Configuration file root must be a JSON/YAML object')
-            }
-            const parsed = rawParsed as Record<string, unknown>
-
-            applyPersistableConfigKeys(parsed, this.config, {
-                toolFilter: this.toolFilterFromFile,
-                codemode: this.codemodeFromFile,
-                defaultWorkspaceId: this.defaultWorkspaceIdFromFile,
-                defaultProjectNumber: this.defaultProjectNumberFromFile,
-                briefingKeys: this.briefingKeysFromFile,
-            })
-
-            if (isYaml) {
-                // To avoid destroying yaml comments, ideally we'd use a robust yaml editor.
-                // But this is just a best effort fallback for CLI config rewrites.
-                logger.warning('YAML file updates from update_configuration tool will drop comments.', { module: 'ConfigManager' })
-            }
-            const serialized = serializeConfigObject(parsed, isYaml)
-            // [INVARIANT] Atomic temp+rename so a crash or concurrent reader never sees a truncated config.
-            writeTempAndRenameConfig(this.configFilePath, serialized)
+            persistDynamicConfigToFile(
+                this.configFilePath,
+                this.isYamlConfigPath(),
+                this.config,
+                {
+                    toolFilter: this.toolFilterFromFile,
+                    codemode: this.codemodeFromFile,
+                    defaultWorkspaceId: this.defaultWorkspaceIdFromFile,
+                    defaultProjectNumber: this.defaultProjectNumberFromFile,
+                    briefingKeys: this.briefingKeysFromFile,
+                },
+                () => {
+                    logger.warning('YAML file updates from update_configuration tool will drop comments.', {
+                        module: 'ConfigManager',
+                    })
+                }
+            )
             // [SIDE-EFFECT] rename replaces the inode, so re-arm the watcher on the new file.
             if (!this.closed && this.watcher !== undefined) {
                 this.watcher.close()
@@ -342,42 +330,55 @@ export class ConfigManager extends EventEmitter {
             logger.error('Failed to persist configuration to file', { module: 'ConfigManager', error: message })
             return message
         } finally {
+            this.suppressSelfWatchUntil = Date.now() + 250
             this.isWriting = false
         }
         return undefined
     }
 
+    private runDebouncedReload(state: { pendingRename: boolean }): void {
+        if (this.closed) return
+        const shouldRewatch = state.pendingRename
+        state.pendingRename = false
+        try {
+            if (
+                shouldRewatch &&
+                this.watcher !== undefined &&
+                this.configFilePath !== undefined &&
+                fs.lstatSync(this.configFilePath, { throwIfNoEntry: false }) !== undefined
+            ) {
+                this.watcher.close()
+                this.watcher = undefined
+                this.watchFile()
+            }
+            this.reloadFromFile()
+        } catch (err: unknown) {
+            logger.error('Failed to reload config file', {
+                module: 'ConfigManager',
+                error: err instanceof Error ? err.message : String(err),
+            })
+        }
+    }
+
     private watchFile(): void {
         if (this.closed || !this.configFilePath) return
-
         try {
-            let pendingRename = false
+            const state = { pendingRename: false }
             this.watcher = fs.watch(this.configFilePath, { persistent: false }, (eventType) => {
-                if ((eventType === 'change' || eventType === 'rename') && !this.isWriting && !this.closed) {
-                    if (eventType === 'rename') pendingRename = true
-                    if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
-                    this.debounceTimer = setTimeout(() => {
-                        if (this.closed) return
-                        const shouldRewatch = pendingRename
-                        pendingRename = false
-                        try {
-                            if (
-                                shouldRewatch &&
-                                this.watcher !== undefined &&
-                                this.configFilePath !== undefined &&
-                                fs.existsSync(this.configFilePath)
-                            ) {
-                                this.watcher.close()
-                                this.watcher = undefined
-                                this.watchFile()
-                            }
-                            this.reloadFromFile()
-                        } catch (err: unknown) {
-                            logger.error('Failed to reload config file', { module: 'ConfigManager', error: err instanceof Error ? err.message : String(err) })
-                        }
-                    }, CONFIG_RELOAD_DEBOUNCE_MS)
-                    this.debounceTimer.unref()
+                if (
+                    (eventType !== 'change' && eventType !== 'rename') ||
+                    this.isWriting ||
+                    Date.now() < this.suppressSelfWatchUntil ||
+                    this.closed
+                ) {
+                    return
                 }
+                if (eventType === 'rename') state.pendingRename = true
+                if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
+                this.debounceTimer = setTimeout(() => {
+                    this.runDebouncedReload(state)
+                }, CONFIG_RELOAD_DEBOUNCE_MS)
+                this.debounceTimer.unref()
             })
             this.watcher.on('error', (err: unknown) => {
                 logger.warning('Config file watcher error', {
@@ -386,9 +387,15 @@ export class ConfigManager extends EventEmitter {
                     error: err instanceof Error ? err.message : String(err),
                 })
             })
-            logger.info('Watching configuration file for changes', { module: 'ConfigManager', path: this.configFilePath })
+            logger.info('Watching configuration file for changes', {
+                module: 'ConfigManager',
+                path: this.configFilePath,
+            })
         } catch (error: unknown) {
-            logger.warning('Failed to start configuration file watcher', { module: 'ConfigManager', error: error instanceof Error ? error.message : String(error) })
+            logger.warning('Failed to start configuration file watcher', {
+                module: 'ConfigManager',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
     }
 
@@ -437,7 +444,12 @@ export class ConfigManager extends EventEmitter {
     }
 
     private reloadFromFile(): void {
-        if (!this.configFilePath || !fs.existsSync(this.configFilePath)) return
+        if (
+            !this.configFilePath ||
+            fs.lstatSync(this.configFilePath, { throwIfNoEntry: false }) === undefined
+        ) {
+            return
+        }
 
         try {
             const parsed = this.readRawConfigObject()

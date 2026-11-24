@@ -176,6 +176,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     const executeCodeFn = createSandboxExecutor({
         shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
         pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode, activeTimers,
+        ...(options.nestedDepth !== undefined ? { nestedDepth: options.nestedDepth } : {}),
     })
     executeCodeFnRef.current = executeCodeFn
 

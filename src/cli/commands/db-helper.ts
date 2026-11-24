@@ -64,6 +64,9 @@ export function resolveCliReadScope(
     serverOptions: ServerOptions,
     options: { workspace?: string; defaultProject?: number; team?: boolean }
 ): { workspaceId: string; projectNumber?: number } {
+    if (options.workspace?.trim() === '') {
+        throw new ValidationError("Invalid --workspace '': expected a non-empty workspace identifier.")
+    }
     const trimmedWs = options.workspace?.trim()
     const scope = resolveCliQueryScope(
         trimmedWs !== undefined && trimmedWs !== '' ? trimmedWs : undefined,

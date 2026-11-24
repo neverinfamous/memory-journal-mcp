@@ -284,9 +284,11 @@ export function healValidationAndScoreFields(obj: Record<string, unknown>): bool
         } else if (NONE_VALIDATION_ALIASES.has(vsStr)) {
             obj['validation_status'] = 'none'
             modified = true
-        } else if (typeof rawVs === 'string' && !['passed', 'none', 'failed'].includes(vsStr)) {
-            obj['validation_status'] = 'none'
-            modified = true
+        } else if (vsStr === 'passed' || vsStr === 'failed' || vsStr === 'none') {
+            if (rawVs !== vsStr) {
+                obj['validation_status'] = vsStr
+                modified = true
+            }
         }
     }
 

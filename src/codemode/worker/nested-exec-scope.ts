@@ -69,6 +69,7 @@ export interface SandboxExecutorOptions {
     projectRegistryRaw: unknown
     runIsolatedNestedCode: RunIsolatedNestedFn
     activeTimers?: Set<NodeJS.Timeout>
+    nestedDepth?: number
 }
 
 function resolveNestedNarrowedScope(
@@ -169,13 +170,22 @@ interface ShortcutDispatchInput {
 
 const MAX_SNAPSHOT_DEPTH = 12
 const MAX_SNAPSHOT_NODES = 2_000
+const MAX_SNAPSHOT_BYTES = 128 * 1024
+const MAX_NESTED_FASTPATH_DEPTH = 4
 
 function snapshotUntrustedValue(
     val: unknown,
     depth: number,
-    budget: { remaining: number },
+    budget: { remaining: number; remainingBytes: number },
     active: WeakSet<object>
 ): unknown {
+    if (typeof val === 'string') {
+        budget.remainingBytes -= Buffer.byteLength(val, 'utf8')
+        if (budget.remainingBytes < 0) {
+            throw new Error('Nested executeCode argument exceeds snapshot byte limit')
+        }
+        return val
+    }
     if (val === null || typeof val !== 'object') return val
     if (depth >= MAX_SNAPSHOT_DEPTH || budget.remaining <= 0) {
         throw new Error('Nested executeCode argument exceeds snapshot bounds')
@@ -223,11 +233,17 @@ function snapshotUntrustedArg(arg: unknown): {
     safeArg: unknown
     argRec: Record<string, unknown> | undefined
 } {
+    if (typeof arg === 'string') {
+        if (Buffer.byteLength(arg, 'utf8') > MAX_SNAPSHOT_BYTES) {
+            throw new Error('Nested executeCode argument exceeds snapshot byte limit')
+        }
+        return { safeArg: arg, argRec: undefined }
+    }
     if (!isPlainRecord(arg)) return { safeArg: arg, argRec: undefined }
     const snap = snapshotUntrustedValue(
         arg,
         0,
-        { remaining: MAX_SNAPSHOT_NODES },
+        { remaining: MAX_SNAPSHOT_NODES, remainingBytes: MAX_SNAPSHOT_BYTES },
         new WeakSet()
     ) as Record<string, unknown>
     return { safeArg: snap, argRec: snap }
@@ -365,6 +381,32 @@ function validateAndWrapNestedCode(
     return { ok: true, wrapped: `"use strict";\n(async () => {\n${transformedCode}\n})()` }
 }
 
+function resolveSnapshottedNestedArgs(
+    rawArgs: unknown[]
+): { arg: unknown; argRec: Record<string, unknown> | undefined } | { error: string } {
+    try {
+        const snapped = snapshotUntrustedArg(rawArgs[0])
+        let arg = snapped.safeArg
+        let argRec = snapped.argRec
+        const snappedOpts =
+            rawArgs.length > 1 && rawArgs[1] !== undefined ? snapshotUntrustedArg(rawArgs[1]) : undefined
+        if (typeof arg === 'string' && snappedOpts?.argRec !== undefined) {
+            argRec = Object.assign(Object.create(null) as Record<string, unknown>, snappedOpts.argRec, { code: arg })
+            arg = argRec
+        } else if (argRec !== undefined && snappedOpts?.argRec !== undefined) {
+            const res = mergeNestedArgAndOptions(argRec, snappedOpts.argRec)
+            if ('error' in res) return { error: res.error }
+            arg = argRec = res.merged
+        }
+        return { arg, argRec }
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : ''
+        return {
+            error: msg !== '' ? `Nested executeCode argument snapshot failed: ${msg}` : 'Nested executeCode argument snapshot failed',
+        }
+    }
+}
+
 /**
  * Builds the sandboxed nested `executeCode` dispatcher enforcing pinned scope,
  * readonly/dryRun/useTestDb invariants, and code-security checks before `vm.runInContext`.
@@ -373,7 +415,10 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
     const {
         shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
         pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode, activeTimers,
+        nestedDepth,
     } = options
+    const baseDepth = nestedDepth ?? 0
+    let activeFastPathDepth = 0
     const pinnedWorkspace =
         typeof pinnedWorkspaceRaw === 'string' && pinnedWorkspaceRaw.trim() !== '' && pinnedWorkspaceRaw.trim() !== '*'
             ? pinnedWorkspaceRaw.trim()
@@ -384,24 +429,14 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
             : undefined
 
     return async (...rawArgs: unknown[]): Promise<unknown> => {
-        let arg: unknown
-        let argRec: Record<string, unknown> | undefined
-        try {
-            const snapped = snapshotUntrustedArg(rawArgs[0])
-            arg = snapped.safeArg
-            argRec = snapped.argRec
-            const snappedOpts = rawArgs.length > 1 && rawArgs[1] !== undefined ? snapshotUntrustedArg(rawArgs[1]) : undefined
-            if (typeof arg === 'string' && snappedOpts?.argRec !== undefined) {
-                argRec = Object.assign(Object.create(null) as Record<string, unknown>, snappedOpts.argRec, { code: arg })
-                arg = argRec
-            } else if (argRec !== undefined && snappedOpts?.argRec !== undefined) {
-                const res = mergeNestedArgAndOptions(argRec, snappedOpts.argRec)
-                if ('error' in res) return { success: false, error: res.error, code: 'VALIDATION_ERROR' }
-                arg = argRec = res.merged
-            }
-        } catch {
-            return { success: false, error: 'Nested executeCode argument snapshot failed', code: 'VALIDATION_ERROR' }
+        if (baseDepth + activeFastPathDepth >= MAX_NESTED_FASTPATH_DEPTH) {
+            throw new Error(
+                `Nested executeCode exceeded maximum recursion depth of ${String(MAX_NESTED_FASTPATH_DEPTH)}`
+            )
         }
+        const snap = resolveSnapshottedNestedArgs(rawArgs)
+        if ('error' in snap) return { success: false, error: snap.error, code: 'VALIDATION_ERROR' }
+        const { arg, argRec } = snap
         const scopeErr = validateNestedExecScope(argRec, pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw)
         if (scopeErr !== null) return { success: false, error: scopeErr.error, code: 'VALIDATION_ERROR' }
 
@@ -438,12 +473,18 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
         if (escalates || isolation !== undefined) {
             return runIsolatedNestedCode(compiled.wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation)
         }
-        return await raceWithSandboxTimeout(
-            Promise.resolve(
-                getOrCompileVmScript(compiled.wrapped).runInContext(vmContextRef.current, { timeout: timeoutMs })
-            ),
-            timeoutMs,
-            activeTimers
-        )
+        activeFastPathDepth++
+        try {
+            const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
+                Promise.resolve(
+                    getOrCompileVmScript(compiled.wrapped).runInContext(vmContextRef.current, { timeout: timeoutMs })
+                ),
+                timeoutMs,
+                activeTimers
+            )
+            return enforceNestedResultLimit(rawResult, maxResultSize)
+        } finally {
+            activeFastPathDepth--
+        }
     }
 }

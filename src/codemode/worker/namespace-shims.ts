@@ -361,7 +361,7 @@ function createPromptBlockedFn(prop: string): (_promptName?: string) => Promise<
 }
 
 function resolveContextProxyProp(target: Record<string, unknown>, prop: string | symbol): unknown {
-    if (Object.prototype.hasOwnProperty.call(target, prop)) {
+    if (Object.hasOwn(target, prop)) {
         return Reflect.get(target, prop)
     }
     if (typeof prop === 'symbol') {

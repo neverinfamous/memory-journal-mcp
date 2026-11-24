@@ -15,6 +15,24 @@ export { convertKeysToSnakeCase }
 const ENTRY_CREATE_METHODS = new Set(['createEntry', 'createEntryMinimal', 'teamCreateEntry'])
 
 const VALID_ENTRY_FIELDS = new Set([
+    '_alias_derived_workspace',
+    'use_test_db',
+    'useTestDb',
+    'expected_version',
+    'expectedVersion',
+    'is_archived',
+    'isArchived',
+    'target_workspace_id',
+    'targetWorkspaceId',
+    'entry_id',
+    'entryId',
+    'auto_version',
+    'autoVersion',
+    'dry_run',
+    'dryRun',
+    'readonly',
+    'readOnly',
+    'read_only',
     'type',
     'tags',
     'entry_type',
@@ -22,6 +40,12 @@ const VALID_ENTRY_FIELDS = new Set([
     'share_with_team',
     'significance_type',
     'auto_context',
+    'project',
+    'project_id',
+    'projectId',
+    'project_name',
+    'projectName',
+    'projectNumber',
     'project_number',
     'project_owner',
     'issue_number',
@@ -32,6 +56,8 @@ const VALID_ENTRY_FIELDS = new Set([
     'workflow_run_id',
     'workflow_name',
     'workflow_status',
+    'workspace',
+    'workspaceId',
     'workspace_id',
     'session_id',
     'impact_score',
@@ -56,7 +82,7 @@ function synthesizeMissingEntryContent(methodName: string, obj: Record<string, u
 
     let content = ''
     for (const [key, value] of Object.entries(obj)) {
-        if (VALID_ENTRY_FIELDS.has(key)) continue
+        if (key.startsWith('_') || VALID_ENTRY_FIELDS.has(key)) continue
         const strValue =
             typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)
         content += `**${key}**\n${strValue}\n\n`

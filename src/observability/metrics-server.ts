@@ -180,7 +180,11 @@ function servePrometheusMetrics(
         logger.error('Failed to generate metrics', {
             error: error instanceof Error ? error.message : String(error),
         });
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.writeHead(500, {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+        });
         res.end(req.method === 'HEAD' ? undefined : 'Internal Server Error');
     }
 }

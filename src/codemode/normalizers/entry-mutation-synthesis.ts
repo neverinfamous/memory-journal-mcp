@@ -44,6 +44,9 @@ export function synthesizeEntryMutationFields(obj: Record<string, unknown>, isUp
         }
         Reflect.deleteProperty(obj, 'heading')
         Reflect.deleteProperty(obj, 'subject')
+        if (obj['content'] === undefined) {
+            return
+        }
     } else {
         consumeGroup(['title', 'heading', 'subject', 'name'], (v) => {
             const s = safeString(v)

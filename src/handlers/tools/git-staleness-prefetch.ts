@@ -170,7 +170,12 @@ export async function resolvePrefetchedLookup(
     try {
         const prefetched = await prefetchCommitsSince(earliestSince, registryPath, 500)
         return buildPrefetchedCommitCounter(prefetched, 500, maxCommitsPerAnchor)
-    } catch {
+    } catch (err: unknown) {
+        mcpLogger.debug(
+            'GitStaleness',
+            'Prefetched git commit counter failed; using per-anchor fallback',
+            { error: err instanceof Error ? err.message : String(err) }
+        )
         return undefined
     }
 }

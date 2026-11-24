@@ -11,8 +11,14 @@ export async function searchAction(query: string | undefined, options: z.infer<t
         await getDb(options, command)
         return
     }
-    const finalQuery = query ?? options.query ?? options.term ?? options.keyword;
-    if (!finalQuery) {
+    const firstNonBlankQuery = (...vals: (string | undefined)[]): string | undefined => {
+        for (const v of vals) {
+            if (typeof v === 'string' && v.trim() !== '') return v.trim()
+        }
+        return undefined
+    }
+    const finalQuery = firstNonBlankQuery(query, options.query, options.term, options.keyword)
+    if (finalQuery === undefined) {
         process.stderr.write("🛠️ AUTONOMOUS HEALING: Missing search query. You must provide a query as a positional argument (e.g. `mj search \"query\"`) or via a flag (e.g. `mj search --query \"query\"`).\n");
         process.exit(1);
     }

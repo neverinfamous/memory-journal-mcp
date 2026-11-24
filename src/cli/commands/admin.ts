@@ -30,6 +30,10 @@ export const auditSchema = adminAuditSearchOptionsSchema
 export const rebuildIndexSchema = adminRebuildIndexOptionsSchema
 
 export async function backupAction(options: z.infer<typeof backupSchema>, command: Command): Promise<void> {
+    if (options.dest?.trim() === '') {
+        process.stderr.write("Backup failed: Invalid --dest '': path cannot be empty or whitespace.\n")
+        process.exit(1)
+    }
     const { db } = await getDb(options, command)
     const trimmedDest = options.dest?.trim()
     const dest = trimmedDest !== undefined && trimmedDest !== '' ? trimmedDest : undefined
@@ -101,6 +105,9 @@ function resolveCliPruneScope(
     options: z.infer<typeof pruneSchema>,
     serverOptions: CliAdminServerOptions
 ): { workspaceId: string; projectNumber?: number } {
+    if (options.workspace?.trim() === '') {
+        throw new Error("Invalid --workspace '': expected a non-empty workspace identifier.")
+    }
     const requestedWs = options.workspace?.trim()
     const requestedProject = options.defaultProject
     if (requestedWs === '*') {
@@ -323,6 +330,9 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
     const { db, serverOptions } = await getDb(options, command)
     let exitCode = 0
     try {
+        if (options.workspace?.trim() === '') {
+            throw new Error("Invalid --workspace '': expected a non-empty workspace identifier.")
+        }
         const explicitWs = options.workspace?.trim()
         if (explicitWs === '*') {
             throw new Error(

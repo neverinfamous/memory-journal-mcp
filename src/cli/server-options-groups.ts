@@ -1,3 +1,4 @@
+import * as path from 'node:path'
 import { z } from 'zod'
 import type { BriefingConfig } from '../handlers/resources/shared.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
@@ -368,6 +369,22 @@ export function resolveMaxToolInputElementsOption(
     }, undefined)
 }
 
+function resolveMetricsPathOption(resolver: ConfigResolver): string | undefined {
+    const val = resolver.resolve<unknown>('metricsPath', 'METRICS_PATH')
+    if (val === undefined || val === null) return undefined
+    if (typeof val !== 'string') {
+        throw new Error(`Invalid metricsPath: expected string, got ${typeof val}`)
+    }
+    const trimmed = val.trim()
+    if (trimmed === '') {
+        if (resolver.isCliProvided('metricsPath') || resolver.hasConfigFileKey('metricsPath')) {
+            throw new Error('Invalid blank metricsPath.')
+        }
+        return undefined
+    }
+    return path.resolve(process.cwd(), trimmed)
+}
+
 export function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig: CatchConfig): {
     archiveOlderThanDays: number
     pruneOlderThanDays: number
@@ -389,7 +406,8 @@ export function buildLifecycleOptionsGroup(resolver: ConfigResolver, catchConfig
         pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
         metricsExport: resolveMetricsExportOption(resolver, catchConfig),
         persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
-        metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
+        metricsPath: catchConfig(() => resolveMetricsPathOption(resolver), undefined),
+        // [INTENT] Port 0 requests an OS-assigned ephemeral port (Pass 60).
         metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 0, 65535), undefined),
     }
 }

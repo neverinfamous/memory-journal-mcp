@@ -10,7 +10,7 @@ import { logger } from '../utils/logger.js'
  */
 export const SessionCommitContextSchema = z
     .object({
-        commits: z.array(z.string().regex(/^[0-9a-fA-F]{7,40}$/)),
+        commits: z.array(z.string().regex(/^[0-9a-fA-F]{7,40}$/)).max(500),
         branch: z.string().optional(),
         pr: z.number().int().positive().optional(),
         repo: z.string().optional(),
@@ -39,6 +39,8 @@ export const AutoContextSchema = z.union([
     SessionCommitContextSchema,
 ])
 
+const FreeformRecordSchema = z.record(z.string(), z.unknown())
+
 /**
  * Helper to safely parse and validate autoContext JSON.
  * Returns the parsed object, or null if invalid/omitted.
@@ -64,7 +66,8 @@ export function parseAutoContext(
             issues: result.error.issues,
         })
 
-        return parsed as Record<string, unknown>
+        const freeform = FreeformRecordSchema.safeParse(parsed)
+        return freeform.success ? freeform.data : null
     } catch (error: unknown) {
         logger.warning('Failed to parse auto_context JSON', {
             module: 'Validator',

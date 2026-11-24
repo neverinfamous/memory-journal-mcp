@@ -73,7 +73,23 @@ export function parseAuditLine(line: string | undefined): AuditEntry | null {
             return null
         }
         const record = parsed as Record<string, unknown>
-        if (typeof record['tool'] !== 'string') {
+        if (
+            typeof record['tool'] !== 'string' ||
+            typeof record['timestamp'] !== 'string' ||
+            typeof record['success'] !== 'boolean'
+        ) {
+            return null
+        }
+        if (record['user'] !== undefined && record['user'] !== null && typeof record['user'] !== 'string') {
+            return null
+        }
+        if (record['category'] !== undefined && typeof record['category'] !== 'string') {
+            return null
+        }
+        if (record['workspaceId'] !== undefined && typeof record['workspaceId'] !== 'string') {
+            return null
+        }
+        if (record['projectNumber'] !== undefined && typeof record['projectNumber'] !== 'number') {
             return null
         }
         return parsed as AuditEntry
@@ -91,7 +107,10 @@ export function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilte
     if (filters.date_range?.start && entry.timestamp < filters.date_range.start) return false
     if (filters.date_range?.end && entry.timestamp > filters.date_range.end) return false
     if (filters.workspace_id !== undefined && filters.workspace_id !== '*') {
-        if (entry.workspaceId?.toLowerCase() !== filters.workspace_id.toLowerCase()) {
+        if (
+            typeof entry.workspaceId !== 'string' ||
+            entry.workspaceId.toLowerCase() !== filters.workspace_id.toLowerCase()
+        ) {
             return false
         }
     }

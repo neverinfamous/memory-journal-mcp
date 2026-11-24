@@ -8,35 +8,34 @@ function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (typeof v === 'number') {
         return Number.isSafeInteger(v) && v > 0 ? v : Number.NaN
     }
-    if (v === '') return undefined
     const trimmed = v.trim()
     if (trimmed === '') return Number.NaN
     return parseCanonicalPositiveInt(trimmed) ?? Number.NaN
 }
 
 function coerceCanonicalProject(v: number | string | undefined): number | undefined {
-    if (v === undefined || v === '') return undefined
+    if (v === undefined) return undefined
     if (typeof v === 'string' && v.trim() === '') return Number.NaN
     return parsePositiveProjectNumber(v) ?? Number.NaN
 }
 
 export const GitHistoryOptionsSchema = z.object({
-    ref: z.string().optional(),
-    path: z.string().optional(),
+    ref: z.string().max(255).optional(),
+    path: z.string().max(500).optional(),
     maxCount: z.number().int().positive().max(10000).optional(),
-    since: z.string().optional(),
+    since: z.string().max(64).optional(),
     sortBy: z.enum(['date', 'impact']).optional(),
-    scope: z.string().optional(),
+    scope: z.string().max(255).optional(),
     techDebtAudit: z.boolean().optional(),
     summary: z.boolean().optional(),
     uncommitted: z.boolean().optional(),
-    repo: z.string().optional(),
-    repo_name: z.string().optional(),
+    repo: z.string().max(255).optional(),
+    repo_name: z.string().max(255).optional(),
     workspace_id: z.string().max(255).optional(),
     workspaceId: z.string().max(255).optional(),
     project_number: StrictProjectNumberSchema.optional(),
-    cwd: z.string().optional(),
-})
+    cwd: z.string().max(500).optional(),
+}).strict()
 
 export const GitHistoryOptionsSchemaMcp = z.object({
     ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
@@ -67,19 +66,19 @@ export const GitHistoryOptionsSchemaMcp = z.object({
 }))
 
 export const GitSearchOptionsSchema = z.object({
-    query: z.string().min(1),
+    query: z.string().min(1).max(500),
     maxCount: z.number().int().positive().max(10000).optional(),
     sortBy: z.enum(['date', 'impact']).optional(),
-    scope: z.string().optional(),
+    scope: z.string().max(255).optional(),
     techDebtAudit: z.boolean().optional(),
     summary: z.boolean().optional(),
-    repo: z.string().optional(),
-    repo_name: z.string().optional(),
+    repo: z.string().max(255).optional(),
+    repo_name: z.string().max(255).optional(),
     workspace_id: z.string().max(255).optional(),
     workspaceId: z.string().max(255).optional(),
     project_number: StrictProjectNumberSchema.optional(),
-    cwd: z.string().optional(),
-})
+    cwd: z.string().max(500).optional(),
+}).strict()
 
 export const GitSearchOptionsSchemaMcp = z.object({
     query: z.string().optional().describe('Search query to match in commit messages'),

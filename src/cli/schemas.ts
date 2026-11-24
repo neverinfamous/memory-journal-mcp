@@ -285,8 +285,8 @@ export type BaseEntryOptionsSchema = z.infer<typeof baseEntryOptionsSchema>
 export const createEntryOptionsSchema = baseEntryOptionsSchema
 
 export const updateEntryOptionsSchema = baseEntryOptionsSchema.extend({
-    id: safeCoerceNumber,
-    expectedVersion: safeCoerceNumber,
+    id: safeCoercePositiveInt,
+    expectedVersion: safeCoercePositiveInt,
     targetWorkspace: z.string().optional(),
     target_workspace: z.string().optional(),
 })

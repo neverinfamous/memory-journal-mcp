@@ -166,7 +166,7 @@ export function resolveProjectNumber(
     if (!registry || !repo) return undefined
     const repoName = slug?.repo ?? repo
     const canonicalKey = findCanonicalRegistryKey(repoName, registry) ?? repoName
-    if (Object.prototype.hasOwnProperty.call(registry, canonicalKey)) {
+    if (Object.hasOwn(registry, canonicalKey)) {
         const entry = registry[canonicalKey]
         if (entry?.project_number != null) {
             return entry.project_number
@@ -319,7 +319,7 @@ function lookupMatchedRegistryKey(
     if (lookupWs !== undefined) {
         matchedRegistryKey =
             findCanonicalRegistryKey(lookupWs, registry) ??
-            (Object.prototype.hasOwnProperty.call(registry, lookupWs) ? lookupWs : undefined)
+            (Object.hasOwn(registry, lookupWs) ? lookupWs : undefined)
     }
     if (matchedRegistryKey === undefined && inputProjectNumber !== undefined && !namedDefault) {
         const matches = Object.entries(registry).filter(
@@ -390,7 +390,7 @@ export function resolveGitHubRegistryScope(
         fsMatchedKey ??
         (resolvedRepoName
             ? (findCanonicalRegistryKey(resolvedRepoName, registry) ??
-              (registry && Object.prototype.hasOwnProperty.call(registry, resolvedRepoName)
+              (registry && Object.hasOwn(registry, resolvedRepoName)
                   ? resolvedRepoName
                   : undefined))
             : matchedRegistryKey)

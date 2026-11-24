@@ -76,7 +76,7 @@ export const TeamLinkEntriesSchema = z.preprocess(
             ),
             description: z.string().optional(),
             project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             session_id: z.string().optional(),
         })
         .strict()
@@ -212,7 +212,7 @@ export const TeamSemanticSearchSchema = z.preprocess(
                 .optional()
                 .describe('Find entries related to this entry ID'),
             limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
-            similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number()).optional().default(0.25),
+            similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional().default(0.25),
             tags: z.array(z.string()).optional(),
             exclude_tags: z.array(z.string()).optional(),
             entry_type: z.enum(ENTRY_TYPES).optional(),

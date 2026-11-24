@@ -25,6 +25,8 @@ export interface ScopedRpcOverrides {
     autoVersion?: boolean
 }
 
+export const MAX_NESTED_EXEC_DEPTH = 4
+
 export interface VmExecutionContextOptions {
     rpcFn: RpcCallFn
     sendRpcRequest: SendRpcRequestFn
@@ -42,6 +44,7 @@ export interface VmExecutionContextOptions {
     projectRegistryRaw: unknown
     activeTimers: Set<NodeJS.Timeout>
     executionLifecycle?: ExecutionLifecycleState
+    nestedDepth?: number
 }
 
 export function createScopedRpcCall(
@@ -112,6 +115,9 @@ function buildNestedVmContextOptions(
     nestedReadonly: boolean,
     nestedDryRun: boolean,
     nestedUseTestDb: boolean,
+    childTimers: Set<NodeJS.Timeout>,
+    childLifecycle: ExecutionLifecycleState,
+    nextDepth: number,
     overrides?: NestedExecIsolationOverrides
 ): { vmOpts: VmExecutionContextOptions; nextTimeout: number; nextMaxResult: number | undefined } {
     const nextWs = outerWs ?? overrides?.workspaceId
@@ -163,10 +169,9 @@ function buildNestedVmContextOptions(
             pinnedWorkspaceRaw: nextWs ?? options.pinnedWorkspaceRaw,
             pinnedProjectRaw: nextProj,
             projectRegistryRaw: options.projectRegistryRaw,
-            activeTimers: options.activeTimers,
-            ...(options.executionLifecycle !== undefined
-                ? { executionLifecycle: options.executionLifecycle }
-                : {}),
+            activeTimers: childTimers,
+            executionLifecycle: childLifecycle,
+            nestedDepth: nextDepth,
         },
     }
 }
@@ -196,26 +201,42 @@ export function createIsolatedNestedRunner(
         nestedUseTestDb: boolean,
         overrides?: NestedExecIsolationOverrides
     ): Promise<unknown> => {
+        const nextDepth = (options.nestedDepth ?? 0) + 1
+        if (nextDepth > MAX_NESTED_EXEC_DEPTH) {
+            throw new Error(
+                `Nested executeCode exceeded maximum recursion depth of ${String(MAX_NESTED_EXEC_DEPTH)}`
+            )
+        }
+        const childTimers = new Set<NodeJS.Timeout>()
+        const childLifecycle: ExecutionLifecycleState = { ended: false, postCloseActivity: false }
+        const childSendRpcRequest: SendRpcRequestFn = (payload) => {
+            if (childLifecycle.ended || options.executionLifecycle?.ended === true) {
+                childLifecycle.postCloseActivity = true
+                return Promise.reject(new Error('Nested sandbox execution has already ended'))
+            }
+            return sendRpcRequest(payload)
+        }
         const { vmOpts, nextTimeout, nextMaxResult } = buildNestedVmContextOptions(
-            options,
-            sendRpcRequest,
-            outerWs,
-            outerProj,
-            nestedReadonly,
-            nestedDryRun,
-            nestedUseTestDb,
-            overrides
+            options, childSendRpcRequest, outerWs, outerProj,
+            nestedReadonly, nestedDryRun, nestedUseTestDb,
+            childTimers, childLifecycle, nextDepth, overrides
         )
         const nestedContext = buildVmContext(vmOpts)
-        const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
-            Promise.resolve(
-                getOrCompileVmScript(wrapped).runInContext(nestedContext, {
-                    timeout: Math.max(1, Math.ceil(nextTimeout)),
-                })
-            ),
-            nextTimeout,
-            options.activeTimers
-        )
-        return enforceNestedResultLimit(rawResult, nextMaxResult)
+        try {
+            const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
+                Promise.resolve(
+                    getOrCompileVmScript(wrapped).runInContext(nestedContext, {
+                        timeout: Math.max(1, Math.ceil(nextTimeout)),
+                    })
+                ),
+                nextTimeout,
+                childTimers
+            )
+            return enforceNestedResultLimit(rawResult, nextMaxResult)
+        } finally {
+            childLifecycle.ended = true
+            for (const timer of childTimers) clearTimeout(timer)
+            childTimers.clear()
+        }
     }
 }

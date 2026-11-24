@@ -231,6 +231,14 @@ export function parsePositiveEntryId(
         firstNonBlankAlias(entryObj, rawObj, ['entry_id']) ??
         firstNonBlankAlias(entryObj, rawObj, ['entryId']) ??
         firstNonBlankAlias(entryObj, rawObj, ['id'])
+    if (rawEntryId === undefined) {
+        for (const src of [entryObj, rawObj]) {
+            for (const k of ['entry_id', 'entryId', 'id'] as const) {
+                if (typeof src[k] === 'string' && src[k].trim() === '') return ''
+            }
+        }
+        return undefined
+    }
     if (typeof rawEntryId === 'number') {
         if (Number.isSafeInteger(rawEntryId) && rawEntryId > 0) return rawEntryId
         return Number.isFinite(rawEntryId) ? rawEntryId : String(rawEntryId)
@@ -244,7 +252,7 @@ export function parsePositiveEntryId(
         if (trimmed !== '') return trimmed
     }
     if (typeof rawEntryId === 'boolean') return String(rawEntryId)
-    if (rawEntryId !== undefined && rawEntryId !== null) {
+    if (rawEntryId !== null) {
         return typeof rawEntryId === 'object' ? (JSON.stringify(rawEntryId) ?? 'invalid') : 'invalid'
     }
     return undefined
@@ -398,4 +406,22 @@ export function appendSharedEntryFlags(
           ? secondaryObj['anchors']
           : undefined
     if (anchors !== undefined) payload['anchors'] = anchors
+    let rawExpectedVer: unknown
+    for (const src of [entryObj, secondaryObj]) {
+        if (src['expected_version'] !== undefined) { rawExpectedVer = src['expected_version']; break }
+        if (src['expectedVersion'] !== undefined) { rawExpectedVer = src['expectedVersion']; break }
+    }
+    if (rawExpectedVer !== undefined) {
+        if (typeof rawExpectedVer === 'string') {
+            payload['expected_version'] = parseCanonicalPositiveInt(rawExpectedVer.trim()) ?? rawExpectedVer
+        } else {
+            payload['expected_version'] = rawExpectedVer
+        }
+    }
+    const isArchived =
+        entryObj['is_archived'] ?? entryObj['isArchived'] ?? secondaryObj['is_archived'] ?? secondaryObj['isArchived']
+    if (typeof isArchived === 'boolean') payload['is_archived'] = isArchived
+    const autoLink =
+        entryObj['auto_link'] ?? entryObj['autoLink'] ?? secondaryObj['auto_link'] ?? secondaryObj['autoLink']
+    if (typeof autoLink === 'boolean') payload['auto_link'] = autoLink
 }

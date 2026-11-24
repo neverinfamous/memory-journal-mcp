@@ -36,7 +36,14 @@ function toCanonicalRelationType(relationType: RequestedRelationship['relationTy
             return 'references'
         case 'depends_on':
             return 'blocked_by'
-        default:
+        case 'blocked_by':
+        case 'caused':
+        case 'clarifies':
+        case 'evolves_from':
+        case 'implements':
+        case 'references':
+        case 'resolved':
+        case 'response_to':
             return relationType
     }
 }

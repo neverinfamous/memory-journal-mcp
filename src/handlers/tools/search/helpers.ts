@@ -227,7 +227,12 @@ export function mergeMultipleSources(
                           return simB - simA
                       }
                   }
-                  return (b.timestamp ?? '').localeCompare(a.timestamp ?? '')
+                  const tsCmp = (b.timestamp ?? '').localeCompare(a.timestamp ?? '')
+                  if (tsCmp !== 0) return tsCmp
+                  const aId = typeof a['id'] === 'number' ? a['id'] : -1
+                  const bId = typeof b['id'] === 'number' ? b['id'] : -1
+                  if (bId !== aId) return bId - aId
+                  return (a.source ?? 'personal').localeCompare(b.source ?? 'personal')
               })
 
     for (const entry of all) {

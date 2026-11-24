@@ -67,6 +67,9 @@ function resolveDefaultWorkspaceIdOption(
                 throw new Error(`Invalid workspace: expected string, got ${typeof ws}.`)
             }
             const trimmedWs = typeof ws === 'string' ? ws.trim() : undefined
+            if (trimmedWs === '' && resolver.isCliProvided('workspace')) {
+                throw new Error("Invalid workspace '': cannot be empty or whitespace.")
+            }
             if (trimmedWs === '*') {
                 throw new Error("Invalid workspace '*': default workspace cannot be a wildcard.")
             }
@@ -77,6 +80,12 @@ function resolveDefaultWorkspaceIdOption(
             throw new Error(`Invalid defaultWorkspaceId: expected string, got ${typeof defWs}.`)
         }
         const trimmedDefWs = typeof defWs === 'string' ? defWs.trim() : undefined
+        if (
+            trimmedDefWs === '' &&
+            (resolver.isCliProvided('defaultWorkspaceId') || resolver.hasConfigFileKey('defaultWorkspaceId'))
+        ) {
+            throw new Error("Invalid defaultWorkspaceId '': cannot be empty or whitespace.")
+        }
         if (
             trimmedDefWs === '*' ||
             (trimmedDefWs !== undefined && trimmedDefWs !== '' && isForbiddenProjectKey(trimmedDefWs))

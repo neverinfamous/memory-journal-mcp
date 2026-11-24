@@ -34,7 +34,14 @@ export function readEntryIdField(target: Record<string, unknown>): {
     invalidExplicitEntryId: number | string | undefined
 } {
     const raw = firstNonBlankAlias(target, undefined, ['entry_id', 'entryId', 'id'])
-    if (raw === undefined) return { entryId: undefined, invalidExplicitEntryId: undefined }
+    if (raw === undefined) {
+        for (const k of ['entry_id', 'entryId', 'id'] as const) {
+            if (typeof target[k] === 'string' && target[k].trim() === '') {
+                return { entryId: undefined, invalidExplicitEntryId: '' }
+            }
+        }
+        return { entryId: undefined, invalidExplicitEntryId: undefined }
+    }
     const parsed = parsePositiveProjectNumber(raw)
     if (parsed !== undefined) return { entryId: parsed, invalidExplicitEntryId: undefined }
     if (typeof raw === 'number') {
@@ -189,6 +196,38 @@ export function firstDefinedAlias(
     for (const k of keys) if (primary[k] !== undefined) return primary[k]
     if (fallback !== undefined) for (const k of keys) if (fallback[k] !== undefined) return fallback[k]
     return undefined
+}
+
+/** Parse string positive integer versions while preserving invalid values so `applyAutoVersion` cannot mask them. */
+export function parseExpectedVersionValue(raw: unknown): unknown {
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim()
+        return parseCanonicalPositiveInt(trimmed) ?? raw
+    }
+    return raw
+}
+
+/** Forward delete (`permanent`, `expected_version`) and read-by-id (`include_relationships`, `session_id`) flags. */
+export function assignScopedOpExtraFields(
+    fnPath: string,
+    params: Record<string, unknown>,
+    target: Record<string, unknown>,
+    original: Record<string, unknown>
+): void {
+    const fb = original !== target ? original : undefined
+    if (fnPath === 'mj.admin.deleteEntry' || fnPath === 'mj.team.teamDeleteEntry') {
+        const permRaw = firstDefinedAlias(target, fb, ['permanent'])
+        if (typeof permRaw === 'boolean') params['permanent'] = permRaw
+        const verRaw = firstDefinedAlias(target, fb, ['expected_version', 'expectedVersion'])
+        if (verRaw !== undefined) params['expected_version'] = parseExpectedVersionValue(verRaw)
+        return
+    }
+    if (fnPath === 'mj.core.getEntryById' || fnPath === 'mj.team.teamGetEntryById') {
+        const incRelRaw = firstDefinedAlias(target, fb, ['include_relationships', 'includeRelationships'])
+        if (typeof incRelRaw === 'boolean') params['include_relationships'] = incRelRaw
+        const sessRaw = firstDefinedAlias(target, fb, ['session_id', 'sessionId'])
+        if (typeof sessRaw === 'string' && sessRaw.trim() !== '') params['session_id'] = sessRaw.trim()
+    }
 }
 
 /** Keys that explicitly discriminate a structured Code Mode command vs plain entry fields. */

@@ -189,8 +189,16 @@ export async function searchSimilarEntriesById(
     threshold: number,
     targetWs: string,
     projectNumber?: number,
-    prefetchedEntry?: JournalEntry
+    prefetchedEntry?: JournalEntry,
+    expectedDimensions?: number
 ): Promise<SemanticSearchResult[]> {
+    if (!Number.isSafeInteger(entryId) || entryId <= 0) {
+        throw new Error(`Entry ${String(entryId)} not found`)
+    }
+    if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(threshold)) {
+        return []
+    }
+    const safeLimit = Math.min(limit, 10_000)
     const sourceEntry =
         prefetchedEntry?.id === entryId
             ? prefetchedEntry
@@ -206,12 +214,26 @@ export async function searchSimilarEntriesById(
     }
 
     let queryEmbedding = dbAdapter.getVector(entryId)
-    if (!queryEmbedding) {
+    const hasDimensionMismatch =
+        expectedDimensions !== undefined &&
+        expectedDimensions > 0 &&
+        queryEmbedding !== null &&
+        queryEmbedding.length !== expectedDimensions
+    if (!queryEmbedding || hasDimensionMismatch) {
         queryEmbedding = await generateEmbedding(formatEntryForEmbedding(sourceEntry))
+        if (
+            expectedDimensions !== undefined &&
+            expectedDimensions > 0 &&
+            queryEmbedding.length !== expectedDimensions
+        ) {
+            throw new Error(
+                `Embedding dimension mismatch: expected ${String(expectedDimensions)}, got ${String(queryEmbedding.length)}`
+            )
+        }
         dbAdapter.upsertVector(entryId, queryEmbedding)
     }
 
-    const results = dbAdapter.searchVectors(queryEmbedding, limit + 1, targetWs, projectNumber)
+    const results = dbAdapter.searchVectors(queryEmbedding, safeLimit + 1, targetWs, projectNumber)
     const candidates = collectCandidates(results, threshold, entryId)
-    return resolveCandidates(dbAdapter, candidates, limit, targetWs, projectNumber)
+    return resolveCandidates(dbAdapter, candidates, safeLimit, targetWs, projectNumber)
 }

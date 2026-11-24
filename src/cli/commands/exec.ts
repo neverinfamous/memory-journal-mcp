@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { initializeDependencies } from '../../server/mcp-server/initialization.js'
 import { resolveActiveBriefingConfig } from '../../server/mcp-server/tool-registration/register-tools-helpers.js'
@@ -13,6 +12,7 @@ import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 import { type z } from 'zod'
 import { execOptionsSchema } from '../schemas.js'
+import { readBoundedCliInputFile } from './cli-input-reader.js'
 import { formatCliError, writeCliResult } from './cli-output.js'
 
 export const execSchema = execOptionsSchema
@@ -30,6 +30,12 @@ function validateExecScope(
     serverOptions: PreparedExecConfig['serverOptions'],
     configErrors: string[]
 ): { execWorkspaceId: string | undefined; explicitDefaultProject: boolean } {
+    if (options.workspace?.trim() === '') {
+        configErrors.push("Invalid --workspace '': expected a non-empty workspace identifier.")
+    }
+    if (options.defaultWorkspaceId?.trim() === '') {
+        configErrors.push("Invalid --default-workspace-id '': expected a non-empty workspace identifier.")
+    }
     if (options.workspace?.trim() === '*' || options.defaultWorkspaceId?.trim() === '*') {
         configErrors.push("Wildcard '*' is not allowed for --workspace or --default-workspace-id.")
     }
@@ -94,11 +100,9 @@ function prepareExecServerOptions(options: ExecOptions, command: Command): Prepa
 
 function readExecScriptOrExit(scriptPath: string): string {
     try {
-        return readFileSync(scriptPath, 'utf8')
+        return readBoundedCliInputFile(scriptPath, 'script')
     } catch (err) {
-        process.stderr.write(
-            `Failed to read script '${scriptPath}': ${err instanceof Error ? err.message : String(err)}\n`
-        )
+        process.stderr.write(`Failed to read script: ${formatCliError(err)}\n`)
         process.exit(1)
     }
 }

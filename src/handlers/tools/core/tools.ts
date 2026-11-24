@@ -86,8 +86,12 @@ async function executeCreateEntry(
     context: ToolContext
 ): Promise<Record<string, unknown>> {
     const { db, progress } = context
-    coerceSignificanceAlias(params)
-    const input = CreateEntrySchema.parse(params)
+    const paramsCopy =
+        typeof params === 'object' && params !== null && !Array.isArray(params)
+            ? { ...(params as Record<string, unknown>) }
+            : params
+    coerceSignificanceAlias(paramsCopy)
+    const input = CreateEntrySchema.parse(paramsCopy)
     const scope = resolveCreateEntryScope(input, context.config)
     if ('errorResponse' in scope) return scope.errorResponse
     if ((input.relationships !== undefined && input.relationships.length > 0) || input.auto_link === true) {

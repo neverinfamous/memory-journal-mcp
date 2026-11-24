@@ -26,6 +26,18 @@ import {
     QUERY_EMBEDDING_CACHE_MAX_CHARS,
 } from './embedding-cache.js'
 
+const MAX_VECTOR_SEARCH_LIMIT = 10_000
+let modelLoadMutex: Promise<void> = Promise.resolve()
+
+function withModelLoadLock<T>(fn: () => Promise<T>): Promise<T> {
+    const next = modelLoadMutex.then(fn, fn)
+    modelLoadMutex = next.then(
+        () => undefined,
+        () => undefined
+    )
+    return next
+}
+
 export class VectorSearchManager {
     private dbAdapter: IDatabaseAdapter
     private modelName: string
@@ -84,32 +96,34 @@ export class VectorSearchManager {
     }
 
     private async loadDefaultEmbeddingModel(): Promise<void> {
-        const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
-        if (this.transformers === null) {
-            // [PERF]: Keep dynamic specifier non-literal so tsc/eslint skip 429 @huggingface/transformers .d.ts files
-            const transformersModuleName = '@huggingface/transformers'
-            this.transformers = (await import(transformersModuleName)) as unknown
-        }
-        const transformersModule = this.transformers as {
-            pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
-            env: { allowRemoteModels: boolean; cacheDir: string; localModelPath: string }
-        }
-        const cachedLocally = isModelCachedOnDisk(cacheDir, this.modelName)
-        transformersModule.env.allowRemoteModels = !cachedLocally
-        transformersModule.env.cacheDir = cacheDir
-        transformersModule.env.localModelPath = cacheDir
+        return withModelLoadLock(async () => {
+            const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
+            if (this.transformers === null) {
+                // [PERF]: Keep dynamic specifier non-literal so tsc/eslint skip 429 @huggingface/transformers .d.ts files
+                const transformersModuleName = '@huggingface/transformers'
+                this.transformers = (await import(transformersModuleName)) as unknown
+            }
+            const transformersModule = this.transformers as {
+                pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
+                env: { allowRemoteModels: boolean; cacheDir: string; localModelPath: string }
+            }
+            const cachedLocally = isModelCachedOnDisk(cacheDir, this.modelName)
+            transformersModule.env.allowRemoteModels = !cachedLocally
+            transformersModule.env.cacheDir = cacheDir
+            transformersModule.env.localModelPath = cacheDir
 
-        logger.info(`Loading embedding model: ${this.modelName}`)
-        this.pipeline = await this.loadPipelineWithRetry(transformersModule, cacheDir, cachedLocally)
-        logger.info('Embedding model loaded')
+            logger.info(`Loading embedding model: ${this.modelName}`)
+            this.pipeline = await this.loadPipelineWithRetry(transformersModule, cacheDir, cachedLocally)
+            logger.info('Embedding model loaded')
 
-        const pipelineFunc = this.pipeline as (
-            text: string,
-            options: unknown
-        ) => Promise<{ data: unknown[] }>
-        const testResult = await pipelineFunc('test', { pooling: 'mean', normalize: true })
-        this.dimensions = testResult.data.length
-        logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
+            const pipelineFunc = this.pipeline as (
+                text: string,
+                options: unknown
+            ) => Promise<{ data: unknown[] }>
+            const testResult = await pipelineFunc('test', { pooling: 'mean', normalize: true })
+            this.dimensions = testResult.data.length
+            logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
+        })
     }
 
     private async loadPipelineWithRetry(
@@ -192,7 +206,8 @@ export class VectorSearchManager {
         options?: { bypassQueryCache?: boolean }
     ): Promise<Float32Array> {
         await this.initialize()
-        if (this.getDimensions() === null) {
+        const dims = this.getDimensions()
+        if (dims === null || dims <= 0) {
             throw new Error('Vector search not initialized properly. Cannot rebuild index.')
         }
         const canCache =
@@ -201,10 +216,19 @@ export class VectorSearchManager {
             this.transformers !== null &&
             text.length <= QUERY_EMBEDDING_CACHE_MAX_CHARS
         const pipelineFunc = this.pipeline as (text: string, options: unknown) => Promise<{ data: number[] }>
-        return getOrComputeCachedEmbedding(this.modelName, text, canCache, async () => {
+        const vec = await getOrComputeCachedEmbedding(this.modelName, text, canCache, async () => {
             const result = await pipelineFunc(text, { pooling: 'mean', normalize: true })
             return new Float32Array(result.data)
         })
+        if (vec.length !== dims) {
+            throw new Error(`Embedding dimension mismatch: expected ${String(dims)}, got ${String(vec.length)}`)
+        }
+        for (const el of vec) {
+            if (!Number.isFinite(el)) {
+                throw new Error('Generated embedding contains non-finite value')
+            }
+        }
+        return vec
     }
 
     /** Generate settled per-item embeddings for a batch of texts, using tensor batching on the HF pipeline. */
@@ -306,9 +330,10 @@ export class VectorSearchManager {
         workspaceId?: string,
         projectNumber?: number
     ): Promise<VectorCandidate[]> {
-        if (!Number.isSafeInteger(limit) || limit <= 0) {
+        if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(threshold) || query.trim() === '') {
             return []
         }
+        const safeLimit = Math.min(limit, MAX_VECTOR_SEARCH_LIMIT)
         await this.initialize()
         if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
             return []
@@ -319,7 +344,7 @@ export class VectorSearchManager {
             const targetWs = effectiveWorkspace(workspaceId)
             const results = this.dbAdapter.searchVectors(
                 queryEmbedding,
-                limit,
+                safeLimit,
                 targetWs,
                 projectNumber
             )
@@ -341,9 +366,10 @@ export class VectorSearchManager {
         workspaceId?: string,
         projectNumber?: number
     ): Promise<SemanticSearchResult[]> {
-        if (!Number.isSafeInteger(limit) || limit <= 0) {
+        if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(threshold) || query.trim() === '') {
             return []
         }
+        const safeLimit = Math.min(limit, MAX_VECTOR_SEARCH_LIMIT)
         await this.initialize()
         if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
             return []
@@ -354,12 +380,12 @@ export class VectorSearchManager {
             const targetWs = effectiveWorkspace(workspaceId)
             const results = this.dbAdapter.searchVectors(
                 queryEmbedding,
-                limit,
+                safeLimit,
                 targetWs,
                 projectNumber
             )
             const candidates = collectCandidates(results, threshold)
-            return resolveCandidates(this.dbAdapter, candidates, limit, targetWs, projectNumber)
+            return resolveCandidates(this.dbAdapter, candidates, safeLimit, targetWs, projectNumber)
         } catch (error) {
             logger.error('Semantic search failed', {
                 error: error instanceof Error ? error.message : String(error),
@@ -380,6 +406,13 @@ export class VectorSearchManager {
         projectNumber?: number,
         prefetchedEntry?: JournalEntry
     ): Promise<SemanticSearchResult[]> {
+        if (!Number.isSafeInteger(entryId) || entryId <= 0) {
+            throw new Error(`Entry ${String(entryId)} not found`)
+        }
+        if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(threshold)) {
+            return []
+        }
+        const safeLimit = Math.min(limit, MAX_VECTOR_SEARCH_LIMIT)
         await this.initialize()
 
         try {
@@ -388,11 +421,12 @@ export class VectorSearchManager {
                 this.dbAdapter,
                 (text) => this.generateEmbedding(text, { bypassQueryCache: true }),
                 entryId,
-                limit,
+                safeLimit,
                 threshold,
                 targetWs,
                 projectNumber,
-                prefetchedEntry
+                prefetchedEntry,
+                this.dimensions ?? undefined
             )
         } catch (error) {
             logger.error(`Semantic search by entry ID ${entryId} failed`, {

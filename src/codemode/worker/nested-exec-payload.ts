@@ -206,6 +206,8 @@ function isNestedPlainRecord(val: unknown): val is Record<string, unknown> {
  * Extracts and normalizes a `context` payload from nested `executeCode` arguments,
  * wrapping strings and arrays safely to match top-level `buildSandboxUserContext`.
  */
+const MAX_NESTED_CONTEXT_BYTES = 128 * 1024
+
 export function extractNestedContextRecord(
     argRec: Record<string, unknown> | undefined
 ): Record<string, unknown> | undefined {
@@ -213,7 +215,12 @@ export function extractNestedContextRecord(
     const rawCtx = argRec['context']
     if (rawCtx === undefined || rawCtx === null) return undefined
     if (isNestedPlainRecord(rawCtx)) return { ...rawCtx }
-    if (typeof rawCtx === 'string') return parseStringContextPayload(rawCtx)
+    if (typeof rawCtx === 'string') {
+        if (Buffer.byteLength(rawCtx, 'utf8') > MAX_NESTED_CONTEXT_BYTES) {
+            throw new Error(`Nested executeCode context exceeds maximum ${String(MAX_NESTED_CONTEXT_BYTES)} bytes`)
+        }
+        return parseStringContextPayload(rawCtx)
+    }
     return { value: rawCtx, raw: rawCtx }
 }
 

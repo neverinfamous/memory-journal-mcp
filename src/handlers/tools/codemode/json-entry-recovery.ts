@@ -269,11 +269,11 @@ function populateRecoveredArrayAndContextFields(
         payload['tags'] = rawTags.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
     }
 
-    const autoContextCandidates = scanCode.match(/\bauto_context\s*:/gi)
+    const autoContextCandidates = scanCode.match(/\b(?:auto_context|autoContext)\s*:/gi)
     const autoContextStartMatch =
         autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
             ? null
-            : /\bauto_context\s*:\s*(\{)/i.exec(scanCode)
+            : /\b(?:auto_context|autoContext)\s*:\s*(\{)/i.exec(scanCode)
     let rawAutoContext: string | undefined
     if (autoContextStartMatch !== null) {
         const openBraceIdx = autoContextStartMatch.index + autoContextStartMatch[0].length - 1
@@ -284,6 +284,33 @@ function populateRecoveredArrayAndContextFields(
     if (rawAutoContext !== undefined) {
         const parsedAutoContext = parseRelaxedAutoContext(rawAutoContext)
         if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
+    }
+}
+
+function populateRecoveredEntryFlags(payload: Record<string, unknown>, topLevelScanCode: string): void {
+    const isArchivedMatch = /\b(?:is_archived|isArchived)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
+    if (isArchivedMatch?.[1] !== undefined) {
+        payload['is_archived'] = isArchivedMatch[1].toLowerCase() === 'true'
+    }
+    const autoLinkMatch = /\b(?:auto_link|autoLink)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
+    if (autoLinkMatch?.[1] !== undefined) {
+        payload['auto_link'] = autoLinkMatch[1].toLowerCase() === 'true'
+    }
+    const verMatch =
+        /\b(?:expected_version|expectedVersion)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
+            topLevelScanCode
+        )
+    const rawVer = verMatch?.[1] ?? verMatch?.[3]?.trim()
+    if (rawVer !== undefined && rawVer !== '') {
+        const parsedVer = parseCanonicalPositiveInt(rawVer)
+        if (parsedVer !== undefined) {
+            payload['expected_version'] = parsedVer
+        } else if (verMatch?.[1] !== undefined) {
+            const numVer = Number(rawVer)
+            payload['expected_version'] = Number.isFinite(numVer) ? numVer : rawVer
+        } else {
+            payload['expected_version'] = rawVer
+        }
     }
 }
 
@@ -356,6 +383,7 @@ function populateRecoveredEntryMetadata(
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
     if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
     if (useTestDbMatch?.[1]?.toLowerCase() === 'true') payload['use_test_db'] = true
+    populateRecoveredEntryFlags(payload, topLevelScanCode)
 
     populateRecoveredArrayAndContextFields(payload, scanCode, topLevelScanCode)
 }
