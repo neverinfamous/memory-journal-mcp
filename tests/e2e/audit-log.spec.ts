@@ -23,29 +23,35 @@ import {
     stopServer,
     createClient,
     callToolRaw,
-    callToolAndParse,
 } from './helpers.js'
 import type { Client } from '@modelcontextprotocol/client'
 
-test.describe.configure({ mode: 'serial', timeout: 120_000 })
+// [INTENT] Run the 4 independent audit-server configurations in parallel across workers,
+// while sharing a single server across the 5 tests that use identical default audit flags.
+test.describe.configure({ mode: 'parallel', timeout: 120_000 })
 
-const AUDIT_PORT_BASE = 5130 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const AUDIT_FILTER = 'core,admin'
 
+function auditPort(parallelIndex: number, offset: number): number {
+    return 5130 + parallelIndex * 100 + offset
+}
+
 function auditLogPath(suffix: string): string {
-    return join(tmpdir(), `mj-audit-e2e-${suffix}-${Date.now()}.jsonl`)
+    return join(tmpdir(), `mj-audit-e2e-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jsonl`)
 }
 
 async function cleanupAuditFiles(logPath: string) {
     try {
         await rm(logPath, { force: true })
-    } catch {}
+    } catch {
+        // Ignore cleanup errors for missing files
+    }
 }
 
 async function readAuditLogWithRetry(
     path: string,
-    maxAttempts = 15,
-    intervalMs = 500
+    maxAttempts = 75,
+    intervalMs = 100
 ): Promise<Array<Record<string, unknown>>> {
     for (let i = 0; i < maxAttempts; i++) {
         try {
@@ -63,87 +69,76 @@ async function readAuditLogWithRetry(
 }
 
 test.describe('Audit Log', () => {
-    test('write-scoped tool calls produce audit entries', async () => {
-        const port = AUDIT_PORT_BASE
-        const logPath = auditLogPath('write')
+    test.describe('Default redaction and memory://audit resource', () => {
+        test.describe.configure({ mode: 'serial' })
 
-        await startServer(port, ['--audit-log', logPath, '--no-audit-redact', '--tool-filter', AUDIT_FILTER], 'audit-write')
+        let port: number
+        let logPath: string
+        let client: Client
 
-        let client: Client | undefined
-        try {
+        test.beforeAll(async ({ baseURL: _baseURL }, testInfo) => {
+            port = auditPort(testInfo.parallelIndex, 0)
+            logPath = auditLogPath('default')
+            await startServer(port, ['--audit-log', logPath, '--tool-filter', AUDIT_FILTER], 'audit-default')
             client = await createClient(port)
+        })
 
-            // Write scope tool
+        test.afterAll(async () => {
+            await client.close()
+            stopServer(port)
+            await cleanupAuditFiles(logPath)
+        })
+
+        test('read-scoped tool calls are NOT logged', async () => {
+            // Runs first before any write-scoped tool call so the log file stays absent
+            await callToolRaw(client, 'get_recent_entries', { project_number: 1 })
+
+            // Wait longer than the flush interval to confirm nothing is written
+            await delay(1500)
+
+            let fileExists: boolean
+            try {
+                await readFile(logPath, 'utf-8')
+                fileExists = true
+            } catch {
+                fileExists = false
+            }
+            expect(fileExists).toBe(false)
+        })
+
+        test('--audit-redact omits tool arguments from entries', async () => {
             await callToolRaw(client, 'create_entry', {
                 project_number: 1,
-                content: 'audit log test entry',
-                tags: ['audit-test']
+                content: 'redact test entry',
             })
 
             const entries = await readAuditLogWithRetry(logPath)
             expect(entries.length).toBeGreaterThanOrEqual(1)
 
-            const entry = entries[entries.length - 1]!
-            expect(entry.tool).toBe('create_entry')
-            expect(entry.category).toBe('write')
-            expect(entry.success).toBe(true)
-            expect(typeof entry.timestamp).toBe('string')
-            expect(typeof entry.durationMs).toBe('number')
-            expect(entry.args).toBeDefined()
-        } finally {
-            if (client) await client.close()
-            stopServer(port)
-            await cleanupAuditFiles(logPath)
-        }
-    })
+            const entry = entries[entries.length - 1]
+            expect(entry).toBeDefined()
+            expect(entry?.tool).toBe('create_entry')
+            expect(entry?.success).toBe(true)
+            expect(entry?.args).toBeUndefined()
+        })
 
-    test('read-scoped tool calls are NOT logged', async () => {
-        const port = AUDIT_PORT_BASE + 1
-        const logPath = auditLogPath('readonly')
-
-        await startServer(port, ['--audit-log', logPath, '--tool-filter', AUDIT_FILTER], 'audit-readonly')
-
-        let client: Client | undefined
-        try {
-            client = await createClient(port)
-
-            // Read scope tool
-            await callToolRaw(client, 'get_recent_entries', { project_number: 1 })
-
-            // Wait generously — longer than the flush interval
-            await delay(2000)
-
-            // Audit log file should not exist
-            let fileExists = false
-            try {
-                await readFile(logPath, 'utf-8')
-                fileExists = true
-            } catch {}
-            expect(fileExists).toBe(false)
-        } finally {
-            if (client) await client.close()
-            stopServer(port)
-            await cleanupAuditFiles(logPath)
-        }
-    })
-
-    test('memory://audit resource returns recent entries', async () => {
-        const port = AUDIT_PORT_BASE + 2
-        const logPath = auditLogPath('resource')
-
-        await startServer(port, ['--audit-log', logPath, '--tool-filter', AUDIT_FILTER], 'audit-resource')
-
-        let client: Client | undefined
-        try {
-            client = await createClient(port)
-
+        test('audit entries include tokenEstimate > 0', async () => {
             await callToolRaw(client, 'create_entry', {
                 project_number: 1,
-                content: 'test resource entry'
+                content: 'tokens test entry',
             })
 
-            await readAuditLogWithRetry(logPath)
+            const entries = await readAuditLogWithRetry(logPath)
+            expect(entries.length).toBeGreaterThanOrEqual(1)
 
+            const entry = entries[entries.length - 1]
+            expect(entry).toBeDefined()
+            expect(entry?.tool).toBe('create_entry')
+            expect(typeof entry?.tokenEstimate).toBe('number')
+            expect(entry?.tokenEstimate as number).toBeGreaterThan(0)
+        })
+
+        test('memory://audit resource returns recent entries', async () => {
             const resource = await client.readResource({ uri: 'memory://audit' })
             expect(resource.contents).toBeDefined()
             expect(resource.contents.length).toBeGreaterThan(0)
@@ -152,18 +147,24 @@ test.describe('Audit Log', () => {
             expect(text).toContain('audit_log:')
             expect(text).toContain('entries_shown:')
             expect(text).toMatch(/tool:\s*"?create_entry"?/)
-        } finally {
-            if (client) await client.close()
-            stopServer(port)
-            await cleanupAuditFiles(logPath)
-        }
+        })
+
+        test('memory://audit resource includes summary block', async () => {
+            const resource = await client.readResource({ uri: 'memory://audit' })
+            const text = (resource.contents[0] as { text: string }).text
+            expect(text).toContain('session_summary:')
+            expect(text).toContain('  total_tokens: ')
+            expect(text).toContain('  total_duration_ms: ')
+            expect(text).toContain('  error_count: ')
+            expect(text).toMatch(/tool:\s*"?create_entry"?/)
+        })
     })
 
-    test('--audit-redact omits tool arguments from entries', async () => {
-        const port = AUDIT_PORT_BASE + 3
-        const logPath = auditLogPath('redact')
+    test('write-scoped tool calls produce audit entries', async ({ baseURL: _baseURL }, testInfo) => {
+        const port = auditPort(testInfo.parallelIndex, 1)
+        const logPath = auditLogPath('write')
 
-        await startServer(port, ['--audit-log', logPath, '--tool-filter', AUDIT_FILTER], 'audit-redact')
+        await startServer(port, ['--audit-log', logPath, '--no-audit-redact', '--tool-filter', AUDIT_FILTER], 'audit-write')
 
         let client: Client | undefined
         try {
@@ -171,17 +172,21 @@ test.describe('Audit Log', () => {
 
             await callToolRaw(client, 'create_entry', {
                 project_number: 1,
-                content: 'redact test entry'
+                content: 'audit log test entry',
+                tags: ['audit-test'],
             })
 
             const entries = await readAuditLogWithRetry(logPath)
             expect(entries.length).toBeGreaterThanOrEqual(1)
 
-            const entry = entries[entries.length - 1]!
-            expect(entry.tool).toBe('create_entry')
-            expect(entry.success).toBe(true)
-            expect(entry.args).toBeUndefined()
-            
+            const entry = entries[entries.length - 1]
+            expect(entry).toBeDefined()
+            expect(entry?.tool).toBe('create_entry')
+            expect(entry?.category).toBe('write')
+            expect(entry?.success).toBe(true)
+            expect(typeof entry?.timestamp).toBe('string')
+            expect(typeof entry?.durationMs).toBe('number')
+            expect(entry?.args).toBeDefined()
         } finally {
             if (client) await client.close()
             stopServer(port)
@@ -189,10 +194,8 @@ test.describe('Audit Log', () => {
         }
     })
 
-
-
-    test('--audit-reads logs read-scoped tools with compact entries', async () => {
-        const port = AUDIT_PORT_BASE + 4
+    test('--audit-reads logs read-scoped tools with compact entries', async ({ baseURL: _baseURL }, testInfo) => {
+        const port = auditPort(testInfo.parallelIndex, 2)
         const logPath = auditLogPath('reads')
 
         await startServer(port, ['--audit-log', logPath, '--audit-reads', '--tool-filter', AUDIT_FILTER], 'audit-reads')
@@ -208,12 +211,11 @@ test.describe('Audit Log', () => {
 
             const readEntry = entries.find((e) => e.tool === 'get_recent_entries')
             expect(readEntry).toBeDefined()
-            expect(readEntry!.category).toBe('read')
-            expect(readEntry!.success).toBe(true)
-
-            expect(readEntry!.args).toBeUndefined()
-            expect(readEntry!.user == null).toBe(true)
-            expect(readEntry!.scopes).toEqual([])
+            expect(readEntry?.category).toBe('read')
+            expect(readEntry?.success).toBe(true)
+            expect(readEntry?.args).toBeUndefined()
+            expect(readEntry?.user == null).toBe(true)
+            expect(readEntry?.scopes).toEqual([])
         } finally {
             if (client) await client.close()
             stopServer(port)
@@ -221,65 +223,8 @@ test.describe('Audit Log', () => {
         }
     })
 
-    test('audit entries include tokenEstimate > 0', async () => {
-        const port = AUDIT_PORT_BASE + 5
-        const logPath = auditLogPath('tokens')
-
-        await startServer(port, ['--audit-log', logPath, '--tool-filter', AUDIT_FILTER], 'audit-tokens')
-
-        let client: Client | undefined
-        try {
-            client = await createClient(port)
-
-            await callToolRaw(client, 'create_entry', {
-                project_number: 1,
-                content: 'tokens test entry'
-            })
-
-            const entries = await readAuditLogWithRetry(logPath)
-            expect(entries.length).toBeGreaterThanOrEqual(1)
-
-            const entry = entries[entries.length - 1]!
-            expect(entry.tool).toBe('create_entry')
-            expect(typeof entry.tokenEstimate).toBe('number')
-            expect(entry.tokenEstimate as number).toBeGreaterThan(0)
-        } finally {
-            if (client) await client.close()
-            stopServer(port)
-            await cleanupAuditFiles(logPath)
-        }
-    })
-
-    test('memory://audit resource includes summary block', async () => {
-        const port = AUDIT_PORT_BASE + 6
-        const logPath = auditLogPath('summary')
-
-        await startServer(port, ['--audit-log', logPath, '--tool-filter', AUDIT_FILTER], 'audit-summary')
-
-        let client: Client | undefined
-        try {
-            client = await createClient(port)
-
-            await callToolRaw(client, 'create_entry', { project_number: 1, content: 'summary' })
-
-            await readAuditLogWithRetry(logPath)
-
-            const resource = await client.readResource({ uri: 'memory://audit' })
-            const text = (resource.contents[0] as { text: string }).text
-            expect(text).toContain('session_summary:')
-            expect(text).toContain('  total_tokens: ')
-            expect(text).toContain('  total_duration_ms: ')
-            expect(text).toContain('  error_count: ')
-            expect(text).toMatch(/tool:\s*"?create_entry"?/)
-        } finally {
-            if (client) await client.close()
-            stopServer(port)
-            await cleanupAuditFiles(logPath)
-        }
-    })
-
-    test('audit log correctly ignores and recovers from corrupted entries', async () => {
-        const port = AUDIT_PORT_BASE + 7
+    test('audit log correctly ignores and recovers from corrupted entries', async ({ baseURL: _baseURL }, testInfo) => {
+        const port = auditPort(testInfo.parallelIndex, 3)
         const logPath = auditLogPath('corrupted')
 
         await appendFile(logPath, '{"tool":"create_entry","category":"wri\n') // Incomplete
@@ -290,15 +235,22 @@ test.describe('Audit Log', () => {
         let client: Client | undefined
         try {
             client = await createClient(port)
+            const activeClient = client
 
-            await callToolRaw(client, 'create_entry', { project_number: 1, content: 'new valid' })
+            await callToolRaw(activeClient, 'create_entry', { project_number: 1, content: 'new valid' })
 
-            await delay(2000)
+            let text = ''
+            await expect
+                .poll(
+                    async () => {
+                        const resource = await activeClient.readResource({ uri: 'memory://audit' })
+                        text = (resource.contents[0] as { text: string }).text
+                        return text
+                    },
+                    { timeout: 5000, intervals: [100, 200, 250] }
+                )
+                .toMatch(/tool:\s*"?create_entry"?/)
 
-            const resource = await client.readResource({ uri: 'memory://audit' })
-            const text = (resource.contents[0] as { text: string }).text
-            
-            expect(text).toMatch(/tool:\s*"?create_entry"?/)
             expect(text).toMatch(/tool:\s*"?delete_entry"?/)
 
             const rawFile = await readFile(logPath, 'utf-8')

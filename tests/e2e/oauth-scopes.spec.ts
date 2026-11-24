@@ -115,15 +115,17 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         serverProcess.stderr?.on('data', (d) => console.error('E2E SERVER STDERR:', d.toString()))
         serverProcess.stdout?.on('data', (d) => console.log('E2E SERVER STDOUT:', d.toString()))
         let ready = false
-        for (let i = 0; i < 120; i++) {
+        for (let i = 0; i < 600; i++) {
             try {
-                const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`)
+                const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`, {
+                    signal: AbortSignal.timeout(1000),
+                })
                 if (res.ok) {
                     ready = true
                     break
                 }
             } catch {}
-            await delay(500)
+            await delay(50)
         }
         if (!ready) throw new Error('MCP server failed to start within 60 seconds')
     })

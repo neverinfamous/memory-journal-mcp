@@ -58,9 +58,9 @@ test.describe('E2E MCP Subscriptions', () => {
             },
         })
 
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        expect(receivedNotifications).toContain('memory://recent')
+        await expect
+            .poll(() => receivedNotifications, { timeout: 3000, intervals: [50, 100, 200] })
+            .toContain('memory://recent')
     })
 
     test('should successfully unsubscribe from memory://recent', async () => {
@@ -76,7 +76,7 @@ test.describe('E2E MCP Subscriptions', () => {
             },
         })
 
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 250))
 
         expect(receivedNotifications).not.toContain('memory://recent')
     })
@@ -93,8 +93,9 @@ test.describe('E2E MCP Subscriptions', () => {
             },
         })
 
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        expect(receivedNotifications).toContain('memory://briefing')
+        await expect
+            .poll(() => receivedNotifications, { timeout: 3000, intervals: [50, 100, 200] })
+            .toContain('memory://briefing')
 
         await client.unsubscribeResource({ uri: 'memory://briefing' })
         receivedNotifications = []
@@ -108,7 +109,7 @@ test.describe('E2E MCP Subscriptions', () => {
             },
         })
 
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 250))
         expect(receivedNotifications).not.toContain('memory://briefing')
     })
 })

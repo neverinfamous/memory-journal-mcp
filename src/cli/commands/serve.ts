@@ -1,7 +1,6 @@
 import type { Command } from 'commander'
 import { logger } from '../../utils/logger.js'
 import { isPlaceholderAuthToken } from '../../utils/security-utils.js'
-import { createServer } from '../../server/mcp-server/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { type z } from 'zod'
@@ -88,6 +87,7 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
     })
 
     try {
+        const { createServer } = await import('../../server/mcp-server/index.js')
         await createServer(serverOptions)
     } catch (error) {
         logger.error('Failed to start server', {

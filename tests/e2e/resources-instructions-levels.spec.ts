@@ -19,10 +19,11 @@
 import { test, expect } from './test-fixture.js'
 import { Client } from '@modelcontextprotocol/client'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { startServer, stopServer } from './helpers.js'
 
-const CORE_ONLY_PORT = 5110 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100) // --tool-filter core  (no codemode, no github, no search)
-const NO_GITHUB_PORT = 5111 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100) // --tool-filter -github (all except github)
+const INSTR_PORT = 5110 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 /** Read memory://instructions text from a client */
 async function readInstructions(client: Client): Promise<string> {
@@ -32,20 +33,26 @@ async function readInstructions(client: Client): Promise<string> {
     return (response.contents[0] as { text: string }).text
 }
 
-// ============================================================================
-// core-only filter: no codemode, no github, no search
-// ============================================================================
+test.describe.configure({ mode: 'serial' })
 
-test.describe('memory://instructions: core-only filter gating', () => {
+test.describe('memory://instructions filter gating', () => {
     let client: Client
+    const tempConfigPath = path.join(process.cwd(), '.test-output', 'e2e', `instr-levels-${INSTR_PORT}.json`)
 
     test.beforeAll(async () => {
-        await startServer(CORE_ONLY_PORT, ['--tool-filter', 'core'], 'instr-core-only')
+        fs.mkdirSync(path.dirname(tempConfigPath), { recursive: true })
+        fs.writeFileSync(tempConfigPath, '{}')
+        await startServer(
+            INSTR_PORT,
+            ['--config', tempConfigPath, '--tool-filter', 'core'],
+            'instr-levels'
+        )
         const transport = new StreamableHTTPClientTransport(
-            new URL(`http://localhost:${CORE_ONLY_PORT}/mcp`)
-        , { protocolVersion: '2024-11-05' })
+            new URL(`http://localhost:${INSTR_PORT}/mcp`),
+            { protocolVersion: '2024-11-05' }
+        )
         client = new Client(
-            { name: 'instr-core-only-test', version: '1.0.0' },
+            { name: 'instr-levels-test', version: '1.0.0' },
             { capabilities: {} }
         )
         await client.connect(transport)
@@ -53,124 +60,107 @@ test.describe('memory://instructions: core-only filter gating', () => {
 
     test.afterAll(async () => {
         await client.close()
-        stopServer(CORE_ONLY_PORT)
+        stopServer(INSTR_PORT)
+        if (fs.existsSync(tempConfigPath)) {
+            fs.unlinkSync(tempConfigPath)
+        }
     })
 
-    test('core-only: core section (Essential Behaviors) is always present', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('Essential Behaviors')
+    // ============================================================================
+    // core-only filter: no codemode, no github, no search
+    // ============================================================================
+
+    test.describe('memory://instructions: core-only filter gating', () => {
+        test('core-only: core section (Essential Behaviors) is always present', async () => {
+            const text = await readInstructions(client)
+            expect(text).toContain('Essential Behaviors')
+        })
+
+        test('core-only: Active Tools section lists only core group', async () => {
+            const text = await readInstructions(client)
+            // Active Tools section should mention core tools
+            expect(text).toContain('## Active Tools')
+            expect(text).toContain('core')
+        })
+
+        test('core-only: Code Mode section is always present (mj_execute_code is escape-hatch)', async () => {
+            const text = await readInstructions(client)
+            expect(text).toContain('## Code Mode')
+        })
+
+        test('core-only: GitHub Integration section is absent (github group disabled)', async () => {
+            const text = await readInstructions(client)
+            expect(text).not.toContain('## GitHub Integration')
+        })
+
+        test('core-only: Copilot Review Patterns section is absent (github group disabled)', async () => {
+            const text = await readInstructions(client)
+            expect(text).not.toContain('Copilot Review Patterns')
+        })
+
+        test('core-only: semantic_search Quick Access row is absent (search group disabled)', async () => {
+            const text = await readInstructions(client)
+            expect(text).not.toContain('semantic_search')
+        })
     })
 
-    test('core-only: Active Tools section lists only core group', async () => {
-        const text = await readInstructions(client)
-        // Active Tools section should mention core tools
-        expect(text).toContain('## Active Tools')
-        expect(text).toContain('core')
+    // ============================================================================
+    // -github filter: all groups except github
+    // ============================================================================
+
+    test.describe('memory://instructions: -github filter gating', () => {
+        test.beforeAll(async () => {
+            await client.callTool({
+                name: 'update_configuration',
+                arguments: { tool_filter: '-github' },
+            })
+        })
+
+        test('-github: core section is present', async () => {
+            const text = await readInstructions(client)
+            expect(text).toContain('Essential Behaviors')
+        })
+
+        test('-github: Code Mode section is present (codemode group enabled)', async () => {
+            const text = await readInstructions(client)
+            expect(text).toContain('## Code Mode')
+        })
+
+        test('-github: GitHub help pointer is absent (github group removed)', async () => {
+            const text = await readInstructions(client)
+            expect(text).not.toContain('memory://help/github')
+        })
+
+        test('-github: Active Tools section does not list github tools', async () => {
+            const text = await readInstructions(client)
+            expect(text).not.toContain('get_github_issues')
+        })
     })
 
-    test('core-only: Code Mode section is always present (mj_execute_code is escape-hatch)', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('## Code Mode')
-    })
+    // ============================================================================
+    // codemode-only filter: Code Mode API injection
+    // ============================================================================
 
-    test('core-only: GitHub Integration section is absent (github group disabled)', async () => {
-        const text = await readInstructions(client)
-        expect(text).not.toContain('## GitHub Integration')
-    })
+    test.describe('memory://instructions: codemode-only filter gating', () => {
+        test.beforeAll(async () => {
+            await client.callTool({
+                name: 'update_configuration',
+                arguments: { tool_filter: 'codemode' },
+            })
+        })
 
-    test('core-only: Copilot Review Patterns section is absent (github group disabled)', async () => {
-        const text = await readInstructions(client)
-        expect(text).not.toContain('Copilot Review Patterns')
-    })
+        test('codemode-only: injects full Code Mode API Reference', async () => {
+            const text = await readInstructions(client)
+            expect(text).toContain('# Code Mode API Reference')
+            expect(text).toContain('## API Namespace Map')
+            expect(text).toContain('mj.core')
+            expect(text).toContain('mj.github')
+        })
 
-    test('core-only: semantic_search Quick Access row is absent (search group disabled)', async () => {
-        const text = await readInstructions(client)
-        expect(text).not.toContain('semantic_search')
-    })
-})
-
-// ============================================================================
-// -github filter: all groups except github
-// ============================================================================
-
-test.describe('memory://instructions: -github filter gating', () => {
-    let client: Client
-
-    test.beforeAll(async () => {
-        await startServer(NO_GITHUB_PORT, ['--tool-filter', '-github'], 'instr-no-github')
-        const transport = new StreamableHTTPClientTransport(
-            new URL(`http://localhost:${NO_GITHUB_PORT}/mcp`)
-        , { protocolVersion: '2024-11-05' })
-        client = new Client(
-            { name: 'instr-no-github-test', version: '1.0.0' },
-            { capabilities: {} }
-        )
-        await client.connect(transport)
-    })
-
-    test.afterAll(async () => {
-        await client.close()
-        stopServer(NO_GITHUB_PORT)
-    })
-
-    test('-github: core section is present', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('Essential Behaviors')
-    })
-
-    test('-github: Code Mode section is present (codemode group enabled)', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('## Code Mode')
-    })
-
-    test('-github: GitHub help pointer is absent (github group removed)', async () => {
-        const text = await readInstructions(client)
-        expect(text).not.toContain('memory://help/github')
-    })
-
-    test('-github: Active Tools section does not list github tools', async () => {
-        const text = await readInstructions(client)
-        expect(text).not.toContain('get_github_issues')
-    })
-})
-
-// ============================================================================
-// codemode-only filter: Code Mode API injection
-// ============================================================================
-
-const CODEMODE_ONLY_PORT = 5112 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
-
-test.describe('memory://instructions: codemode-only filter gating', () => {
-    let client: Client
-
-    test.beforeAll(async () => {
-        await startServer(CODEMODE_ONLY_PORT, ['--tool-filter', 'codemode'], 'instr-codemode')
-        const transport = new StreamableHTTPClientTransport(
-            new URL(`http://localhost:${CODEMODE_ONLY_PORT}/mcp`)
-        , { protocolVersion: '2024-11-05' })
-        client = new Client(
-            { name: 'instr-codemode-test', version: '1.0.0' },
-            { capabilities: {} }
-        )
-        await client.connect(transport)
-    })
-
-    test.afterAll(async () => {
-        await client.close()
-        stopServer(CODEMODE_ONLY_PORT)
-    })
-
-    test('codemode-only: injects full Code Mode API Reference', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('# Code Mode API Reference')
-        expect(text).toContain('## API Namespace Map')
-        expect(text).toContain('mj.core')
-        expect(text).toContain('mj.github')
-    })
-
-    test('codemode-only: Active Tools section lists only codemode group', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('**codemode**: `mj_execute_code`')
-        expect(text).not.toContain('**core**:')
+        test('codemode-only: Active Tools section lists only codemode group', async () => {
+            const text = await readInstructions(client)
+            expect(text).toContain('**codemode**: `mj_execute_code`')
+            expect(text).not.toContain('**core**:')
+        })
     })
 })

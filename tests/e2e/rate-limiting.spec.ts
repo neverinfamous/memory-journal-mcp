@@ -9,114 +9,79 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import { startServer, stopServer } from './helpers.js'
+import { getBaseURL, startServer, stopServer } from './helpers.js'
 
 const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
-const RATE_PORT = 4100 + (workerIndex * 10)
+const RATE_PORT = 4100 + workerIndex * 10
+
+function postInitialize(baseUrl: string, id: number, clientName: string) {
+    return fetch(`${baseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            'mcp-protocol-version': '2024-11-05',
+        },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id,
+            method: 'initialize',
+            params: {
+                protocolVersion: '2025-03-26',
+                capabilities: {},
+                clientInfo: { name: clientName, version: '1.0' },
+            },
+        }),
+    })
+}
 
 test.describe('Rate Limiting', () => {
     test.setTimeout(120000)
 
-    test('should allow high throughput with default rate limit', async () => {
-        const testPort = RATE_PORT + 1
-        await startServer(testPort, [], 'rate-default')
-        try {
-            const burstCount = 50
-            const promises = []
-            for (let i = 0; i < burstCount; i++) {
-                promises.push(
-                    fetch(`http://localhost:${testPort}/mcp`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Accept: 'application/json, text/event-stream',
-                    'mcp-protocol-version': '2024-11-05',
-                        },
-                        body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            id: i + 1,
-                            method: 'initialize',
-                            params: {
-                                protocolVersion: '2025-03-26',
-                                capabilities: {},
-                                clientInfo: { name: 'default-test', version: '1.0' },
-                            },
-                        }),
-                    })
-                )
-            }
-            const results = await Promise.all(promises)
-            for (const res of results) {
-                expect(res.status).not.toBe(429)
-            }
-        } finally {
-            stopServer(testPort)
+    test('should allow high throughput with default rate limit', async ({ baseURL: _baseURL }, testInfo) => {
+        const baseUrl = getBaseURL(testInfo)
+        const burstCount = 50
+        const promises = Array.from({ length: burstCount }, (_, i) =>
+            postInitialize(baseUrl, i + 1, 'default-test')
+        )
+        const results = await Promise.all(promises)
+        for (const res of results) {
+            expect(res.status).not.toBe(429)
         }
     })
 
-    test('should return 429 after exceeding rate limit', async () => {
-        const testPort = RATE_PORT + 2
-        await startServer(testPort, [], 'rate-limit', {
-            env: { MCP_RATE_LIMIT_MAX: '5' }
+    test.describe('Low rate limit enforcement', () => {
+        test.describe.configure({ mode: 'serial' })
+
+        const lowLimitPort = RATE_PORT + 2
+        const lowLimitBase = `http://localhost:${lowLimitPort}`
+
+        test.beforeAll(async () => {
+            await startServer(lowLimitPort, [], 'rate-limit', {
+                env: { MCP_RATE_LIMIT_MAX: '5' },
+            })
         })
-        try {
+
+        test.afterAll(() => {
+            stopServer(lowLimitPort)
+        })
+
+        test('should return 429 after exceeding rate limit', async () => {
             let status429Hit = false
             for (let i = 0; i < 20; i++) {
-                const res = await fetch(`http://localhost:${testPort}/mcp`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json, text/event-stream',
-                    'mcp-protocol-version': '2024-11-05',
-                    },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        id: i + 1,
-                        method: 'initialize',
-                        params: {
-                            protocolVersion: '2025-03-26',
-                            capabilities: {},
-                            clientInfo: { name: 'rate-test', version: '1.0' },
-                        },
-                    }),
-                })
+                const res = await postInitialize(lowLimitBase, i + 1, 'rate-test')
                 if (res.status === 429) {
                     status429Hit = true
                     break
                 }
             }
             expect(status429Hit).toBe(true)
-        } finally {
-            stopServer(testPort)
-        }
-    })
-
-    test('should include Retry-After header on 429', async () => {
-        const testPort = RATE_PORT + 3
-        await startServer(testPort, [], 'rate-retry', {
-            env: { MCP_RATE_LIMIT_MAX: '3' }
         })
-        try {
+
+        test('should include Retry-After header on 429', async () => {
             let retryAfter: string | null = null
             for (let i = 0; i < 20; i++) {
-                const res = await fetch(`http://localhost:${testPort}/mcp`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json, text/event-stream',
-                    'mcp-protocol-version': '2024-11-05',
-                    },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        id: i + 1,
-                        method: 'initialize',
-                        params: {
-                            protocolVersion: '2025-03-26',
-                            capabilities: {},
-                            clientInfo: { name: 'retry-test', version: '1.0' },
-                        },
-                    }),
-                })
+                const res = await postInitialize(lowLimitBase, i + 1, 'retry-test')
                 if (res.status === 429) {
                     retryAfter = res.headers.get('retry-after')
                     break
@@ -124,28 +89,18 @@ test.describe('Rate Limiting', () => {
             }
             expect(retryAfter).not.toBeNull()
             expect(Number(retryAfter)).toBeGreaterThan(0)
-        } finally {
-            stopServer(testPort)
-        }
-    })
-
-    test('should apply rate limiting to /health', async () => {
-        const testPort = RATE_PORT + 4
-        await startServer(testPort, [], 'rate-health', {
-            env: { MCP_RATE_LIMIT_MAX: '2' }
         })
-        try {
+
+        test('should apply rate limiting to /health', async () => {
             let status429Hit = false
             for (let i = 0; i < 20; i++) {
-                const res = await fetch(`http://localhost:${testPort}/health`)
+                const res = await fetch(`${lowLimitBase}/health`)
                 if (res.status === 429) {
                     status429Hit = true
                     break
                 }
             }
             expect(status429Hit).toBe(true)
-        } finally {
-            stopServer(testPort)
-        }
+        })
     })
 })

@@ -36,7 +36,11 @@ export default defineConfig({
     testDir: './tests/e2e',
     timeout: 60000,
     outputDir: '.test-output/playwright',
-    fullyParallel: true,
+    // [INTENT] Run spec files in parallel across workers while keeping tests within a file
+    // on the same worker by default so `beforeAll` server spawns execute once per describe
+    // instead of duplicating across workers. Specs with independent per-test servers opt into
+    // `test.describe.configure({ mode: 'parallel' })` explicitly.
+    fullyParallel: false,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: WORKERS,

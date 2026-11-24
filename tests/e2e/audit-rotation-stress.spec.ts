@@ -43,28 +43,34 @@ test.describe('Audit Log Rotation Stress', () => {
             const iterations = 40
             for (let i = 0; i < iterations; i++) {
                 await callToolAndParse(client, 'test_simple', { message: `stress-${i}` })
-                if (i % 5 === 0) {
-                    await new Promise((r) => setTimeout(r, 150))
-                }
             }
 
-            await new Promise((r) => setTimeout(r, 1000))
-
-            let rotatedCount = 0
-            for (let i = 1; i <= 6; i++) {
-                const rotatedPath = `${logPath}.${i}`
-                try {
-                    const s = await stat(rotatedPath)
-                    if (s.size > 0) {
-                        rotatedCount++
-                        if (i > 5) {
-                            throw new Error(`Rotation exceeded maximum limit, found ${rotatedPath}`)
+            const countRotatedFiles = async (): Promise<number> => {
+                let count = 0
+                for (let i = 1; i <= 6; i++) {
+                    const rotatedPath = `${logPath}.${i}`
+                    try {
+                        const s = await stat(rotatedPath)
+                        if (s.size > 0) {
+                            count++
+                            if (i > 5) {
+                                throw new Error(`Rotation exceeded maximum limit, found ${rotatedPath}`)
+                            }
+                        }
+                    } catch (err) {
+                        if (err instanceof Error && err.message.startsWith('Rotation exceeded')) {
+                            throw err
                         }
                     }
-                } catch {}
+                }
+                return count
             }
 
-            expect(rotatedCount).toBeGreaterThanOrEqual(2)
+            await expect
+                .poll(countRotatedFiles, { timeout: 5000, intervals: [100, 200, 250] })
+                .toBeGreaterThanOrEqual(2)
+
+            const rotatedCount = await countRotatedFiles()
             expect(rotatedCount).toBeLessThanOrEqual(5)
         } finally {
             if (client) await client.close()
