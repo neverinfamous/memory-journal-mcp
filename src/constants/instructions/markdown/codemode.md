@@ -33,7 +33,7 @@ In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You m
 - `searchEntries(params)`
 - `searchByDateRange(params)`
 - `semanticSearch(params)`
-- `getVectorIndexStats(params)`
+- `getVectorIndexStats({})` *(database-wide; takes no parameters)*
 - `listDeletedEntries(params)`
 - `crossTeamSearch(params)`
 

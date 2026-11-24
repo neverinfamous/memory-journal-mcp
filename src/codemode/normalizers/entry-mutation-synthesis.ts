@@ -1,4 +1,14 @@
-import { ENTRY_TYPE_ALIASES, safeString } from './shared-utils.js'
+import { ENTRY_TYPE_ALIASES, isRecord, safeString } from './shared-utils.js'
+
+const CONTEXT_WRAPPER_KEYS = new Set(['content', 'text', 'raw', 'body'])
+
+function extractUnwrappedContextContent(val: unknown): string | undefined {
+    if (!isRecord(val)) return undefined
+    const rawContent = val['content']
+    if (typeof rawContent !== 'string' || rawContent.trim() === '') return undefined
+    const keys = Object.keys(val)
+    return keys.length > 0 && keys.every((k) => CONTEXT_WRAPPER_KEYS.has(k)) ? rawContent : undefined
+}
 
 function canonicalizeEntryType(obj: Record<string, unknown>): void {
     if (obj['type'] !== undefined && obj['entry_type'] === undefined) {
@@ -41,10 +51,22 @@ export function synthesizeEntryMutationFields(obj: Record<string, unknown>, isUp
         })
     }
     consumeGroup(['description', 'details', 'summary', 'notes', 'text', 'message'], safeString)
-    consumeGroup(['context'], (v) => {
-        const s = safeString(v)
-        return s !== '' ? `**Context:** ${s}` : ''
-    })
+    const unwrappedContext = extractUnwrappedContextContent(obj['context'])
+    if (unwrappedContext !== undefined) {
+        Reflect.deleteProperty(obj, 'context')
+        const existingContent =
+            obj['content'] !== undefined ? safeString(obj['content']).trim() : ''
+        if (existingContent === '') {
+            obj['content'] = unwrappedContext
+        } else if (existingContent !== unwrappedContext.trim()) {
+            contentParts.push(unwrappedContext)
+        }
+    } else {
+        consumeGroup(['context'], (v) => {
+            const s = safeString(v)
+            return s !== '' ? `**Context:** ${s}` : ''
+        })
+    }
     consumeGroup(['focus', 'goal', 'objective'], (v) => {
         const s = safeString(v)
         return s !== '' ? `**Focus:** ${s}` : ''

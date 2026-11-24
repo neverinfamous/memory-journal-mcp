@@ -75,7 +75,23 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
                     const stats = vectorManager.getStats()
                     return { success: true, available: true, ...stats }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    const formatted = formatHandlerError(err)
+                    if (
+                        typeof params === 'object' &&
+                        params !== null &&
+                        !Array.isArray(params) &&
+                        ('workspace_id' in params ||
+                            'workspaceId' in params ||
+                            'project_number' in params ||
+                            'projectNumber' in params)
+                    ) {
+                        return {
+                            ...formatted,
+                            suggestion:
+                                '🛠️ AUTONOMOUS HEALING: get_vector_index_stats reports database-wide vector index statistics and accepts no parameters. Re-call with empty arguments: mj.search.getVectorIndexStats({}).',
+                        }
+                    }
+                    return formatted
                 }
             },
         },

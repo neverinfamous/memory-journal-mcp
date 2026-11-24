@@ -6,6 +6,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { calcPerDbLimit, isTeamDbReady, mergeAndDedup, resolveAuthorizedIncludeTeam } from './helpers.js'
 import { decodeCompoundCursor, encodeCompoundCursor } from './fts.js'
+import { computeMergedCompoundCursor } from './merge-cursors.js'
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
 
@@ -46,12 +47,15 @@ function queryTeamDateRangeAndMerge(
     wsId: string,
     projectNumber: number | undefined,
     perDbLimit: number,
-    teamCursor: string | undefined,
-    teamExhausted: boolean,
+    cursorState: {
+        personalCursor: string | undefined
+        teamCursor: string | undefined
+        teamExhausted: boolean
+    },
     personalEntries: ReturnType<ToolContext['db']['searchByDateRange']>
 ): Record<string, unknown> {
     const emptyPage: ReturnType<ToolContext['db']['searchByDateRange']> = { entries: [] }
-    const teamEntries = teamExhausted
+    const teamEntries = cursorState.teamExhausted
         ? emptyPage
         : teamDb.searchByDateRange(input.start_date, input.end_date, {
               entryType: input.entry_type,
@@ -63,7 +67,7 @@ function queryTeamDateRangeAndMerge(
               workflowRunId: input.workflow_run_id,
               limit: perDbLimit,
               sortBy: input.sort_by,
-              cursor: teamCursor,
+              cursor: cursorState.teamCursor,
               includeArchived: input.include_archived,
               workspaceId: wsId,
           })
@@ -80,10 +84,19 @@ function queryTeamDateRangeAndMerge(
         input.sort_by,
         teamDb
     )
-    let compoundNextCursor: string | undefined
-    if (personalEntries.nextCursor || teamEntries.nextCursor) {
-        compoundNextCursor = encodeCompoundCursor(personalEntries.nextCursor, teamEntries.nextCursor)
-    }
+    const compoundNextCursor = computeMergedCompoundCursor({
+        merged,
+        personalEntries: personalEntries.entries,
+        teamEntries: teamEntries.entries,
+        personalRawNextCursor: personalEntries.nextCursor,
+        teamRawNextCursor: teamEntries.nextCursor,
+        prevPersonalCursor: cursorState.personalCursor,
+        prevTeamCursor: cursorState.teamCursor,
+        useKeyset: input.sort_by !== 'importance',
+        personalDegraded: false,
+        teamDegraded: false,
+        encodeCompound: encodeCompoundCursor,
+    })
     return {
         success: true,
         entries: merged,
@@ -157,8 +170,7 @@ function executeDateRangeSearch(
             wsId,
             projectNumber,
             perDbLimit,
-            teamCursor,
-            teamExhausted,
+            { personalCursor, teamCursor, teamExhausted },
             personalEntries
         )
     }

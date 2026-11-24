@@ -128,8 +128,24 @@ export const SearchEntriesSchemaMcp = z.preprocess(
 export const SearchByDateRangeSchema = z.preprocess(
     preprocessSearchPayload,
     z.object({
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('Start date (use `start_date`, not `start`)'),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('End date (use `end_date`, not `end`)'),
+    start_date: z
+        .string({
+            error: (issue) =>
+                issue.input === undefined
+                    ? "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). Pass start_date: '1970-01-01' for open-ended queries, or use search_entries / get_recent_entries."
+                    : undefined,
+        })
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .describe('Start date (use `start_date`, not `start`)'),
+    end_date: z
+        .string({
+            error: (issue) =>
+                issue.input === undefined
+                    ? "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). Pass start_date: '1970-01-01' for open-ended queries, or use search_entries / get_recent_entries."
+                    : undefined,
+        })
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),

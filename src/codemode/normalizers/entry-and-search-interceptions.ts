@@ -103,6 +103,14 @@ function applyExactMatchSearchInterception(
     if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
         obj['end_date'] = new Date().toISOString().split('T')[0]
     }
+    if (
+        DATE_RANGE_METHODS.has(methodName) &&
+        typeof obj['end_date'] === 'string' &&
+        obj['end_date'].trim() !== '' &&
+        (obj['start_date'] === undefined || obj['start_date'] === null || obj['start_date'] === '')
+    ) {
+        obj['start_date'] = '1970-01-01'
+    }
 
     const hasConcreteWorkspace =
         typeof obj['workspace_id'] === 'string' &&

@@ -15,6 +15,7 @@ import {
     mergeAndDedup,
     type EntryWithSource,
 } from './helpers.js'
+import { computeMergedCompoundCursor } from './merge-cursors.js'
 import { Buffer } from 'node:buffer'
 
 // Helper for compound cursor encoding/decoding
@@ -182,6 +183,8 @@ function mergeFtsStoreResults(
     personalResult: ReturnType<IDatabaseAdapter['searchEntries']>,
     teamResult: ReturnType<IDatabaseAdapter['searchEntries']>,
     options: FtsSearchOptions,
+    cursors: { personalCursor?: string; teamCursor?: string },
+    query: string | undefined,
     teamDb?: IDatabaseAdapter
 ): FtsSearchResponse {
     const merged = mergeAndDedup(
@@ -197,12 +200,24 @@ function mergeFtsStoreResults(
         options.sortBy === 'blended' ? 'preserve' : options.sortBy,
         teamDb
     )
-    const compoundNextCursor =
-        personalResult.nextCursor || teamResult.nextCursor
-            ? encodeCompoundCursor(personalResult.nextCursor, teamResult.nextCursor)
-            : undefined
     const isTeamDegraded = 'degraded' in teamResult && teamResult.degraded === true
     const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded === true
+    const hasTextQuery = typeof query === 'string' && query.trim().length > 0
+    const useKeyset =
+        !hasTextQuery && options.sortBy !== 'importance' && options.sortBy !== 'blended'
+    const compoundNextCursor = computeMergedCompoundCursor({
+        merged,
+        personalEntries: personalResult.entries,
+        teamEntries: teamResult.entries,
+        personalRawNextCursor: personalResult.nextCursor,
+        teamRawNextCursor: teamResult.nextCursor,
+        prevPersonalCursor: cursors.personalCursor,
+        prevTeamCursor: cursors.teamCursor,
+        useKeyset,
+        personalDegraded: isPersonalDegraded && hasTextQuery,
+        teamDegraded: isTeamDegraded && hasTextQuery,
+        encodeCompound: encodeCompoundCursor,
+    })
 
     let mergedHighlights: { id: number; snippet: string }[] | undefined
     if (options.includeHighlights) {
@@ -264,7 +279,7 @@ export function ftsSearch(
             hasFilters,
             options
         )
-        return mergeFtsStoreResults(personalResult, teamResult, options, teamDb)
+        return mergeFtsStoreResults(personalResult, teamResult, options, cursors, query, teamDb)
     }
 
     const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded === true

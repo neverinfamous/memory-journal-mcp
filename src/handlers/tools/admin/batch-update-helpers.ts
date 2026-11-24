@@ -118,14 +118,22 @@ export function mapBatchUpdateInputItem(
     }
 }
 
-function buildWildcardMismatchError(wildcardMismatches: number[]): Record<string, unknown> {
+function buildWildcardMismatchError(
+    wildcardMismatches: number[],
+    workspaceId?: string,
+    projectNumber?: number
+): Record<string, unknown> {
+    const suggestion =
+        workspaceId === '*' && projectNumber !== undefined
+            ? `🛠️ AUTONOMOUS HEALING: Cross-workspace batch updates are restricted to project_number ${String(projectNumber)} because project_number was pinned (often inherited from top-level mj_execute_code({ project_number })). Re-run mj_execute_code with workspace_id: '*' and omit top-level project_number when updating entries across multiple projects.`
+            : 'Verify the entry identifiers and project number'
     return {
         success: false,
         error: `Batch update aborted because entries were not found in the requested project: ${wildcardMismatches.join(', ')}. No rows were updated.`,
         code: 'RESOURCE_NOT_FOUND',
         category: 'resource',
         recoverable: true,
-        suggestion: 'Verify the entry identifiers and project number',
+        suggestion,
         count: 0,
         notFound: wildcardMismatches,
     }
@@ -170,7 +178,11 @@ export async function executeBatchUpdateEntries(
         prefetchedById
     )
     if (wildcardMismatches.length > 0) {
-        return buildWildcardMismatchError(wildcardMismatches)
+        return buildWildcardMismatchError(
+            wildcardMismatches,
+            input.workspace_id,
+            input.project_number
+        )
     }
 
     await sendProgress(progress, 0, 2, 'Updating entries...')

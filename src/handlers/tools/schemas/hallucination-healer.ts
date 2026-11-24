@@ -67,6 +67,17 @@ function toStr(v: unknown, pretty = false): string {
     return ''
 }
 
+const CONTEXT_WRAPPER_KEYS = new Set(['content', 'text', 'raw', 'body'])
+
+function extractUnwrappedContextWrapper(val: unknown): string | undefined {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return undefined
+    const rec = val as Record<string, unknown>
+    const rawContent = rec['content']
+    if (typeof rawContent !== 'string' || rawContent.trim() === '') return undefined
+    const keys = Object.keys(rec)
+    return keys.length > 0 && keys.every((k) => CONTEXT_WRAPPER_KEYS.has(k)) ? rawContent : undefined
+}
+
 function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
     let modified = false
 
@@ -84,6 +95,23 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
         ['context', 'Context'], ['focus', 'Focus'], ['resolution', 'Resolution'],
     ] as const) {
         if (!(field in obj)) continue
+        if (field === 'context') {
+            const unwrapped = extractUnwrappedContextWrapper(obj[field])
+            if (unwrapped !== undefined) {
+                const existingContent = toStr(obj['content'])
+                if (existingContent.trim() === '' && !isUpdatePayload(obj)) {
+                    obj['content'] = unwrapped
+                } else if (
+                    existingContent.trim() !== '' &&
+                    existingContent.trim() !== unwrapped.trim()
+                ) {
+                    obj['content'] = `${existingContent}\n\n${unwrapped}`
+                }
+                Reflect.deleteProperty(obj, field)
+                modified = true
+                continue
+            }
+        }
         const val =
             field === 'context' && typeof obj[field] === 'object' && obj[field] !== null
                 ? toStr(obj[field], true)
@@ -154,6 +182,10 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
     }
 
     if ('significance_type' in obj) {
+        if (obj['significance_type'] === null && !isUpdatePayload(obj)) {
+            Reflect.deleteProperty(obj, 'significance_type')
+            modified = true
+        }
         const originalSigType = obj['significance_type']
         coerceSignificanceAlias(obj)
 

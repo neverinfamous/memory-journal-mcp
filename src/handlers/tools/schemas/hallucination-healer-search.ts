@@ -188,6 +188,18 @@ function healSearchSortBy(obj: Record<string, unknown>): boolean {
     return healSortByField(obj)
 }
 
+const ISO_DATETIME_PREFIX_RE =
+    /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?$/i
+
+function normalizeIsoDateField(obj: Record<string, unknown>, key: 'start_date' | 'end_date'): boolean {
+    const raw = obj[key]
+    if (typeof raw !== 'string') return false
+    const match = ISO_DATETIME_PREFIX_RE.exec(raw.trim())
+    if (match?.[1] === undefined) return false
+    obj[key] = match[1]
+    return true
+}
+
 /** Read-safe preprocessor for search schemas: normalizes search filters without synthesizing `content` or write `tags`. */
 export function healSearchPayload(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
@@ -214,6 +226,8 @@ export function healSearchPayload(val: unknown): unknown {
     if (coerceEntryIdField(obj)) modified = true
     if (normalizeTagsField(obj)) modified = true
     if (healTagListField(obj, 'exclude_tags')) modified = true
+    if (normalizeIsoDateField(obj, 'start_date')) modified = true
+    if (normalizeIsoDateField(obj, 'end_date')) modified = true
 
     if ('entry_type' in obj && typeof obj['entry_type'] === 'string') {
         const mapped = mapKnownEntryTypeAlias(obj['entry_type'].toLowerCase())
