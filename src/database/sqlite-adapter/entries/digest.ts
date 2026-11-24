@@ -323,10 +323,11 @@ export function computeDigest(db: Database, workspaceId = 'default'): DigestSnap
  * is its own workspace and uses `${type}:default`.
  */
 export function workspaceSnapshotType(type: string, workspaceId?: string): string {
-    if (workspaceId === undefined || workspaceId === '') {
+    const trimmed = workspaceId?.trim()
+    if (trimmed === undefined || trimmed === '') {
         return type
     }
-    return `${type}:${workspaceId}`
+    return `${type}:${trimmed}`
 }
 
 /**

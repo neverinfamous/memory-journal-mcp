@@ -137,6 +137,13 @@ export async function importMarkdownEntries(
         dry_run,
     }
 
+    const verifyPinnedSourceDir = (): void => {
+        assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
+        if (realpathSync.native(pinnedSourceDir) !== pinnedSourceDir) {
+            throw new Error(`Import directory symlink changed during batch: ${pinnedSourceDir}`)
+        }
+    }
+
     const {
         parsedFiles,
         skipped: readSkipped,
@@ -144,14 +151,8 @@ export async function importMarkdownEntries(
     } = await readMarkdownFilesParallel(
         mdFiles,
         (filename) => readAndParseMarkdownFile(pinnedSourceDir, filename),
-        (chunkIndex) => {
-            if (chunkIndex > 0) {
-                assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
-                if (realpathSync.native(pinnedSourceDir) !== pinnedSourceDir) {
-                    throw new Error(`Import directory symlink changed during batch: ${pinnedSourceDir}`)
-                }
-            }
-        }
+        verifyPinnedSourceDir,
+        verifyPinnedSourceDir
     )
     result.skipped += readSkipped
     if (readErrors.length > 0) {

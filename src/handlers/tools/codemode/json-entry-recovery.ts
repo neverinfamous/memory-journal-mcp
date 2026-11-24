@@ -30,7 +30,7 @@ export function extractAndRecoverRecordCode(record: Record<string, unknown>): st
 
 function detectRecoverableEntryCall(
     code: string
-): { isUpdate: boolean; isTeamCall: boolean } | null {
+): { isUpdate: boolean; isLegacyUpdateAlias: boolean; isTeamCall: boolean } | null {
     // Reject multi-call scripts so scope/id fields from an earlier statement are never stolen.
     const strippedCode = stripCommentsAndStrings(code)
     const callMatches = strippedCode.match(
@@ -53,7 +53,7 @@ function detectRecoverableEntryCall(
         )
 
     if (!isCreate && !isStrictUpdate && !isLegacyUpdateAlias) return null
-    return { isUpdate, isTeamCall }
+    return { isUpdate, isLegacyUpdateAlias, isTeamCall }
 }
 
 function unescapeQuotes(value: string): string {
@@ -67,17 +67,17 @@ function extractContentField(
     code: string
 ): { content: string; match: RegExpExecArray } | null {
     const backtickMatch =
-        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+        /\bcontent\s*:\s*`((?:[^`\\]|\\[\s\S])*)`(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
     if (backtickMatch?.[1] !== undefined) return { content: backtickMatch[1], match: backtickMatch }
     const singleMatch =
-        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+        /\bcontent\s*:\s*'((?:[^'\\]|\\[\s\S])*)'(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
     if (singleMatch?.[1] !== undefined) return { content: singleMatch[1], match: singleMatch }
     const doubleMatch =
-        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+        /\bcontent\s*:\s*"((?:[^"\\]|\\[\s\S])*)"(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
             code
         )
     if (doubleMatch?.[1] !== undefined) return { content: doubleMatch[1], match: doubleMatch }
@@ -305,15 +305,21 @@ function populateRecoveredEntryMetadata(
         /\b(?:significance_type|significanceType)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
     const isPersonalMatch = /\b(?:is_personal|isPersonal)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
     const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
-    const entryIdMatch = /\b(?:entry_id|entryId|id)\s*:\s*(-?\d+(?:\.\d+)?)/i.exec(topLevelScanCode)
+    const useTestDbMatch = /\b(?:use_test_db|useTestDb)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
+    const entryIdMatch = /\b(?:entry_id|entryId|id)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
+        topLevelScanCode
+    )
 
-    if (entryIdMatch?.[1] !== undefined) {
-        const eid = parseCanonicalPositiveInt(entryIdMatch[1])
+    const rawEntryId = entryIdMatch?.[1] ?? entryIdMatch?.[3]?.trim()
+    if (rawEntryId !== undefined && rawEntryId !== '') {
+        const eid = parseCanonicalPositiveInt(rawEntryId)
         if (eid !== undefined) {
             payload['entry_id'] = eid
+        } else if (entryIdMatch?.[1] !== undefined) {
+            const numEid = Number(rawEntryId)
+            payload['entry_id'] = Number.isFinite(numEid) ? numEid : rawEntryId
         } else {
-            const numEid = Number(entryIdMatch[1])
-            payload['entry_id'] = Number.isFinite(numEid) ? numEid : entryIdMatch[1]
+            payload['entry_id'] = rawEntryId
         }
     }
     if (projectMatch?.[1] !== undefined) {
@@ -344,6 +350,7 @@ function populateRecoveredEntryMetadata(
     if (sigMatch?.[2] !== undefined) payload['significance_type'] = sigMatch[2]
     if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
     if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
+    if (useTestDbMatch?.[1]?.toLowerCase() === 'true') payload['use_test_db'] = true
 
     populateRecoveredArrayAndContextFields(payload, scanCode, topLevelScanCode)
 }
@@ -371,16 +378,18 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const payload: Record<string, unknown> = {
         content: extracted.content,
     }
-    if (typeMatch?.[2] !== undefined) {
-        payload['entry_type'] = typeMatch[2]
-    } else if (!detected.isUpdate) {
-        payload['entry_type'] = 'technical_note'
-    }
     if (extracted.title !== undefined && extracted.title !== '') payload['title'] = extracted.title
 
     populateRecoveredEntryMetadata(payload, cleanScanCode, topLevelScanCode)
+    const isUpdate =
+        detected.isUpdate || (detected.isLegacyUpdateAlias && payload['entry_id'] !== undefined)
+    if (typeMatch?.[2] !== undefined) {
+        payload['entry_type'] = typeMatch[2]
+    } else if (!isUpdate) {
+        payload['entry_type'] = 'technical_note'
+    }
 
-    const fnName = detected.isUpdate
+    const fnName = isUpdate
         ? detected.isTeamCall ? 'mj.team.teamUpdateEntry' : 'mj.updateEntry'
         : detected.isTeamCall ? 'mj.team.teamCreateEntry' : 'mj.createEntry'
     return `return await ${fnName}(${JSON.stringify(payload)});`

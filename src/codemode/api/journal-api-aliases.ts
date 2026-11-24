@@ -246,14 +246,16 @@ function normalizeAutoRouteArg(
         }
     }
     if (!isRecord(firstArg)) return null
-    const entryId = firstArg['entry_id'] ?? firstArg['entryId'] ?? firstArg['id']
-    const workspaceId = firstArg['workspace_id'] ?? firstArg['workspaceId'] ?? firstArg['workspace']
-    const projectNumber = firstArg['project_number'] ?? firstArg['projectNumber']
+    const extra = isRecord(args[1]) ? args[1] : undefined
+    const sourceRec: Record<string, unknown> = extra !== undefined ? { ...extra, ...firstArg } : firstArg
+    const entryId = sourceRec['entry_id'] ?? sourceRec['entryId'] ?? sourceRec['id']
+    const workspaceId = sourceRec['workspace_id'] ?? sourceRec['workspaceId'] ?? sourceRec['workspace']
+    const projectNumber = sourceRec['project_number'] ?? sourceRec['projectNumber']
     const includeRelationships =
-        firstArg['include_relationships'] ?? firstArg['includeRelationships']
-    const sessionId = firstArg['session_id'] ?? firstArg['sessionId']
+        sourceRec['include_relationships'] ?? sourceRec['includeRelationships']
+    const sessionId = sourceRec['session_id'] ?? sourceRec['sessionId']
     return {
-        ...firstArg,
+        ...sourceRec,
         ...(entryId !== undefined ? { entry_id: entryId } : {}),
         ...(workspaceId !== undefined ? { workspace_id: workspaceId } : {}),
         ...(projectNumber !== undefined ? { project_number: projectNumber } : {}),

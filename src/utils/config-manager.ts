@@ -166,9 +166,9 @@ export class ConfigManager extends EventEmitter {
         const prevConfig = this.config
         let nextConfig: DynamicConfig = { ...this.config, ...newConfig }
         if ('rawToolFilter' in newConfig) {
-            nextConfig.toolFilterConfig = newConfig.rawToolFilter
-                ? parseToolFilter(newConfig.rawToolFilter)
-                : null
+            const trimmedFilter = newConfig.rawToolFilter?.trim()
+            nextConfig.toolFilterConfig =
+                trimmedFilter !== undefined && trimmedFilter !== '' ? parseToolFilter(trimmedFilter) : null
         }
         if ('briefingConfig' in newConfig) {
             const registry = activeProjectRegistry(nextConfig.briefingConfig.projectRegistry)

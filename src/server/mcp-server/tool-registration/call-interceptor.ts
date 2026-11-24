@@ -14,11 +14,13 @@ import {
     toThrownValidationResponse,
     toValidationFailureResponse,
     tryPromptAndResourceFallbacks,
+    type ToolCallParams,
 } from './call-interceptor-helpers.js'
 import { resolveEffectiveMaxToolInputElements } from '../../../utils/tool-input-bounds.js'
 import {
     applyCreateWorkspaceScope,
     healIncomingToolCallParams,
+    resolveToolNameAlias,
 } from './call-arg-normalizer.js'
 import {
     isAutonomousShimBlockedByFilter,
@@ -305,6 +307,26 @@ function isRegisteredToolBlocked(
     return false
 }
 
+async function dispatchBlockedRegisteredTool(
+    checkName: string | undefined,
+    aliasedName: string | undefined,
+    params: ToolCallParams | undefined,
+    request: unknown,
+    extra: unknown,
+    originalHandler: (request: unknown, extra: unknown) => Promise<unknown>,
+    allTools: ToolRegistration[],
+    allToolNames: Set<string>,
+    customToolHandlerConfig: ToolHandlerConfig,
+    readOnlyHints?: ReadonlyMap<string, boolean | undefined>
+): Promise<unknown> {
+    if (!isRegisteredToolBlocked(checkName, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)) {
+        return undefined
+    }
+    if (params !== undefined && aliasedName !== undefined) params.name = aliasedName
+    const blockedRes = await originalHandler(request, extra)
+    return toValidationFailureResponse(blockedRes, params) ?? blockedRes
+}
+
 async function executeInterceptedToolCall(
     request: unknown,
     extra: unknown,
@@ -328,55 +350,41 @@ async function executeInterceptedToolCall(
         if (limitErr !== undefined) return limitErr
 
         const preHealName = params?.name
-        if (isRegisteredToolBlocked(preHealName, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)) {
-            const blockedRes = await originalHandler(request, extra)
-            return toValidationFailureResponse(blockedRes, params) ?? blockedRes
-        }
+        const preHealAlias = healingEnabled ? resolveToolNameAlias(preHealName) : undefined
+        const preBlocked = await dispatchBlockedRegisteredTool(
+            preHealAlias ?? preHealName, preHealAlias, params, request, extra,
+            originalHandler, allTools, allToolNames, customToolHandlerConfig, readOnlyHints
+        )
+        if (preBlocked !== undefined) return preBlocked
 
         if (params !== undefined && healingEnabled) {
             const healError = healIncomingToolCallParams(params, options, liveBriefing)
             if (healError !== undefined) return healError
         }
 
-        if (
-            params?.name !== preHealName &&
-            isRegisteredToolBlocked(params?.name, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)
-        ) {
-            const blockedRes = await originalHandler(request, extra)
-            return toValidationFailureResponse(blockedRes, params) ?? blockedRes
+        if (params?.name !== preHealName) {
+            const postBlocked = await dispatchBlockedRegisteredTool(
+                params?.name, undefined, params, request, extra,
+                originalHandler, allTools, allToolNames, customToolHandlerConfig, readOnlyHints
+            )
+            if (postBlocked !== undefined) return postBlocked
         }
 
         applyCreateWorkspaceScope(params, customToolHandlerConfig, liveBriefing, context.runtime)
 
-        if (
-            params?.name !== undefined &&
-            params.name !== '' &&
-            !allToolNames.has(params.name)
-        ) {
+        if (params?.name !== undefined && params.name !== '' && !allToolNames.has(params.name)) {
             const normalizedToolArgs =
-                typeof params.arguments === 'object' &&
-                params.arguments !== null &&
-                !Array.isArray(params.arguments)
+                typeof params.arguments === 'object' && params.arguments !== null && !Array.isArray(params.arguments)
                     ? params.arguments
                     : {}
             return await handleUnknownTool(
-                params.name,
-                normalizedToolArgs,
-                healingEnabled,
-                prompts,
-                context,
-                options,
-                allTools,
-                allToolNames,
-                customToolHandlerConfig
+                params.name, normalizedToolArgs, healingEnabled, prompts,
+                context, options, allTools, allToolNames, customToolHandlerConfig
             )
         }
 
         const result = await originalHandler(request, extra)
-        const validationFailure = toValidationFailureResponse(result, params)
-        if (validationFailure !== undefined) return validationFailure
-
-        return result
+        return toValidationFailureResponse(result, params) ?? result
     } catch (error: unknown) {
         const handled = toThrownValidationResponse(error, request)
         if (handled !== undefined) return handled

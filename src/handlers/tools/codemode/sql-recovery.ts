@@ -167,29 +167,33 @@ function recoverSpecialTableSelect(
     tableName: string,
     whereClause: string,
     idVal: number | undefined,
+    limitVal: number | undefined,
     scopeFields: Record<string, unknown>
 ): string | null {
     if (!/^SELECT\b/i.test(cleanSql)) return null
     if (hasUnsupportedSpecialTableWhere(whereClause, specialWhereAllowedCols(tableName))) {
         return null
     }
+    if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
+        const relParams: Record<string, unknown> = idVal !== undefined ? { entry_id: idVal, ...scopeFields } : { ...scopeFields }
+        if (limitVal !== undefined) relParams['limit'] = limitVal
+        return `return await mj.relationships.visualizeRelationships(${JSON.stringify(relParams)});`
+    }
+    if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
+        const auditParams: Record<string, unknown> = limitVal !== undefined ? { ...scopeFields, limit: limitVal } : scopeFields
+        return `return await mj.admin.searchAuditLog(${JSON.stringify(auditParams)});`
+    }
+    if (limitVal !== undefined) return null
     if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
         return `return await mj.core.listTags(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'projects' || tableName === 'project_registry') {
         return `return await mj.admin.listProjects(${JSON.stringify(scopeFields)});`
     }
-    if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
-        const relParams = idVal !== undefined ? { entry_id: idVal, ...scopeFields } : scopeFields
-        return `return await mj.relationships.visualizeRelationships(${JSON.stringify(relParams)});`
-    }
     if (tableName === 'team_members' || tableName === 'members') {
         return `return await mj.team.teamListMembers(${JSON.stringify(scopeFields)});`
     }
-    if (tableName === 'author_aliases' || tableName === 'aliases') {
-        return `return await mj.team.teamListAuthorAliases(${JSON.stringify(scopeFields)});`
-    }
-    return `return await mj.admin.searchAuditLog(${JSON.stringify(scopeFields)});`
+    return `return await mj.team.teamListAuthorAliases(${JSON.stringify(scopeFields)});`
 }
 
 function recoverEntrySelect(
@@ -335,7 +339,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     const scopeFields = scopeFromSqlLiterals(cleanSql)
 
     if (/^SELECT\b/i.test(cleanSql) && tableName !== undefined && SPECIAL_TABLES.has(tableName)) {
-        return recoverSpecialTableSelect(cleanSql, tableName, whereClause, idVal, scopeFields)
+        return recoverSpecialTableSelect(cleanSql, tableName, whereClause, idVal, limitVal, scopeFields)
     }
     if (/^SELECT\b/i.test(cleanSql)) {
         return recoverEntrySelect(cleanSql, tableName, whereClause, idVal, limitVal, scopeFields)

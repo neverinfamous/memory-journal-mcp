@@ -109,6 +109,9 @@ export function appendOptionalQuerySearchFields(
             searchPayload[snakeKey] = source[camelKey]
         }
     }
+    if (source['use_test_db'] === true || source['useTestDb'] === true) {
+        searchPayload['use_test_db'] = true
+    }
 }
 
 /** Normalizes arbitrary `context` values into a mutable plain record wrapper. */

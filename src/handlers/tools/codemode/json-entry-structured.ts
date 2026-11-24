@@ -8,13 +8,17 @@ import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import {
     assignMissingScope,
+    firstDefinedAlias,
+    hasStructuredDiscriminator,
+    hasUseTestDbFlag,
     readProjectNumber,
     readWorkspaceId,
     resolveCompatibleInheritedScope,
     resolveRepoWorkspace,
+    STRUCTURED_DISCRIMINATOR_KEYS,
 } from './json-entry-scope.js'
 
-export { resolveRepoWorkspace }
+export { hasStructuredDiscriminator, resolveRepoWorkspace, STRUCTURED_DISCRIMINATOR_KEYS }
 
 interface PayloadSignals {
     hasContent: boolean
@@ -34,8 +38,16 @@ interface PayloadSignals {
 /** Recover executable JS directly from an already-parsed structured record. */
 export function recoverStructuredRecord(parsed: Record<string, unknown>): string | null {
     const target = unwrapPayloadTarget(parsed)
-    const toolCall = recoverNamedToolCall(target, parsed)
-    if (toolCall !== null) return toolCall
+    if (
+        target['tool'] !== undefined ||
+        target['method'] !== undefined ||
+        target['function'] !== undefined ||
+        parsed['tool'] !== undefined ||
+        parsed['method'] !== undefined ||
+        parsed['function'] !== undefined
+    ) {
+        return recoverNamedToolCall(target, parsed)
+    }
     const searchCall = recoverSearchCall(target, parsed)
     if (searchCall !== null) return searchCall
     return recoverEntryMutation(parsed, target)
@@ -84,6 +96,7 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
           ? { ...target['args'] }
           : {}
     assignMissingScope(toolParams, target, original)
+    if (hasUseTestDbFlag(target, original)) toolParams['use_test_db'] = true
     const cleanTool = toolName.replace(/^mj[._]/, '')
     return `return await (mj.${cleanTool} || mj.core.${cleanTool})(${JSON.stringify(toolParams)});`
 }
@@ -110,6 +123,7 @@ function recoverSearchCall(target: Record<string, unknown>, original: Record<str
     const scope = resolveCompatibleInheritedScope(target, original)
     if (scope.projectNumber !== undefined) searchParams['project_number'] = scope.projectNumber
     if (scope.workspaceId !== undefined) searchParams['workspace_id'] = scope.workspaceId
+    if (hasUseTestDbFlag(target, original)) searchParams['use_test_db'] = true
     return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
 }
 
@@ -166,7 +180,13 @@ function formatScopedMutationOp(
     const scope = resolveCompatibleInheritedScope(target, original)
     if (scope.workspaceId !== undefined) params['workspace_id'] = scope.workspaceId
     if (scope.projectNumber !== undefined) params['project_number'] = scope.projectNumber
-    if (fnPath === 'mj.core.getEntryById' && scope.workspaceId === undefined && scope.projectNumber === undefined) {
+    if (hasUseTestDbFlag(target, original)) params['use_test_db'] = true
+    if (
+        fnPath === 'mj.core.getEntryById' &&
+        scope.workspaceId === undefined &&
+        scope.projectNumber === undefined &&
+        params['use_test_db'] !== true
+    ) {
         return `return await mj.core.getEntryById({ entry_id: ${JSON.stringify(entryId)} });`
     }
     return `return await ${fnPath}(${JSON.stringify(params)});`
@@ -178,7 +198,8 @@ function recoverEntryMutation(
 ): string | null {
     const { entryId, invalidExplicitEntryId } = readEntryIdField(target)
     const explicitIdForMutation = entryId ?? invalidExplicitEntryId
-    const op = readOperation(target).trim().toLowerCase()
+    const rawOp = readOperation(target) || (original !== target ? readOperation(original) : '')
+    const op = rawOp.trim().toLowerCase()
     if (explicitIdForMutation !== undefined) {
         if (op === 'delete' || op === 'delete_entry') {
             return formatScopedMutationOp('mj.admin.deleteEntry', explicitIdForMutation, target, original)
@@ -193,7 +214,7 @@ function recoverEntryMutation(
             return formatScopedMutationOp('mj.team.teamRestoreEntry', explicitIdForMutation, target, original)
         }
     }
-    const signals = readPayloadSignals(target, op)
+    const signals = readPayloadSignals(target, op, original)
     if (!hasJournalFields(signals) && explicitIdForMutation !== undefined) {
         if (!SUPPORTED_READ_BY_ID_OPS.has(op)) return null
         const readFn = op === 'team_get_entry_by_id' ? 'mj.team.teamGetEntryById' : 'mj.core.getEntryById'
@@ -208,7 +229,7 @@ function recoverEntryMutation(
         op === 'update' ||
         op === 'team_update_entry' ||
         (explicitIdForMutation !== undefined && !signals.hasOp)
-    const entryParams = buildEntryParams(target, signals, isUpdate)
+    const entryParams = buildEntryParams(target, signals, isUpdate, original)
     const scope = resolveCompatibleInheritedScope(target, original, true)
     if (entryParams['workspace_id'] === undefined && scope.workspaceId !== undefined) {
         entryParams['workspace_id'] = scope.workspaceId
@@ -227,7 +248,12 @@ function recoverEntryMutation(
     return `return await ${createFn}(${JSON.stringify(entryParams)});`
 }
 
-function readPayloadSignals(target: Record<string, unknown>, op: string): PayloadSignals {
+function readPayloadSignals(
+    target: Record<string, unknown>,
+    op: string,
+    original?: Record<string, unknown>
+): PayloadSignals {
+    const fb = original !== target ? original : undefined
     return {
         hasContent: typeof target['content'] === 'string' && target['content'].trim().length > 0,
         hasNotes: typeof target['notes'] === 'string' && target['notes'].trim().length > 0,
@@ -244,24 +270,16 @@ function readPayloadSignals(target: Record<string, unknown>, op: string): Payloa
         hasDetails: typeof target['details'] === 'string' && target['details'].trim().length > 0,
         hasStatus: typeof target['status'] === 'string' && target['status'].trim().length > 0,
         hasType:
-            typeof target['type'] === 'string' ||
-            typeof target['entry_type'] === 'string' ||
-            typeof target['category'] === 'string',
+            typeof firstDefinedAlias(target, fb, ['entry_type', 'type', 'category']) === 'string',
         hasOp: SUPPORTED_ENTRY_MUTATION_OPS.has(op),
     }
 }
 
 function hasJournalFields(signals: PayloadSignals): boolean {
     return (
-        signals.hasContent ||
-        signals.hasNotes ||
-        signals.hasChanges ||
-        signals.hasTask ||
-        signals.hasTitle ||
-        signals.hasSummary ||
-        signals.hasDescription ||
-        signals.hasFindings ||
-        signals.hasDetails
+        signals.hasContent || signals.hasNotes || signals.hasChanges ||
+        signals.hasTask || signals.hasTitle || signals.hasSummary ||
+        signals.hasDescription || signals.hasFindings || signals.hasDetails
     )
 }
 
@@ -269,24 +287,22 @@ function buildEntryParams(
     target: Record<string, unknown>,
     signals: PayloadSignals,
     isUpdate = false,
+    original?: Record<string, unknown>
 ): Record<string, unknown> {
+    const fb = original !== target ? original : undefined
     const entryParams: Record<string, unknown> = {}
     if (!isUpdate || signals.hasTitle || signals.hasTask || signals.hasSummary) {
         entryParams['title'] = resolveTitle(target, signals)
     }
     const collectedContent = collectContent(target, signals, isUpdate)
-    if (!isUpdate || collectedContent !== '') {
-        entryParams['content'] = collectedContent
-    }
-    if (!isUpdate || signals.hasType) {
-        entryParams['entry_type'] = resolveEntryType(target)
-    }
-    if (!isUpdate || target['tags'] !== undefined) {
-        entryParams['tags'] = collectTags(target)
+    if (!isUpdate || collectedContent !== '') entryParams['content'] = collectedContent
+    if (!isUpdate || signals.hasType) entryParams['entry_type'] = resolveEntryType(target, fb)
+    if (!isUpdate || target['tags'] !== undefined || fb?.['tags'] !== undefined) {
+        entryParams['tags'] = collectTags(target, fb)
     }
     const autoContext = collectAutoContext(target)
     if (Object.keys(autoContext).length > 0) entryParams['auto_context'] = autoContext
-    copyOptionalEntryFields(target, entryParams)
+    copyOptionalEntryFields(target, entryParams, fb)
     return entryParams
 }
 
@@ -336,8 +352,8 @@ function resolveTitle(target: Record<string, unknown>, signals: PayloadSignals):
     return 'Journal Entry'
 }
 
-function resolveEntryType(target: Record<string, unknown>): string {
-    const rawType = target['entry_type'] ?? target['type'] ?? target['category']
+function resolveEntryType(target: Record<string, unknown>, fallback?: Record<string, unknown>): string {
+    const rawType = firstDefinedAlias(target, fallback, ['entry_type', 'type', 'category'])
     if (typeof rawType !== 'string') return 'technical_note'
     const low = rawType.toLowerCase()
     if (low === 'code' || low === 'coding' || low === 'technical' || low === 'task') {
@@ -346,24 +362,28 @@ function resolveEntryType(target: Record<string, unknown>): string {
     return low
 }
 
-function collectTags(target: Record<string, unknown>): string[] {
-    const tags: string[] = []
-    if (Array.isArray(target['tags'])) {
-        for (const t of target['tags']) {
-            if (typeof t === 'string' && t.trim().length > 0 && !tags.includes(t.trim())) tags.push(t.trim())
+function appendTagItems(tags: string[], rawTags: unknown): void {
+    if (Array.isArray(rawTags)) {
+        for (const t of rawTags) {
+            if (typeof t === 'string' && t.trim().length > 0 && !tags.includes(t.trim())) {
+                tags.push(t.trim())
+            }
         }
-    } else if (typeof target['tags'] === 'string') {
-        for (const t of target['tags'].split(',')) {
+    } else if (typeof rawTags === 'string') {
+        for (const t of rawTags.split(',')) {
             const trimmedTag = t.trim()
             if (trimmedTag.length > 0 && !tags.includes(trimmedTag)) tags.push(trimmedTag)
         }
     }
-    if (
-        typeof target['project'] === 'string' &&
-        target['project'].trim().length > 0 &&
-        !tags.includes(target['project'].trim())
-    ) {
-        tags.push(target['project'].trim())
+}
+
+function collectTags(target: Record<string, unknown>, fallback?: Record<string, unknown>): string[] {
+    const tags: string[] = []
+    appendTagItems(tags, target['tags'])
+    if (fallback !== undefined) appendTagItems(tags, fallback['tags'])
+    const projRaw = target['project'] ?? fallback?.['project']
+    if (typeof projRaw === 'string' && projRaw.trim().length > 0 && !tags.includes(projRaw.trim())) {
+        tags.push(projRaw.trim())
     }
     return tags
 }
@@ -384,31 +404,40 @@ function collectAutoContext(target: Record<string, unknown>): Record<string, unk
 function copyOptionalEntryFields(
     target: Record<string, unknown>,
     entryParams: Record<string, unknown>,
+    fallback?: Record<string, unknown>
 ): void {
     const wsId = readWorkspaceId(target)
     if (wsId !== undefined) entryParams['workspace_id'] = wsId
-    const targetWs = target['target_workspace_id'] ?? target['targetWorkspaceId']
-    if (typeof targetWs === 'string' && targetWs.trim() !== '') {
-        entryParams['target_workspace_id'] = targetWs.trim()
-    }
-    const sessId = target['session_id'] ?? target['sessionId']
-    if (typeof sessId === 'string') entryParams['session_id'] = sessId
     const projNum = readProjectNumber(target)
     if (projNum !== undefined) entryParams['project_number'] = projNum
-    const impactVal = target['impact_score'] ?? target['impactScore'] ?? target['impact']
-    if (typeof impactVal === 'number') entryParams['impact_score'] = impactVal
-    const trustVal = target['trust_score'] ?? target['trustScore'] ?? target['trust']
-    if (typeof trustVal === 'number') entryParams['trust_score'] = trustVal
-    const valStatus = target['validation_status'] ?? target['validationStatus']
-    if (typeof valStatus === 'string') {
-        entryParams['validation_status'] = valStatus
+    for (const [outKey, aliases, nonBlank] of [
+        ['target_workspace_id', ['target_workspace_id', 'targetWorkspaceId'], true],
+        ['session_id', ['session_id', 'sessionId'], false],
+        ['validation_status', ['validation_status', 'validationStatus'], false],
+        ['significance_type', ['significance_type', 'significanceType'], false],
+    ] as const) {
+        const raw = firstDefinedAlias(target, fallback, aliases)
+        if (typeof raw === 'string' && (!nonBlank || raw.trim() !== '')) {
+            entryParams[outKey] = nonBlank ? raw.trim() : raw
+        }
     }
-    const sigType = target['significance_type'] ?? target['significanceType']
-    if (typeof sigType === 'string') entryParams['significance_type'] = sigType
-    const isPersonal = target['is_personal'] ?? target['isPersonal']
-    if (typeof isPersonal === 'boolean') entryParams['is_personal'] = isPersonal
-    const shareWithTeam = target['share_with_team'] ?? target['shareWithTeam']
-    if (typeof shareWithTeam === 'boolean') entryParams['share_with_team'] = shareWithTeam
-    if (Array.isArray(target['relationships'])) entryParams['relationships'] = target['relationships']
-    if (Array.isArray(target['anchors'])) entryParams['anchors'] = target['anchors']
+    for (const [outKey, aliases] of [
+        ['impact_score', ['impact_score', 'impactScore', 'impact']],
+        ['trust_score', ['trust_score', 'trustScore', 'trust']],
+    ] as const) {
+        const raw = firstDefinedAlias(target, fallback, aliases)
+        if (typeof raw === 'number') entryParams[outKey] = raw
+    }
+    for (const [outKey, aliases] of [
+        ['is_personal', ['is_personal', 'isPersonal']],
+        ['share_with_team', ['share_with_team', 'shareWithTeam']],
+    ] as const) {
+        const raw = firstDefinedAlias(target, fallback, aliases)
+        if (typeof raw === 'boolean') entryParams[outKey] = raw
+    }
+    if (hasUseTestDbFlag(target, fallback)) entryParams['use_test_db'] = true
+    for (const arrKey of ['relationships', 'anchors'] as const) {
+        const raw = firstDefinedAlias(target, fallback, [arrKey])
+        if (Array.isArray(raw)) entryParams[arrKey] = raw
+    }
 }

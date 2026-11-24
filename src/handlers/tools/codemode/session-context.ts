@@ -10,6 +10,7 @@ import {
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { firstNonBlankString } from './json-entry-scope.js'
 import type { ExecuteCodeInput } from './payload-synthesizer.js'
 
 type ProjectRegistry = NonNullable<ToolContext['config']>['projectRegistry']
@@ -45,21 +46,19 @@ function resolveSessionProjectId(
     input: ExecuteCodeInput,
     effectiveRegistry: ProjectRegistry
 ): number | string | undefined {
-    const rawWorkspace = input.workspace_id ?? input.workspaceId
+    const rawWorkspace = firstNonBlankString(input.workspace_id, input.workspaceId)
     const rawProjInput = input.project_number ?? input.projectNumber
     let projectId: number | string | undefined = rawProjInput
-    if ((projectId === undefined || projectId === null) && rawWorkspace !== undefined && rawWorkspace !== '') {
+    if ((projectId === undefined || projectId === null) && rawWorkspace !== undefined) {
         const wsEntry = lookupRegistryEntry(effectiveRegistry, rawWorkspace)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
     }
-    const rawRepo = (input.repo ?? input.repo_name ?? input.repoName ?? input.repository)?.trim()
-    if ((projectId === undefined || projectId === null) && rawRepo !== undefined && rawRepo !== '') {
+    const rawRepo = firstNonBlankString(input.repo, input.repo_name, input.repoName, input.repository)
+    if ((projectId === undefined || projectId === null) && rawRepo !== undefined) {
         const repoEntry = lookupRegistryEntry(effectiveRegistry, rawRepo)
         if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
     }
-    const callerExplicitWorkspaceOrRepo =
-        (rawWorkspace !== undefined && rawWorkspace.trim() !== '') ||
-        (rawRepo !== undefined && rawRepo !== '')
+    const callerExplicitWorkspaceOrRepo = rawWorkspace !== undefined || rawRepo !== undefined
     if (!callerExplicitWorkspaceOrRepo) {
         projectId ??= projectIdFromDefaults(context, effectiveRegistry)
     }
@@ -219,8 +218,8 @@ function validateExplicitRepoAndWorkspaceInput(
     input: ExecuteCodeInput,
     effectiveRegistry: ProjectRegistry
 ): ValidatedSessionInput | { errorResponse: Record<string, unknown> } {
-    const rawWsTrimmed = (input.workspace_id ?? input.workspaceId)?.trim()
-    const rawRepoTrimmed = (input.repo ?? input.repo_name ?? input.repoName ?? input.repository)?.trim()
+    const rawWsTrimmed = firstNonBlankString(input.workspace_id, input.workspaceId)
+    const rawRepoTrimmed = firstNonBlankString(input.repo, input.repo_name, input.repoName, input.repository)
     const hasExplicitRepo = rawRepoTrimmed !== undefined && rawRepoTrimmed !== ''
     const hasExplicitConcreteWs =
         rawWsTrimmed !== undefined && rawWsTrimmed !== '' && rawWsTrimmed !== '*'
@@ -349,11 +348,7 @@ function resolveSessionWorkspaceAndProjectPair(
 ):
     | { projectId: number | string | undefined; numericProjectId: number | undefined; workspaceId: string }
     | { errorResponse: Record<string, unknown> } {
-    const rawWorkspaceInputRaw = input.workspace_id ?? input.workspaceId
-    const rawWorkspaceInput =
-        typeof rawWorkspaceInputRaw === 'string' && rawWorkspaceInputRaw.trim() !== ''
-            ? rawWorkspaceInputRaw.trim()
-            : undefined
+    const rawWorkspaceInput = firstNonBlankString(input.workspace_id, input.workspaceId)
     const rawProjectInput = input.project_number ?? input.projectNumber
     const explicitDefaultWithoutProject =
         validated.rawWsTrimmed?.toLowerCase() === 'default' && rawProjectInput === undefined
@@ -425,7 +420,7 @@ export async function resolveCodeModeSessionContext(
 
     const repoContext = await injectRepoGithub(
         context,
-        input.repo ?? input.repo_name ?? input.repoName ?? input.repository,
+        firstNonBlankString(input.repo, input.repo_name, input.repoName, input.repository),
         effectiveRegistry
     )
     if ('errorResponse' in repoContext) return repoContext

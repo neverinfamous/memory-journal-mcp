@@ -119,6 +119,9 @@ const ENTRY_CONTENT_ALIAS_KEYS = [
     'knowledge',
 ] as const
 
+const DISCRIMINATOR_KEYS = ['action', 'operation', 'op', 'tool', 'method', 'function'] as const
+const NON_ACTION_DISCRIMINATORS = ['operation', 'op', 'tool', 'method', 'function'] as const
+
 function findFallbackCodeString(obj: Record<string, unknown>): string | undefined {
     for (const [k, v] of Object.entries(obj)) {
         if (typeof v !== 'string' || NON_CODE_METADATA_KEYS.has(k)) continue
@@ -160,6 +163,22 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         }
     }
 
+    const hasDiscriminator = DISCRIMINATOR_KEYS.some((k) => obj[k] !== undefined)
+    if (hasDiscriminator) {
+        const explicitCodeAlias = EXPLICIT_CODE_ALIAS_KEYS.map((key) => obj[key]).find(
+            (val): val is string => typeof val === 'string' && val.length > 0
+        )
+        if (explicitCodeAlias !== undefined) {
+            obj['code'] = explicitCodeAlias
+            return
+        }
+        const hasNonActionDiscriminator = NON_ACTION_DISCRIMINATORS.some((k) => obj[k] !== undefined)
+        if (obj['action'] !== undefined && !hasNonActionDiscriminator) {
+            obj['code'] = JSON.stringify(obj)
+        }
+        return
+    }
+
     const codeAlias =
         obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['command'] ?? obj['executionCode'] ?? obj['content'] ??
         obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ??
@@ -176,10 +195,9 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
             if (obj['content'] === undefined) obj['content'] = entryContentAlias
             return
         }
-        if (isRecord(obj['payload'])) obj['code'] = JSON.stringify(obj['payload'])
-        else if (isRecord(obj['entry'])) obj['code'] = JSON.stringify(obj['entry'])
-        else if (isRecord(obj['input'])) obj['code'] = JSON.stringify(obj['input'])
-        else if (obj['action'] !== undefined || obj['task'] !== undefined || obj['notes'] !== undefined || obj['changes'] !== undefined) {
+        if (isRecord(obj['payload']) || isRecord(obj['entry']) || isRecord(obj['input'])) {
+            obj['code'] = JSON.stringify(obj)
+        } else if (obj['task'] !== undefined || obj['notes'] !== undefined || obj['changes'] !== undefined) {
             obj['code'] = JSON.stringify(obj)
         } else {
             const fallbackCode = findFallbackCodeString(obj)

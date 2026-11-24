@@ -107,7 +107,7 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
     })
 
     it('AP1–AP2: bumps AUDIT_PROMPT_REVISION to pass65 and embeds Pass 65 performance and code-quality checks', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass79')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass80')
 
         const adapter = new DatabaseAdapter(':memory:', { projectRegistry: {} })
         try {
@@ -117,7 +117,7 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
                 adapter
             )
             const perfText = perfRes.messages[0]?.content.text ?? ''
-            expect(perfText).toContain('Prompt revision: 2026-11-24-audit-pass79')
+            expect(perfText).toContain('Prompt revision: 2026-11-24-audit-pass80')
             expect(perfText).toContain('unconditional `git rev-parse --git-dir`')
             expect(perfText).toContain('two-stage batch path classifiers')
             expect(perfText).toContain('explore')
@@ -129,7 +129,7 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
                 adapter
             )
             const cqText = cqRes.messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass79')
+            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass80')
             expect(cqText).toContain('--add scratch/')
             expect(cqText).toContain('--cwd ""')
             expect(cqText).toContain('--msg ""')

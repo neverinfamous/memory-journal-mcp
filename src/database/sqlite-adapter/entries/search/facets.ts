@@ -197,12 +197,12 @@ function executeMaterializedFtsFacetQuery(
             SELECT 'type' AS kind, b.entry_type AS name, COUNT(*) AS cnt
             FROM fts_base b
             ${typeFilterSql}
-            GROUP BY b.entry_type ORDER BY cnt DESC
+            GROUP BY b.entry_type ORDER BY cnt DESC, b.entry_type ASC
         )
         SELECT kind, name, cnt FROM tag_facets
         UNION ALL
         SELECT kind, name, cnt FROM type_facets
-        ORDER BY kind ASC, cnt DESC
+        ORDER BY kind ASC, cnt DESC, name ASC
     `
     const rows = db
         .prepare(sql)
@@ -286,7 +286,7 @@ function executeFacetCountQueries(
                 SELECT e.entry_type AS name, COUNT(*) AS cnt
                 FROM memory_journal e
                 ${entryTypesWhere}
-                GROUP BY e.entry_type ORDER BY cnt DESC
+                GROUP BY e.entry_type ORDER BY cnt DESC, e.entry_type ASC
             `
             tagsRows = db.prepare(tagsSql).all(params) as { name: string; cnt: number }[]
             entryTypesRows = db.prepare(entryTypesSql).all(entryTypeParams) as {

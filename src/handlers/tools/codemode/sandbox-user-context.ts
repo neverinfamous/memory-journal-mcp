@@ -11,6 +11,7 @@ import {
 } from '../../../codemode/shared-context-parsers.js'
 import type { ToolContext } from '../../../types/index.js'
 import { getNonEmptyString, type ExecuteCodeInput } from './natural-language-synthesizer.js'
+import { firstNonBlankString } from './json-entry-scope.js'
 
 export function buildSandboxUserContext(
     input: ExecuteCodeInput,
@@ -26,11 +27,11 @@ export function buildSandboxUserContext(
     const resolvedProjectNumber =
         numericProjectId ?? (typeof projectId === 'number' ? projectId : undefined)
     const sessionFromUser = getNonEmptyString(userContext, {}, ['session_id', 'sessionId'])
-    const rawSessionId = input.session_id ?? input.sessionId
     const resolvedSessionId =
-        typeof rawSessionId === 'string' && rawSessionId.trim() !== ''
-            ? rawSessionId.trim()
-            : (sessionFromUser ?? getRequestContext()?.sessionId ?? 'session-default')
+        firstNonBlankString(input.session_id, input.sessionId) ??
+        sessionFromUser ??
+        getRequestContext()?.sessionId ??
+        'session-default'
     const resolvedWorkspaceId = workspaceId ?? sessionContext.config?.defaultWorkspaceId
 
     if (resolvedProjectNumber !== undefined) {

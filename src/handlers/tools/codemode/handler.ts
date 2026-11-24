@@ -23,6 +23,7 @@ import { healCodeModeScript, healTemplateBackticksOnRuntimeError, isValidJsScrip
 import { extractAndRecoverJsonCode, extractAndRecoverEntryCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
 import { resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput } from './payload-synthesizer.js'
+import { firstNonBlankString } from './json-entry-scope.js'
 import { resolveCodeModeSessionContext } from './secure-dispatcher.js'
 import { validateRawPayloadSize } from './payload-byte-bounds.js'
 
@@ -148,8 +149,7 @@ function resolveCodeModeRunOptions(input: ExecuteCodeInput): {
     isDryRun: boolean
     useTestDb: boolean
 } {
-    const rawSession = input.session_id ?? input.sessionId
-    const sessionId = typeof rawSession === 'string' && rawSession.trim() !== '' ? rawSession.trim() : undefined
+    const sessionId = firstNonBlankString(input.session_id, input.sessionId)
     return {
         sessionId,
         timeoutMs: input.timeout ?? input.timeout_ms ?? input.timeoutMs,

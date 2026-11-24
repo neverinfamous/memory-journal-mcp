@@ -181,7 +181,8 @@ export function prefetchImportedEntriesById(
 export async function readMarkdownFilesParallel<T>(
     filenames: readonly string[],
     reader: (filename: string) => Promise<{ parsed?: T; skipped?: boolean }>,
-    beforeChunk?: (chunkIndex: number) => void
+    beforeChunk?: (chunkIndex: number) => void,
+    afterChunk?: (chunkIndex: number) => void
 ): Promise<{
     parsedFiles: T[]
     skipped: number
@@ -206,6 +207,7 @@ export async function readMarkdownFilesParallel<T>(
                 }
             })
         )
+        afterChunk?.(i)
         for (const item of outcomes) {
             if ('error' in item && item.error !== undefined) {
                 errors.push({ file: item.filename, error: item.error })

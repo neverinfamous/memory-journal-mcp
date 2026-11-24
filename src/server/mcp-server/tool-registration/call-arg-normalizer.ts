@@ -271,26 +271,25 @@ function resolveProjectNumberFromHint(
     }
 }
 
-function applyToolNameAlias(reqParams: ToolCallParams, toolArgs: Record<string, unknown>): void {
-    const currentName = reqParams.name
-    if (currentName === undefined || currentName === '') return
+export function resolveToolNameAlias(currentName: string | undefined): string | undefined {
+    if (currentName === undefined || currentName === '') return undefined
+    if (ALIASED_EXECUTE_CODE_NAMES.has(currentName)) return 'mj_execute_code'
+    if (currentName === 'create_entry_minimal') return 'create_entry'
+    if (ALIASED_LIST_PROJECTS_NAMES.has(currentName)) return 'list_projects'
+    if (ALIASED_GET_PROJECT_NAMES.has(currentName)) return 'get_project'
+    if (ALIASED_GREP_SEARCH_NAMES.has(currentName)) return 'grep_search'
+    if (ALIASED_VIEW_FILE_NAMES.has(currentName)) return 'view_file'
+    if (ALIASED_LIST_DIR_NAMES.has(currentName)) return 'list_dir'
+    return undefined
+}
 
-    if (ALIASED_EXECUTE_CODE_NAMES.has(currentName)) {
-        reqParams.name = 'mj_execute_code'
-    } else if (currentName === 'create_entry_minimal') {
-        reqParams.name = 'create_entry'
-        if (toolArgs['entry_type'] === undefined) toolArgs['entry_type'] = 'personal_reflection'
-    } else if (ALIASED_LIST_PROJECTS_NAMES.has(currentName)) {
-        reqParams.name = 'list_projects'
-    } else if (ALIASED_GET_PROJECT_NAMES.has(currentName)) {
-        reqParams.name = 'get_project'
-    } else if (ALIASED_GREP_SEARCH_NAMES.has(currentName)) {
-        reqParams.name = 'grep_search'
-    } else if (ALIASED_VIEW_FILE_NAMES.has(currentName)) {
-        reqParams.name = 'view_file'
-    } else if (ALIASED_LIST_DIR_NAMES.has(currentName)) {
-        reqParams.name = 'list_dir'
+function applyToolNameAlias(reqParams: ToolCallParams, toolArgs: Record<string, unknown>): void {
+    const aliased = resolveToolNameAlias(reqParams.name)
+    if (aliased === undefined) return
+    if (reqParams.name === 'create_entry_minimal' && toolArgs['entry_type'] === undefined) {
+        toolArgs['entry_type'] = 'personal_reflection'
     }
+    reqParams.name = aliased
 }
 
 const PROJECT_REGISTRY_TOOL_NAMES = new Set([

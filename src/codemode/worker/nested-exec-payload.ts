@@ -33,6 +33,14 @@ export function readExecutableCode(arg: unknown): string | null {
     if (typeof queryProp === 'string' && queryProp.trim() !== '') {
         return queryProp
     }
+    const hasDiscriminator =
+        Reflect.get(arg, 'action') !== undefined ||
+        Reflect.get(arg, 'operation') !== undefined ||
+        Reflect.get(arg, 'op') !== undefined ||
+        Reflect.get(arg, 'tool') !== undefined ||
+        Reflect.get(arg, 'method') !== undefined ||
+        Reflect.get(arg, 'function') !== undefined
+    if (hasDiscriminator) return ''
     const hasEntryText =
         typeof Reflect.get(arg, 'content') === 'string' ||
         typeof Reflect.get(arg, 'text') === 'string' ||

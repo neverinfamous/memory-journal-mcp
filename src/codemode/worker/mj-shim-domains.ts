@@ -120,15 +120,22 @@ export function createGetReadFindInterceptor(
         const [arg, ...rest] = args
         if (arg === undefined) return Promise.resolve(shimMj)
         if (typeof arg === 'number' || typeof arg === 'string') {
+            const extraOpts = rest.length === 1 ? readAppendMetadata(rest[0]) : undefined
             const parsedId = parsePositiveProjectNumber(arg)
             if (parsedId !== undefined) {
+                const payload = extraOpts !== undefined ? { ...extraOpts, entry_id: parsedId } : { entry_id: parsedId }
                 return typeof getFn === 'function'
-                    ? (getFn as (...a: unknown[]) => unknown)({ entry_id: parsedId }, ...rest)
+                    ? extraOpts !== undefined
+                        ? (getFn as (...a: unknown[]) => unknown)(payload)
+                        : (getFn as (...a: unknown[]) => unknown)(payload, ...rest)
                     : undefined
             }
             if (typeof arg === 'string') {
+                const payload = extraOpts !== undefined ? { ...extraOpts, query: arg } : { query: arg }
                 return typeof searchFn === 'function'
-                    ? (searchFn as (...a: unknown[]) => unknown)({ query: arg }, ...rest)
+                    ? extraOpts !== undefined
+                        ? (searchFn as (...a: unknown[]) => unknown)(payload)
+                        : (searchFn as (...a: unknown[]) => unknown)(payload, ...rest)
                     : Promise.resolve({
                           success: false,
                           code: 'VALIDATION_ERROR',
@@ -329,6 +336,8 @@ const APPEND_META_FIELDS = [
     'autoContext',
     'is_personal',
     'isPersonal',
+    'project_id',
+    'projectId',
     'project_name',
     'projectName',
     'anchors',
@@ -356,7 +365,7 @@ function firstNonBlankString(record: Record<string, unknown>, keys: readonly str
 }
 
 function firstValidProjectNumber(record: Record<string, unknown>): number | string | undefined {
-    for (const key of ['project_number', 'projectNumber', 'project']) {
+    for (const key of ['project_number', 'projectNumber', 'project_id', 'projectId', 'project']) {
         const val = record[key]
         if (typeof val === 'number' && !Number.isNaN(val)) return val
         if (typeof val === 'string' && val.trim() !== '') return val

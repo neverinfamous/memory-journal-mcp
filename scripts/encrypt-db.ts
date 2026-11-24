@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
 import { parseArgs } from 'node:util'
 
@@ -63,7 +64,27 @@ function sanitizeScriptError(err: unknown, secret?: string): string {
     return safe
 }
 
-const tmpPath = `${outPath}.tmp-${String(process.pid)}`
+const tmpPath = `${outPath}.tmp-${String(process.pid)}-${crypto.randomBytes(6).toString('hex')}`
+
+function copyPlaintextSecurely(srcPath: string, destPath: string): void {
+    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0)
+    const dstFd = fs.openSync(destPath, flags, 0o600)
+    const srcFd = fs.openSync(srcPath, fs.constants.O_RDONLY)
+    const buf = Buffer.allocUnsafe(64 * 1024)
+    try {
+        for (;;) {
+            const bytesRead = fs.readSync(srcFd, buf, 0, buf.length, null)
+            if (bytesRead === 0) break
+            let offset = 0
+            while (offset < bytesRead) {
+                offset += fs.writeSync(dstFd, buf, offset, bytesRead - offset)
+            }
+        }
+    } finally {
+        fs.closeSync(srcFd)
+        fs.closeSync(dstFd)
+    }
+}
 
 function removeIfExists(filePath: string): void {
     if (!fs.existsSync(filePath)) return
@@ -91,13 +112,8 @@ try {
     }
 
     // SQLite3 Multiple Ciphers uses PRAGMA rekey for in-place encryption
-    // Stage into a temp file with restricted permissions and swap atomically only after verification.
-    fs.copyFileSync(inPath, tmpPath)
-    try {
-        fs.chmodSync(tmpPath, 0o600)
-    } catch {
-        // chmod 0600 is best-effort on Windows filesystems
-    }
+    // Stage into an exclusively created temp file with 0600 mode and swap atomically only after verification.
+    copyPlaintextSecurely(inPath, tmpPath)
 
     const db = new Database(tmpPath)
     try {

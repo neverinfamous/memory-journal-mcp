@@ -189,6 +189,10 @@ function validateAndRegisterProjectEntry(
     if (serverOptions === undefined) return undefined
 
     saveConfig(config, options)
+    serverOptions.projectRegistry = registry
+    if (serverOptions.briefingConfig !== undefined) {
+        serverOptions.briefingConfig.projectRegistry = registry
+    }
     return { absPath, serverOptions, effectiveProjNum: newEntry.project_number }
 }
 

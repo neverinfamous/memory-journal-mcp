@@ -121,7 +121,9 @@ export function normalizeParams(methodName: string, args: unknown[]): unknown {
     }
 
     if (typeof paramMapping === 'string') {
-        const result: Record<string, unknown> = { [paramMapping]: args[0] }
+        const result: Record<string, unknown> = isRecord(args[0])
+            ? convertKeysToSnakeCase(args[0], methodName)
+            : { [paramMapping]: args[0] }
         if (args.length > 1) {
             const lastArg = args[args.length - 1]
             if (isRecord(lastArg)) {

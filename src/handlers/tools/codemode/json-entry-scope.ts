@@ -9,6 +9,7 @@ import {
 } from '../../../codemode/normalizers/project-alias-helpers.js'
 import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
+import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 
 /** Resolves `project_number` / aliases from a JSON recovery payload record. */
 export function readProjectNumber(target: Record<string, unknown>): number | string | undefined {
@@ -118,4 +119,55 @@ export function assignMissingScope(
     if (!hasProjParam && scope.projectNumber !== undefined) {
         params['project_number'] = scope.projectNumber
     }
+}
+
+/** True when `use_test_db` or `useTestDb` is explicitly enabled on target or outer wrapper. */
+export function hasUseTestDbFlag(
+    target: Record<string, unknown>,
+    original?: Record<string, unknown>
+): boolean {
+    return (
+        target['use_test_db'] === true ||
+        target['useTestDb'] === true ||
+        original?.['use_test_db'] === true ||
+        original?.['useTestDb'] === true
+    )
+}
+
+/** Return the first non-blank trimmed string from candidate values. */
+export function firstNonBlankString(...values: unknown[]): string | undefined {
+    for (const val of values) {
+        if (typeof val === 'string' && val.trim() !== '') return val.trim()
+    }
+    return undefined
+}
+
+/** Return first defined property value matching `keys` on `primary` then `fallback`. */
+export function firstDefinedAlias(
+    primary: Record<string, unknown>,
+    fallback: Record<string, unknown> | undefined,
+    keys: readonly string[]
+): unknown {
+    for (const k of keys) if (primary[k] !== undefined) return primary[k]
+    if (fallback !== undefined) for (const k of keys) if (fallback[k] !== undefined) return fallback[k]
+    return undefined
+}
+
+/** Keys that explicitly discriminate a structured Code Mode command vs plain entry fields. */
+export const STRUCTURED_DISCRIMINATOR_KEYS = [
+    'action', 'operation', 'op', 'tool', 'method', 'function',
+] as const
+
+function recordHasDiscriminator(rec: Record<string, unknown>): boolean {
+    return STRUCTURED_DISCRIMINATOR_KEYS.some((k) => rec[k] !== undefined)
+}
+
+/** True when `record` or its nested `payload`/`entry`/`input` wrapper declares a command/tool discriminator. */
+export function hasStructuredDiscriminator(record: Record<string, unknown>): boolean {
+    if (recordHasDiscriminator(record)) return true
+    for (const wrapKey of ['payload', 'entry', 'input'] as const) {
+        const inner = record[wrapKey]
+        if (isRecord(inner) && recordHasDiscriminator(inner)) return true
+    }
+    return false
 }

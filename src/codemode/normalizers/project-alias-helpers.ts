@@ -218,11 +218,22 @@ export function normalizeProjectAliases(
     obj: Record<string, unknown>,
     allowProjectAlias = true
 ): { error: Record<string, unknown> } | undefined {
-    if (obj['workspace_id'] === undefined) {
-        if (typeof obj['workspaceId'] === 'string') {
-            obj['workspace_id'] = obj['workspaceId']
-        } else if (typeof obj['workspace'] === 'string') {
-            obj['workspace_id'] = obj['workspace']
+    const rawWs = obj['workspace_id']
+    if (rawWs === undefined || (typeof rawWs === 'string' && rawWs.trim() === '')) {
+        const nonBlankAlias =
+            typeof obj['workspaceId'] === 'string' && obj['workspaceId'].trim() !== ''
+                ? obj['workspaceId']
+                : typeof obj['workspace'] === 'string' && obj['workspace'].trim() !== ''
+                  ? obj['workspace']
+                  : undefined
+        if (nonBlankAlias !== undefined) {
+            obj['workspace_id'] = nonBlankAlias
+        } else if (rawWs === undefined) {
+            if (typeof obj['workspaceId'] === 'string') {
+                obj['workspace_id'] = obj['workspaceId']
+            } else if (typeof obj['workspace'] === 'string') {
+                obj['workspace_id'] = obj['workspace']
+            }
         }
     }
     Reflect.deleteProperty(obj, 'workspaceId')

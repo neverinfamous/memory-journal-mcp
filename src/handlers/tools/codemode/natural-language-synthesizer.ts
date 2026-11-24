@@ -7,7 +7,7 @@ import type { z } from 'zod'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import type { ExecuteCodeSchema } from './schemas.js'
-import { resolveRepoWorkspace } from './json-entry-structured.js'
+import { hasStructuredDiscriminator, resolveRepoWorkspace } from './json-entry-structured.js'
 import { isValidJsScript } from './code-healer.js'
 
 export type ExecuteCodeInput = z.infer<typeof ExecuteCodeSchema>
@@ -158,9 +158,16 @@ export function resolveCompatibleInheritedScope(
 }
 
 function normalizeUnitScore(raw: unknown): number | undefined {
-    if (raw === undefined || raw === null) return undefined
-    const num = Number(raw)
-    if (Number.isNaN(num)) return undefined
+    let num: number
+    if (typeof raw === 'number') {
+        if (!Number.isFinite(raw)) return undefined
+        num = raw
+    } else if (typeof raw === 'string' && /^-?\d+(?:\.\d+)?$/.test(raw.trim())) {
+        num = Number(raw.trim())
+        if (!Number.isFinite(num)) return undefined
+    } else {
+        return undefined
+    }
     return num > 1 && num <= 10 ? num / 10 : Math.min(1, Math.max(0, num))
 }
 
@@ -347,6 +354,8 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
     const learnedVal = getNonEmptyString(entryObj, rawObj, ['learned_context', 'learnedContext', 'lesson', 'insight', 'knowledge', 'rule'])
     if (
         isExplicitJsCode ||
+        hasStructuredDiscriminator(entryObj) ||
+        hasStructuredDiscriminator(rawObj) ||
         (looksLikeSqlQuery && !hasExplicitContent) ||
         (!hasEntryFields && learnedVal === undefined && !isNaturalLanguagePrompt(executionCode))
     ) {
@@ -375,6 +384,14 @@ export function appendSharedEntryFlags(
         secondaryObj['share_with_team'] ??
         secondaryObj['shareWithTeam']
     if (typeof shareTeam === 'boolean') payload['share_with_team'] = shareTeam
+    if (
+        entryObj['use_test_db'] === true ||
+        entryObj['useTestDb'] === true ||
+        secondaryObj['use_test_db'] === true ||
+        secondaryObj['useTestDb'] === true
+    ) {
+        payload['use_test_db'] = true
+    }
     const rels = Array.isArray(entryObj['relationships'])
         ? entryObj['relationships']
         : Array.isArray(secondaryObj['relationships'])

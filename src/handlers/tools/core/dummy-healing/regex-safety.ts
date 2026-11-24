@@ -120,7 +120,27 @@ const UNIVERSAL_WILDCARD_CLASSES = new Set([
 ])
 
 function isUniversalWildcardAtom(token: string): boolean {
-    return token === '.' || UNIVERSAL_WILDCARD_CLASSES.has(token)
+    return (
+        token === '.' ||
+        UNIVERSAL_WILDCARD_CLASSES.has(token) ||
+        (token.startsWith('[^') && token.endsWith(']'))
+    )
+}
+
+function isLiteralDisjointFromShorthand(lit: string, short: string): boolean {
+    if (short === '\\s') return !/^\s$/.test(lit)
+    if (short === '\\S') return /^\s$/.test(lit)
+    if (short === '\\w') return !/^[A-Za-z0-9_]$/.test(lit)
+    if (short === '\\W') return /^[A-Za-z0-9_]$/.test(lit)
+    if (short === '\\d') return !/^[0-9]$/.test(lit)
+    if (short === '\\D') return /^[0-9]$/.test(lit)
+    return false
+}
+
+function isSimpleNonWhitespaceClass(token: string): boolean {
+    if (!token.startsWith('[') || !token.endsWith(']') || token.startsWith('[^')) return false
+    const inner = token.slice(1, -1)
+    return inner.length > 0 && !inner.includes('\\') && !/\s/.test(inner)
 }
 
 function areAtomsProvablyDisjoint(a: string, b: string): boolean {
@@ -129,22 +149,43 @@ function areAtomsProvablyDisjoint(a: string, b: string): boolean {
     const bNorm = /^[A-Za-z]$/.test(b) ? b.toLowerCase() : b
     if (aNorm === bNorm) return false
     if (isDisjointShorthandPair(a, b)) return true
-    const nonWsClassRe = /^\[[A-Za-z0-9_-]+\]$/
     if (
-        (a === '\\s' && nonWsClassRe.test(b)) ||
-        (b === '\\s' && nonWsClassRe.test(a))
+        (a === '\\s' && isSimpleNonWhitespaceClass(b)) ||
+        (b === '\\s' && isSimpleNonWhitespaceClass(a))
     ) {
         return true
     }
     const aIsLiteral = a.length === 1 && a !== '[' && a !== '\\'
     const bIsLiteral = b.length === 1 && b !== '[' && b !== '\\'
-    return aIsLiteral && bIsLiteral
+    if (aIsLiteral && bIsLiteral) return true
+    if (aIsLiteral && b.startsWith('\\') && b.length === 2) return isLiteralDisjointFromShorthand(a, b)
+    if (bIsLiteral && a.startsWith('\\') && a.length === 2) return isLiteralDisjointFromShorthand(b, a)
+    return false
+}
+
+function readEscapeAtomEnd(pattern: string, i: number): number {
+    const esc = pattern[i + 1]
+    if (esc === 'x' && /^[0-9a-fA-F]{2}/.test(pattern.slice(i + 2, i + 4))) return i + 4
+    if (esc === 'c' && /[A-Za-z]/.test(pattern[i + 2] ?? '')) return i + 3
+    if (esc === 'u') {
+        if (pattern[i + 2] === '{') {
+            const close = pattern.indexOf('}', i + 3)
+            if (close !== -1) return close + 1
+        }
+        if (/^[0-9a-fA-F]{4}/.test(pattern.slice(i + 2, i + 6))) return i + 6
+    }
+    if ((esc === 'p' || esc === 'P') && pattern[i + 2] === '{') {
+        const close = pattern.indexOf('}', i + 3)
+        if (close !== -1) return close + 1
+    }
+    return i + 2
 }
 
 function readAtomToken(pattern: string, i: number): { token: string; next: number } {
     const ch = pattern[i] ?? ''
     if (ch === '\\' && i + 1 < pattern.length) {
-        return { token: pattern.slice(i, i + 2), next: i + 2 }
+        const end = readEscapeAtomEnd(pattern, i)
+        return { token: pattern.slice(i, end), next: end }
     }
     if (ch === '[') {
         let j = i + 1
@@ -290,7 +331,13 @@ function hasUnsafeUngroupedQuantifiers(pattern: string): boolean {
             topFrame.singleAtom = topFrame.tokenCount === 1 ? token : null
         }
         const quant = readQuantifierAt(pattern, next)
-        if (quant === null) { state.prevQuantAtom = null; i = next; continue }
+        if (quant === null) {
+            if (state.prevQuantAtom !== null && areAtomsProvablyDisjoint(state.prevQuantAtom, token)) {
+                state.prevQuantAtom = null
+            }
+            i = next
+            continue
+        }
         if (topFrame !== undefined) topFrame.hasInnerQuant = true
         if (!quant.repeating) { i = quant.end; continue }
         state.repeatingCount++
