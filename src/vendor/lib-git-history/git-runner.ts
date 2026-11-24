@@ -1,18 +1,35 @@
 // @ts-nocheck
 import { spawn, execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import type { CliArgs } from './cli.js';
-import { GIT_TIMEOUT_MS, GIT_CMD_MAX_BUFFER, GIT_STREAM_BUFFER_DEFAULT, GIT_IDLE_TIMEOUT_MS, GIT_ABSOLUTE_TIMEOUT_MS, MAX_STDERR_LENGTH, SIGPIPE_EXIT_CODE } from './constants.js';
+import {
+  GIT_TIMEOUT_MS,
+  GIT_CMD_MAX_BUFFER,
+  GIT_STREAM_BUFFER_DEFAULT,
+  GIT_IDLE_TIMEOUT_MS,
+  GIT_ABSOLUTE_TIMEOUT_MS,
+  MAX_STDERR_LENGTH,
+  SIGPIPE_EXIT_CODE,
+  UNIQUE_ID,
+  RECORD_SEPARATOR,
+  FIELD_SEPARATOR,
+  NUMSTAT_BOUNDARY_STR,
+  PATCH_BOUNDARY_STR,
+  FULL_SHA_REGEX,
+  parseDescribeLong,
+} from './constants.js';
 import {
   drainTextChunks,
   hasCrossChunkTextBoundary,
   retainTextBoundaryTailFromChunks,
   hasCrossChunkBoundary,
   drainBinaryChunks,
+  captureChunksPrefixAndDrop,
   retainBoundaryTailFromChunks,
   type TextStreamState,
   type BinaryStreamState,
 } from './git-stream-buffers.js';
+
+export { UNIQUE_ID, RECORD_SEPARATOR, FIELD_SEPARATOR, NUMSTAT_BOUNDARY_STR, PATCH_BOUNDARY_STR };
 
 interface ErrnoException extends Error {
   code?: string;
@@ -29,12 +46,6 @@ export function cleanupProcesses() {
     }
   }
 }
-
-export const UNIQUE_ID = randomUUID();
-export const RECORD_SEPARATOR = `\x1E<GIT_RECORD_BOUNDARY_${UNIQUE_ID}>\x1E`;
-export const FIELD_SEPARATOR = `\x1E<GIT_FIELD_BOUNDARY_${UNIQUE_ID}>\x1E`;
-export const NUMSTAT_BOUNDARY_STR = `\x1E<GIT_NUMSTAT_BOUNDARY_${UNIQUE_ID}>\x1E`;
-export const PATCH_BOUNDARY_STR = `\x1E<GIT_PATCH_BOUNDARY_${UNIQUE_ID}>\x1E`;
 
 function attachStderrCollector(proc: ReturnType<typeof spawn>) {
   const errChunks: string[] = [];
@@ -149,7 +160,7 @@ export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: Abo
 }
 
 export function getHeadSha(cwd: string = process.cwd()): string {
-  const execOpts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_CMD_MAX_BUFFER, windowsHide: true };
+  const execOpts = { cwd, encoding: 'utf-8' as const, stdio: ['ignore', 'pipe', 'pipe'] as ('ignore' | 'pipe')[], timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_CMD_MAX_BUFFER, windowsHide: true };
   try {
     return execFileSync('git', ['--no-pager', 'rev-parse', 'HEAD'], execOpts).trim() || 'HEAD';
   } catch {
@@ -157,18 +168,9 @@ export function getHeadSha(cwd: string = process.cwd()): string {
   }
 }
 
-const DESCRIBE_LONG_REGEX = /^(.*)-(\d+)-g([0-9a-f]{40})$/i;
-const FULL_SHA_REGEX = /^[0-9a-f]{40}$/i;
-
-function parseDescribeLong(output: string): { tagName: string; distance: number; sha: string } | null {
-  const m = output.match(DESCRIBE_LONG_REGEX);
-  if (!m || !m[1] || !m[2] || !m[3]) return null;
-  return { tagName: m[1], distance: parseInt(m[2], 10), sha: m[3] };
-}
-
 export function getGitTagRange(cwd: string = process.cwd()): { range: string; isFallback: boolean; headSha: string } {
   let headSha = 'HEAD';
-  const execOpts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_CMD_MAX_BUFFER, windowsHide: true };
+  const execOpts = { cwd, encoding: 'utf-8' as const, stdio: ['ignore', 'pipe', 'pipe'] as ('ignore' | 'pipe')[], timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_CMD_MAX_BUFFER, windowsHide: true };
   try {
     // [INTENT]: Single `describe --tags --long --abbrev=40 --always` yields HEAD SHA, nearest tag, and distance in 1 spawn.
     const raw = execFileSync('git', ['--no-pager', 'describe', '--tags', '--long', '--abbrev=40', '--always'], execOpts).trim();
@@ -372,7 +374,8 @@ export async function* spawnGitBinaryStream(
   boundaryStr: string,
   stdinShas?: string,
   maxBufferLimit: number = GIT_STREAM_BUFFER_DEFAULT,
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
+  truncateAtBytes?: number,
 ): AsyncGenerator<Buffer, void, unknown> {
   const ac = new AbortController();
   const hasStdin = Boolean(stdinShas);
@@ -387,7 +390,7 @@ export async function* spawnGitBinaryStream(
   if (stdinShas && proc.stdin) writeStdinShas(proc.stdin, stdinShas);
 
   const { resetTimeout, processComplete, getStreamError, cleanup } = setupGitProcessLifecycle(proc, ac, 'spawnGitBinaryStream');
-  const state: BinaryStreamState = { chunks: [], chunksLength: 0, droppingMassiveRecord: false };
+  const state: BinaryStreamState = { chunks: [], chunksLength: 0, droppingMassiveRecord: false, cappedPrefix: null };
   const boundary = Buffer.from(boundaryStr);
 
   try {
@@ -402,9 +405,11 @@ export async function* spawnGitBinaryStream(
 
         const hasBoundary = buf.indexOf(boundary) !== -1 || (state.chunksLength > buf.length && hasCrossChunkBoundary(state.chunks, buf, boundary));
         if (hasBoundary) {
-          yield* drainBinaryChunks(state, boundary, maxBufferLimit);
+          yield* drainBinaryChunks(state, boundary, maxBufferLimit, truncateAtBytes);
         } else if (state.droppingMassiveRecord) {
           retainBoundaryTailFromChunks(state, boundary.length);
+        } else if (truncateAtBytes !== undefined && state.chunksLength >= truncateAtBytes) {
+          captureChunksPrefixAndDrop(state, boundary.length, truncateAtBytes);
         } else if (state.chunksLength >= maxBufferLimit) {
           console.warn(`Warning: Git binary buffer exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping buffer to prevent memory exhaustion.`);
           state.droppingMassiveRecord = true;
@@ -421,7 +426,12 @@ export async function* spawnGitBinaryStream(
       }
     }
     await processComplete;
-    if (!state.droppingMassiveRecord && state.chunksLength > 0) {
+    if (state.droppingMassiveRecord) {
+      if (state.cappedPrefix) {
+        yield state.cappedPrefix;
+        state.cappedPrefix = null;
+      }
+    } else if (state.chunksLength > 0) {
       yield state.chunks.length === 1 && state.chunks[0] !== undefined
         ? state.chunks[0]
         : Buffer.concat(state.chunks, state.chunksLength);

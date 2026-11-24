@@ -20,8 +20,8 @@
         "uncommitted.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-23T20:55:24.282Z",
-      "syncedFromCommit": "98ad3acc18239e464595f6f18014c200464124ca"
+      "syncedAt": "2026-11-24T08:17:07.228Z",
+      "syncedFromCommit": "385911a8ac883fcc51e5fed5c9239b9917c6b8bf"
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",

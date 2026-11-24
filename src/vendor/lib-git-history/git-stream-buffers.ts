@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { flattenString } from './constants.js';
+
 export interface TextStreamState {
   chunks: string[];
   chunksLength: number;
@@ -9,6 +11,7 @@ export interface BinaryStreamState {
   chunks: Buffer[];
   chunksLength: number;
   droppingMassiveRecord: boolean;
+  cappedPrefix?: Buffer | null;
 }
 
 export function hasCrossChunkTextBoundary(chunks: string[], textChunk: string, recordSeparator: string): boolean {
@@ -35,7 +38,7 @@ export function retainTextBoundaryTail(state: TextStreamState, tailSource: strin
     return;
   }
   const sliced = tailSource.length > tailLen ? tailSource.slice(-tailLen) : tailSource;
-  const detached = (' ' + sliced).slice(1);
+  const detached = flattenString(sliced);
   state.chunks = [detached];
   state.chunksLength = detached.length;
 }
@@ -64,6 +67,21 @@ export function retainTextBoundaryTailFromChunks(state: TextStreamState, sepLen:
   retainTextBoundaryTail(state, tailParts.join(''), sepLen);
 }
 
+const NON_WS_RE = /\S/;
+
+function hasNonWhitespace(str: string, start: number, end: number): boolean {
+  for (let i = start; i < end; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 0x21 && code < 0xa0) return true;
+    if (code <= 0x20) {
+      if (code !== 32 && code !== 10 && code !== 13 && code !== 9 && code !== 11 && code !== 12) return true;
+      continue;
+    }
+    if (NON_WS_RE.test(str.charAt(i))) return true;
+  }
+  return false;
+}
+
 export function drainTextChunks(
   state: TextStreamState,
   maxBufferLimit: number,
@@ -89,9 +107,8 @@ export function drainTextChunks(
     if (recordLen > 0) {
       if (recordLen >= maxBufferLimit) {
         console.warn(`Warning: Git record exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping massive commit.`);
-      } else {
-        const record = pending.slice(cursor, sepIdx);
-        if (record.trim()) records.push(record);
+      } else if (hasNonWhitespace(pending, cursor, sepIdx)) {
+        records.push(pending.slice(cursor, sepIdx));
       }
     }
     cursor = sepIdx + recordSeparator.length;
@@ -107,7 +124,9 @@ export function drainTextChunks(
   }
 
   if (remainingLen > 0) {
-    const remaining = cursor === 0 ? pending : (' ' + pending.slice(cursor)).slice(1);
+    const remaining = cursor === 0
+      ? pending
+      : (pending.length > remainingLen * 2 ? flattenString(pending.slice(cursor)) : pending.slice(cursor));
     state.chunks = [remaining];
     state.chunksLength = remaining.length;
   } else {
@@ -171,10 +190,43 @@ export function retainBoundaryTailFromChunks(state: BinaryStreamState, boundaryL
   retainBoundaryTail(state, Buffer.concat(tailChunks, gathered), boundaryLen);
 }
 
+function capturePrefixAndDrop(
+  state: BinaryStreamState,
+  source: Buffer,
+  start: number,
+  boundaryLen: number,
+  truncateAtBytes: number,
+): void {
+  const copyLen = Math.min(source.length - start, truncateAtBytes);
+  state.cappedPrefix = Buffer.from(source.subarray(start, start + copyLen));
+  state.droppingMassiveRecord = true;
+  retainBoundaryTail(state, start === 0 ? source : source.subarray(start), boundaryLen);
+}
+
+export function captureChunksPrefixAndDrop(
+  state: BinaryStreamState,
+  boundaryLen: number,
+  truncateAtBytes: number,
+): void {
+  const copyLen = Math.min(state.chunksLength, truncateAtBytes);
+  const prefix = Buffer.allocUnsafe(copyLen);
+  let offset = 0;
+  for (const c of state.chunks) {
+    if (offset >= copyLen) break;
+    const take = Math.min(c.length, copyLen - offset);
+    c.copy(prefix, offset, 0, take);
+    offset += take;
+  }
+  state.cappedPrefix = prefix;
+  state.droppingMassiveRecord = true;
+  retainBoundaryTailFromChunks(state, boundaryLen);
+}
+
 export function drainBinaryChunks(
   state: BinaryStreamState,
   boundary: Buffer,
   maxBufferLimit: number,
+  truncateAtBytes?: number,
 ): Buffer[] {
   const emitted: Buffer[] = [];
   const pendingBuffer =
@@ -189,6 +241,10 @@ export function drainBinaryChunks(
       retainBoundaryTail(state, pendingBuffer, boundary.length);
       return emitted;
     }
+    if (state.cappedPrefix) {
+      emitted.push(state.cappedPrefix);
+      state.cappedPrefix = null;
+    }
     state.droppingMassiveRecord = false;
     cursor = resyncIdx + boundary.length;
   }
@@ -197,7 +253,9 @@ export function drainBinaryChunks(
   while (nextIdx !== -1) {
     const recordLen = nextIdx - cursor;
     if (recordLen > 0) {
-      if (recordLen >= maxBufferLimit) {
+      if (truncateAtBytes !== undefined && recordLen > truncateAtBytes) {
+        emitted.push(Buffer.from(pendingBuffer.subarray(cursor, cursor + truncateAtBytes)));
+      } else if (recordLen >= maxBufferLimit) {
         console.warn(`Warning: Git binary record exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping massive record.`);
       } else {
         emitted.push(pendingBuffer.subarray(cursor, nextIdx));
@@ -208,6 +266,10 @@ export function drainBinaryChunks(
   }
 
   const remainingLen = pendingBuffer.length - cursor;
+  if (truncateAtBytes !== undefined && remainingLen >= truncateAtBytes) {
+    capturePrefixAndDrop(state, pendingBuffer, cursor, boundary.length, truncateAtBytes);
+    return emitted;
+  }
   if (remainingLen >= maxBufferLimit) {
     console.warn(`Warning: Git binary buffer exceeded ${Math.round(maxBufferLimit / 1024 / 1024)}MB. Dropping buffer to prevent memory exhaustion.`);
     state.droppingMassiveRecord = true;

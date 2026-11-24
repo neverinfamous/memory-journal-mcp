@@ -1,54 +1,19 @@
 // @ts-nocheck
 
-import { spawnGitBinaryStream, NUMSTAT_BOUNDARY_STR } from './git-runner.js';
+import { spawnGitBinaryStream } from './git-runner.js';
 import { extractShaFromBuffer } from './parser-utils.js';
-import { CHAR_NEWLINE, CHAR_NULL, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
+import {
+  CHAR_NEWLINE,
+  CHAR_NULL,
+  GIT_STREAM_BUFFER_DEFAULT,
+  NUMSTAT_BOUNDARY_STR,
+  NUMSTAT_MAPS_WITH_ALIASES,
+  parseNumstatLineIntoMap,
+  type NumstatEntry,
+  type NumstatCommitMap,
+} from './constants.js';
 
-export type NumstatEntry = { insertions: number; deletions: number; path: string; isBinary?: boolean };
-export type NumstatCommitMap = Map<string, NumstatEntry>;
-export const NUMSTAT_MAPS_WITH_ALIASES = new WeakSet<NumstatCommitMap>();
-
-const LEADING_CR_LF_RE = /^[\r\n]+/;
-
-export function parseNumstatLineIntoMap(
-  rawLine: string,
-  readNextPart: () => string | null,
-  currentMap: NumstatCommitMap,
-): void {
-  const firstCode = rawLine.charCodeAt(0);
-  const firstStr = firstCode === 10 || firstCode === 13 ? rawLine.replace(LEADING_CR_LF_RE, '') : rawLine;
-  if (!firstStr) return;
-
-  const tab1 = firstStr.indexOf('\t');
-  if (tab1 === -1) return;
-  const tab2 = firstStr.indexOf('\t', tab1 + 1);
-  if (tab2 === -1) return;
-
-  const p0 = firstStr.slice(0, tab1);
-  const p1 = firstStr.slice(tab1 + 1, tab2);
-  const isBinary = p0 === '-' || p1 === '-';
-  const ins = isBinary ? 0 : Math.min(parseInt(p0, 10) || 0, Number.MAX_SAFE_INTEGER);
-  const del = isBinary ? 0 : Math.min(parseInt(p1, 10) || 0, Number.MAX_SAFE_INTEGER);
-
-  let oldPath: string | undefined;
-  let newPath: string;
-  if (tab2 + 1 < firstStr.length) {
-    newPath = firstStr.slice(tab2 + 1);
-  } else {
-    oldPath = readNextPart() ?? '';
-    newPath = readNextPart() ?? '';
-  }
-
-  if (!newPath) newPath = 'unknown_path_due_to_malformed_buffer';
-  const stats: NumstatEntry = isBinary
-    ? { insertions: ins, deletions: del, path: newPath, isBinary: true }
-    : { insertions: ins, deletions: del, path: newPath };
-  currentMap.set(newPath, stats);
-  if (oldPath) {
-    currentMap.set(oldPath, stats);
-    NUMSTAT_MAPS_WITH_ALIASES.add(currentMap);
-  }
-}
+export { NUMSTAT_MAPS_WITH_ALIASES, parseNumstatLineIntoMap, type NumstatEntry, type NumstatCommitMap };
 
 function parseNumstatRecord(recordBuf: Buffer, shaEnd: number): NumstatCommitMap {
   const currentMap: NumstatCommitMap = new Map();

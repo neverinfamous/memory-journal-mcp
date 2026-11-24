@@ -181,12 +181,18 @@ function applySingleTrailer(
       state.isBreaking = true;
       if (val.trim()) state.breakingChangeDescription = val;
       break;
-    case 'co-authored-by':
+    case 'co-authored-by': {
+      if (!val.includes(',')) {
+        const trimmed = val.trim();
+        if (trimmed) state.coAuthors.push(trimmed);
+        break;
+      }
       for (const part of val.split(',')) {
         const trimmed = part.trim();
         if (trimmed) state.coAuthors.push(trimmed);
       }
       break;
+    }
     case 'reviewed-by':
       if (val) state.reviewers.push(val);
       break;
@@ -228,7 +234,8 @@ export function parseTrailersBlock(rawTrailers: string, sha: string): ParsedTrai
     const key = keyLower.includes(' ') || keyLower.includes('\t') ? keyLower.replace(WHITESPACE_COLLAPSE_RE, '-') : keyLower;
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
-    let val = rawVal.includes('\n') ? rawVal.replace(REGEX_TRAILER_CONTINUATION, '\n') : rawVal;
+    const cappedRaw = rawVal.length > MAX_TRAILER_LENGTH * 4 + 64 ? rawVal.slice(0, MAX_TRAILER_LENGTH * 4 + 64) : rawVal;
+    let val = cappedRaw.includes('\n') ? cappedRaw.replace(REGEX_TRAILER_CONTINUATION, '\n') : cappedRaw;
     if (val.includes('\u200B')) val = val.replace(REGEX_ZERO_WIDTH_SPACE, '');
     if (val.length > MAX_TRAILER_LENGTH) {
       val = truncateSafely(val, MAX_TRAILER_LENGTH, '\n...[trailer truncated due to length]');

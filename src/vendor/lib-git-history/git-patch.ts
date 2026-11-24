@@ -2,11 +2,33 @@
 
 import { spawnGitBinaryStream, PATCH_BOUNDARY_STR } from './git-runner.js';
 import type { CliArgs } from './cli.js';
-import { DEFAULT_MAX_PATCH_LEN, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
-import { extractShaFromBuffer, truncateSafely } from './parser-utils.js';
+import { DEFAULT_MAX_PATCH_LEN, flattenString, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT, truncateSafely, wantsPatchOutput } from './constants.js';
+import { extractShaFromBuffer } from './parser-utils.js';
+
+export { wantsPatchOutput };
 
 const DIFF_HEADER_NL = Buffer.from('\ndiff --git ');
 const DIFF_HEADER_START = Buffer.from('diff --git ');
+
+function isWhitespaceOnlyBuffer(buf: Buffer, start: number): boolean {
+  const len = buf.length;
+  for (let i = start; i < len; i++) {
+    const b = buf[i] ?? 0;
+    if (b < 0x80) {
+      if (b !== 0x20 && b !== 0x09 && b !== 0x0A && b !== 0x0D && b !== 0x0B && b !== 0x0C) {
+        return false;
+      }
+      continue;
+    }
+    let end = Math.min(len, i + 64);
+    while (end < len && end < i + 67 && ((buf[end] ?? 0) & 0xC0) === 0x80) {
+      end++;
+    }
+    if (buf.toString('utf-8', i, end).trim().length > 0) return false;
+    i = end - 1;
+  }
+  return true;
+}
 
 function truncateOversizedPatch(
   recordBuf: Buffer,
@@ -34,13 +56,13 @@ function truncateOversizedPatch(
     const nextDiff = recordBuf.indexOf(DIFF_HEADER_NL, searchStart + 1);
     const diffEnd = nextDiff !== -1 ? nextDiff : recordBuf.length;
 
-    const maxBytes = remainingBudget * 4 + 64;
+    const maxBytes = remainingBudget * 3 + 64;
     const decodeEnd = diffEnd - searchStart > maxBytes ? searchStart + maxBytes : diffEnd;
     const diffText = recordBuf.toString('utf-8', searchStart, decodeEnd).trim();
 
     if (decodeEnd < diffEnd || diffText.length > remainingBudget) {
       truncated = true;
-      processedDiffs.push(truncateSafely(diffText, remainingBudget, '\n...[patch truncated due to length]'));
+      processedDiffs.push(flattenString(truncateSafely(diffText, remainingBudget, '\n...[patch truncated due to length]')));
       remainingBudget = 0;
     } else if (diffText.length > 0) {
       processedDiffs.push(diffText);
@@ -52,15 +74,6 @@ function truncateOversizedPatch(
   }
 
   return { patch: processedDiffs.filter(Boolean).join('\n'), truncated };
-}
-
-export function wantsPatchOutput(args: CliArgs): boolean {
-  return Boolean(
-    (args['include-patch'] || args['diff-context'] !== undefined) &&
-    !args.summary &&
-    !args['no-body'] &&
-    !args.stats,
-  );
 }
 
 export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string, cwd: string = process.cwd()) {
@@ -79,13 +92,14 @@ export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas
   const map = new Map<string, { patch: string; truncated: boolean }>();
   const parsedMaxPatchLen = args['max-patch-length'];
   const maxPatchLen = (parsedMaxPatchLen !== undefined && !Number.isNaN(parsedMaxPatchLen) && parsedMaxPatchLen >= 0) ? parsedMaxPatchLen : DEFAULT_MAX_PATCH_LEN;
+  const truncateAtBytes = Math.min(GIT_STREAM_BUFFER_DEFAULT, Math.max(4096, maxPatchLen * 4 + 4096));
 
-  for await (const recordBuf of spawnGitBinaryStream(patchArgs, PATCH_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd)) {
+  for await (const recordBuf of spawnGitBinaryStream(patchArgs, PATCH_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd, truncateAtBytes)) {
     const { sha: hash, shaEnd: hashEnd } = extractShaFromBuffer(recordBuf);
     if (!hash) continue;
     const patchByteLen = recordBuf.length - (hashEnd + 1);
     if (patchByteLen > maxPatchLen) {
-      if (maxPatchLen === 0 && recordBuf.toString('utf-8', hashEnd + 1).trim().length === 0) {
+      if (maxPatchLen === 0 && isWhitespaceOnlyBuffer(recordBuf, hashEnd + 1)) {
         map.set(hash, { patch: '', truncated: false });
       } else {
         map.set(hash, truncateOversizedPatch(recordBuf, hashEnd + 1, maxPatchLen));

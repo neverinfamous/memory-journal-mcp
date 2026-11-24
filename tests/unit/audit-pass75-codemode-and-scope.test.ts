@@ -50,8 +50,8 @@ function makeBaseContext(overrides: Partial<ToolContext> = {}): ToolContext {
 
 describe('Pass 75 Audit — Code Mode, Recovery, Normalizers & Prompts', () => {
     it('tracks AP1-AP4 prompt updates and revision 2026-11-22-audit-pass75', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass80')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass80')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass81')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass81')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = await def.handler(
             { target: 'memory-journal-mcp' },

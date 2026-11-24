@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { z } from 'zod';
 import type { CliArgs } from './cli.js';
 import { IMPACT_HIGH, IMPACT_MEDIUM, IMPACT_LOW } from './constants.js';
 
@@ -35,13 +34,14 @@ export function matchesTrailerFilters(
   type: string | undefined,
   metadataObj: Readonly<{ impact?: unknown; confidence?: unknown }> | undefined,
 ): boolean {
-  const parsedFilters = getParsedCliFilters(args);
-  if (parsedFilters.allowedCategories) {
-    const allowed = parsedFilters.allowedCategories;
-    if (categories && categories.length > 0) {
-      if (!categories.some((c) => allowed.has(c.toLowerCase()))) return false;
-    } else if (!allowed.has(type ? type.toLowerCase() : 'uncategorized')) {
-      return false;
+  if (args.category) {
+    const allowed = getParsedCliFilters(args).allowedCategories;
+    if (allowed) {
+      if (categories && categories.length > 0) {
+        if (!categories.some((c) => allowed.has(c.toLowerCase()))) return false;
+      } else if (!allowed.has(type ? type.toLowerCase() : 'uncategorized')) {
+        return false;
+      }
     }
   }
   if (args['impact']) {
@@ -67,9 +67,11 @@ export interface FilterableCommitEntry {
 }
 
 export function matchesCommitEntryFilters(entry: FilterableCommitEntry, args: CliArgs): boolean {
-  const parsedFilters = getParsedCliFilters(args);
-  if (parsedFilters.allowedTypes && (!entry.type || !parsedFilters.allowedTypes.has(entry.type.toLowerCase()))) {
-    return false;
+  if (args.type) {
+    const allowedTypes = getParsedCliFilters(args).allowedTypes;
+    if (allowedTypes && (!entry.type || !allowedTypes.has(entry.type.toLowerCase()))) {
+      return false;
+    }
   }
   const meta = entry.metadata;
   if (!matchesTrailerFilters(args, meta?.category, entry.type, meta)) return false;
@@ -86,9 +88,11 @@ export function matchesRawRecordFilters(
   raw: { type: string | undefined; isBreaking: boolean; metadataObj: Record<string, unknown> },
   args: CliArgs,
 ): boolean {
-  const parsedFilters = getParsedCliFilters(args);
-  if (parsedFilters.allowedTypes && (!raw.type || !parsedFilters.allowedTypes.has(raw.type.toLowerCase()))) {
-    return false;
+  if (args.type) {
+    const allowedTypes = getParsedCliFilters(args).allowedTypes;
+    if (allowedTypes && (!raw.type || !allowedTypes.has(raw.type.toLowerCase()))) {
+      return false;
+    }
   }
   const rawCats = raw.metadataObj['category'];
   const cats = Array.isArray(rawCats) ? (rawCats as readonly string[]) : undefined;
@@ -111,15 +115,18 @@ const NUMERIC_FILTER_CACHE = new Map<string, ParsedNumericFilter | null>();
 const MAX_FILTER_CACHE_SIZE = 64;
 const NUMERIC_FILTER_REGEX = /^(>=|<=|>|<|==|=)?\s*(-?\d+(?:\.\d+)?)$/;
 const FALLBACK_EXTRACT_REGEX = /['"]?(?:trust|impact|confidence|data)['"]?\s*:\s*['"]?([\d.]+)['"]?/;
+const HIGH_WORD_RE = /\bhigh\b/g;
+const MEDIUM_WORD_RE = /\bmedium\b/g;
+const LOW_WORD_RE = /\blow\b/g;
 
 function getParsedNumericFilter(filterString: string): ParsedNumericFilter | null {
   const cached = NUMERIC_FILTER_CACHE.get(filterString);
   if (cached !== undefined) return cached;
 
   const normalizedFilter = filterString.trim().toLowerCase()
-    .replace(/\bhigh\b/g, String(IMPACT_HIGH))
-    .replace(/\bmedium\b/g, String(IMPACT_MEDIUM))
-    .replace(/\blow\b/g, String(IMPACT_LOW));
+    .replace(HIGH_WORD_RE, String(IMPACT_HIGH))
+    .replace(MEDIUM_WORD_RE, String(IMPACT_MEDIUM))
+    .replace(LOW_WORD_RE, String(IMPACT_LOW));
   const matchObj = normalizedFilter.match(NUMERIC_FILTER_REGEX);
   let parsed: ParsedNumericFilter | null = null;
   if (matchObj) {
@@ -153,21 +160,36 @@ export function evaluateNumericFilter(filterString: string, recordValue: number 
 
 // [INVARIANT]: Require literal dot before fractional digits so `\d+` and `\d*` never overlap (prevents O(N^2) backtracking).
 const FINITE_DECIMAL_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
-const finiteNumberSchema = z.union([
-  z.number().finite(),
-  z.string().trim().regex(FINITE_DECIMAL_RE).transform(Number).refine(Number.isFinite),
-]);
 
-const numericSchema = z.union([
-  z.object({ status: z.literal('success'), data: finiteNumberSchema }).transform(v => v.data),
-  z.object({ data: finiteNumberSchema }).transform(v => v.data),
-  z.object({ status: z.literal('success'), data: z.object({ trust: finiteNumberSchema }) }).transform(v => v.data.trust),
-  z.object({ status: z.literal('success'), data: z.object({ impact: finiteNumberSchema }) }).transform(v => v.data.impact),
-  z.object({ status: z.literal('success'), data: z.object({ confidence: finiteNumberSchema }) }).transform(v => v.data.confidence),
-  z.object({ trust: finiteNumberSchema }).transform(v => v.trust),
-  z.object({ impact: finiteNumberSchema }).transform(v => v.impact),
-  z.object({ confidence: finiteNumberSchema }).transform(v => v.confidence),
-]);
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (FINITE_DECIMAL_RE.test(trimmed)) {
+      const n = Number(trimmed);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return undefined;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const getOwn = (rec: Record<string, unknown>, key: string): unknown => (Object.hasOwn(rec, key) ? rec[key] : undefined);
+
+function extractStructuredNumber(parsed: unknown): number | undefined {
+  if (!isPlainRecord(parsed)) return undefined;
+  const rawData = getOwn(parsed, 'data');
+  const directData = toFiniteNumber(rawData);
+  if (directData !== undefined) return directData;
+  if (getOwn(parsed, 'status') === 'success' && isPlainRecord(rawData)) {
+    const nested = toFiniteNumber(getOwn(rawData, 'trust')) ?? toFiniteNumber(getOwn(rawData, 'impact')) ?? toFiniteNumber(getOwn(rawData, 'confidence'));
+    if (nested !== undefined) return nested;
+  }
+  return toFiniteNumber(getOwn(parsed, 'trust')) ?? toFiniteNumber(getOwn(parsed, 'impact')) ?? toFiniteNumber(getOwn(parsed, 'confidence'));
+}
 
 const extractMatch = (s: string, regex: RegExp) => {
   const m = s.match(regex);
@@ -185,27 +207,30 @@ export function extractNumericMetadata(val: string): number | string | undefined
     if (!Number.isNaN(n)) return Number.isFinite(n) ? n : undefined;
   }
 
-  const vLower = trimmed.toLowerCase();
-  switch (vLower) {
-    case 'high': return IMPACT_HIGH;
-    case 'medium': return IMPACT_MEDIUM;
-    case 'low': return IMPACT_LOW;
-    case 'nan':
-    case 'infinity':
-    case '+infinity':
-    case '-infinity': return undefined;
-    default: break;
+  if (trimmed.length <= 8) {
+    switch (trimmed.toLowerCase()) {
+      case 'high': return IMPACT_HIGH;
+      case 'medium': return IMPACT_MEDIUM;
+      case 'low': return IMPACT_LOW;
+      case 'nan':
+      case 'infinity': return undefined;
+      default: break;
+    }
   }
 
   if (trimmed.includes(':')) {
-    const jsonCandidate = firstCode === 123 ? trimmed : `{${trimmed}}`;
-    try {
-      const parsed: unknown = JSON.parse(jsonCandidate);
-      const zodResult = numericSchema.safeParse(parsed);
-      if (zodResult.success && !Number.isNaN(zodResult.data) && Number.isFinite(zodResult.data)) {
-        return zodResult.data;
+    let runFallback = firstCode !== 123 && firstCode !== 34;
+    if (!runFallback) {
+      const jsonCandidate = firstCode === 123 ? trimmed : `{${trimmed}}`;
+      try {
+        const parsed: unknown = JSON.parse(jsonCandidate);
+        const extracted = extractStructuredNumber(parsed);
+        if (extracted !== undefined && !Number.isNaN(extracted) && Number.isFinite(extracted)) return extracted;
+      } catch {
+        runFallback = true;
       }
-    } catch {
+    }
+    if (runFallback) {
       const matchedString = extractMatch(trimmed, FALLBACK_EXTRACT_REGEX);
       if (matchedString !== undefined && !Number.isNaN(matchedString)) {
         return (typeof matchedString === 'number' && !Number.isFinite(matchedString)) ? undefined : matchedString;
@@ -213,7 +238,7 @@ export function extractNumericMetadata(val: string): number | string | undefined
     }
   }
 
-  if (firstCode === 123 || vLower.includes('nan')) {
+  if (firstCode === 123 || trimmed.toLowerCase().includes('nan')) {
     return undefined;
   }
 

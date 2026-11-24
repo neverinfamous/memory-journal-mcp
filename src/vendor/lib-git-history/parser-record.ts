@@ -1,23 +1,13 @@
 // @ts-nocheck
 import type { CliArgs } from './cli.js';
-import { FIELD_SEPARATOR } from './git-runner.js';
-import { parseNumstatLineIntoMap, type NumstatCommitMap } from './git-numstat.js';
-import { extractIssues, truncateSafely, flattenString, expandIssueTrackerUrl, hasOwnKeys } from './parser-utils.js';
+import { extractIssuesLazy, expandIssueTrackerUrl, hasOwnKeys } from './parser-utils.js';
 import { CHANGELOG_TYPES, getParsedCliFilters, matchesTrailerFilters } from './parser-metadata.js';
 import { parseTrailersBlock } from './parser-trailers.js';
 import {
-  MAX_BODY_LENGTH,
-  MAX_SUBJECT_LENGTH,
-  EXPECTED_RECORD_PARTS,
-  MAX_STATUS_ITERATIONS,
-  MAX_EMPTY_STATUS_COUNT,
-  MAX_PARSED_FILES,
-  RECORD_START_FIELDS,
-  RECORD_END_FIELDS,
-  REGEX_FILE_STATUS,
-  REGEX_CONVENTIONAL_COMMIT,
-  REGEX_BREAKING_CHANGE,
-  REGEX_REVERT_COMMIT,
+  FIELD_SEPARATOR, MAX_BODY_LENGTH, MAX_SUBJECT_LENGTH, MAX_ISSUE_TEXT_LENGTH, EXPECTED_RECORD_PARTS,
+  MAX_STATUS_ITERATIONS, MAX_EMPTY_STATUS_COUNT, MAX_PARSED_FILES, RECORD_START_FIELDS, RECORD_END_FIELDS,
+  REGEX_FILE_STATUS, REGEX_CONVENTIONAL_COMMIT, REGEX_BREAKING_CHANGE, REGEX_REVERT_COMMIT,
+  flattenString, truncateSafely, parseNumstatLineIntoMap, type NumstatCommitMap,
 } from './constants.js';
 
 const REGEX_TRAILING_DIGITS = /(\d{1,3})$/;
@@ -31,9 +21,37 @@ const REGEX_LEADING_CR = /^\r+/;
 const REGEX_CR_LF = /\r\n/g;
 const REGEX_CR_OPT_LF = /\r\n?/g;
 const REGEX_CR = /\r/g;
-const REGEX_HEAD_REF = /^HEAD -> /;
-const REGEX_TAG_PREFIX = /^tag:\s*/;
 const REGEX_WHITESPACE_SPLIT = /\s+/;
+const REGEX_ISSUE_HINT = /[#-]\d|:\/\//;
+
+const EMPTY_STRING_ARRAY: string[] = Object.freeze([]) as unknown as string[];
+const EMPTY_REFS_TAGS: { refs: string[]; tags: string[] } = Object.freeze({ refs: EMPTY_STRING_ARRAY, tags: EMPTY_STRING_ARRAY });
+const EMPTY_ISSUES_MAP = new Map<string, string | null>();
+const hasIssueTokenHint = (s: string): boolean =>
+  s.length > 0 && REGEX_ISSUE_HINT.test(s.length > MAX_ISSUE_TEXT_LENGTH ? s.slice(0, MAX_ISSUE_TEXT_LENGTH) : s);
+
+function parseRefsAndTags(refsRaw: string, collectRefs = true): { refs: string[]; tags: string[] } {
+  if (!refsRaw) return EMPTY_REFS_TAGS;
+  const refs: string[] = collectRefs ? [] : EMPTY_STRING_ARRAY;
+  const tags: string[] = [];
+  let pos = 0;
+  while (pos <= refsRaw.length) {
+    const commaIdx = refsRaw.indexOf(', ', pos);
+    const rawSeg = commaIdx === -1 ? refsRaw.slice(pos) : refsRaw.slice(pos, commaIdx);
+    let seg = rawSeg.trim();
+    if (seg.startsWith('HEAD -> ')) seg = seg.slice(8);
+    if (seg) {
+      if (collectRefs) refs.push(flattenString(seg));
+      if (seg.startsWith('tag: ')) {
+        const tagName = seg.slice(5).trimStart();
+        if (tagName) tags.push(flattenString(tagName));
+      }
+    }
+    if (commaIdx === -1) break;
+    pos = commaIdx + 2;
+  }
+  return { refs, tags };
+}
 
 export type RawCommitBatchItem = {
   sha: string; parents: string[]; refs: string[]; tags: string[]; authorName: string; authorEmail: string; date: string;
@@ -94,9 +112,35 @@ function statusConsumesOldFile(statusRaw: string, isCombined: boolean): boolean 
   return statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C');
 }
 
+interface FilePartCursor {
+  idx: number;
+}
+
+function readFilePart(filesBlock: string, cursor: FilePartCursor): string | null {
+  if (cursor.idx >= filesBlock.length) return null;
+  const nulIdx = filesBlock.indexOf('\x00', cursor.idx);
+  if (nulIdx === -1) {
+    const part = filesBlock.slice(cursor.idx);
+    cursor.idx = filesBlock.length;
+    return part;
+  }
+  const part = filesBlock.slice(cursor.idx, nulIdx);
+  cursor.idx = nulIdx + 1;
+  return part;
+}
+
+function skipFilePart(filesBlock: string, cursor: FilePartCursor): boolean {
+  if (cursor.idx >= filesBlock.length) return false;
+  const nulIdx = filesBlock.indexOf('\x00', cursor.idx);
+  const nonEmpty = (nulIdx === -1 ? filesBlock.length : nulIdx) > cursor.idx;
+  cursor.idx = nulIdx === -1 ? filesBlock.length : nulIdx + 1;
+  return nonEmpty;
+}
+
 function parseSingleFileStatus(
   statusRaw: string,
-  getNextFilePart: () => string | null,
+  filesBlock: string,
+  cursor: FilePartCursor,
   isCombined = false,
 ): RawFileItem | null {
   let status = statusRaw;
@@ -115,8 +159,8 @@ function parseSingleFileStatus(
     hasOldFile = !isCombined && statusLetters.length === 1 && (statusLetters === 'R' || statusLetters === 'C');
   }
 
-  const oldFile = hasOldFile ? (getNextFilePart() || undefined) : undefined;
-  const file = getNextFilePart();
+  const oldFile = hasOldFile ? (readFilePart(filesBlock, cursor) || undefined) : undefined;
+  const file = readFilePart(filesBlock, cursor);
   if (!file) return null;
 
   const item: RawFileItem = {
@@ -128,6 +172,8 @@ function parseSingleFileStatus(
   return item;
 }
 
+const previewStatus = (s: string): string => (s.length > 128 ? `${s.slice(0, 128)}...` : s);
+
 function isValidFileStatus(statusRaw: string): boolean {
   if (statusRaw.length === 1) {
     const code = statusRaw.charCodeAt(0);
@@ -137,54 +183,40 @@ function isValidFileStatus(statusRaw: string): boolean {
 }
 
 function consumeFileStatusToken(
-  statusRaw: string,
-  isCombined: boolean,
-  getNextFilePart: () => string | null,
-  rawFiles: RawFileItem[],
-  countOnly: boolean,
+  statusRaw: string, isCombined: boolean, filesBlock: string, cursor: FilePartCursor,
+  rawFiles: RawFileItem[], countOnly: boolean,
 ): boolean {
   if (countOnly || rawFiles.length >= MAX_PARSED_FILES) {
-    if (statusConsumesOldFile(statusRaw, isCombined)) getNextFilePart();
-    const skippedFile = getNextFilePart();
-    return Boolean(skippedFile);
+    if (statusConsumesOldFile(statusRaw, isCombined)) skipFilePart(filesBlock, cursor);
+    return skipFilePart(filesBlock, cursor);
   }
-  const parsedFile = parseSingleFileStatus(statusRaw, getNextFilePart, isCombined);
+  const parsedFile = parseSingleFileStatus(statusRaw, filesBlock, cursor, isCombined);
   if (!parsedFile) return false;
   rawFiles.push(parsedFile);
   return true;
 }
 
-function parseFilesBlock(
-  filesBlock: string,
-  sha: string,
+function createEmptyFilesResult(
   inlineNumstatMode: boolean,
-  countOnly = false,
 ): { rawFiles: RawFileItem[]; trueFileCount: number; inlineNumstats?: NumstatCommitMap } {
+  return inlineNumstatMode ? { rawFiles: [], trueFileCount: 0, inlineNumstats: new Map() } : { rawFiles: [], trueFileCount: 0 };
+}
+
+function parseFilesBlock(
+  filesBlock: string, sha: string, inlineNumstatMode: boolean, countOnly = false,
+): { rawFiles: RawFileItem[]; trueFileCount: number; inlineNumstats?: NumstatCommitMap } {
+  if (!filesBlock) return createEmptyFilesResult(inlineNumstatMode);
   const rawFiles: RawFileItem[] = [];
   const inlineNumstats: NumstatCommitMap | undefined = inlineNumstatMode ? new Map() : undefined;
   let trueFileCount = 0;
-  let fileBlockIdx = 0;
+  const cursor: FilePartCursor = { idx: 0 };
+  let readNumstatPart: (() => string | null) | undefined;
 
-  const getNextFilePart = (): string | null => {
-    if (!filesBlock || fileBlockIdx >= filesBlock.length) return null;
-    const nulIdx = filesBlock.indexOf('\x00', fileBlockIdx);
-    if (nulIdx === -1) {
-      const part = filesBlock.slice(fileBlockIdx);
-      fileBlockIdx = filesBlock.length;
-      return part;
-    }
-    const part = filesBlock.slice(fileBlockIdx, nulIdx);
-    fileBlockIdx = nulIdx + 1;
-    return part;
-  };
-
-  let firstToken = getNextFilePart();
-  if (firstToken === null) return { rawFiles, trueFileCount, ...(inlineNumstats ? { inlineNumstats } : {}) };
+  let firstToken = readFilePart(filesBlock, cursor);
+  if (firstToken === null) return createEmptyFilesResult(inlineNumstatMode);
   const firstCode = firstToken.charCodeAt(0);
   if (firstCode === 10 || firstCode === 13) firstToken = firstToken.replace(REGEX_LEADING_CR_LF, '');
-  if (!firstToken && fileBlockIdx >= filesBlock.length) {
-    return { rawFiles, trueFileCount, ...(inlineNumstats ? { inlineNumstats } : {}) };
-  }
+  if (!firstToken && cursor.idx >= filesBlock.length) return createEmptyFilesResult(inlineNumstatMode);
 
   const hasCR = filesBlock.includes('\r');
   let token: string | null = firstToken;
@@ -196,30 +228,29 @@ function parseFilesBlock(
     if (token === '') {
       emptyCount++;
       if (emptyCount > MAX_EMPTY_STATUS_COUNT) break;
-      token = getNextFilePart();
+      token = readFilePart(filesBlock, cursor);
       continue;
     }
     emptyCount = 0;
 
     if (token.charCodeAt(0) === 58) {
-      // [INTENT]: Parse `git log --raw -z` entry (`:<modes> <shas> <status>` or `::<modes> <shas> <combinedStatus>`).
       const isCombined = token.charCodeAt(1) === 58;
       const lastSpace = token.lastIndexOf(' ');
       const statusRaw = lastSpace !== -1 ? token.slice(lastSpace + 1) : '';
       if (!isValidFileStatus(statusRaw)) {
-        console.warn(`[lib-git-history] Warning: Desynced or invalid raw file status "${statusRaw}" in commit ${sha}. Stopping file parsing for this commit.`);
+        console.warn(`[lib-git-history] Warning: Desynced or invalid raw file status "${previewStatus(statusRaw)}" in commit ${sha}. Stopping file parsing for this commit.`);
         break;
       }
-      if (consumeFileStatusToken(statusRaw, isCombined, getNextFilePart, rawFiles, countOnly)) trueFileCount++;
+      if (consumeFileStatusToken(statusRaw, isCombined, filesBlock, cursor, rawFiles, countOnly)) trueFileCount++;
     } else if (inlineNumstats !== undefined && token.includes('\t')) {
-      parseNumstatLineIntoMap(token, getNextFilePart, inlineNumstats);
+      parseNumstatLineIntoMap(token, readNumstatPart ??= () => readFilePart(filesBlock, cursor), inlineNumstats);
     } else if (isValidFileStatus(token)) {
-      if (consumeFileStatusToken(token, false, getNextFilePart, rawFiles, countOnly)) trueFileCount++;
+      if (consumeFileStatusToken(token, false, filesBlock, cursor, rawFiles, countOnly)) trueFileCount++;
     } else {
-      console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${token}" in commit ${sha}. Stopping file parsing for this commit.`);
+      console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${previewStatus(token)}" in commit ${sha}. Stopping file parsing for this commit.`);
       break;
     }
-    token = getNextFilePart();
+    token = readFilePart(filesBlock, cursor);
   }
   return { rawFiles, trueFileCount, ...(inlineNumstats ? { inlineNumstats } : {}) };
 }
@@ -246,9 +277,9 @@ function parseParentsAndFiles(parentsAndFiles: string): { parentsRaw: string; fi
 }
 
 function stripExactTrailerBlock(body: string, exactTrailerBlock: string): string {
-  if (!exactTrailerBlock) return body;
+  if (!exactTrailerBlock || !body || exactTrailerBlock.length > body.length * 2) return body;
   const normalizedBody = body.includes('\r') ? body.replace(REGEX_CR_OPT_LF, '\n') : body;
-  const trailerTrimmed = (exactTrailerBlock.includes('\r') ? exactTrailerBlock.replace(REGEX_CR_OPT_LF, '\n') : exactTrailerBlock).trim();
+  const trailerTrimmed = exactTrailerBlock.includes('\r') ? exactTrailerBlock.replace(REGEX_CR_OPT_LF, '\n').trim() : exactTrailerBlock;
   if (trailerTrimmed.length === 0) return body;
   const trimmedBody = normalizedBody.trimEnd();
   if (trimmedBody.endsWith(trailerTrimmed)) {
@@ -269,19 +300,16 @@ function applyIssueTrackerUrls(issuesMap: Map<string, string | null>, tracker: s
 }
 
 function normalizeSubject(rawSubject: string): string {
-  let subject = rawSubject.trim();
-  if (subject.includes('\r')) subject = subject.replace(REGEX_CR_LF, '\n');
-  if (subject.length > MAX_SUBJECT_LENGTH) {
-    subject = truncateSafely(subject, MAX_SUBJECT_LENGTH, '...[subject truncated]');
-  }
-  return subject;
+  const trimmed = rawSubject.trim();
+  const capped = trimmed.length > MAX_SUBJECT_LENGTH * 2 + 2 ? trimmed.slice(0, MAX_SUBJECT_LENGTH * 2 + 2) : trimmed;
+  const subject = capped.includes('\r') ? capped.replace(REGEX_CR_LF, '\n') : capped;
+  return subject.length > MAX_SUBJECT_LENGTH ? truncateSafely(subject, MAX_SUBJECT_LENGTH, '...[subject truncated]') : subject;
 }
 
 function normalizeBody(rawBody: string): string {
-  let body = rawBody.includes('\r') ? rawBody.replace(REGEX_CR_LF, '\n') : rawBody;
-  if (body.length > MAX_BODY_LENGTH) {
-    body = truncateSafely(body, MAX_BODY_LENGTH, '\n\n...[body truncated to prevent memory exhaustion]');
-  }
+  const capped = rawBody.length > MAX_BODY_LENGTH * 2 + 2 ? rawBody.slice(0, MAX_BODY_LENGTH * 2 + 2) : rawBody;
+  let body = capped.includes('\r') ? capped.replace(REGEX_CR_LF, '\n') : capped;
+  if (body.length > MAX_BODY_LENGTH) body = truncateSafely(body, MAX_BODY_LENGTH, '\n\n...[body truncated to prevent memory exhaustion]');
   const hasBOM = body.charCodeAt(0) === 0xFEFF;
   body = body.trim();
   if (hasBOM && body.charCodeAt(0) !== 0xFEFF) body = '\uFEFF' + body;
@@ -314,40 +342,78 @@ function detectBodyBreaking(
   return { isBreaking: initialIsBreaking, breakingChangeDescription: initialDesc };
 }
 
-export function parseGitRecord(commitBlock: string, args: CliArgs, inlineNumstatMode = false): RawCommitBatchItem | null {
+function extractCommitIssues(subject: string, body: string, args: CliArgs): Map<string, string | null> {
+  const customPattern = args['issue-pattern'];
+  const subjHint = hasIssueTokenHint(subject);
+  const bodyHint = hasIssueTokenHint(body);
+  if (!subjHint && !bodyHint && !customPattern) return EMPTY_ISSUES_MAP;
+
+  let issuesMap: Map<string, string | null> | undefined;
+  const getMap = (): Map<string, string | null> => (issuesMap ??= new Map<string, string | null>());
+
+  if (subjHint || customPattern) extractIssuesLazy(subject, getMap, customPattern, subjHint);
+  if (bodyHint || customPattern) extractIssuesLazy(body, getMap, customPattern, bodyHint);
+
+  if (!issuesMap || issuesMap.size === 0) return EMPTY_ISSUES_MAP;
+  if (args['issue-tracker']) applyIssueTrackerUrls(issuesMap, args['issue-tracker']);
+  return issuesMap;
+}
+
+function skipWithTags(sha: string, rawRefs: string, onSkippedTags?: (tags: readonly string[], sha: string) => void): null {
+  if (onSkippedTags && rawRefs.includes('tag:')) {
+    const { tags } = parseRefsAndTags(rawRefs.trim(), false);
+    if (tags.length > 0) onSkippedTags(tags, flattenString(sha));
+  }
+  return null;
+}
+
+function extractIdentityFields(parts: string[]) {
+  const rawAuthorName = parts[2].trim(), rawAuthorEmail = parts[3].trim(), rawDate = parts[4].trim();
+  const rawCommitterName = parts[5].trim(), rawCommitterEmail = parts[6].trim(), rawCommitterDate = parts[7].trim();
+  const authorName = flattenString(rawAuthorName), authorEmail = flattenString(rawAuthorEmail), date = flattenString(rawDate);
+  return {
+    authorName, authorEmail, date,
+    committerName: rawCommitterName === rawAuthorName ? authorName : flattenString(rawCommitterName),
+    committerEmail: rawCommitterEmail === rawAuthorEmail ? authorEmail : flattenString(rawCommitterEmail),
+    committerDate: rawCommitterDate === rawDate ? date : flattenString(rawCommitterDate),
+  };
+}
+
+export function parseGitRecord(
+  commitBlock: string, args: CliArgs, inlineNumstatMode = false,
+  onSkippedTags?: (tags: readonly string[], sha: string) => void, omitBodyOverride = false,
+): RawCommitBatchItem | null {
   const parts = extractRecordParts(commitBlock);
   if (!parts) return null;
 
+  const sha = parts[0].trim();
   const subject = normalizeSubject(parts[8]);
   const convMatch = stripLeadingEmojiAndShortcode(subject).match(REGEX_CONVENTIONAL_COMMIT);
   const type = convMatch ? convMatch[1] : undefined;
-  const parsedFilters = getParsedCliFilters(args);
-  if (parsedFilters.allowedTypes && (!type || !parsedFilters.allowedTypes.has(type.toLowerCase()))) {
-    return null;
+  if (args.type) {
+    const allowedTypes = getParsedCliFilters(args).allowedTypes;
+    if (allowedTypes && (!type || !allowedTypes.has(type.toLowerCase()))) return skipWithTags(sha, parts[1], onSkippedTags);
   }
 
-  const sha = parts[0].trim();
   const bodyEndIdx = parts.length - 3;
   const rawTrailers = (parts[bodyEndIdx + 1] ?? '').trim();
   const trailers = parseTrailersBlock(rawTrailers, sha);
   // [INTENT]: Evaluate trailer-only filters before normalizing bodies or scanning for BREAKING CHANGE footers.
   if (!matchesTrailerFilters(args, trailers.categories, type, trailers.metadataObj)) {
-    return null;
+    return skipWithTags(sha, parts[1], onSkippedTags);
   }
 
   const rawBody = bodyEndIdx === 10 ? parts[9] : parts.slice(9, bodyEndIdx).join(FIELD_SEPARATOR);
   const initialBody = normalizeBody(rawBody);
   const exactTrailerBlock = (parts[bodyEndIdx] ?? '').trim();
-  const body = stripExactTrailerBlock(initialBody, exactTrailerBlock);
+  const strippedBody = stripExactTrailerBlock(initialBody, exactTrailerBlock);
   const { isBreaking, breakingChangeDescription } = detectBodyBreaking(
-    body,
-    Boolean(convMatch?.[3]) || trailers.isBreaking,
-    trailers.breakingChangeDescription,
+    strippedBody, Boolean(convMatch?.[3]) || trailers.isBreaking, trailers.breakingChangeDescription,
   );
 
-  if (args.breaking && !isBreaking) return null;
+  if (args.breaking && !isBreaking) return skipWithTags(sha, parts[1], onSkippedTags);
   if (args['changelog-only'] && trailers.entriesParsed.length === 0 && !(CHANGELOG_TYPES.has((type ?? '').toLowerCase()) || isBreaking)) {
-    return null;
+    return skipWithTags(sha, parts[1], onSkippedTags);
   }
 
   if (trailers.categories.length > 0) trailers.metadataObj['category'] = trailers.categories;
@@ -355,37 +421,29 @@ export function parseGitRecord(commitBlock: string, args: CliArgs, inlineNumstat
   if (hasOwnKeys(trailers.customTrailers)) trailers.metadataObj['customTrailers'] = trailers.customTrailers;
 
   const { parentsRaw, filesBlock } = parseParentsAndFiles(parts[bodyEndIdx + 2] ?? '');
-  const { rawFiles, trueFileCount, inlineNumstats } = parseFilesBlock(filesBlock, sha, inlineNumstatMode, Boolean(args.summary));
+  const isBuiltInChangelogNoCache = !args.cache && (args.format === 'markdown' || args.format === 'slack');
+  const omitFiles = Boolean(args.summary || args['no-body'] || isBuiltInChangelogNoCache);
+  const { rawFiles, trueFileCount, inlineNumstats } = parseFilesBlock(filesBlock, sha, inlineNumstatMode, omitFiles);
 
-  const refsRaw = parts[1].trim();
-  const refs = refsRaw ? refsRaw.split(', ').map((r) => flattenString(r.trim().replace(REGEX_HEAD_REF, ''))).filter(Boolean) : [];
-  const tags = refs.length > 0 ? refs.filter((r) => r.startsWith('tag: ')).map((r) => flattenString(r.replace(REGEX_TAG_PREFIX, ''))) : [];
+  const { refs, tags } = parseRefsAndTags(parts[1].trim());
   const parents = !parentsRaw ? [] : !parentsRaw.includes(' ') ? [flattenString(parentsRaw)] : parentsRaw.split(REGEX_WHITESPACE_SPLIT).filter(Boolean).map(flattenString);
 
-  const revertMatch = body.includes('This reverts commit ') ? body.match(REGEX_REVERT_COMMIT) : null;
+  const revertMatch = strippedBody.includes('This reverts commit ') ? strippedBody.match(REGEX_REVERT_COMMIT) : null;
   const isRevert = ((subject.charCodeAt(0) | 32) === 114 && REGEX_REVERT_SUBJECT.test(subject)) || Boolean(revertMatch);
   const revertedCommit = revertMatch ? revertMatch[1] : undefined;
 
-  const issuesMap = new Map<string, string | null>();
-  extractIssues(subject, issuesMap, args['issue-pattern']);
-  extractIssues(body, issuesMap, args['issue-pattern']);
-  applyIssueTrackerUrls(issuesMap, args['issue-tracker']);
-
+  const issuesMap = extractCommitIssues(subject, strippedBody, args);
+  const omitBody = omitFiles || (args.stats && !args.cache) || omitBodyOverride;
+  const body = omitBody || !strippedBody ? '' : flattenString(strippedBody);
+  const flatSubject = flattenString(subject);
   const scope = convMatch ? convMatch[2] : undefined;
-  const cleanSubject = convMatch ? convMatch[4].trim() : subject;
+  const cleanSubject = convMatch ? flattenString(convMatch[4].trim()) : flatSubject;
   return {
-    sha: flattenString(sha), parents, refs, tags,
-    authorName: flattenString(parts[2].trim()), authorEmail: flattenString(parts[3].trim()),
-    date: flattenString(parts[4].trim()), committerName: flattenString(parts[5].trim()),
-    committerEmail: flattenString(parts[6].trim()), committerDate: flattenString(parts[7].trim()),
-    subject: flattenString(subject), body, cleanSubject: flattenString(cleanSubject),
-    type: type ? flattenString(type) : undefined, scope: scope ? flattenString(scope) : undefined,
-    isBreaking, isRevert,
-    revertedCommit: revertedCommit ? flattenString(revertedCommit) : undefined,
-    breakingChangeDescription: breakingChangeDescription ? flattenString(breakingChangeDescription) : undefined,
-    rawFiles, metadataObj: trailers.metadataObj, trailersObj: trailers.trailersObj,
-    references: trailers.references, coAuthors: trailers.coAuthors, reviewers: trailers.reviewers,
-    issuesMap, trueFileCount,
-    ...(inlineNumstats !== undefined ? { inlineNumstats } : {}),
+    sha: flattenString(sha), parents, refs, tags, ...extractIdentityFields(parts),
+    subject: flatSubject, body, cleanSubject,
+    type: type ? flattenString(type) : undefined, scope: scope ? flattenString(scope) : undefined, isBreaking, isRevert,
+    revertedCommit: revertedCommit ? flattenString(revertedCommit) : undefined, breakingChangeDescription: breakingChangeDescription ? flattenString(breakingChangeDescription) : undefined,
+    rawFiles, metadataObj: trailers.metadataObj, trailersObj: trailers.trailersObj, references: trailers.references,
+    coAuthors: trailers.coAuthors, reviewers: trailers.reviewers, issuesMap, trueFileCount, ...(inlineNumstats !== undefined ? { inlineNumstats } : {}),
   };
 }

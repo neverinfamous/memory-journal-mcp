@@ -2,10 +2,14 @@
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { entrySchema, type CommitEntry } from './schema.js';
+import type { CacheProjection } from './constants.js';
+import type { CommitEntry, FileStatus } from './schema.js';
+
+export type { CacheProjection };
 
 let db: Database | null = null;
 let currentDbPath: string | null = null;
+let isReadOnly = false;
 let cachedInsertTx: ((commits: CommitEntry[]) => void) | null = null;
 let cachedInsertTxDb: Database | null = null;
 let cachedInsertStmt: ReturnType<Database['prepare']> | null = null;
@@ -43,119 +47,160 @@ function getOrPrepare(database: Database, query: string): ReturnType<Database['p
 
 const INSERT_COMMIT_SQL = `
   INSERT OR REPLACE INTO commits (
-    commit_hash, parents, refs, tags, author, email, committer, committerEmail, committerDate,
-    date, type, scope, isBreaking, breakingChangeDescription, isRevert, revertedCommit,
-    isRebased, subject, cleanSubject, body, isBodyTruncated, size, files, fileCount, isFilesTruncated,
-    totalInsertions, totalDeletions, metadata, trailersObj, patch, isPatchTruncated, "references",
-    coAuthors, reviewers, associatedIssues, slackId, validationErrors, isCorrupted
-  ) VALUES (
-    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
-  )
+    commit_hash, type, scope, isBreaking, tags, metadata,
+    parents, refs, author, email, committer, committerEmail, committerDate, date,
+    breakingChangeDescription, isRevert, revertedCommit, isRebased, subject, cleanSubject, isBodyTruncated,
+    size, fileCount, isFilesTruncated, totalInsertions, totalDeletions, trailersObj, isPatchTruncated,
+    "references", coAuthors, reviewers, associatedIssues, slackId, validationErrors, isCorrupted,
+    files, body, patch
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 
-const CACHE_SCHEMA_VERSION = 3;
+const CACHE_SCHEMA_VERSION = 4;
+const PARSE_FAIL = Symbol('parse_fail');
 
-const safeParseJSON = (str: string | null | undefined, columnName: string, commitHash: string): unknown => {
-  if (!str) return undefined;
+function parseJsonCol(raw: unknown, columnName: string, commitHash: string): unknown {
+  if (raw === null || raw === undefined || raw === '') return undefined;
+  if (typeof raw !== 'string') return PARSE_FAIL;
   try {
-    return JSON.parse(str);
+    return JSON.parse(raw) as unknown;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[lib-git-history] Warning: Failed to parse cached JSON column '${columnName}' for commit ${commitHash}: ${msg}`);
-    return undefined;
+    return PARSE_FAIL;
   }
-};
-
-export type CacheProjection = 'full' | 'no-patch' | 'stats' | 'summary' | 'no-body';
+}
 
 const BASE_NO_BODY_COLS =
-  'commit_hash, parents, refs, tags, author, email, committer, committerEmail, committerDate, ' +
-  'date, type, scope, isBreaking, breakingChangeDescription, isRevert, revertedCommit, isRebased, ' +
-  'subject, cleanSubject, associatedIssues, slackId, validationErrors, isCorrupted';
+  'c.commit_hash, c.parents, c.refs, c.tags, c.author, c.email, c.committer, c.committerEmail, c.committerDate, ' +
+  'c.date, c.type, c.scope, c.isBreaking, c.breakingChangeDescription, c.isRevert, c.revertedCommit, c.isRebased, ' +
+  'c.subject, c.cleanSubject, c.associatedIssues, c.slackId, c.validationErrors, c.isCorrupted';
 
 const SUMMARY_EXTRA_COLS =
-  'size, fileCount, isFilesTruncated, totalInsertions, totalDeletions, ' +
-  'metadata, trailersObj, "references", coAuthors, reviewers';
+  'c.size, c.fileCount, c.isFilesTruncated, c.totalInsertions, c.totalDeletions, ' +
+  'c.metadata, c.trailersObj, c."references", c.coAuthors, c.reviewers';
 
 const CACHE_PROJECTION_COLUMNS: Record<CacheProjection, string> = {
-  full: '*',
-  'no-patch': `${BASE_NO_BODY_COLS}, body, isBodyTruncated, files, ${SUMMARY_EXTRA_COLS}`,
-  stats: `${BASE_NO_BODY_COLS}, files, ${SUMMARY_EXTRA_COLS}`,
+  full: 'c.*',
+  'no-patch': `${BASE_NO_BODY_COLS}, c.body, c.isBodyTruncated, c.files, ${SUMMARY_EXTRA_COLS}`,
+  stats: `${BASE_NO_BODY_COLS}, c.files, ${SUMMARY_EXTRA_COLS}`,
   summary: `${BASE_NO_BODY_COLS}, ${SUMMARY_EXTRA_COLS}`,
   'no-body': BASE_NO_BODY_COLS,
 };
-
-const MIGRATION_COLUMNS: ReadonlyArray<readonly [string, string]> = [
-  ['isBodyTruncated', 'INTEGER'],
-  ['trailersObj', 'TEXT'],
-  ['slackId', 'TEXT'],
-];
-
-function ensureCacheSchemaColumns(database: Database): void {
-  const infoStmt = database.prepare('PRAGMA table_info(commits);');
-  let existingRows: unknown[];
-  try {
-    existingRows = infoStmt.all() as unknown[];
-  } finally {
-    finalizeStatement(infoStmt);
-  }
-  const existingCols = new Set(existingRows.map((r) => (isRecord(r) && typeof r['name'] === 'string' ? r['name'] : '')));
-  for (const [colName, colType] of MIGRATION_COLUMNS) {
-    if (!existingCols.has(colName)) {
-      database.exec(`ALTER TABLE commits ADD COLUMN ${colName} ${colType};`);
-    }
-  }
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function copyScalarColumns(row: Record<string, unknown>, out: Record<string, unknown>): void {
-  if (typeof row['email'] === 'string') out['email'] = row['email'];
-  if (typeof row['committer'] === 'string') out['committer'] = row['committer'];
-  if (typeof row['committerEmail'] === 'string') out['committerEmail'] = row['committerEmail'];
-  if (typeof row['committerDate'] === 'string') out['committerDate'] = row['committerDate'];
-  if (typeof row['type'] === 'string') out['type'] = row['type'];
-  if (typeof row['scope'] === 'string') out['scope'] = row['scope'];
-  if (typeof row['breakingChangeDescription'] === 'string') out['breakingChangeDescription'] = row['breakingChangeDescription'];
-  if (typeof row['revertedCommit'] === 'string') out['revertedCommit'] = row['revertedCommit'];
-  if (typeof row['cleanSubject'] === 'string') out['cleanSubject'] = row['cleanSubject'];
-  if (typeof row['body'] === 'string') out['body'] = row['body'];
-  if (typeof row['size'] === 'string') out['size'] = row['size'];
-  if (typeof row['patch'] === 'string') out['patch'] = row['patch'];
-  if (typeof row['slackId'] === 'string') out['slackId'] = row['slackId'];
-  if (typeof row['fileCount'] === 'number') out['fileCount'] = row['fileCount'];
-  if (typeof row['totalInsertions'] === 'number') out['totalInsertions'] = row['totalInsertions'];
-  if (typeof row['totalDeletions'] === 'number') out['totalDeletions'] = row['totalDeletions'];
-  if (row['isBreaking'] === 1) out['isBreaking'] = true;
-  if (row['isRevert'] === 1) out['isRevert'] = true;
-  if (row['isRebased'] === 1) out['isRebased'] = true;
-  if (row['isBodyTruncated'] === 1) out['isBodyTruncated'] = true;
-  if (row['isFilesTruncated'] === 1) out['isFilesTruncated'] = true;
-  if (row['isPatchTruncated'] === 1) out['isPatchTruncated'] = true;
-  if (row['isCorrupted'] === 1) out['isCorrupted'] = true;
+const isString = (v: unknown): v is string => typeof v === 'string';
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(isString);
+function isStringRecord(v: unknown): v is Record<string, string> {
+  if (!isRecord(v)) return false;
+  for (const k in v) { if (Object.hasOwn(v, k) && typeof v[k] !== 'string') return false; }
+  return true;
+}
+const isAnyValue = (_v: unknown): _v is unknown => true;
+const isFiniteNumOrStr = (v: unknown): v is number | string => (typeof v === 'number' ? Number.isFinite(v) : typeof v === 'string');
+
+function isFileStatus(v: unknown): v is FileStatus {
+  if (!isRecord(v) || typeof v['status'] !== 'string' || typeof v['file'] !== 'string') return false;
+  if (v['oldFile'] !== undefined && typeof v['oldFile'] !== 'string') return false;
+  if (v['similarityScore'] !== undefined && (typeof v['similarityScore'] !== 'number' || !Number.isInteger(v['similarityScore']))) return false;
+  if (v['insertions'] !== undefined && (typeof v['insertions'] !== 'number' || !Number.isInteger(v['insertions']))) return false;
+  if (v['deletions'] !== undefined && (typeof v['deletions'] !== 'number' || !Number.isInteger(v['deletions']))) return false;
+  if (v['isBinary'] !== undefined && typeof v['isBinary'] !== 'boolean') return false;
+  return v['language'] === undefined || typeof v['language'] === 'string';
 }
 
-function setParsedJsonField(out: Record<string, unknown>, key: string, rawVal: unknown, hash: string): void {
-  if (typeof rawVal === 'string' && rawVal.length > 0) {
-    const parsedJson = safeParseJSON(rawVal, key, hash);
-    if (parsedJson !== undefined) out[key] = parsedJson;
+const isAssociatedIssue = (v: unknown): v is { issue: string; action: string | null } =>
+  isRecord(v) && typeof v['issue'] === 'string' && (v['action'] === null || typeof v['action'] === 'string');
+
+function parseCommitSize(raw: unknown): CommitEntry['size'] | undefined | null {
+  if (raw === null || raw === undefined) return undefined;
+  return raw === 'XS' || raw === 'S' || raw === 'M' || raw === 'L' || raw === 'XL' ? raw : null;
+}
+
+function parseJsonArray<T>(raw: unknown, col: string, hash: string, guard: (v: unknown) => v is T): T[] | undefined | null {
+  const parsed = parseJsonCol(raw, col, hash);
+  if (parsed === undefined) return undefined;
+  if (parsed === PARSE_FAIL || !Array.isArray(parsed) || !parsed.every(guard)) return null;
+  return parsed;
+}
+
+function parseValidatedMetadata(rawMeta: unknown, hash: string): CommitEntry['metadata'] | undefined | null {
+  const parsed = parseJsonCol(rawMeta, 'metadata', hash);
+  if (parsed === undefined) return undefined;
+  if (parsed === PARSE_FAIL || !isRecord(parsed)) return null;
+  const meta: NonNullable<CommitEntry['metadata']> = {};
+  if (parsed['category'] !== undefined) { if (!isStringArray(parsed['category'])) return null; meta.category = parsed['category']; }
+  if (parsed['entry'] !== undefined) { if (!isStringArray(parsed['entry'])) return null; meta.entry = parsed['entry']; }
+  if (parsed['significance'] !== undefined) { if (typeof parsed['significance'] !== 'string') return null; meta.significance = parsed['significance']; }
+  if (parsed['impact'] !== undefined) { if (!isFiniteNumOrStr(parsed['impact'])) return null; meta.impact = parsed['impact']; }
+  if (parsed['trust'] !== undefined) { if (!isFiniteNumOrStr(parsed['trust'])) return null; meta.trust = parsed['trust']; }
+  if (parsed['confidence'] !== undefined) { if (!isFiniteNumOrStr(parsed['confidence'])) return null; meta.confidence = parsed['confidence']; }
+  if (parsed['validation'] !== undefined) { if (typeof parsed['validation'] !== 'string') return null; meta.validation = parsed['validation']; }
+  if (parsed['customTrailers'] !== undefined) {
+    if (!isRecord(parsed['customTrailers'])) return null;
+    const trailers: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(parsed['customTrailers'])) {
+      if (!isStringArray(v)) return null;
+      trailers[k] = v;
+    }
+    meta.customTrailers = trailers;
   }
+  return meta;
 }
 
-function copyJsonColumns(row: Record<string, unknown>, out: Record<string, unknown>, hash: string): void {
-  setParsedJsonField(out, 'parents', row['parents'], hash);
-  setParsedJsonField(out, 'refs', row['refs'], hash);
-  setParsedJsonField(out, 'tags', row['tags'], hash);
-  setParsedJsonField(out, 'files', row['files'], hash);
-  setParsedJsonField(out, 'metadata', row['metadata'], hash);
-  setParsedJsonField(out, 'trailersObj', row['trailersObj'], hash);
-  setParsedJsonField(out, 'references', row['references'], hash);
-  setParsedJsonField(out, 'coAuthors', row['coAuthors'], hash);
-  setParsedJsonField(out, 'reviewers', row['reviewers'], hash);
-  setParsedJsonField(out, 'associatedIssues', row['associatedIssues'], hash);
-  setParsedJsonField(out, 'validationErrors', row['validationErrors'], hash);
+const checkInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
+
+function hydrateScalarFields(row: Record<string, unknown>, entry: CommitEntry): boolean {
+  if (typeof row['email'] === 'string') entry.email = row['email'];
+  if (typeof row['committer'] === 'string') entry.committer = row['committer'];
+  if (typeof row['committerEmail'] === 'string') entry.committerEmail = row['committerEmail'];
+  if (typeof row['committerDate'] === 'string') entry.committerDate = row['committerDate'];
+  if (typeof row['type'] === 'string') entry.type = row['type'];
+  if (typeof row['scope'] === 'string') entry.scope = row['scope'];
+  if (typeof row['breakingChangeDescription'] === 'string') entry.breakingChangeDescription = row['breakingChangeDescription'];
+  if (typeof row['revertedCommit'] === 'string') entry.revertedCommit = row['revertedCommit'];
+  if (typeof row['cleanSubject'] === 'string') entry.cleanSubject = row['cleanSubject'];
+  if (typeof row['body'] === 'string') entry.body = row['body'];
+  if (typeof row['patch'] === 'string') entry.patch = row['patch'];
+  if (typeof row['slackId'] === 'string') entry.slackId = row['slackId'];
+  const sz = parseCommitSize(row['size']);
+  if (sz === null) return false;
+  if (sz !== undefined) entry.size = sz;
+  if (row['fileCount'] !== null && row['fileCount'] !== undefined) { if (!checkInt(row['fileCount'])) return false; entry.fileCount = row['fileCount']; }
+  if (row['totalInsertions'] !== null && row['totalInsertions'] !== undefined) { if (!checkInt(row['totalInsertions'])) return false; entry.totalInsertions = row['totalInsertions']; }
+  if (row['totalDeletions'] !== null && row['totalDeletions'] !== undefined) { if (!checkInt(row['totalDeletions'])) return false; entry.totalDeletions = row['totalDeletions']; }
+  if (row['isBreaking'] === 1) entry.isBreaking = true; if (row['isRevert'] === 1) entry.isRevert = true; if (row['isRebased'] === 1) entry.isRebased = true;
+  if (row['isBodyTruncated'] === 1) entry.isBodyTruncated = true; if (row['isFilesTruncated'] === 1) entry.isFilesTruncated = true; if (row['isPatchTruncated'] === 1) entry.isPatchTruncated = true; if (row['isCorrupted'] === 1) entry.isCorrupted = true;
+  return true;
+}
+
+function hydrateJsonFields(row: Record<string, unknown>, entry: CommitEntry, hash: string): boolean {
+  const parents = parseJsonArray(row['parents'], 'parents', hash, isString);
+  const refs = parseJsonArray(row['refs'], 'refs', hash, isString);
+  const tags = parseJsonArray(row['tags'], 'tags', hash, isString);
+  const files = parseJsonArray(row['files'], 'files', hash, isFileStatus);
+  const metadata = parseValidatedMetadata(row['metadata'], hash);
+  const references = parseJsonArray(row['references'], 'references', hash, isString);
+  const coAuthors = parseJsonArray(row['coAuthors'], 'coAuthors', hash, isString);
+  const reviewers = parseJsonArray(row['reviewers'], 'reviewers', hash, isString);
+  const associatedIssues = parseJsonArray(row['associatedIssues'], 'associatedIssues', hash, isAssociatedIssue);
+  const validationErrors = parseJsonArray(row['validationErrors'], 'validationErrors', hash, isAnyValue);
+  if (parents === null || refs === null || tags === null || files === null || metadata === null ||
+      references === null || coAuthors === null || reviewers === null || associatedIssues === null || validationErrors === null) return false;
+  const rawTrailers = parseJsonCol(row['trailersObj'], 'trailersObj', hash);
+  if (rawTrailers !== undefined) {
+    if (rawTrailers === PARSE_FAIL || !isStringRecord(rawTrailers)) return false;
+    entry.trailersObj = rawTrailers;
+  }
+  if (parents !== undefined) entry.parents = parents; if (refs !== undefined) entry.refs = refs;
+  if (tags !== undefined) entry.tags = tags; if (files !== undefined) entry.files = files;
+  if (metadata !== undefined) entry.metadata = metadata; if (references !== undefined) entry.references = references;
+  if (coAuthors !== undefined) entry.coAuthors = coAuthors; if (reviewers !== undefined) entry.reviewers = reviewers;
+  if (associatedIssues !== undefined) entry.associatedIssues = associatedIssues; if (validationErrors !== undefined) entry.validationErrors = validationErrors;
+  return true;
 }
 
 function hydrateCachedRow(rawRow: unknown): CommitEntry | null {
@@ -164,31 +209,23 @@ function hydrateCachedRow(rawRow: unknown): CommitEntry | null {
     return null;
   }
   const hash = rawRow['commit_hash'];
-  const rawObj: Record<string, unknown> = { commit: hash, author: rawRow['author'], date: rawRow['date'], subject: rawRow['subject'] };
-  copyScalarColumns(rawRow, rawObj);
-  copyJsonColumns(rawRow, rawObj, hash);
-
-  const parsed = entrySchema.safeParse(rawObj);
-  if (!parsed.success) {
+  const entry: CommitEntry = { commit: hash, author: rawRow['author'], date: rawRow['date'], subject: rawRow['subject'] };
+  if (!hydrateScalarFields(rawRow, entry) || !hydrateJsonFields(rawRow, entry, hash)) {
     console.warn(`[lib-git-history] Warning: Failed to parse cached commit ${hash}`);
     return null;
   }
-  return parsed.data;
+  return entry;
 }
 
 const CREATE_COMMITS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS commits (
-    commit_hash TEXT PRIMARY KEY,
-    parents TEXT, refs TEXT, tags TEXT,
-    author TEXT, email TEXT, committer TEXT, committerEmail TEXT, committerDate TEXT,
-    date TEXT, type TEXT, scope TEXT, isBreaking INTEGER, breakingChangeDescription TEXT,
-    isRevert INTEGER, revertedCommit TEXT, isRebased INTEGER,
-    subject TEXT, cleanSubject TEXT, body TEXT, isBodyTruncated INTEGER,
-    size TEXT, files TEXT, fileCount INTEGER, isFilesTruncated INTEGER,
-    totalInsertions INTEGER, totalDeletions INTEGER,
-    metadata TEXT, trailersObj TEXT, patch TEXT, isPatchTruncated INTEGER,
-    "references" TEXT, coAuthors TEXT, reviewers TEXT, associatedIssues TEXT,
-    slackId TEXT, validationErrors TEXT, isCorrupted INTEGER
+    commit_hash TEXT PRIMARY KEY, type TEXT, scope TEXT, isBreaking INTEGER, tags TEXT, metadata TEXT,
+    parents TEXT, refs TEXT, author TEXT, email TEXT, committer TEXT, committerEmail TEXT, committerDate TEXT,
+    date TEXT, breakingChangeDescription TEXT, isRevert INTEGER, revertedCommit TEXT, isRebased INTEGER,
+    subject TEXT, cleanSubject TEXT, isBodyTruncated INTEGER, size TEXT, fileCount INTEGER, isFilesTruncated INTEGER,
+    totalInsertions INTEGER, totalDeletions INTEGER, trailersObj TEXT, isPatchTruncated INTEGER,
+    "references" TEXT, coAuthors TEXT, reviewers TEXT, associatedIssues TEXT, slackId TEXT, validationErrors TEXT,
+    isCorrupted INTEGER, files TEXT, body TEXT, patch TEXT
   ) STRICT
 `;
 
@@ -210,15 +247,14 @@ function initializeSchema(nextDb: Database): void {
   nextDb.exec('BEGIN IMMEDIATE;');
   try {
     if (readUserVersion(nextDb) !== CACHE_SCHEMA_VERSION) {
-      nextDb.exec(CREATE_COMMITS_TABLE_SQL);
-      ensureCacheSchemaColumns(nextDb);
-      nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_author ON commits(author);');
-      nextDb.exec('DROP INDEX IF EXISTS idx_commits_type;');
-      nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_type_scope ON commits(type, scope);');
-      nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_scope ON commits(scope);');
-      nextDb.exec('DROP INDEX IF EXISTS idx_commits_isBreaking;');
-      nextDb.exec('CREATE INDEX IF NOT EXISTS idx_commits_isBreaking_true ON commits(isBreaking) WHERE isBreaking = 1;');
-      nextDb.exec(`PRAGMA user_version = ${CACHE_SCHEMA_VERSION};`);
+      nextDb.exec(`DROP TABLE IF EXISTS commits; ${CREATE_COMMITS_TABLE_SQL};`);
+      nextDb.exec(
+        'CREATE INDEX IF NOT EXISTS idx_commits_author ON commits(author);' +
+        'CREATE INDEX IF NOT EXISTS idx_commits_type_scope ON commits(type, scope);' +
+        'CREATE INDEX IF NOT EXISTS idx_commits_scope ON commits(scope);' +
+        'CREATE INDEX IF NOT EXISTS idx_commits_isBreaking_true ON commits(isBreaking) WHERE isBreaking = 1;' +
+        `PRAGMA user_version = ${CACHE_SCHEMA_VERSION};`,
+      );
     }
     nextDb.exec('COMMIT;');
   } catch (err: unknown) {
@@ -227,39 +263,50 @@ function initializeSchema(nextDb: Database): void {
   }
 }
 
-export function initCache(dbPath?: string): Database {
+export function initCache(dbPath?: string, readonly = false): Database {
   const rawPath = dbPath || join(process.cwd(), '.agents', 'cache', 'git-history.db');
   const isMemory = rawPath === ':memory:';
   const targetPath = isMemory ? ':memory:' : resolve(rawPath);
 
   if (db) {
-    if (targetPath === currentDbPath) return db;
+    if (targetPath === currentDbPath && (!isReadOnly || readonly)) return db;
     closeCache();
   }
-  if (!isMemory) {
+  if (!isMemory && !readonly) {
     try { mkdirSync(dirname(targetPath), { recursive: true }); }
     catch (err: unknown) { if (!isErrnoException(err) || err.code !== 'EEXIST') throw err; }
   }
-  const nextDb = new Database(targetPath);
-  try { initializeSchema(nextDb); }
-  catch (err: unknown) { try { nextDb.close(); } catch { /* ignore */ } throw err; }
+  const nextDb = readonly && !isMemory ? new Database(targetPath, { readonly: true }) : new Database(targetPath);
+  try {
+    if (readonly && !isMemory) {
+      nextDb.exec('PRAGMA busy_timeout = 5000; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -16384;');
+      if (readUserVersion(nextDb) !== CACHE_SCHEMA_VERSION) throw new Error('CacheSchemaVersionMismatch');
+    } else {
+      initializeSchema(nextDb);
+    }
+  } catch (err: unknown) {
+    try { nextDb.close(); } catch { /* ignore */ }
+    throw err;
+  }
   db = nextDb;
   currentDbPath = targetPath;
+  isReadOnly = readonly && !isMemory;
   return nextDb;
 }
 
 export function closeCache(): void {
   if (!db) return;
   const activeDb = db;
+  const optimize = !isReadOnly;
   try {
     if (cachedInsertStmt) { finalizeStatement(cachedInsertStmt); cachedInsertStmt = null; }
     if (cachedPatchUpdateStmt) { finalizeStatement(cachedPatchUpdateStmt); cachedPatchUpdateStmt = null; }
     for (const stmt of stmtCache.values()) finalizeStatement(stmt);
     stmtCache.clear();
-    try { activeDb.exec('PRAGMA optimize;'); } catch { /* ignore */ }
+    if (optimize) { try { activeDb.exec('PRAGMA optimize;'); } catch { /* ignore */ } }
     activeDb.close();
   } finally {
-    db = null; currentDbPath = null;
+    db = null; currentDbPath = null; isReadOnly = false;
     cachedInsertTx = null; cachedInsertTxDb = null; cachedInsertStmt = null;
     cachedPatchUpdateTx = null; cachedPatchUpdateTxDb = null; cachedPatchUpdateStmt = null;
     stmtCache.clear();
@@ -274,54 +321,24 @@ export function hasCachedCommits(): boolean {
 export interface CachedFilterProbe {
   type?: string;
   isBreaking?: boolean;
-  metadata?: {
-    category?: string[];
-    entry?: string[];
-    impact?: number | string;
-    confidence?: number | string;
-  };
-}
-
-function parseFilterMetadata(rawMeta: unknown, hash: string): CachedFilterProbe['metadata'] | null {
-  if (rawMeta === null || rawMeta === undefined || rawMeta === '') return undefined;
-  if (typeof rawMeta !== 'string') return null;
-  const parsed = safeParseJSON(rawMeta, 'metadata', hash);
-  if (!isRecord(parsed)) return null;
-  const meta: NonNullable<CachedFilterProbe['metadata']> = {};
-  if (parsed['category'] !== undefined) {
-    if (!Array.isArray(parsed['category']) || !parsed['category'].every((v): v is string => typeof v === 'string')) return null;
-    meta.category = parsed['category'];
-  }
-  if (parsed['entry'] !== undefined) {
-    if (!Array.isArray(parsed['entry']) || !parsed['entry'].every((v): v is string => typeof v === 'string')) return null;
-    meta.entry = parsed['entry'];
-  }
-  if (parsed['impact'] !== undefined) {
-    if (typeof parsed['impact'] !== 'number' && typeof parsed['impact'] !== 'string') return null;
-    meta.impact = parsed['impact'];
-  }
-  if (parsed['confidence'] !== undefined) {
-    if (typeof parsed['confidence'] !== 'number' && typeof parsed['confidence'] !== 'string') return null;
-    meta.confidence = parsed['confidence'];
-  }
-  return meta;
+  tags?: string[];
+  metadata?: CommitEntry['metadata'];
 }
 
 /**
- * [INTENT]: Lightweight 3-4 column probe for warm-cache TS post-filters; avoids decoding
- * `body`, `files`, `patch`, and full 38-field Zod validation on non-matching rows.
+ * [INTENT]: Lightweight 3-5 column probe for warm-cache TS post-filters; avoids decoding
+ * `body`, `files`, `patch`, and full hydration on non-matching rows.
  */
-export function batchProbeCommitFilters(shas: string[], includeMetadata: boolean): Map<string, CachedFilterProbe> {
+export function batchProbeCommitFilters(shas: string[], includeMetadata: boolean, includeTags = false): Map<string, CachedFilterProbe> {
   if (shas.length === 0) return new Map();
   const currentDb = db || initCache();
-  const cols = includeMetadata ? 'commit_hash, type, isBreaking, metadata' : 'commit_hash, type, isBreaking';
+  const cols = `c.commit_hash, c.type, c.isBreaking${includeMetadata ? ', c.metadata' : ''}${includeTags ? ', c.tags' : ''}`;
   const CHUNK = 500;
   const result = new Map<string, CachedFilterProbe>();
 
   for (let i = 0; i < shas.length; i += CHUNK) {
     const chunk = shas.slice(i, i + CHUNK);
-    const placeholders = '?,'.repeat(chunk.length - 1) + '?';
-    const rows = getOrPrepare(currentDb, `SELECT ${cols} FROM commits WHERE commit_hash IN (${placeholders})`).all(...chunk) as unknown[];
+    const rows = getOrPrepare(currentDb, `SELECT ${cols} FROM commits c JOIN json_each(?) j ON c.commit_hash = j.value`).all(JSON.stringify(chunk)) as unknown[];
     for (const row of rows) {
       if (!isRecord(row) || typeof row['commit_hash'] !== 'string') continue;
       const hash = row['commit_hash'];
@@ -329,8 +346,13 @@ export function batchProbeCommitFilters(shas: string[], includeMetadata: boolean
       const probe: CachedFilterProbe = {};
       if (typeof row['type'] === 'string') probe.type = row['type'];
       if (row['isBreaking'] === 1) probe.isBreaking = true;
+      if (includeTags) {
+        const tags = parseJsonArray(row['tags'], 'tags', hash, isString);
+        if (tags === null) continue;
+        if (tags !== undefined) probe.tags = tags;
+      }
       if (includeMetadata) {
-        const meta = parseFilterMetadata(row['metadata'], hash);
+        const meta = parseValidatedMetadata(row['metadata'], hash);
         if (meta === null) continue;
         if (meta !== undefined) probe.metadata = meta;
       }
@@ -341,7 +363,7 @@ export function batchProbeCommitFilters(shas: string[], includeMetadata: boolean
 }
 
 export function updateCommitPatches(updates: PatchUpdateRow[]): void {
-  if (updates.length === 0) return;
+  if (updates.length === 0 || isReadOnly) return;
   const currentDb = db || initCache();
   if (!cachedPatchUpdateTx || cachedPatchUpdateTxDb !== currentDb) {
     if (cachedPatchUpdateStmt) finalizeStatement(cachedPatchUpdateStmt);
@@ -356,7 +378,7 @@ export function updateCommitPatches(updates: PatchUpdateRow[]): void {
 }
 
 export function insertCommits(batch: CommitEntry[]): void {
-  if (batch.length === 0) return;
+  if (batch.length === 0 || isReadOnly) return;
   const currentDb = db || initCache();
   if (!cachedInsertTx || cachedInsertTxDb !== currentDb) {
     if (cachedInsertStmt) finalizeStatement(cachedInsertStmt);
@@ -365,19 +387,19 @@ export function insertCommits(batch: CommitEntry[]): void {
     cachedInsertTx = currentDb.transaction((commits: CommitEntry[]) => {
       for (const c of commits) {
         insert.run(
-          c.commit, c.parents ? JSON.stringify(c.parents) : null, c.refs ? JSON.stringify(c.refs) : null,
-          c.tags ? JSON.stringify(c.tags) : null, c.author, c.email ?? null,
-          c.committer ?? null, c.committerEmail ?? null, c.committerDate ?? null, c.date,
-          c.type ?? null, c.scope ?? null, c.isBreaking ? 1 : 0, c.breakingChangeDescription ?? null,
-          c.isRevert ? 1 : 0, c.revertedCommit ?? null, c.isRebased ? 1 : 0,
-          c.subject, c.cleanSubject ?? null, c.body ?? null, c.isBodyTruncated ? 1 : 0,
-          c.size ?? null, c.files ? JSON.stringify(c.files) : null, c.fileCount ?? null,
-          c.isFilesTruncated ? 1 : 0, c.totalInsertions ?? null, c.totalDeletions ?? null,
-          c.metadata ? JSON.stringify(c.metadata) : null, c.trailersObj ? JSON.stringify(c.trailersObj) : null,
-          c.patch ?? null, c.isPatchTruncated ? 1 : 0, c.references ? JSON.stringify(c.references) : null,
-          c.coAuthors ? JSON.stringify(c.coAuthors) : null, c.reviewers ? JSON.stringify(c.reviewers) : null,
-          c.associatedIssues ? JSON.stringify(c.associatedIssues) : null, c.slackId ?? null,
-          c.validationErrors ? JSON.stringify(c.validationErrors) : null, c.isCorrupted ? 1 : 0,
+          c.commit, c.type ?? null, c.scope ?? null, c.isBreaking ? 1 : 0,
+          c.tags ? JSON.stringify(c.tags) : null, c.metadata ? JSON.stringify(c.metadata) : null,
+          c.parents ? JSON.stringify(c.parents) : null, c.refs ? JSON.stringify(c.refs) : null,
+          c.author, c.email ?? null, c.committer ?? null, c.committerEmail ?? null, c.committerDate ?? null, c.date,
+          c.breakingChangeDescription ?? null, c.isRevert ? 1 : 0, c.revertedCommit ?? null, c.isRebased ? 1 : 0,
+          c.subject, c.cleanSubject ?? null, c.isBodyTruncated ? 1 : 0,
+          c.size ?? null, c.fileCount ?? null, c.isFilesTruncated ? 1 : 0,
+          c.totalInsertions ?? null, c.totalDeletions ?? null,
+          c.trailersObj ? JSON.stringify(c.trailersObj) : null, c.isPatchTruncated ? 1 : 0,
+          c.references ? JSON.stringify(c.references) : null, c.coAuthors ? JSON.stringify(c.coAuthors) : null,
+          c.reviewers ? JSON.stringify(c.reviewers) : null, c.associatedIssues ? JSON.stringify(c.associatedIssues) : null,
+          c.slackId ?? null, c.validationErrors ? JSON.stringify(c.validationErrors) : null, c.isCorrupted ? 1 : 0,
+          c.files ? JSON.stringify(c.files) : null, c.body ?? null, c.patch ?? null,
         );
       }
     }).immediate;
@@ -390,56 +412,38 @@ export type QueryCommitsFilter = Pick<Partial<CommitEntry>, 'commit' | 'author' 
 
 export function queryCommits(filters: QueryCommitsFilter = {}): CommitEntry[] {
   const currentDb = db || initCache();
-  let query = 'SELECT * FROM commits';
   const conditions: string[] = [];
   const params: Record<string, string | number> = {};
-
   if (filters.commit) { conditions.push('commit_hash = $commit'); params.$commit = filters.commit; }
   if (filters.author) { conditions.push('author = $author'); params.$author = filters.author; }
   if (filters.type) { conditions.push('type = $type'); params.$type = filters.type; }
   if (filters.scope) { conditions.push('scope = $scope'); params.$scope = filters.scope; }
-  if (typeof filters.isBreaking === 'boolean') {
-    // [INTENT]: Literal `= 1` enables SQLite to match the partial index `idx_commits_isBreaking_true`.
-    conditions.push(filters.isBreaking ? 'isBreaking = 1' : 'isBreaking = 0');
-  }
-  if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-
-  const rows = getOrPrepare(currentDb, query).all(params) as unknown[];
+  // [INTENT]: Literal `= 1` enables SQLite to match the partial index `idx_commits_isBreaking_true`.
+  if (typeof filters.isBreaking === 'boolean') conditions.push(filters.isBreaking ? 'isBreaking = 1' : 'isBreaking = 0');
+  const query = conditions.length > 0 ? `SELECT * FROM commits WHERE ${conditions.join(' AND ')}` : 'SELECT * FROM commits';
   const results: CommitEntry[] = [];
-  for (const row of rows) {
+  for (const row of getOrPrepare(currentDb, query).all(params) as unknown[]) {
     const hydrated = hydrateCachedRow(row);
     if (hydrated !== null) results.push(hydrated);
   }
   return results;
 }
 
-/**
- * Batch-query commits by SHA list, replacing the N+1 per-commit lookup pattern.
- * Returns a Map keyed by commit SHA for O(1) caller lookup.
- */
+/** Batch-query commits by SHA list via `JOIN json_each(?)`, reusing 1 prepared statement per projection. */
 export function batchQueryCommits(shas: string[], projection: CacheProjection = 'full'): Map<string, CommitEntry> {
   if (shas.length === 0) return new Map();
   const currentDb = db || initCache();
-
-  // Keep IN-clause binds <= 500 and use positional `?` placeholders so prepared statements
-  // are reused across chunks regardless of outer offset `i`.
   const CHUNK = 500;
   const cols = CACHE_PROJECTION_COLUMNS[projection];
   const result = new Map<string, CommitEntry>();
-
   for (let i = 0; i < shas.length; i += CHUNK) {
     const chunk = shas.slice(i, i + CHUNK);
-    const placeholders = '?,'.repeat(chunk.length - 1) + '?';
-    const query = `SELECT ${cols} FROM commits WHERE commit_hash IN (${placeholders})`;
-
-    const stmt = getOrPrepare(currentDb, query);
-    const rows = stmt.all(...chunk) as unknown[];
+    const rows = getOrPrepare(currentDb, `SELECT ${cols} FROM commits c JOIN json_each(?) j ON c.commit_hash = j.value`).all(JSON.stringify(chunk)) as unknown[];
     for (const row of rows) {
       if (isRecord(row) && typeof row['commit_hash'] === 'string' && result.has(row['commit_hash'])) continue;
       const hydrated = hydrateCachedRow(row);
       if (hydrated !== null) result.set(hydrated.commit, hydrated);
     }
   }
-
   return result;
 }

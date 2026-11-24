@@ -1,14 +1,14 @@
 // @ts-nocheck
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { z } from 'zod';
-import type { entrySchema, FileStatus } from './schema.js';
+import type { CommitEntry, FileStatus } from './schema.js';
 import type { CliArgs } from './cli.js';
-import { DEFAULT_MAX_PATCH_LEN, GIT_CMD_MAX_BUFFER, GIT_TIMEOUT_MS } from './constants.js';
-import { wantsPatchOutput } from './git-patch.js';
-import { flattenString, getLanguage, truncateSafely } from './parser-utils.js';
+import {
+  DEFAULT_MAX_PATCH_LEN, GIT_CMD_MAX_BUFFER, GIT_TIMEOUT_MS,
+  flattenString, getLanguage, truncateSafely, wantsPatchOutput,
+} from './constants.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_UNTRACKED_STAT_BYTES = 5 * 1024 * 1024;
@@ -19,24 +19,13 @@ const SYNC_SCRATCH_BUFFER = Buffer.allocUnsafe(STREAM_READ_CHUNK_BYTES);
 const UNBORN_HEAD_REGEX = /unknown revision|ambiguous argument 'HEAD'|bad revision 'HEAD'|needed a single revision/i;
 const NEWLINE_SPLIT_REGEX = /\r?\n/;
 
-function isErrnoException(err: unknown): err is NodeJS.ErrnoException {
-  return err instanceof Error && 'code' in err;
-}
-
 function formatGitStatusFailure(err: unknown, status?: number | null, stderr?: string): Error {
-  if (isErrnoException(err) && err.code === 'ENOENT') {
-    return new Error(
-      JSON.stringify({
-        error: 'GitExecutableNotFound',
-        message: 'The git binary is missing from the environment PATH.',
-      }),
-      { cause: err },
-    );
+  if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
+    return new Error(JSON.stringify({ error: 'GitExecutableNotFound', message: 'The git binary is missing from the environment PATH.' }), { cause: err });
   }
   if (err instanceof Error) {
     const stderrProp = 'stderr' in err && typeof err.stderr === 'string' ? err.stderr.trim() : '';
-    const detail = stderrProp || err.message;
-    return new Error(`Git status failed: ${detail}`, { cause: err });
+    return new Error(`Git status failed: ${stderrProp || err.message}`, { cause: err });
   }
   const detail = stderr?.trim() || (err !== undefined && err !== null ? String(err) : 'unknown error');
   return new Error(`Git status failed with code ${status ?? 'unknown'}: ${detail}`);
@@ -55,11 +44,13 @@ function extractSettledRejectionText(reason: unknown): string {
 }
 
 function countNewlinesInSlice(buf: Buffer, len: number): number {
+  if (len <= 0) return 0;
+  const view = len < buf.length ? buf.subarray(0, len) : buf;
   let newlines = 0;
   let pos = 0;
   while (pos < len) {
-    const next = buf.indexOf(0x0a, pos);
-    if (next === -1 || next >= len) break;
+    const next = view.indexOf(0x0a, pos);
+    if (next === -1) break;
     newlines++;
     pos = next + 1;
   }
@@ -107,7 +98,7 @@ function countUntrackedLines(resolvedCwd: string, relFile: string): number {
   }
 }
 
-async function countUntrackedLinesAsync(resolvedCwd: string, relFile: string): Promise<number> {
+async function countUntrackedLinesAsync(resolvedCwd: string, relFile: string, sharedBuf?: Buffer): Promise<number> {
   try {
     const fullPath = resolveContainedPath(resolvedCwd, relFile);
     if (fullPath === null) return 0;
@@ -117,8 +108,9 @@ async function countUntrackedLinesAsync(resolvedCwd: string, relFile: string): P
     const openFlags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0);
     const handle = await fs.promises.open(fullPath, openFlags);
     try {
-      const buf = Buffer.allocUnsafe(Math.min(stat.size, STREAM_READ_CHUNK_BYTES));
-      const first = await handle.read(buf, 0, buf.length, 0);
+      const buf = sharedBuf ?? Buffer.allocUnsafe(Math.min(stat.size, STREAM_READ_CHUNK_BYTES));
+      const readCap = Math.min(buf.length, stat.size);
+      const first = await handle.read(buf, 0, readCap, 0);
       if (first.bytesRead <= 0) return 0;
       if (buf.subarray(0, Math.min(first.bytesRead, BINARY_PEEK_BYTES)).includes(0)) return 0;
 
@@ -205,139 +197,112 @@ function parseStatusEntries(nameStatus: string): ParsedStatusEntry[] {
     const xy = statusLine.slice(0, 2);
     const file = statusLine.slice(3);
     let oldFile: string | undefined;
-    if (xy[0] === 'R' || xy[0] === 'C' || xy[1] === 'R' || xy[1] === 'C') {
-      i++;
-      oldFile = parts[i];
-    }
+    if (xy[0] === 'R' || xy[0] === 'C' || xy[1] === 'R' || xy[1] === 'C') { i++; oldFile = parts[i]; }
     const isUntracked = xy === '??';
-    let mappedStatus = xy;
-    if (isUntracked) mappedStatus = 'U';
-    else if (xy[0] !== ' ' && xy[0] !== '?') mappedStatus = xy[0] ?? xy;
-    else if (xy[1] !== ' ') mappedStatus = xy[1] ?? xy;
+    const mappedStatus = isUntracked ? 'U' : (xy[0] !== ' ' && xy[0] !== '?') ? (xy[0] ?? xy) : (xy[1] !== ' ' ? (xy[1] ?? xy) : xy);
     entries.push(oldFile ? { mappedStatus, isUntracked, file, oldFile } : { mappedStatus, isUntracked, file });
   }
   return entries;
 }
 
+type UncommittedFilesResult = { files: FileStatus[]; fileCount: number; totalInsertions: number; totalDeletions: number };
+
 function buildFilesFromEntries(
-  entries: ParsedStatusEntry[],
-  numstatsMap: Map<string, UncommittedNumstat>,
-  untrackedCounts: Map<string, number>,
-): { files: FileStatus[]; totalInsertions: number; totalDeletions: number } {
+  entries: ParsedStatusEntry[], numstatsMap: Map<string, UncommittedNumstat>, untrackedCounts: Map<string, number>, omitFiles = false,
+): UncommittedFilesResult {
   const files: FileStatus[] = [];
   let totalInsertions = 0;
   let totalDeletions = 0;
   for (const { mappedStatus, isUntracked, file, oldFile } of entries) {
-    const stats = numstatsMap.get(file) ?? {
-      insertions: isUntracked ? (untrackedCounts.get(file) ?? 0) : 0,
-      deletions: 0,
-    };
+    const stats = numstatsMap.get(file) ?? { insertions: isUntracked ? (untrackedCounts.get(file) ?? 0) : 0, deletions: 0 };
+    totalInsertions += stats.insertions;
+    totalDeletions += stats.deletions;
+    if (omitFiles) continue;
     const flatFile = flattenString(file);
     const lang = getLanguage(flatFile);
-    const item: FileStatus = {
-      status: flattenString(mappedStatus),
-      file: flatFile,
-      insertions: stats.insertions,
-      deletions: stats.deletions,
-    };
+    const item: FileStatus = { status: flattenString(mappedStatus), file: flatFile, insertions: stats.insertions, deletions: stats.deletions };
     if (oldFile) item.oldFile = flattenString(oldFile);
     if (lang) item.language = lang;
     if (stats.isBinary) item.isBinary = true;
     files.push(item);
-    totalInsertions += stats.insertions;
-    totalDeletions += stats.deletions;
   }
-  return { files, totalInsertions, totalDeletions };
+  return { files, fileCount: entries.length, totalInsertions, totalDeletions };
 }
 
 function parseUncommittedFiles(
-  cwd: string,
-  nameStatus: string,
-  numstatsMap: Map<string, UncommittedNumstat>,
-): { files: FileStatus[]; totalInsertions: number; totalDeletions: number } {
+  cwd: string, nameStatus: string, numstatsMap: Map<string, UncommittedNumstat>, omitFiles = false,
+): UncommittedFilesResult {
   const entries = parseStatusEntries(nameStatus);
-  if (entries.length === 0) return { files: [], totalInsertions: 0, totalDeletions: 0 };
+  if (entries.length === 0) return { files: [], fileCount: 0, totalInsertions: 0, totalDeletions: 0 };
   const resolvedCwd = path.resolve(cwd);
   const untrackedCounts = new Map<string, number>();
   for (const e of entries) {
-    if (e.isUntracked && !numstatsMap.has(e.file)) {
-      untrackedCounts.set(e.file, countUntrackedLines(resolvedCwd, e.file));
-    }
+    if (e.isUntracked && !numstatsMap.has(e.file)) untrackedCounts.set(e.file, countUntrackedLines(resolvedCwd, e.file));
   }
-  return buildFilesFromEntries(entries, numstatsMap, untrackedCounts);
+  return buildFilesFromEntries(entries, numstatsMap, untrackedCounts, omitFiles);
 }
 
 async function parseUncommittedFilesAsync(
-  cwd: string,
-  nameStatus: string,
-  numstatsMap: Map<string, UncommittedNumstat>,
-): Promise<{ files: FileStatus[]; totalInsertions: number; totalDeletions: number }> {
+  cwd: string, nameStatus: string, numstatsMap: Map<string, UncommittedNumstat>, omitFiles = false,
+): Promise<UncommittedFilesResult> {
   const entries = parseStatusEntries(nameStatus);
-  if (entries.length === 0) return { files: [], totalInsertions: 0, totalDeletions: 0 };
+  if (entries.length === 0) return { files: [], fileCount: 0, totalInsertions: 0, totalDeletions: 0 };
   const resolvedCwd = path.resolve(cwd);
   const untrackedFiles: string[] = [];
   for (const e of entries) {
     if (e.isUntracked && !numstatsMap.has(e.file)) untrackedFiles.push(e.file);
   }
   const untrackedCounts = new Map<string, number>();
-  for (let i = 0; i < untrackedFiles.length; i += UNTRACKED_ASYNC_CONCURRENCY) {
-    const chunk = untrackedFiles.slice(i, i + UNTRACKED_ASYNC_CONCURRENCY);
-    const settled = await Promise.allSettled(chunk.map((f) => countUntrackedLinesAsync(resolvedCwd, f)));
-    for (let j = 0; j < chunk.length; j++) {
-      const outcome = settled[j];
-      untrackedCounts.set(chunk[j], outcome && outcome.status === 'fulfilled' ? outcome.value : 0);
-    }
+  if (untrackedFiles.length > 0) {
+    let nextIdx = 0;
+    const workerCount = Math.min(UNTRACKED_ASYNC_CONCURRENCY, untrackedFiles.length);
+    await Promise.allSettled(Array.from({ length: workerCount }, async () => {
+      const buf = Buffer.allocUnsafe(STREAM_READ_CHUNK_BYTES);
+      while (nextIdx < untrackedFiles.length) {
+        const file = untrackedFiles[nextIdx++];
+        if (file !== undefined) untrackedCounts.set(file, await countUntrackedLinesAsync(resolvedCwd, file, buf));
+      }
+    }));
   }
-  return buildFilesFromEntries(entries, numstatsMap, untrackedCounts);
+  return buildFilesFromEntries(entries, numstatsMap, untrackedCounts, omitFiles);
 }
 
+function resolveMaxPatchLen(args: CliArgs): number {
+  const parsedMax = args['max-patch-length'];
+  return parsedMax !== undefined && !Number.isNaN(parsedMax) && parsedMax >= 0 ? parsedMax : DEFAULT_MAX_PATCH_LEN;
+}
+
+interface BoundedDiffResult { patch: string; capped: boolean; }
+
 function applyUncommittedPatchBounds(
-  rawPatch: string | undefined,
-  args: CliArgs,
+  rawPatch: string | undefined, maxPatchLen: number, forceTruncated = false,
 ): { patch?: string; isPatchTruncated?: boolean } {
   if (!rawPatch) return {};
-  const parsedMax = args['max-patch-length'];
-  const maxPatchLen =
-    parsedMax !== undefined && !Number.isNaN(parsedMax) && parsedMax >= 0
-      ? parsedMax
-      : DEFAULT_MAX_PATCH_LEN;
   if (rawPatch.length > maxPatchLen) {
-    return {
-      patch: truncateSafely(rawPatch, maxPatchLen, '\n...[patch truncated due to length]'),
-      isPatchTruncated: true,
-    };
+    return { patch: flattenString(truncateSafely(rawPatch, maxPatchLen, '\n...[patch truncated due to length]')), isPatchTruncated: true };
   }
+  if (forceTruncated) return { patch: `${rawPatch}\n...[patch truncated due to length]`, isPatchTruncated: true };
   return { patch: rawPatch };
 }
 
 function finalizeUncommittedEntry(
-  filesResult: { files: FileStatus[]; totalInsertions: number; totalDeletions: number },
-  patch: string | undefined,
-  userConfigRaw: string,
-  args: CliArgs,
-): z.infer<typeof entrySchema> {
+  filesResult: UncommittedFilesResult, patch: string | undefined, userConfigRaw: string, maxPatchLen: number, forceTruncated = false,
+): CommitEntry {
   const { author, email } = parseGitUserConfig(userConfigRaw);
-  const { patch: boundedPatch, isPatchTruncated } = applyUncommittedPatchBounds(patch, args);
+  const { patch: boundedPatch, isPatchTruncated } = applyUncommittedPatchBounds(patch, maxPatchLen, forceTruncated);
   return {
-    commit: 'UNCOMMITTED',
-    author: flattenString(author),
-    email: flattenString(email),
-    date: new Date().toISOString(),
-    subject: 'Uncommitted Changes',
-    cleanSubject: 'Uncommitted Changes',
+    commit: 'UNCOMMITTED', author: flattenString(author), email: flattenString(email),
+    date: new Date().toISOString(), subject: 'Uncommitted Changes', cleanSubject: 'Uncommitted Changes',
     ...(filesResult.files.length > 0 ? { files: filesResult.files } : {}),
-    fileCount: filesResult.files.length,
-    totalInsertions: filesResult.totalInsertions,
-    totalDeletions: filesResult.totalDeletions,
+    fileCount: filesResult.fileCount, totalInsertions: filesResult.totalInsertions, totalDeletions: filesResult.totalDeletions,
     ...(boundedPatch !== undefined ? { patch: boundedPatch } : {}),
     ...(isPatchTruncated ? { isPatchTruncated: true } : {}),
   };
 }
 
 function runSyncDiffWithUnbornFallback(
-  headArgs: string[],
-  cachedArgs: string[],
-  execOpts: { cwd: string; encoding: 'utf-8'; maxBuffer: number; timeout: number; windowsHide: true },
+  headArgs: string[], cachedArgs: string[],
+  execOpts: { cwd: string; encoding: 'utf-8'; stdio: ('ignore' | 'pipe')[]; maxBuffer: number; timeout: number; windowsHide: true },
 ): string | undefined {
   const res = spawnSync('git', headArgs, execOpts);
   if (!res.error && res.status === 0) return res.stdout;
@@ -353,89 +318,122 @@ function runSyncDiffWithUnbornFallback(
   return undefined;
 }
 
-export function getUncommittedState(args: CliArgs, cwd: string = process.cwd()): z.infer<typeof entrySchema> {
-  const execOpts = { cwd, encoding: 'utf-8' as const, maxBuffer: GIT_CMD_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true as const };
+export function getUncommittedState(args: CliArgs, cwd: string = process.cwd()): CommitEntry {
+  const execOpts = { cwd, encoding: 'utf-8' as const, stdio: ['ignore', 'pipe', 'pipe'] as ('ignore' | 'pipe')[], maxBuffer: GIT_CMD_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true as const };
   const pathFilter = args.path ? ['--', args.path] : [];
   const untrackedFlag = args['no-body'] ? '-uno' : '-uall';
-
   const statusRes = spawnSync('git', ['--no-optional-locks', '--no-pager', 'status', '-z', '--porcelain', untrackedFlag, ...pathFilter], execOpts);
   if (statusRes.error || statusRes.status !== 0) {
     throw formatGitStatusFailure(statusRes.error, statusRes.status, typeof statusRes.stderr === 'string' ? statusRes.stderr : '');
   }
   const nameStatus = statusRes.stdout;
   const skipDiffs = Boolean(args['no-body']) || nameStatus === '';
-
-  const numstat = skipDiffs
-    ? ''
-    : (runSyncDiffWithUnbornFallback(
-        ['--no-optional-locks', '--no-pager', 'diff', '--numstat', '-z', 'HEAD', ...pathFilter],
-        ['--no-optional-locks', '--no-pager', 'diff', '--cached', '--numstat', '-z', ...pathFilter],
-        execOpts,
-      ) ?? '');
-
+  const numstat = skipDiffs ? '' : (runSyncDiffWithUnbornFallback(
+    ['--no-optional-locks', '--no-pager', 'diff', '--numstat', '-z', 'HEAD', ...pathFilter],
+    ['--no-optional-locks', '--no-pager', 'diff', '--cached', '--numstat', '-z', ...pathFilter], execOpts) ?? '');
   const wantPatch = !skipDiffs && wantsPatchOutput(args);
-  const diffContextArg = args['diff-context'] !== undefined ? [`-U${args['diff-context']}`] : [];
-  const patch = wantPatch
-    ? runSyncDiffWithUnbornFallback(
-        ['--no-optional-locks', '--no-pager', 'diff', ...diffContextArg, 'HEAD', ...pathFilter],
-        ['--no-optional-locks', '--no-pager', 'diff', '--cached', ...diffContextArg, ...pathFilter],
-        execOpts,
-      )
-    : undefined;
-
+  const diffCtx = args['diff-context'] !== undefined ? [`-U${args['diff-context']}`] : [];
+  const patch = wantPatch ? runSyncDiffWithUnbornFallback(
+    ['--no-optional-locks', '--no-pager', 'diff', ...diffCtx, 'HEAD', ...pathFilter],
+    ['--no-optional-locks', '--no-pager', 'diff', '--cached', ...diffCtx, ...pathFilter], execOpts) : undefined;
   let userConfigRaw = '';
   try {
-    const res = spawnSync('git', ['config', '--get-regexp', '^user\\.(name|email)$'], execOpts);
+    const res = spawnSync('git', ['--no-pager', 'config', '--get-regexp', '^user\\.(name|email)$'], execOpts);
     if (!res.error && res.status === 0) userConfigRaw = res.stdout;
   } catch { /* ignore missing git user config */ }
-
   const filesResult = args['no-body']
-    ? { files: [], totalInsertions: 0, totalDeletions: 0 }
-    : parseUncommittedFiles(cwd, nameStatus, parseUncommittedNumstat(numstat));
-  return finalizeUncommittedEntry(filesResult, patch, userConfigRaw, args);
+    ? { files: [], fileCount: 0, totalInsertions: 0, totalDeletions: 0 }
+    : parseUncommittedFiles(cwd, nameStatus, parseUncommittedNumstat(numstat), Boolean(args.summary));
+  return finalizeUncommittedEntry(filesResult, patch, userConfigRaw, resolveMaxPatchLen(args));
 }
 
-/**
- * [INTENT]: Concurrent async variant of `getUncommittedState` used by the CLI to eliminate
- * sequential Windows `git.exe` spawn waterfalls via `Promise.allSettled`.
- */
-export async function getUncommittedStateAsync(args: CliArgs, cwd: string = process.cwd()): Promise<z.infer<typeof entrySchema>> {
+function runGitDiffBoundedAsync(gitArgs: string[], cwd: string, maxPatchLen: number): Promise<BoundedDiffResult> {
+  const maxBytes = Math.min(GIT_CMD_MAX_BUFFER, maxPatchLen * 3 + 256);
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', gitArgs, { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const chunks: Buffer[] = [];
+    let totalBytes = 0, errText = '', capped = false, timedOut = false, settled = false;
+    let stderrEnded = child.stderr === null || child.stderr === undefined;
+    let resolveStderr: (() => void) | undefined;
+    const stderrSettled = new Promise<void>((r) => { if (stderrEnded) r(); else resolveStderr = r; });
+    const finishStderr = () => { if (!stderrEnded) { stderrEnded = true; resolveStderr?.(); } };
+    const killChild = () => { try { child.kill('SIGKILL'); } catch { /* ignore */ } };
+    const timer = setTimeout(() => { timedOut = true; killChild(); }, GIT_TIMEOUT_MS);
+    timer.unref();
+    const finish = (err: Error | null, res?: BoundedDiffResult) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(res ?? { patch: '', capped: false });
+    };
+    child.stdout?.on('data', (chunk: Buffer) => {
+      if (capped) return;
+      const rem = maxBytes - totalBytes;
+      if (chunk.length >= rem) {
+        chunks.push(chunk.length === rem ? chunk : chunk.subarray(0, rem));
+        totalBytes += rem; capped = true; clearTimeout(timer); child.stdout?.destroy(); killChild(); return;
+      }
+      chunks.push(chunk); totalBytes += chunk.length;
+    });
+    child.stderr?.on('data', (c: Buffer) => { if (errText.length < 4096) errText += c.toString('utf-8'); });
+    child.stderr?.once('end', finishStderr).once('close', finishStderr).once('error', finishStderr);
+    child.on('error', (err) => finish(err));
+    child.on('close', (code) => {
+      if (!capped && timedOut) { finish(new Error(`git diff timed out after ${GIT_TIMEOUT_MS}ms`)); return; }
+      if (!capped && code !== 0) {
+        if (stderrEnded) {
+          finish(Object.assign(new Error(errText.trim() || `git diff exited ${code ?? 'unknown'}`), { stderr: errText }));
+          return;
+        }
+        let dt: ReturnType<typeof setTimeout> | undefined;
+        const cap = new Promise<void>((r) => { dt = setTimeout(r, 2000); dt.unref(); });
+        void Promise.race([stderrSettled, cap]).finally(() => { if (dt !== undefined) clearTimeout(dt); })
+          .then(() => finish(Object.assign(new Error(errText.trim() || `git diff exited ${code ?? 'unknown'}`), { stderr: errText })));
+        return;
+      }
+      const firstChunk = chunks.length === 1 ? chunks[0] : undefined;
+      const patch = chunks.length === 0 ? '' : firstChunk !== undefined ? firstChunk.toString('utf-8') : Buffer.concat(chunks, totalBytes).toString('utf-8');
+      finish(null, { patch, capped });
+    });
+  });
+}
+
+/** [INTENT]: Concurrent async `getUncommittedState` avoiding Windows `git.exe` spawn waterfalls via `Promise.allSettled`. */
+export async function getUncommittedStateAsync(args: CliArgs, cwd: string = process.cwd()): Promise<CommitEntry> {
   const execOpts = { cwd, encoding: 'utf-8' as const, maxBuffer: GIT_CMD_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true };
   const pathFilter = args.path ? ['--', args.path] : [];
   const skipDiffs = Boolean(args['no-body']);
   const untrackedFlag = skipDiffs ? '-uno' : '-uall';
   const wantPatch = !skipDiffs && wantsPatchOutput(args);
-  const diffContextArg = args['diff-context'] !== undefined ? [`-U${args['diff-context']}`] : [];
-
-  const runGit = (gitArgs: string[]): Promise<string> =>
-    execFileAsync('git', gitArgs, execOpts).then(r => r.stdout);
+  const diffCtx = args['diff-context'] !== undefined ? [`-U${args['diff-context']}`] : [];
+  const maxPatchLen = resolveMaxPatchLen(args);
+  const runGit = (gitArgs: string[]): Promise<string> => execFileAsync('git', gitArgs, execOpts).then(r => r.stdout);
 
   const [statusRes, numstatRes, patchRes, configRes] = await Promise.allSettled([
     runGit(['--no-optional-locks', '--no-pager', 'status', '-z', '--porcelain', untrackedFlag, ...pathFilter]),
     skipDiffs ? Promise.resolve('') : runGit(['--no-optional-locks', '--no-pager', 'diff', '--numstat', '-z', 'HEAD', ...pathFilter]),
-    wantPatch ? runGit(['--no-optional-locks', '--no-pager', 'diff', ...diffContextArg, 'HEAD', ...pathFilter]) : Promise.resolve<string | undefined>(undefined),
-    runGit(['config', '--get-regexp', '^user\\.(name|email)$']),
+    wantPatch ? runGitDiffBoundedAsync(['--no-optional-locks', '--no-pager', 'diff', ...diffCtx, 'HEAD', ...pathFilter], cwd, maxPatchLen) : Promise.resolve<BoundedDiffResult | undefined>(undefined),
+    runGit(['--no-pager', 'config', '--get-regexp', '^user\\.(name|email)$']),
   ]);
   if (statusRes.status === 'rejected') throw formatGitStatusFailure(statusRes.reason);
 
-  const warnDiff = (op: string, r: unknown): void =>
-    console.warn(`[lib-git-history] Warning: ${op} failed: ${extractSettledRejectionText(r).trim()}`);
+  const warnDiff = (op: string, r: unknown): void => console.warn(`[lib-git-history] Warning: ${op} failed: ${extractSettledRejectionText(r).trim()}`);
   const needsNumstatFallback = !skipDiffs && numstatRes.status === 'rejected' && isUnbornHeadError(extractSettledRejectionText(numstatRes.reason));
   const needsPatchFallback = wantPatch && patchRes.status === 'rejected' && isUnbornHeadError(extractSettledRejectionText(patchRes.reason));
   let numstat = numstatRes.status === 'fulfilled' ? numstatRes.value : '';
-  let patch = patchRes.status === 'fulfilled' ? patchRes.value : undefined;
+  let patchResult = patchRes.status === 'fulfilled' ? patchRes.value : undefined;
 
   if (needsNumstatFallback || needsPatchFallback) {
     const [cachedNumstat, cachedPatch] = await Promise.allSettled([
       needsNumstatFallback ? runGit(['--no-optional-locks', '--no-pager', 'diff', '--cached', '--numstat', '-z', ...pathFilter]) : Promise.resolve(numstat),
-      needsPatchFallback ? runGit(['--no-optional-locks', '--no-pager', 'diff', '--cached', ...diffContextArg, ...pathFilter]) : Promise.resolve(patch),
+      needsPatchFallback ? runGitDiffBoundedAsync(['--no-optional-locks', '--no-pager', 'diff', '--cached', ...diffCtx, ...pathFilter], cwd, maxPatchLen) : Promise.resolve(patchResult),
     ]);
     if (needsNumstatFallback) {
       if (cachedNumstat.status === 'fulfilled') numstat = cachedNumstat.value;
       else warnDiff('git diff --cached --numstat', cachedNumstat.reason);
     }
     if (needsPatchFallback) {
-      if (cachedPatch.status === 'fulfilled') patch = cachedPatch.value;
+      if (cachedPatch.status === 'fulfilled') patchResult = cachedPatch.value;
       else warnDiff('git diff --cached patch', cachedPatch.reason);
     }
   }
@@ -444,7 +442,7 @@ export async function getUncommittedStateAsync(args: CliArgs, cwd: string = proc
 
   const userConfigRaw = configRes.status === 'fulfilled' ? configRes.value : '';
   const filesResult = skipDiffs
-    ? { files: [], totalInsertions: 0, totalDeletions: 0 }
-    : await parseUncommittedFilesAsync(cwd, statusRes.value, parseUncommittedNumstat(numstat));
-  return finalizeUncommittedEntry(filesResult, patch, userConfigRaw, args);
+    ? { files: [], fileCount: 0, totalInsertions: 0, totalDeletions: 0 }
+    : await parseUncommittedFilesAsync(cwd, statusRes.value, parseUncommittedNumstat(numstat), Boolean(args.summary));
+  return finalizeUncommittedEntry(filesResult, patchResult?.patch, userConfigRaw, maxPatchLen, Boolean(patchResult?.capped));
 }
