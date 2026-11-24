@@ -11,14 +11,26 @@ import {
     workspacesForProject,
 } from '../../utils/write-scope.js'
 import { findCanonicalRegistryKey, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
-import type { updateEntryOptionsSchema } from '../schemas.js'
+import { updateEntryOptionsSchema } from '../schemas.js'
+import { isRecord } from '../../utils/type-guards.js'
 import { CliExitError } from './db-core.js'
 import type { EntryPayload } from './entry-payload.js'
+import { extractLooseCliOptions } from './entry-payload-helpers.js'
 
 export type UpdateEntryCliOptions = z.infer<typeof updateEntryOptionsSchema> & {
-    tag?: string
-    contentFile?: string
-    body?: string
+    tag?: string | undefined
+    contentFile?: string | undefined
+    body?: string | undefined
+}
+
+export function extractUpdateEntryCliOptions(raw: unknown): UpdateEntryCliOptions {
+    const out: UpdateEntryCliOptions = { ...extractLooseCliOptions(updateEntryOptionsSchema, raw) }
+    if (isRecord(raw)) {
+        if (typeof raw['tag'] === 'string') out.tag = raw['tag']
+        if (typeof raw['contentFile'] === 'string') out.contentFile = raw['contentFile']
+        if (typeof raw['body'] === 'string') out.body = raw['body']
+    }
+    return out
 }
 
 export interface ValidatedCliUpdateArgs {

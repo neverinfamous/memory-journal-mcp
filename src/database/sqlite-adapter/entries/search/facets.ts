@@ -188,12 +188,8 @@ function executeMaterializedFtsFacetQuery(
         ORDER BY kind ASC, cnt DESC, name ASC
     `
     const rows = db
-        .prepare(sql)
-        .all(...filterTagsParams, ...baseParams, ...tagFilterParams, ...typeFilterParams) as {
-        kind: string
-        name: string
-        cnt: number
-    }[]
+        .prepare<unknown[], { kind: string; name: string; cnt: number }>(sql)
+        .all(...filterTagsParams, ...baseParams, ...tagFilterParams, ...typeFilterParams)
     const tagsRows: { name: string; cnt: number }[] = []
     const entryTypesRows: { name: string; cnt: number }[] = []
     for (const row of rows) {
@@ -271,11 +267,12 @@ function executeFacetCountQueries(
                 ${entryTypesWhere}
                 GROUP BY e.entry_type ORDER BY cnt DESC, e.entry_type ASC
             `
-            tagsRows = db.prepare(tagsSql).all(params) as { name: string; cnt: number }[]
-            entryTypesRows = db.prepare(entryTypesSql).all(entryTypeParams) as {
-                name: string
-                cnt: number
-            }[]
+            tagsRows = db
+                .prepare<unknown[], { name: string; cnt: number }>(tagsSql)
+                .all(params)
+            entryTypesRows = db
+                .prepare<unknown[], { name: string; cnt: number }>(entryTypesSql)
+                .all(entryTypeParams)
         }
     } catch (err) {
         if (useFts && isFts5QueryError(err)) {

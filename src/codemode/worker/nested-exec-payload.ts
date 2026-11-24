@@ -4,7 +4,9 @@
  */
 
 import * as vm from 'node:vm'
+import { createNullProtoRecord, isRecord } from '../../utils/type-guards.js'
 import type { SandboxResult } from '../types.js'
+import { isCallable, isObjectOrFunction } from './result-proxy-aliases.js'
 import { serializeAndEnforceEgress } from './result-compactor.js'
 import {
     appendOptionalQuerySearchFields,
@@ -70,14 +72,14 @@ const DANGEROUS_NESTED_QUERY_TOKEN_RE =
 export function readNestedQuerySearch(
     arg: unknown
 ): ({ query: string; workspace_id?: string; project_number?: number; limit?: unknown } & Record<string, unknown>) | undefined {
-    if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return undefined
+    if (!isRecord(arg)) return undefined
     if (hasNestedDiscriminator(arg)) return undefined
-    const codeProp = Reflect.get(arg, 'code') as unknown
-    const scriptProp = Reflect.get(arg, 'script') as unknown
+    const codeProp = arg['code']
+    const scriptProp = arg['script']
     if ((typeof codeProp === 'string' && codeProp.trim() !== '') || (typeof scriptProp === 'string' && scriptProp.trim() !== '')) {
         return undefined
     }
-    const queryProp = Reflect.get(arg, 'query') as unknown
+    const queryProp = arg['query']
     if (typeof queryProp !== 'string' || queryProp.trim() === '') return undefined
     const trimmedQuery = queryProp.trim()
     if (DANGEROUS_NESTED_QUERY_TOKEN_RE.test(trimmedQuery) || EXPLICIT_QUERY_CODE_RE.test(trimmedQuery)) return undefined
@@ -97,7 +99,7 @@ export function readNestedQuerySearch(
         (v) => v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '')
     )
     if (typeof projProp === 'number' && Number.isSafeInteger(projProp) && projProp > 0) searchPayload.project_number = projProp
-    appendOptionalQuerySearchFields(searchPayload, arg as Record<string, unknown>)
+    appendOptionalQuerySearchFields(searchPayload, arg)
     return searchPayload
 }
 
@@ -139,9 +141,9 @@ export function invokeShimGroupMethod(
     payload: unknown
 ): unknown {
     const groupObj = shimMj[group]
-    if ((typeof groupObj === 'object' && groupObj !== null) || typeof groupObj === 'function') {
-        const fn = Reflect.get(groupObj, method) as unknown
-        if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
+    if (isObjectOrFunction(groupObj)) {
+        const fn: unknown = Reflect.get(groupObj, method)
+        if (isCallable(fn)) return fn(payload)
     }
     return undefined
 }
@@ -171,8 +173,8 @@ export function dispatchSynthesizedNestedEntry(
         }
     }
     const nextPayload =
-        effectiveUseTestDb && typeof payload === 'object' && payload !== null && !Array.isArray(payload)
-            ? { ...(payload as Record<string, unknown>), use_test_db: true }
+        effectiveUseTestDb && isRecord(payload)
+            ? { ...payload, use_test_db: true }
             : payload
     return invokeCreateEntry(nextPayload)
 }
@@ -438,7 +440,7 @@ export function mergeNestedArgAndOptions(
             return { error: `Conflicting nested executeCode '${group[0]}' between argument and options.` }
         }
     }
-    const merged = Object.assign(Object.create(null) as Record<string, unknown>, argRec)
+    const merged = createNullProtoRecord(argRec)
     for (const k of Object.keys(optsRec)) {
         if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
         if (merged[k] === undefined && optsRec[k] !== undefined) merged[k] = optsRec[k]

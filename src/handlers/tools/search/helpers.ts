@@ -28,9 +28,11 @@ import {
     isTeamDbReady,
     isTeamFilterAllowed,
     passMetadataFilters,
+    toEntryType,
     type EntryWithSource,
     type ISearchFilters,
 } from './team-search-helpers.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { collapseTeamMirrors } from '../../../utils/team-mirror.js'
 
 export {
@@ -39,6 +41,7 @@ export {
     isTeamDbReady,
     isTeamFilterAllowed,
     passMetadataFilters,
+    toEntryType,
     type EntryWithSource,
     type ISearchFilters,
 }
@@ -53,19 +56,13 @@ function hasPlainIncludeTeam(record: Record<string, unknown>): boolean {
 
 /** Return true if the caller explicitly passed `include_team: true` (top-level or nested filter). */
 export function hasExplicitIncludeTeam(rawParams: unknown): boolean {
-    if (typeof rawParams !== 'object' || rawParams === null || Array.isArray(rawParams)) {
+    if (!isRecord(rawParams)) {
         return false
     }
-    const rec = rawParams as Record<string, unknown>
-    if (hasPlainIncludeTeam(rec)) return true
+    if (hasPlainIncludeTeam(rawParams)) return true
     for (const key of ['filter', 'filters'] as const) {
-        const nested = rec[key]
-        if (
-            typeof nested === 'object' &&
-            nested !== null &&
-            !Array.isArray(nested) &&
-            hasPlainIncludeTeam(nested as Record<string, unknown>)
-        ) {
+        const nested = rawParams[key]
+        if (isRecord(nested) && hasPlainIncludeTeam(nested)) {
             return true
         }
     }

@@ -3,6 +3,7 @@ import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { DUMMY_ENTRY_CREATION_TOOL_NAMES } from '../../../handlers/tools/core/dummy-healing/alias-catalog.js'
+import { isRecord } from '../../../utils/type-guards.js'
 
 const DUMMY_CREATE_SCOPE_SET = new Set<string>(DUMMY_ENTRY_CREATION_TOOL_NAMES)
 
@@ -36,10 +37,9 @@ function resolveSingleCreateScope(
 
 function applyWildcardRootToBatch(entries: unknown[]): void {
     for (const entry of entries) {
-        if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
-        const item = entry as Record<string, unknown>
-        if (item['workspace_id'] === undefined) {
-            item['workspace_id'] = '*'
+        if (!isRecord(entry)) continue
+        if (entry['workspace_id'] === undefined) {
+            entry['workspace_id'] = '*'
         }
     }
 }
@@ -51,8 +51,8 @@ function resolveBatchCreateItemScope(
     registry: ReturnType<typeof activeProjectRegistry>,
     resolverConfig: ToolHandlerConfig
 ): void {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return
-    const item = entry as Record<string, unknown>
+    if (!isRecord(entry)) return
+    const item = entry
     if (item['workspace_id'] !== undefined) {
         return
     }

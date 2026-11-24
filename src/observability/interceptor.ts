@@ -20,6 +20,7 @@ import { logger } from '../utils/logger.js'
 import { logAgentIssue } from '../utils/issue-logger.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { isSilentTeamProbeActive } from '../codemode/rpc-context.js'
+import { isRecord } from '../utils/type-guards.js'
 
 // ============================================================================
 // Types
@@ -37,9 +38,8 @@ export type ToolHandlerFn = (args: Record<string, unknown>) => Promise<unknown>
  * Matches the {success: false, error: string} shape used by formatHandlerError().
  */
 function isErrorResult(result: unknown): boolean {
-    if (typeof result !== 'object' || result === null) return false
-    const obj = result as Record<string, unknown>
-    return obj['success'] === false && typeof obj['error'] === 'string'
+    if (!isRecord(result)) return false
+    return result['success'] === false && typeof result['error'] === 'string'
 }
 
 function recordMetricsUser(accumulator: MetricsAccumulator): void {
@@ -89,12 +89,7 @@ const NOT_FOUND_THROTTLED_TOOLS = new Set(['get_entry_by_id', 'team_get_entry_by
 const notFoundIssueTimestamps = new Map<string, number[]>()
 
 function isResourceNotFoundErrorResult(result: unknown): boolean {
-    return (
-        typeof result === 'object' &&
-        result !== null &&
-        'code' in result &&
-        result.code === 'RESOURCE_NOT_FOUND'
-    )
+    return isRecord(result) && result['code'] === 'RESOURCE_NOT_FOUND'
 }
 
 function shouldThrottleNotFoundIssue(toolName: string, result: unknown): boolean {
@@ -119,7 +114,7 @@ function reportToolErrorIssue(
     result: unknown
 ): void {
     if (shouldThrottleNotFoundIssue(toolName, result)) return
-    const errField = (result as Record<string, unknown>)['error']
+    const errField = isRecord(result) ? result['error'] : undefined
     const errorMessage = typeof errField === 'string' ? errField : JSON.stringify(errField)
     logAgentIssue({
         source: 'MCP',
@@ -172,11 +167,7 @@ export function wrapWithMetrics(
 
         const durationMs = Math.round(performance.now() - start)
         const suppressSilentProbe =
-            isError &&
-            isSilentTeamProbeActive() &&
-            typeof result === 'object' &&
-            result !== null &&
-            (result as Record<string, unknown>)['code'] === 'RESOURCE_NOT_FOUND'
+            isError && isSilentTeamProbeActive() && isResourceNotFoundErrorResult(result)
         recordInvocationMetrics(
             accumulator,
             toolName,

@@ -335,9 +335,20 @@ function mergeGlobalJsonOption(command: Command, rawOptions: unknown): unknown {
     return { ...rawOptions, json: true };
 }
 
-export function withValidation<T, A extends unknown[]>(schema: ZodType<T>, action: (...args: A) => void | Promise<void>) {
-    return async (...args: A) => {
-        const command = args[args.length - 1] as Command;
+type CliValidationAction = {
+    run(...args: unknown[]): void | Promise<void>
+}['run']
+
+export function withValidation<T>(
+    schema: ZodType<T>,
+    action: CliValidationAction
+): (...args: unknown[]) => Promise<void> {
+    return async (...args: unknown[]) => {
+        const rawCommand = args[args.length - 1];
+        if (!(rawCommand instanceof Command)) {
+            throw new TypeError('withValidation expected a Commander Command as the final argument');
+        }
+        const command = rawCommand;
         // Commander's action handler args: (arg1, arg2, ..., options, command)
         const rawOptions = args.length > 1 ? args[args.length - 2] : {};
         const effectiveRawOptions = mergeGlobalJsonOption(command, rawOptions);
@@ -348,7 +359,7 @@ export function withValidation<T, A extends unknown[]>(schema: ZodType<T>, actio
             if (newArgs.length > 1) {
                 newArgs[newArgs.length - 2] = validOptions;
             }
-            await action(...(newArgs as unknown as A));
+            await action(...newArgs);
         } catch (err: unknown) {
             if (err instanceof ZodError) {
                 const errorMessages = err.issues.map((e: { path: PropertyKey[]; message: string }) => {

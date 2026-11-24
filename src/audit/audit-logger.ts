@@ -22,9 +22,9 @@ import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 import { getRequestContext } from '../utils/request-context.js'
+import { getErrnoCode } from '../utils/type-guards.js'
 import {
     appendRegularFileNoFollow,
-    nodeErrorCode,
     rotateAuditLogFiles,
     searchAuditFileBackward,
 } from './audit-file-helpers.js'
@@ -379,7 +379,6 @@ export class AuditLogger {
         const results: AuditEntry[] = []
         const limit = filters.limit ?? 100
         if (limit <= 0) return []
-        let skippedLines = 0
 
         // Search current log first, then older rotated logs .1 through .5
         const files = [this.config.logPath]
@@ -387,11 +386,21 @@ export class AuditLogger {
             files.push(`${this.config.logPath}.${String(i)}`)
         }
 
-        for (const file of files) {
-            const res = await searchAuditFileBackward(file, filters, limit, results)
-            skippedLines += res.skippedLines
-            if (res.limitReached) return results
-        }
+        const { skippedLines, limitReached } = await files.reduce<
+            Promise<{ skippedLines: number; limitReached: boolean }>
+        >(
+            async (accPromise, file) => {
+                const acc = await accPromise
+                if (acc.limitReached) return acc
+                const res = await searchAuditFileBackward(file, filters, limit, results)
+                return {
+                    skippedLines: acc.skippedLines + res.skippedLines,
+                    limitReached: res.limitReached,
+                }
+            },
+            Promise.resolve({ skippedLines: 0, limitReached: false })
+        )
+        if (limitReached) return results
 
         if (skippedLines > 0) {
             logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s) during search`, {
@@ -415,7 +424,7 @@ export class AuditLogger {
             await mkdir(dirname(this.config.logPath), { recursive: true, mode: 0o700 })
             this.dirEnsured = true
         } catch (err: unknown) {
-            if (nodeErrorCode(err) === 'EEXIST') {
+            if (getErrnoCode(err) === 'EEXIST') {
                 this.dirEnsured = true
                 return
             }

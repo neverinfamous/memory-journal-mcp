@@ -3,6 +3,16 @@ import { isMissingTableError } from './schema-errors.js'
 import { getSingleRow, runImmediateWriteTx } from './row-helpers.js'
 import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfaces.js'
 
+const TEAM_ROLES: readonly TeamRole[] = ['admin', 'member', 'viewer']
+
+function parseTeamRole(raw: unknown): TeamRole {
+    if (typeof raw === 'string') {
+        const matched = TEAM_ROLES.find((r) => r === raw)
+        if (matched !== undefined) return matched
+    }
+    throw new QueryError(`Invalid team member role in database: ${String(raw)}`)
+}
+
 export class MembersManager {
     private db: IDatabaseConnection
     private rbacActiveCache: { db: object; active: boolean; dataVersion: number } | null = null
@@ -30,7 +40,7 @@ export class MembersManager {
         return {
             id: Number(row['id']),
             author: String(row['author']),
-            role: String(row['role']) as TeamRole,
+            role: parseTeamRole(row['role']),
             displayName: typeof row['display_name'] === 'string' ? row['display_name'] : null,
             addedBy: typeof row['added_by'] === 'string' ? row['added_by'] : null,
             createdAt: String(row['created_at']),
@@ -44,8 +54,10 @@ export class MembersManager {
             if (nativeDb !== undefined && typeof nativeDb.transaction === 'function') {
                 runImmediateWriteTx(nativeDb, () => {
                     const countRow = nativeDb
-                        .prepare(`SELECT COUNT(*) as count FROM team_members`)
-                        .get() as { count?: unknown } | undefined
+                        .prepare<unknown[], { count?: unknown }>(
+                            `SELECT COUNT(*) as count FROM team_members`
+                        )
+                        .get()
                     const isActive =
                         typeof countRow?.count === 'number' && countRow.count > 0
                     if (!isActive && role !== 'admin') {
@@ -54,8 +66,10 @@ export class MembersManager {
                         )
                     }
                     const existing = nativeDb
-                        .prepare(`SELECT id FROM team_members WHERE author = ? COLLATE NOCASE`)
-                        .get(author) as { id?: unknown } | undefined
+                        .prepare<unknown[], { id?: unknown }>(
+                            `SELECT id FROM team_members WHERE author = ? COLLATE NOCASE`
+                        )
+                        .get(author)
                     if (existing !== undefined) {
                         throw new QueryError(
                             `Failed to add team member: Member already exists (${author})`
@@ -164,7 +178,9 @@ export class MembersManager {
             const sql = `SELECT * FROM team_members WHERE author = ? COLLATE NOCASE`
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
-                const row = nativeDb.prepare(sql).get(author) as Record<string, unknown> | undefined
+                const row = nativeDb
+                    .prepare<unknown[], Record<string, unknown>>(sql)
+                    .get(author)
                 return row ? this.mapToTeamMember(row) : null
             }
             const results = this.db.exec(sql, [author])
@@ -188,7 +204,7 @@ export class MembersManager {
             const sql = `SELECT * FROM team_members ORDER BY author ASC`
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
-                const rows = nativeDb.prepare(sql).all() as Record<string, unknown>[]
+                const rows = nativeDb.prepare<unknown[], Record<string, unknown>>(sql).all()
                 return rows.map((row) => this.mapToTeamMember(row))
             }
             const results = this.db.exec(sql)
@@ -223,7 +239,7 @@ export class MembersManager {
             const sql = `SELECT COUNT(*) as count FROM team_members`
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
-                const row = nativeDb.prepare(sql).get() as { count?: unknown } | undefined
+                const row = nativeDb.prepare<unknown[], { count?: unknown }>(sql).get()
                 return typeof row?.count === 'number' ? row.count : 0
             }
             const results = this.db.exec(sql)
@@ -256,7 +272,7 @@ export class MembersManager {
         try {
             const sql = `SELECT COUNT(*) as count FROM team_members`
             if (nativeDb !== undefined) {
-                const row = nativeDb.prepare(sql).get() as { count?: unknown } | undefined
+                const row = nativeDb.prepare<unknown[], { count?: unknown }>(sql).get()
                 count = typeof row?.count === 'number' ? row.count : 0
             } else {
                 const results = this.db.exec(sql)

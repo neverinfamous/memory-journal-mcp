@@ -120,8 +120,8 @@ function handleRegisterProject(
     }
 
     const diskConfig = loadConfig(context)
-    diskConfig['projectRegistry'] ??= {}
-    const diskRegistry = diskConfig['projectRegistry'] as RegistryMap
+    const diskRegistry: RegistryMap = readRegistryObject(diskConfig['projectRegistry']) ?? {}
+    diskConfig['projectRegistry'] = diskRegistry
     const liveRegistry = readLiveProjectRegistry(context)
     const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
 
@@ -251,8 +251,8 @@ function handleUpdateProject(
 ): Record<string, unknown> {
     const parsed = UpdateProjectSchemaMcp.parse(params)
     const diskConfig = loadConfig(context)
-    diskConfig['projectRegistry'] ??= {}
-    const diskRegistry = diskConfig['projectRegistry'] as RegistryMap
+    const diskRegistry: RegistryMap = readRegistryObject(diskConfig['projectRegistry']) ?? {}
+    diskConfig['projectRegistry'] = diskRegistry
     const liveRegistry = readLiveProjectRegistry(context)
     const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
 
@@ -306,8 +306,8 @@ function handleDeleteProject(params: unknown, context: ToolContext): Record<stri
         return { success: false, error: `Invalid project name: '${parsed.name}'` }
     }
     const diskConfig = loadConfig(context)
-    diskConfig['projectRegistry'] ??= {}
-    const diskRegistry = diskConfig['projectRegistry'] as RegistryMap
+    const diskRegistry: RegistryMap = readRegistryObject(diskConfig['projectRegistry']) ?? {}
+    diskConfig['projectRegistry'] = diskRegistry
     const liveRegistry = readLiveProjectRegistry(context)
     const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
 

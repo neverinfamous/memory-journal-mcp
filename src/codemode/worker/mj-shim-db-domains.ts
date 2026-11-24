@@ -3,10 +3,11 @@
  * [BOUNDARY] Zero-dep worker module: uses build-time `PACKAGE_VERSION` (no `createRequire`/`fs`).
  */
 
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { PACKAGE_VERSION } from '../package-version.js'
 import { createPreparedStatementShim } from './node-shims.js'
 import { createSchemaShim } from './namespace-shims.js'
-import { IMMUTABLE_PROXY_TRAPS } from './result-proxy-aliases.js'
+import { IMMUTABLE_PROXY_TRAPS, isCallable } from './result-proxy-aliases.js'
 
 function getGroupProp(target: Record<string, unknown>, group: string, prop: string): unknown {
     const g = target[group]
@@ -129,10 +130,7 @@ function createStatementMethodHandler(
         const methodKey = dbProp === 'exec' ? 'run' : 'all'
         return (sql?: string, ...args: unknown[]) => {
             const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-            const fn = stmt[methodKey]
-            return typeof fn === 'function'
-                ? (fn as (...a: unknown[]) => unknown)(...args)
-                : undefined
+            return stmt[methodKey](...args)
         }
     }
     return undefined
@@ -155,8 +153,7 @@ export function createDbDomainProxy(
                 if (dbProp === 'schema') return createSchemaShim(shimMj)
                 if (dbProp === 'help' || dbProp === 'describe') {
                     const helpFn = target['help']
-                    return () =>
-                        typeof helpFn === 'function' ? (helpFn as () => unknown)() : undefined
+                    return () => (isCallable(helpFn) ? helpFn() : undefined)
                 }
                 const stmtHandler = createStatementMethodHandler(dbProp, shimMj)
                 if (stmtHandler !== undefined) return stmtHandler
@@ -214,15 +211,14 @@ export function createSystemDatabaseDomainProxy(
     const getStatsFn =
         getGroupProp(target, 'analytics', 'getStatistics') ??
         getGroupProp(target, 'analytics', 'get_statistics')
-    const dbShim = Object.assign(Object.create(null) as Record<string, unknown>, {
-        ping: () => Promise.resolve({ success: true, status: 'pong' }),
-        version: () =>
-            Promise.resolve({
-                success: true,
-                version: PACKAGE_VERSION,
-                name: 'memory-journal-mcp',
-            }),
-    })
+    const dbShim = createNullProtoRecord()
+    dbShim['ping'] = () => Promise.resolve({ success: true, status: 'pong' })
+    dbShim['version'] = () =>
+        Promise.resolve({
+            success: true,
+            version: PACKAGE_VERSION,
+            name: 'memory-journal-mcp',
+        })
     if (typeof getStatsFn === 'function') {
         for (const k of STATS_METHOD_KEYS) dbShim[k] = getStatsFn
     }

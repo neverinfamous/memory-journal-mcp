@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ErrorResponse } from '../../../types/error-types.js'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sanitizeAuditEntryForEgress } from '../../../audit/audit-resource.js'
@@ -66,8 +67,107 @@ export const MergeTagsSchema = z
     })
     .strict()
 
+function executeMergeTags(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    const { db } = context
+    let healedParams: unknown = params
+    try {
+        healedParams = healAgentHallucinations(params)
+        const input = MergeTagsSchema.parse(healedParams)
+        const { source_tag, target_tag } = input
+
+        if (source_tag === target_tag) {
+            return {
+                success: false,
+                sourceTag: source_tag,
+                targetTag: target_tag,
+                entriesUpdated: 0,
+                sourceDeleted: false,
+                message: 'Source and target tags cannot be the same',
+                error: 'Source and target tags must be different',
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Provide two different tag names',
+                recoverable: true,
+            }
+        }
+
+        const wsId =
+            input.workspace_id?.trim() === '*'
+                ? '*'
+                : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+        const result = db.mergeTags(
+            source_tag,
+            target_tag,
+            wsId,
+            alignedProjectFilter(
+                wsId,
+                input.project_number,
+                activeProjectRegistry(context.config?.projectRegistry)
+            )
+        )
+        return {
+            success: true,
+            sourceTag: source_tag,
+            targetTag: target_tag,
+            entriesUpdated: result.entriesUpdated,
+            sourceDeleted: result.sourceDeleted,
+            message: `Merged "${source_tag}" into "${target_tag}". Updated ${String(result.entriesUpdated)} entries.`,
+        }
+    } catch (error) {
+        if (error instanceof z.ZodError || error instanceof ValidationError) {
+            return formatHandlerError(error)
+        }
+        // [INTENT] L8: classify via formatHandlerError (never hardcode RESOURCE_NOT_FOUND)
+        // while preserving the merge output shape when tag names are recoverable.
+        const parsed = MergeTagNamesFallbackSchema.safeParse(healedParams)
+        if (!parsed.success) return formatHandlerError(error)
+        return {
+            ...formatHandlerError(error),
+            success: false,
+            sourceTag: parsed.data.source_tag,
+            targetTag: parsed.data.target_tag,
+            entriesUpdated: 0,
+            sourceDeleted: false,
+            message: 'Tag merge failed',
+        }
+    }
+}
+
+async function executeSearchAuditLog(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown> | ErrorResponse> {
+    try {
+        const input = SearchAuditLogSchema.parse(params)
+
+        if (!context.config?.runtime?.auditLogger) {
+            return {
+                success: false,
+                results: [],
+                count: 0,
+                warning: 'Audit logging is disabled or not configured on this server.',
+            }
+        }
+
+        // Map to the internal type AuditSearchFilters
+        const results = (await context.config.runtime.auditLogger.search(input)).map(
+            sanitizeAuditEntryForEgress
+        )
+        return {
+            success: true,
+            count: results.length,
+            results,
+            ...auditScopeWarning(input.project_number, input.workspace_id),
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
 export function getMiscTools(context: ToolContext): ToolDefinition[] {
-    const { db } = context;
     return [
         {
             name: 'merge_tags',
@@ -83,75 +183,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                let healedParams: unknown = params
-                try {
-                    healedParams = healAgentHallucinations(params)
-                    const input = MergeTagsSchema.parse(healedParams)
-                    const { source_tag, target_tag } = input
-
-                    if (source_tag === target_tag) {
-                        return {
-                            success: false,
-                            sourceTag: source_tag,
-                            targetTag: target_tag,
-                            entriesUpdated: 0,
-                            sourceDeleted: false,
-                            message: 'Source and target tags cannot be the same',
-                            error: 'Source and target tags must be different',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide two different tag names',
-                            recoverable: true,
-                        }
-                    }
-
-                    const wsId =
-                        input.workspace_id?.trim() === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(
-                                  input.workspace_id,
-                                  input.project_number,
-                                  context.config
-                              )
-                    const result = db.mergeTags(
-                        source_tag,
-                        target_tag,
-                        wsId,
-                        alignedProjectFilter(
-                            wsId,
-                            input.project_number,
-                            activeProjectRegistry(context.config?.projectRegistry)
-                        )
-                    )
-                    return {
-                        success: true,
-                        sourceTag: source_tag,
-                        targetTag: target_tag,
-                        entriesUpdated: result.entriesUpdated,
-                        sourceDeleted: result.sourceDeleted,
-                        message: `Merged "${source_tag}" into "${target_tag}". Updated ${String(result.entriesUpdated)} entries.`,
-                    }
-                } catch (error) {
-                    // Zod or validation error
-                    if (error instanceof z.ZodError || error instanceof ValidationError) {
-                        return formatHandlerError(error)
-                    }
-                    // [INTENT] L8: classify via formatHandlerError (never hardcode RESOURCE_NOT_FOUND)
-                    // while preserving the merge output shape when tag names are recoverable.
-                    const parsed = MergeTagNamesFallbackSchema.safeParse(healedParams)
-                    if (!parsed.success) return formatHandlerError(error)
-                    return {
-                        ...formatHandlerError(error),
-                        success: false,
-                        sourceTag: parsed.data.source_tag,
-                        targetTag: parsed.data.target_tag,
-                        entriesUpdated: 0,
-                        sourceDeleted: false,
-                        message: 'Tag merge failed',
-                    }
-                }
-            },
+            handler: (params: unknown) => executeMergeTags(params, context),
         },
         {
             name: 'search_audit_log',
@@ -166,33 +198,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
-                try {
-                    const input = SearchAuditLogSchema.parse(params)
-
-                    if (!context.config?.runtime?.auditLogger) {
-                        return {
-                            success: false,
-                            results: [],
-                            count: 0,
-                            warning: 'Audit logging is disabled or not configured on this server.',
-                        }
-                    }
-
-                    // Map to the internal type AuditSearchFilters
-                    const results = (await context.config.runtime.auditLogger.search(input)).map(
-                        sanitizeAuditEntryForEgress
-                    )
-                    return {
-                        success: true,
-                        count: results.length,
-                        results,
-                        ...auditScopeWarning(input.project_number, input.workspace_id),
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeSearchAuditLog(params, context),
         },
     ];
 }

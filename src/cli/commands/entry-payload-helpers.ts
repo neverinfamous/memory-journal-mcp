@@ -8,8 +8,9 @@ import {
     normalizeSignificanceValue,
     pickRecordField,
 } from '../../handlers/tools/schemas/constants-and-primitives.js'
-import type { createEntryOptionsSchema } from '../schemas.js'
+import { createEntryOptionsSchema } from '../schemas.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
+import { isRecord } from '../../utils/type-guards.js'
 import { readBoundedCliInputFile } from './cli-input-reader.js'
 
 const POSITIVE_INT_RE = /^[1-9]\d*$/
@@ -33,9 +34,41 @@ export function validateCliEntryContent(content: string): void {
 }
 
 export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
-    tag?: string
-    contentFile?: string
-    body?: string
+    tag?: string | undefined
+    contentFile?: string | undefined
+    body?: string | undefined
+}
+
+export function extractLooseCliOptions<T extends z.ZodRawShape>(
+    schema: z.ZodObject<T>,
+    raw: unknown
+): z.infer<ReturnType<z.ZodObject<T>['loose']>> {
+    const looseSchema = schema.loose()
+    if (!isRecord(raw)) {
+        return looseSchema.parse({})
+    }
+    const parsed = looseSchema.safeParse(raw)
+    if (parsed.success) {
+        return parsed.data
+    }
+    const cleaned: Record<string, unknown> = { ...raw }
+    for (const issue of parsed.error.issues) {
+        const key = issue.path[0]
+        if (typeof key === 'string') {
+            Reflect.deleteProperty(cleaned, key)
+        }
+    }
+    return looseSchema.parse(cleaned)
+}
+
+export function extractHealedEntryOptions(raw: unknown): HealedEntryOptions {
+    const out: HealedEntryOptions = { ...extractLooseCliOptions(createEntryOptionsSchema, raw) }
+    if (isRecord(raw)) {
+        if (typeof raw['tag'] === 'string') out.tag = raw['tag']
+        if (typeof raw['contentFile'] === 'string') out.contentFile = raw['contentFile']
+        if (typeof raw['body'] === 'string') out.body = raw['body']
+    }
+    return out
 }
 
 /** Normalize CLI flag aliases (--tag, --content-file, --body, --validation, --significance, --workspace, --summary, --description) and positional content. */
@@ -342,12 +375,13 @@ function resolveSignificanceType(
     if (typeof sigRaw !== 'string' || sigRaw.trim() === '') return undefined
     const normalized = normalizeSignificanceValue(sigRaw)
     if (normalized === undefined) return undefined
-    if (!SIGNIFICANCE_TYPES.some((t) => t === normalized)) {
+    const matched = SIGNIFICANCE_TYPES.find((t) => t === normalized)
+    if (matched === undefined) {
         throw new ValidationError(
             `Invalid significance_type '${sigRaw}'. Expected one of: ${SIGNIFICANCE_TYPES.join(', ')}`
         )
     }
-    return normalized as SignificanceType
+    return matched
 }
 
 const CANONICAL_SCORE_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/

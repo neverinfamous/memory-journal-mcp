@@ -22,6 +22,7 @@ import {
 } from './shared.js'
 import { createGitHubMilestoneResources } from './github-milestones.js'
 import { logger } from '../../utils/logger.js'
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
 import { fenceKanbanStatus } from '../tools/github/fencing-helpers.js'
 
@@ -180,7 +181,7 @@ function buildKanbanSummary(
     >
 ): Record<string, number> | null {
     if (kanbanResult.status === 'fulfilled' && kanbanResult.value) {
-        const summary = Object.create(null) as Record<string, number>
+        const summary = createNullProtoRecord<number>()
         for (const col of kanbanResult.value.columns) {
             summary[fenceKanbanStatus(col.status)] = col.items.length
         }

@@ -139,11 +139,15 @@ export function parseAllowedIoRootsOption(raw: unknown): string[] | undefined {
                 parsed = raw.split(',').map((s) => s.trim()).filter(Boolean)
             }
         }
-        if (Array.isArray(parsed) && parsed.every((p) => typeof p === 'string' && path.isAbsolute(p))) {
-            return parsed as string[]
-        }
         if (Array.isArray(parsed)) {
-            throw new Error('All paths must be absolute')
+            const validPaths: string[] = []
+            for (const p of parsed) {
+                if (typeof p !== 'string' || !path.isAbsolute(p)) {
+                    throw new Error('All paths must be absolute')
+                }
+                validPaths.push(p)
+            }
+            return validPaths
         }
         throw new Error('Must be an array of absolute paths')
     } catch (e: unknown) {
@@ -282,7 +286,7 @@ export function resolveTransportOption(resolver: ConfigResolver, catchConfig: Ca
         if (resolver.isCliProvided('stdio') && resolver.resolveBool('stdio') === true) return 'stdio'
         const envTransport = process.env['TRANSPORT']?.trim()
         const raw = resolver.isCliProvided('transport')
-            ? resolver.resolve<string>('transport')
+            ? resolver.resolveString('transport')
             : envTransport !== undefined && envTransport !== ''
               ? envTransport
               : undefined
@@ -290,7 +294,7 @@ export function resolveTransportOption(resolver: ConfigResolver, catchConfig: Ca
             if (resolver.resolveBool('http')) return 'http'
             if (resolver.resolveBool('stdio')) return 'stdio'
         }
-        const cand = raw ?? resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio'
+        const cand = raw ?? resolver.resolveString('transport', 'TRANSPORT') ?? 'stdio'
         const parsed = transportSchema.safeParse(cand)
         if (!parsed.success) {
             throw new Error(`Invalid transport '${cand}'. Use 'stdio' or 'http'.`)

@@ -367,8 +367,9 @@ export async function exportEntriesToMarkdown(
     const anchorsMap = loadExportAnchors(db, validEntries)
 
     const CHUNK_SIZE = 50
-    for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
-        const chunk = validEntries.slice(i, i + CHUNK_SIZE)
+    const exportChunkAt = async (index: number): Promise<void> => {
+        if (index >= validEntries.length) return
+        const chunk = validEntries.slice(index, index + CHUNK_SIZE)
         const preChunkRealpath = realpathSync.native(resolvedOutputDir)
         if (preChunkRealpath !== pinnedRealDir) {
             throw new Error(
@@ -400,7 +401,10 @@ export async function exportEntriesToMarkdown(
             )
         }
         assertSafeDirectoryPath(postChunkRealpath, allowedRoots)
+        return exportChunkAt(index + CHUNK_SIZE)
     }
+
+    await exportChunkAt(0)
 
     return {
         success: errors.length === 0,

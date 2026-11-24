@@ -221,41 +221,137 @@ async function executeTeamCreateEntry(
 // Tool Definitions
 // ============================================================================
 
+function executeTeamGetRecent(
+    context: ToolContext,
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    params: unknown
+): unknown {
+    const {
+        limit,
+        cursor,
+        offset,
+        sort_by,
+        project_number,
+        workspace_id,
+        include_archived,
+    } = TeamGetRecentSchema.parse(params)
+    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+    const projectNumber = resolveTeamProjectNumber(
+        context,
+        wsId,
+        project_number,
+        workspace_id
+    )
+    if (projectNumber == null) {
+        return {
+            success: false,
+            error: 'Missing project_number. Cross-tenant queries without project_number are not allowed.',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            suggestion:
+                "🛠️ AUTONOMOUS HEALING: Specify a concrete registered workspace_id and project_number. Team DB enforces per-project tenant isolation and rejects workspace_id: '*'; for global audits, iterate Object.entries((await mj.admin.listProjects({})).projects) and call mj.team.teamGetRecent({ workspace_id, project_number, limit: 200 }) per project.",
+            recoverable: true,
+        }
+    }
+    const effectiveCursor = cursor ?? (offset > 0 ? encodeCursor({ offset }) : undefined)
+    const result = teamDb.searchEntries('', {
+        limit,
+        cursor: effectiveCursor,
+        sortBy: sort_by,
+        projectNumber: projectNumber,
+        workspaceId: wsId,
+        includeArchived: include_archived,
+    })
+
+    const entries = result.entries
+    const authorMap = batchFetchAuthors(
+        teamDb,
+        entries.map((e) => e.id)
+    )
+    const enriched = entries.map((e) => ({
+        ...e,
+        author: authorMap.get(e.id) ?? null,
+        source: 'team' as const,
+    }))
+
+    return {
+        success: true,
+        entries: enriched,
+        count: enriched.length,
+        next_cursor: result.nextCursor,
+    }
+}
+
+function executeTeamListTags(
+    context: ToolContext,
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    params: unknown
+): unknown {
+    const input = TeamListTagsSchema.parse(params ?? {})
+    const wsId = resolveWorkspaceId(
+        input.workspace_id,
+        input.project_number,
+        context.config
+    )
+    const registry = activeProjectRegistry(context.config?.projectRegistry)
+    const hasActiveRegistry = registry !== undefined && Object.keys(registry).length > 0
+    const resolvedProject =
+        resolveTeamProjectNumber(
+            context,
+            wsId,
+            input.project_number,
+            input.workspace_id
+        ) ?? undefined
+    if ((wsId === '*' || hasActiveRegistry) && resolvedProject === undefined) {
+        return missingTeamProjectNumberError(
+            'Missing project_number. Specify a concrete project_number or registered workspace.'
+        )
+    }
+    const rawTags = teamDb.listTags(wsId, resolvedProject)
+    const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
+    return { success: true, tags, count: tags.length }
+}
+
+function buildTeamEntryTool(context: ToolContext): ToolDefinition {
+    const { teamDb } = context
+    return {
+        name: 'team_create_entry',
+        title: 'Create Team Entry',
+        description:
+            'Create an entry in the team database for sharing with collaborators. ' +
+            'ONLY use when explicitly requested by the user. Default to personal create_entry instead. ' +
+            'Content must be well-structured markdown using ## section headers. Select the most accurate entry_type (e.g., retrospective, technical_note). ' +
+            'For session summaries, use entry_type "retrospective" with tag "session-summary" and ' +
+            'structure content as: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
+            'REQUIRED: You MUST include project_number. ' +
+            'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
+            'REQUIRED: You MUST use related_to to anchor the entry to a session summary or nearby context. ' +
+            'Requires TEAM_DB_PATH.',
+        group: 'team',
+        inputSchema: TeamCreateEntrySchemaMcp,
+        outputSchema: TeamCreateOutputSchema,
+        annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
+        },
+        handler: async (params: unknown) => {
+            try {
+                if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                return await executeTeamCreateEntry(context, teamDb, params)
+            } catch (err) {
+                return formatHandlerError(err)
+            }
+        },
+    }
+}
+
 export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
 
     return [
-        {
-            name: 'team_create_entry',
-            title: 'Create Team Entry',
-            description:
-                'Create an entry in the team database for sharing with collaborators. ' +
-                'ONLY use when explicitly requested by the user. Default to personal create_entry instead. ' +
-                'Content must be well-structured markdown using ## section headers. Select the most accurate entry_type (e.g., retrospective, technical_note). ' +
-                'For session summaries, use entry_type "retrospective" with tag "session-summary" and ' +
-                'structure content as: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
-                'REQUIRED: You MUST include project_number. ' +
-                'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
-                'REQUIRED: You MUST use related_to to anchor the entry to a session summary or nearby context. ' +
-                'Requires TEAM_DB_PATH.',
-            group: 'team',
-            inputSchema: TeamCreateEntrySchemaMcp,
-            outputSchema: TeamCreateOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: async (params: unknown) => {
-                try {
-                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    return await executeTeamCreateEntry(context, teamDb, params)
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
+        buildTeamEntryTool(context),
         {
             name: 'team_get_entry_by_id',
             title: 'Get Team Entry by ID',
@@ -294,65 +390,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    if (!teamDb) {
-                        return { ...TEAM_DB_ERROR_RESPONSE }
-                    }
-
-                    const {
-                        limit,
-                        cursor,
-                        offset,
-                        sort_by,
-                        project_number,
-                        workspace_id,
-                        include_archived,
-                    } = TeamGetRecentSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(
-                        context,
-                        wsId,
-                        project_number,
-                        workspace_id
-                    )
-                    if (projectNumber == null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. Cross-tenant queries without project_number are not allowed.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion:
-                                "🛠️ AUTONOMOUS HEALING: Specify a concrete registered workspace_id and project_number. Team DB enforces per-project tenant isolation and rejects workspace_id: '*'; for global audits, iterate Object.entries((await mj.admin.listProjects({})).projects) and call mj.team.teamGetRecent({ workspace_id, project_number, limit: 200 }) per project.",
-                            recoverable: true,
-                        }
-                    }
-                    const effectiveCursor =
-                        cursor ?? (offset > 0 ? encodeCursor({ offset }) : undefined)
-                    const result = teamDb.searchEntries('', {
-                        limit,
-                        cursor: effectiveCursor,
-                        sortBy: sort_by,
-                        projectNumber: projectNumber,
-                        workspaceId: wsId,
-                        includeArchived: include_archived,
-                    })
-
-                    const entries = result.entries
-                    const authorMap = batchFetchAuthors(
-                        teamDb,
-                        entries.map((e) => e.id)
-                    )
-                    const enriched = entries.map((e) => ({
-                        ...e,
-                        author: authorMap.get(e.id) ?? null,
-                        source: 'team' as const,
-                    }))
-
-                    return {
-                        success: true,
-                        entries: enriched,
-                        count: enriched.length,
-                        next_cursor: result.nextCursor,
-                    }
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    return executeTeamGetRecent(context, teamDb, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -374,34 +413,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    if (!teamDb) {
-                        return { ...TEAM_DB_ERROR_RESPONSE }
-                    }
-
-                    const input = TeamListTagsSchema.parse(params ?? {})
-                    const wsId = resolveWorkspaceId(
-                        input.workspace_id,
-                        input.project_number,
-                        context.config
-                    )
-                    const registry = activeProjectRegistry(context.config?.projectRegistry)
-                    const hasActiveRegistry =
-                        registry !== undefined && Object.keys(registry).length > 0
-                    const resolvedProject =
-                        resolveTeamProjectNumber(
-                            context,
-                            wsId,
-                            input.project_number,
-                            input.workspace_id
-                        ) ?? undefined
-                    if ((wsId === '*' || hasActiveRegistry) && resolvedProject === undefined) {
-                        return missingTeamProjectNumberError(
-                            'Missing project_number. Specify a concrete project_number or registered workspace.'
-                        )
-                    }
-                    const rawTags = teamDb.listTags(wsId, resolvedProject)
-                    const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
-                    return { success: true, tags, count: tags.length }
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    return executeTeamListTags(context, teamDb, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

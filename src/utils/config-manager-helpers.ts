@@ -108,7 +108,7 @@ const MAX_BRIEFING_CONFIG_COUNT = 100
 export function isValidBriefingConfigValue(
     value: unknown,
     kind: BriefingValueKind
-): boolean {
+): value is number | boolean {
     if (kind === 'boolean') return typeof value === 'boolean'
     if (kind === 'unit') {
         return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
@@ -311,7 +311,7 @@ export function reloadBriefingConfigKeys(
             })
             continue
         }
-        const typedVal = value as number | boolean
+        const typedVal = value
         const prevFileVal = lastFileBriefingValues?.get(mapping.target)
         lastFileBriefingValues?.set(mapping.target, typedVal)
         // [INVARIANT] Editing an unrelated key in config.json must not clobber a startup CLI/env

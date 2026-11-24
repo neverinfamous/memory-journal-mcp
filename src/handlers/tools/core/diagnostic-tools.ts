@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ErrorResponse } from '../../../types/error-types.js'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
@@ -11,6 +12,65 @@ const PROGRESS_DEMO_STEP_DELAY_MS = 500
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function executeTriggerProgress(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown> | ErrorResponse> {
+    try {
+        z.object({}).strict().parse(params ?? {})
+        const progress = context.progress
+        await sendProgress(progress, 0, 3, 'Starting operation...')
+        await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
+        await sendProgress(progress, 1, 3, 'Processing step 1...')
+        await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
+        await sendProgress(progress, 2, 3, 'Processing step 2...')
+        await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
+        await sendProgress(progress, 3, 3, 'Operation complete')
+        return {
+            success: true,
+            message: 'Progress notifications completed successfully',
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+function executeTestErrorHandling(params: unknown): Record<string, unknown> | ErrorResponse {
+    try {
+        const input = z
+            .object({
+                error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
+                message: z.string().optional().default('Test error message'),
+            })
+            .parse(params)
+
+        if (input.error_type === 'database') {
+            const err = new Error(`SQLITE_CONSTRAINT: ${input.message}`)
+            Object.defineProperty(err, 'code', {
+                value: 'SQLITE_CONSTRAINT',
+                enumerable: true,
+            })
+            throw err
+        }
+
+        if (input.error_type === 'type') {
+            throw new TypeError(input.message)
+        }
+
+        if (input.error_type === 'memory_journal') {
+            throw new MemoryJournalMcpError(input.message, 'TEST_ERROR', 'internal')
+        }
+
+        if (input.error_type === 'zod') {
+            z.object({ required_field: z.string() }).parse({})
+        }
+
+        throw new Error(input.message)
+    } catch (err) {
+        return formatHandlerError(err)
+    }
 }
 
 /**
@@ -61,25 +121,7 @@ export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
-                try {
-                    z.object({}).strict().parse(params ?? {})
-                    const progress = context.progress
-                    await sendProgress(progress, 0, 3, 'Starting operation...')
-                    await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
-                    await sendProgress(progress, 1, 3, 'Processing step 1...')
-                    await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
-                    await sendProgress(progress, 2, 3, 'Processing step 2...')
-                    await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
-                    await sendProgress(progress, 3, 3, 'Operation complete')
-                    return {
-                        success: true,
-                        message: 'Progress notifications completed successfully',
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeTriggerProgress(params, context),
         },
         {
             name: 'test_error_handling',
@@ -98,47 +140,7 @@ export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    const input = z
-                        .object({
-                            error_type: z.enum([
-                                'zod',
-                                'type',
-                                'database',
-                                'generic',
-                                'memory_journal',
-                            ]),
-                            message: z.string().optional().default('Test error message'),
-                        })
-                        .parse(params)
-
-                    if (input.error_type === 'database') {
-                        const err = new Error(`SQLITE_CONSTRAINT: ${input.message}`)
-                        Object.defineProperty(err, 'code', {
-                            value: 'SQLITE_CONSTRAINT',
-                            enumerable: true,
-                        })
-                        throw err
-                    }
-
-                    if (input.error_type === 'type') {
-                        throw new TypeError(input.message)
-                    }
-
-                    if (input.error_type === 'memory_journal') {
-                        throw new MemoryJournalMcpError(input.message, 'TEST_ERROR', 'internal')
-                    }
-
-                    if (input.error_type === 'zod') {
-                        z.object({ required_field: z.string() }).parse({})
-                    }
-
-                    throw new Error(input.message)
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeTestErrorHandling(params),
         },
     ]
 }

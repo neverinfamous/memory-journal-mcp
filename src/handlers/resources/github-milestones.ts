@@ -27,6 +27,81 @@ function fenceMilestoneResource<
     }
 }
 
+async function handleGitHubMilestonesListResource(
+    uri: string,
+    context: ResourceContext,
+    resourceMilestoneLimit: number
+): Promise<ResourceResult> {
+    const match = /^memory:\/\/github\/milestones(?:\/(.*))?$/.exec(getBaseUri(uri))
+    const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
+    const resolved = await resolveScopedGitHubRepo(context, targetRepo)
+    if (isResourceError(resolved)) return resolved
+    const { owner, repo, lastModified, github } = resolved
+
+    const milestones = await github.getMilestones(
+        owner,
+        repo,
+        'open',
+        resourceMilestoneLimit
+    )
+    const milestonesWithProgress = milestones.map((ms) => ({
+        ...fenceMilestoneResource(ms),
+        completionPercentage: milestoneCompletionPct(ms.openIssues, ms.closedIssues),
+    }))
+    const responseData = {
+        repository: `${owner}/${repo}`,
+        milestones: milestonesWithProgress,
+        count: milestonesWithProgress.length,
+        hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+    }
+    return { data: withResourceTokenMeta(responseData), annotations: { lastModified } }
+}
+
+async function handleGitHubMilestoneDetailResource(
+    uri: string,
+    context: ResourceContext
+): Promise<ResourceResult> {
+    const lastModified = new Date().toISOString()
+    const match = /^memory:\/\/milestones\/(?:(.+)\/)?([1-9]\d*)$/.exec(getBaseUri(uri))
+    const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
+    const milestoneNumber = match?.[2] ? Number.parseInt(match[2], 10) : null
+    if (
+        milestoneNumber === null ||
+        !Number.isSafeInteger(milestoneNumber) ||
+        milestoneNumber <= 0
+    ) {
+        return {
+            data: { error: 'Invalid milestone number', code: -32002 },
+            annotations: { lastModified },
+        }
+    }
+    const resolved = await resolveScopedGitHubRepo(context, targetRepo)
+    if (isResourceError(resolved)) return resolved
+    const { owner, repo, github } = resolved
+    const milestone = await github.getMilestone(owner, repo, milestoneNumber)
+    if (!milestone) {
+        return {
+            data: { error: `Milestone #${String(milestoneNumber)} not found`, code: -32002 },
+            annotations: { lastModified },
+        }
+    }
+    const responseData = {
+        repository: `${owner}/${repo}`,
+        milestone: {
+            ...fenceMilestoneResource(milestone),
+            completionPercentage: milestoneCompletionPct(
+                milestone.openIssues,
+                milestone.closedIssues
+            ),
+        },
+        hint: 'Use get_github_issues tool to list issues associated with this milestone.',
+    }
+    return {
+        data: withResourceTokenMeta(responseData),
+        annotations: { lastModified },
+    }
+}
+
 /** Build milestone resource definitions (extracted from `resources/github.ts`, Appendix A). */
 export function createGitHubMilestoneResources(resourceMilestoneLimit: number): InternalResourceDef[] {
     return [
@@ -39,31 +114,8 @@ export function createGitHubMilestoneResources(resourceMilestoneLimit: number): 
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /^memory:\/\/github\/milestones(?:\/(.*))?$/.exec(getBaseUri(uri))
-                const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
-                const resolved = await resolveScopedGitHubRepo(context, targetRepo)
-                if (isResourceError(resolved)) return resolved
-                const { owner, repo, lastModified, github } = resolved
-
-                const milestones = await github.getMilestones(
-                    owner,
-                    repo,
-                    'open',
-                    resourceMilestoneLimit
-                )
-                const milestonesWithProgress = milestones.map((ms) => ({
-                    ...fenceMilestoneResource(ms),
-                    completionPercentage: milestoneCompletionPct(ms.openIssues, ms.closedIssues),
-                }))
-                const responseData = {
-                    repository: `${owner}/${repo}`,
-                    milestones: milestonesWithProgress,
-                    count: milestonesWithProgress.length,
-                    hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
-                }
-                return { data: withResourceTokenMeta(responseData), annotations: { lastModified } }
-            },
+            handler: (uri: string, context: ResourceContext) =>
+                handleGitHubMilestonesListResource(uri, context, resourceMilestoneLimit),
         },
         {
             uri: 'memory://milestones/{number}',
@@ -74,49 +126,7 @@ export function createGitHubMilestoneResources(resourceMilestoneLimit: number): 
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const lastModified = new Date().toISOString()
-                const match = /^memory:\/\/milestones\/(?:(.+)\/)?([1-9]\d*)$/.exec(
-                    getBaseUri(uri)
-                )
-                const targetRepo = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
-                const milestoneNumber = match?.[2] ? Number.parseInt(match[2], 10) : null
-                if (
-                    milestoneNumber === null ||
-                    !Number.isSafeInteger(milestoneNumber) ||
-                    milestoneNumber <= 0
-                ) {
-                    return {
-                        data: { error: 'Invalid milestone number', code: -32002 },
-                        annotations: { lastModified },
-                    }
-                }
-                const resolved = await resolveScopedGitHubRepo(context, targetRepo)
-                if (isResourceError(resolved)) return resolved
-                const { owner, repo, github } = resolved
-                const milestone = await github.getMilestone(owner, repo, milestoneNumber)
-                if (!milestone) {
-                    return {
-                        data: { error: `Milestone #${String(milestoneNumber)} not found`, code: -32002 },
-                        annotations: { lastModified },
-                    }
-                }
-                const responseData = {
-                    repository: `${owner}/${repo}`,
-                    milestone: {
-                        ...fenceMilestoneResource(milestone),
-                        completionPercentage: milestoneCompletionPct(
-                            milestone.openIssues,
-                            milestone.closedIssues
-                        ),
-                    },
-                    hint: 'Use get_github_issues tool to list issues associated with this milestone.',
-                }
-                return {
-                    data: withResourceTokenMeta(responseData),
-                    annotations: { lastModified },
-                }
-            },
+            handler: handleGitHubMilestoneDetailResource,
         },
     ]
 }

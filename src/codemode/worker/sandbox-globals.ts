@@ -5,6 +5,7 @@
 
 import { type SafeFsShim, pathShim, consoleShim, createPreparedStatementShim } from './node-shims.js'
 import { LAZY_GROUP_METHOD_NAMES } from '../worker-api-proxy.js'
+import { isCallable } from './result-proxy-aliases.js'
 import {
     buildMemoryAndFactoryShims,
     createChildProcessShims,
@@ -189,6 +190,7 @@ export function buildSandboxGlobals(
     } = options
     const frozenPathShim = Object.freeze({ ...pathShim })
     const frozenConsoleShim = Object.freeze({ ...consoleShim })
+    const getConfigFn = shimMj['getConfig']
 
     const sandbox: Record<string, unknown> = {
         ...buildMemoryAndFactoryShims(shimMj, safeFsShim, updateMemoryFn),
@@ -218,11 +220,9 @@ export function buildSandboxGlobals(
         context: frozenContext,
         ctx: frozenContext,
         console: frozenConsoleShim,
-        getConfig:
-            typeof shimMj['getConfig'] === 'function'
-                ? (): Promise<unknown> =>
-                      Promise.resolve((shimMj['getConfig'] as () => unknown)())
-                : (): Promise<unknown> => Promise.resolve({ dbPath: 'memory://internal' }),
+        getConfig: isCallable(getConfigFn)
+            ? (): Promise<unknown> => Promise.resolve(getConfigFn())
+            : (): Promise<unknown> => Promise.resolve({ dbPath: 'memory://internal' }),
         globalThis: shimMj,
         ...createBlockedAndTimerGlobals(activeTimers, executionLifecycle),
     }

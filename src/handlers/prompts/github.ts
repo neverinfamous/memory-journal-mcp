@@ -17,204 +17,138 @@ import {
 
 export { requirePositiveIntOrPlaceholder }
 
+function buildProjectPromptDef(spec: {
+    name: string
+    description: string
+    heading: string
+    lead: string
+    items: string
+}): InternalPromptDef {
+    return {
+        name: spec.name,
+        description: spec.description,
+        icons: [ICON_PROMPT],
+        arguments: [
+            {
+                name: 'project_number',
+                description:
+                    'GitHub Project Number (optional; falls back to configured default project)',
+                required: false,
+            },
+        ],
+        handler: (
+            args: Record<string, string> | undefined,
+            _db: IDatabaseAdapter,
+            _teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: BriefingConfig
+        ) => {
+            const fallbackProject = resolveFallbackProjectNumber(briefingConfig)
+            const projectNumber = requirePositiveIntOrPlaceholder(
+                args?.['project_number'],
+                fallbackProject,
+                'project_number'
+            )
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# ${spec.heading}
+${spec.lead} #${projectNumber}.
+To complete this task, you MUST first read the following resource to obtain the project's context:
+\`memory://projects/${projectNumber}/timeline\`
+
+Please provide:
+${spec.items}`,
+                        },
+                    },
+                ],
+            }
+        },
+    }
+}
+
+function buildPrPromptDef(spec: {
+    name: string
+    description: string
+    heading: string
+    lead: string
+    items: string
+}): InternalPromptDef {
+    return {
+        name: spec.name,
+        description: spec.description,
+        icons: [ICON_PROMPT],
+        arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
+        handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+            const prNumber = requirePositiveIntOrPlaceholder(
+                args?.['pr_number'],
+                '{pr_number}',
+                'pr_number'
+            )
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# ${spec.heading}
+${spec.lead} #${prNumber}.
+To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
+- \`memory://prs/${prNumber}/timeline\`
+
+Please provide:
+${spec.items}`,
+                        },
+                    },
+                ],
+            }
+        },
+    }
+}
+
 /**
  * Get GitHub prompt definitions
  */
 export function getGitHubPromptDefinitions(): InternalPromptDef[] {
     return [
         ...getGitHubCommanderPromptDefinitions(),
-        {
+        buildProjectPromptDef({
             name: 'project-status-summary',
             description: 'Generate a comprehensive status summary for a GitHub project',
-            icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'project_number',
-                    description:
-                        'GitHub Project Number (optional; falls back to configured default project)',
-                    required: false,
-                },
-            ],
-            handler: (
-                args: Record<string, string> | undefined,
-                _db: IDatabaseAdapter,
-                _teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: BriefingConfig
-            ) => {
-                const fallbackProject = resolveFallbackProjectNumber(briefingConfig)
-                const projectNumber = requirePositiveIntOrPlaceholder(
-                    args?.['project_number'],
-                    fallbackProject,
-                    'project_number'
-                )
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# GitHub Project Status Summary
-Generate a comprehensive status summary for Project #${projectNumber}.
-To complete this task, you MUST first read the following resource to obtain the project's context:
-\`memory://projects/${projectNumber}/timeline\`
-
-Please provide:
-1. Overall Progress
-2. Blockers and Risks
-3. Recent Achievements
-4. Next Steps`
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        {
+            heading: 'GitHub Project Status Summary',
+            lead: 'Generate a comprehensive status summary for Project',
+            items: `1. Overall Progress\n2. Blockers and Risks\n3. Recent Achievements\n4. Next Steps`,
+        }),
+        buildProjectPromptDef({
             name: 'project-milestone-tracker',
             description: 'Track progress against a specific project milestone',
-            icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'project_number',
-                    description:
-                        'GitHub Project Number (optional; falls back to configured default project)',
-                    required: false,
-                },
-            ],
-            handler: (
-                args: Record<string, string> | undefined,
-                _db: IDatabaseAdapter,
-                _teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: BriefingConfig
-            ) => {
-                const fallbackProject = resolveFallbackProjectNumber(briefingConfig)
-                const projectNumber = requirePositiveIntOrPlaceholder(
-                    args?.['project_number'],
-                    fallbackProject,
-                    'project_number'
-                )
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# GitHub Project Milestone Tracker
-Analyze milestone progress for Project #${projectNumber}.
-To complete this task, you MUST first read the following resource to obtain the project's context:
-\`memory://projects/${projectNumber}/timeline\`
-
-Please provide:
-1. Current Milestone Status
-2. Velocity Analysis
-3. Scope Creep/Changes
-4. Confidence in Delivery Date`
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        {
+            heading: 'GitHub Project Milestone Tracker',
+            lead: 'Analyze milestone progress for Project',
+            items: `1. Current Milestone Status\n2. Velocity Analysis\n3. Scope Creep/Changes\n4. Confidence in Delivery Date`,
+        }),
+        buildPrPromptDef({
             name: 'pr-summary',
             description: 'Generate an executive summary of a pull request',
-            icons: [ICON_PROMPT],
-            arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = requirePositiveIntOrPlaceholder(
-                    args?.['pr_number'],
-                    '{pr_number}',
-                    'pr_number'
-                )
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# Pull Request Summary
-Generate a summary for PR #${prNumber}.
-To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
-- \`memory://prs/${prNumber}/timeline\`
-
-Please provide:
-1. Summary of Changes
-2. Key Decisions Made
-3. Testing Performed
-4. Remaining Work`
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        {
+            heading: 'Pull Request Summary',
+            lead: 'Generate a summary for PR',
+            items: `1. Summary of Changes\n2. Key Decisions Made\n3. Testing Performed\n4. Remaining Work`,
+        }),
+        buildPrPromptDef({
             name: 'code-review-prep',
             description: 'Prepare a code review checklist and focus areas for a PR',
-            icons: [ICON_PROMPT],
-            arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = requirePositiveIntOrPlaceholder(
-                    args?.['pr_number'],
-                    '{pr_number}',
-                    'pr_number'
-                )
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# Code Review Preparation
-Prepare a code review plan for PR #${prNumber}.
-To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
-- \`memory://prs/${prNumber}/timeline\`
-
-Please provide:
-1. Review Checklist
-2. High-Risk Areas
-3. Testing Recommendations
-4. Architecture Verification`
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        {
+            heading: 'Code Review Preparation',
+            lead: 'Prepare a code review plan for PR',
+            items: `1. Review Checklist\n2. High-Risk Areas\n3. Testing Recommendations\n4. Architecture Verification`,
+        }),
+        buildPrPromptDef({
             name: 'pr-retrospective',
             description: 'Conduct a retrospective analysis on a completed pull request',
-            icons: [ICON_PROMPT],
-            arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = requirePositiveIntOrPlaceholder(
-                    args?.['pr_number'],
-                    '{pr_number}',
-                    'pr_number'
-                )
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# Pull Request Retrospective
-Conduct a retrospective analysis for PR #${prNumber}.
-To complete this task, you MUST first read the following resource to obtain the PR's context (includes linked entries and PR metadata):
-- \`memory://prs/${prNumber}/timeline\`
-
-Please provide:
-1. What went well
-2. Friction points (CI, reviews, scope)
-3. Technical Debt incurred
-4. Learnings for future PRs`
-                            }
-                        }
-                    ]
-                }
-            }
-        }
+            heading: 'Pull Request Retrospective',
+            lead: 'Conduct a retrospective analysis for PR',
+            items: `1. What went well\n2. Friction points (CI, reviews, scope)\n3. Technical Debt incurred\n4. Learnings for future PRs`,
+        }),
     ]
 }

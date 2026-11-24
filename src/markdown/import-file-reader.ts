@@ -8,6 +8,7 @@ import { constants } from 'node:fs'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeChildFile } from '../utils/security-utils.js'
 import { logger } from '../utils/logger.js'
+import { getErrnoCode } from '../utils/type-guards.js'
 import type { ParsedFile } from './importer.js'
 
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -23,11 +24,7 @@ export async function readAndParseMarkdownFile(
         try {
             handle = await open(filepath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
         } catch (err: unknown) {
-            const code =
-                err instanceof Error && 'code' in err
-                    ? (err as { code?: string }).code
-                    : undefined
-            if (code === 'ELOOP') {
+            if (getErrnoCode(err) === 'ELOOP') {
                 throw new Error(`Refusing to read symlink during import: ${filename}`, {
                     cause: err,
                 })

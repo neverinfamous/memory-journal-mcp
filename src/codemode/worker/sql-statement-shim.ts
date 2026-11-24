@@ -4,6 +4,7 @@
  */
 
 import { parseSqlStatement } from '../sql-positional-binder.js'
+import { isCallable, isObjectOrFunction } from './result-proxy-aliases.js'
 
 function invokeGroupMethod(
     shimMj: Record<string, unknown>,
@@ -13,12 +14,12 @@ function invokeGroupMethod(
     params: Record<string, unknown>
 ): unknown {
     const groupObj = shimMj[group]
-    if ((typeof groupObj === 'object' && groupObj !== null) || typeof groupObj === 'function') {
-        const fn =
+    if (isObjectOrFunction(groupObj)) {
+        const fn: unknown =
             (Reflect.get(groupObj, camelName) as unknown) ??
             (Reflect.get(groupObj, snakeName) as unknown)
-        if (typeof fn === 'function') {
-            return (fn as (p: Record<string, unknown>) => unknown)(params)
+        if (isCallable(fn)) {
+            return fn(params)
         }
     }
     return undefined
@@ -45,10 +46,23 @@ const ACTION_TARGETS: Record<string, [group: string, camel: string, snake: strin
     get_by_id: [['core', 'getEntryById', 'get_entry_by_id']],
 }
 
+export interface PreparedStatementShim {
+    run: (...args: unknown[]) => unknown
+    get: (...args: unknown[]) => unknown
+    all: (...args: unknown[]) => unknown
+    iterate: (...args: unknown[]) => unknown
+    bind: (...args: unknown[]) => PreparedStatementShim
+    columns: () => unknown[]
+    raw: () => PreparedStatementShim
+    pluck: () => PreparedStatementShim
+    expand: () => PreparedStatementShim
+    safeIntegers: () => PreparedStatementShim
+}
+
 export function createPreparedStatementShim(
     sql: string,
     shimMj: Record<string, unknown>
-): Record<string, unknown> {
+): PreparedStatementShim {
     let boundArgs: unknown[] = []
     const executeOperation = (args: unknown[]): unknown => {
         const effectiveArgs = args.length > 0 ? args : boundArgs
@@ -64,7 +78,7 @@ export function createPreparedStatementShim(
         return unmappedResult()
     }
 
-    const stmtObj: Record<string, unknown> = {
+    const stmtObj: PreparedStatementShim = {
         run: (...args: unknown[]) => executeOperation(args),
         get: (...args: unknown[]) => executeOperation(args),
         all: (...args: unknown[]) => executeOperation(args),

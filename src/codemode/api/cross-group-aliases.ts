@@ -124,15 +124,17 @@ function wrapEntryCreatorFn(
     const wrapper = async (...args: unknown[]): Promise<unknown> => {
         const params = args[0]
         if (isRecord(params)) {
-            const hasBatch = Array.isArray(params['entries'])
-            const preloadedRegistry = hasBatch
-                ? (readProjectRegistryPayload(ctx.registryProvider?.()) ?? null)
-                : undefined
+            const rawEntries = params['entries']
+            const entriesList = Array.isArray(rawEntries) ? rawEntries : undefined
+            const preloadedRegistry =
+                entriesList !== undefined
+                    ? (readProjectRegistryPayload(ctx.registryProvider?.()) ?? null)
+                    : undefined
             enrichEntryRecord(params, ctx.registryProvider, undefined, undefined, preloadedRegistry)
-            if (hasBatch) {
+            if (entriesList !== undefined) {
                 const topWs = params['workspace_id'] ?? params['workspaceId']
                 const topProj = params['project_number'] ?? params['projectNumber']
-                for (const item of params['entries'] as unknown[]) {
+                for (const item of entriesList) {
                     if (isRecord(item)) {
                         enrichEntryRecord(item, ctx.registryProvider, topWs, topProj, preloadedRegistry)
                     }

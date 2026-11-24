@@ -5,7 +5,7 @@
  * Handles resource and prompt registration with the MCP SDK.
  */
 
-import type { McpServer } from '@modelcontextprotocol/server'
+import type { GetPromptResult, McpServer } from '@modelcontextprotocol/server'
 import { ResourceTemplate } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
@@ -14,6 +14,7 @@ import { getPrompt } from '../handlers/prompts/index.js'
 import { auditOperation } from '../audit/interceptor.js'
 import { extractAuditScopeFromArgs } from '../audit/audit-query-helpers.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import { isRecord } from '../utils/type-guards.js'
 import { ConfigurationError } from '../types/errors.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
 import type { BriefingConfig } from '../handlers/resources/shared.js'
@@ -203,6 +204,79 @@ export function registerResources(
  * get a schema of optional strings so prompts/get receives those values.
  * The SDK validates with `args ?? {}`, so omitting the arguments still works.
  */
+function extractPromptStringArgs(providedArgs: unknown): Record<string, string> {
+    const args: Record<string, string> = {}
+    if (isRecord(providedArgs)) {
+        for (const [k, v] of Object.entries(providedArgs)) {
+            if (typeof v === 'string') {
+                args[k] = v
+            }
+        }
+    }
+    return args
+}
+
+function createPromptCallback(
+    promptDef: PromptDefinition,
+    db: IDatabaseAdapter,
+    teamDb?: IDatabaseAdapter,
+    runtime?: ServerRuntime,
+    github?: GitHubIntegration,
+    briefingConfig?: BriefingConfig | (() => BriefingConfig)
+): (providedArgs: unknown) => Promise<GetPromptResult> {
+    return (providedArgs: unknown): Promise<GetPromptResult> => {
+        if (!runtime) {
+            throw new ConfigurationError(
+                'ServerRuntime is logically required for secure prompt execution.'
+            )
+        }
+        const auditLog = runtime.auditLogger
+        enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
+        const forceAudit =
+            promptDef.capabilities?.requiresTeamScope === true ||
+            promptDef.capabilities?.requiresAuditScope === true ||
+            promptDef.capabilities?.requiresAdminScope === true
+        return auditOperation(
+            auditLog,
+            'prompt',
+            promptDef.name,
+            async () => {
+                const executePrompt = async (): Promise<GetPromptResult> => {
+                    const args = extractPromptStringArgs(providedArgs)
+                    const resolvedBriefingConfig =
+                        typeof briefingConfig === 'function' ? briefingConfig() : briefingConfig
+                    const promptResult = await getPrompt(
+                        promptDef.name,
+                        args,
+                        db,
+                        teamDb,
+                        github,
+                        resolvedBriefingConfig,
+                        runtime
+                    )
+                    return {
+                        messages: promptResult.messages.map((m) => ({
+                            role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+                            content: {
+                                type: 'text' as const,
+                                text: m.content.text,
+                            },
+                        })),
+                    }
+                }
+
+                return await runtime.maintenanceManager.withActiveJob(executePrompt)
+            },
+            {
+                forceAudit,
+                capabilities: promptDef.capabilities,
+                runtime,
+                ...extractAuditScopeFromArgs(providedArgs, undefined, runtime),
+            }
+        )
+    }
+}
+
 export function registerPrompts(
     server: McpServer,
     prompts: PromptDefinition[],
@@ -222,61 +296,7 @@ export function registerPrompts(
                 ...(argsZodSchema !== undefined ? { argsSchema: argsZodSchema } : {}),
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
-            (providedArgs) => {
-                if (!runtime) {
-                    throw new ConfigurationError(
-                        'ServerRuntime is logically required for secure prompt execution.'
-                    )
-                }
-                const auditLog = runtime.auditLogger
-                enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
-                const forceAudit =
-                    promptDef.capabilities?.requiresTeamScope === true ||
-                    promptDef.capabilities?.requiresAuditScope === true ||
-                    promptDef.capabilities?.requiresAdminScope === true
-                return auditOperation(
-                    auditLog,
-                    'prompt',
-                    promptDef.name,
-                    async () => {
-                        const executePrompt = async (): Promise<{
-                            messages: {
-                                role: 'user' | 'assistant'
-                                content: { type: 'text'; text: string }
-                            }[]
-                        }> => {
-                            const args = providedArgs as Record<string, string>
-                            const resolvedBriefingConfig =
-                                typeof briefingConfig === 'function'
-                                    ? briefingConfig()
-                                    : briefingConfig
-                            const promptResult = await getPrompt(
-                                promptDef.name,
-                                args,
-                                db,
-                                teamDb,
-                                github,
-                                resolvedBriefingConfig,
-                                runtime
-                            )
-                            return {
-                                messages: promptResult.messages.map((m) => ({
-                                    role: m.role as 'user' | 'assistant',
-                                    content: m.content as { type: 'text'; text: string },
-                                })),
-                            }
-                        }
-
-                        return await runtime.maintenanceManager.withActiveJob(executePrompt)
-                    },
-                    {
-                        forceAudit,
-                        capabilities: promptDef.capabilities,
-                        runtime,
-                        ...extractAuditScopeFromArgs(providedArgs, undefined, runtime),
-                    }
-                )
-            }
+            createPromptCallback(promptDef, db, teamDb, runtime, github, briefingConfig)
         )
     }
 }

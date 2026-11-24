@@ -12,6 +12,7 @@ import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import { getCallerIdentity } from './rbac.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { ValidationError } from '../../../types/errors.js'
+import { isRecord } from '../../../utils/type-guards.js'
 
 const TeamMemberOutputSchema = z.object({
     id: z.number().int(),
@@ -29,8 +30,8 @@ const authorAliases = ['path', 'target', 'user', 'name', 'account', 'username', 
 const roleAliases = ['keep', 'mode', 'type', 'level', 'permission'];
 
 const preprocessMemberBase = (val: unknown, rejectWorkspaceId: boolean): unknown => {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) };
+    if (isRecord(val)) {
+        const obj: Record<string, unknown> = { ...val };
         let modified = false;
 
         for (const key of authorAliases) {
@@ -165,7 +166,113 @@ const TeamListMembersSchema = z.object({}).strict()
 // Tool Definitions
 // ============================================================================
 
-export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
+function executeTeamAddMember(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): unknown {
+    if (teamDb.addTeamMember === undefined) {
+        return { success: false, error: 'Database adapter does not support team membership', code: 'UNSUPPORTED' }
+    }
+
+    const input = TeamAddMemberSchema.parse(params)
+    const caller = getCallerIdentity()
+
+    if (typeof teamDb.listAuthorAliases === 'function') {
+        const aliases = teamDb.listAuthorAliases(undefined, '*')
+        const conflictingAlias = aliases.find(
+            (a) => a.alias.toLowerCase() === input.author.toLowerCase()
+        )
+        if (conflictingAlias !== undefined) {
+            throw new ValidationError(
+                `Cannot add team member '${input.author}' because it is already registered as an author alias for '${conflictingAlias.canonicalAuthor}'.`,
+                {
+                    author: input.author,
+                    canonicalAuthor: conflictingAlias.canonicalAuthor,
+                }
+            )
+        }
+    }
+
+    // Notice: wrapWithRbac will ensure caller is 'admin' BEFORE we get here,
+    // UNLESS the table is empty, in which case RBAC is inactive and allows everyone.
+    // The MembersManager natively handles the bootstrap logic inside `addTeamMember`.
+    const member = teamDb.addTeamMember(input.author, input.role, caller, input.display_name)
+    triggerTeamNotifications(context)
+    const safeMember = sanitizeMemberRecord(member)
+    return { success: true, member: safeMember, message: `Added ${safeMember.author} as ${safeMember.role}` }
+}
+
+function executeTeamRemoveMember(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): unknown {
+    if (teamDb.removeTeamMember === undefined) return { success: false, error: 'Unsupported' }
+
+    const { author } = TeamRemoveMemberSchema.parse(params)
+    const caller = getCallerIdentity()
+    if (author.toLowerCase() === caller.toLowerCase()) {
+        return { success: false, error: 'Cannot remove yourself. Have another admin do it.', code: 'VALIDATION_ERROR' }
+    }
+
+    const success = teamDb.removeTeamMember(author)
+    if (!success) {
+        return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
+    }
+    triggerTeamNotifications(context)
+    return { success: true, message: `Removed ${author} from team` }
+}
+
+function executeTeamUpdateMemberRole(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): unknown {
+    if (teamDb.updateTeamMemberRole === undefined) return { success: false, error: 'Unsupported' }
+
+    const { author, role } = TeamUpdateMemberRoleSchema.parse(params)
+    if (role !== 'admin' && teamDb.listTeamMembers !== undefined) {
+        const existing = teamDb.getTeamMember !== undefined ? teamDb.getTeamMember(author) : null
+        if (existing?.role === 'admin') {
+            const admins = teamDb.listTeamMembers().filter((m) => m.role === 'admin')
+            if (admins.length <= 1) {
+                return {
+                    success: false,
+                    error: 'Cannot demote the last admin in the team. Promote another member to admin first.',
+                    code: 'VALIDATION_ERROR',
+                }
+            }
+        }
+    }
+    const updated = teamDb.updateTeamMemberRole(author, role)
+    if (!updated) {
+        return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
+    }
+    triggerTeamNotifications(context)
+    return { success: true, member: sanitizeMemberRecord(updated) }
+}
+
+function executeTeamListMembers(teamDb: NonNullable<ToolContext['teamDb']>, params: unknown): unknown {
+    if (teamDb.listTeamMembers === undefined) return { success: false, error: 'Unsupported' }
+    TeamListMembersSchema.parse(params ?? {})
+
+    const members = teamDb.listTeamMembers().map(sanitizeMemberRecord)
+    return { success: true, members, count: members.length }
+}
+
+function executeTeamGetMember(teamDb: NonNullable<ToolContext['teamDb']>, params: unknown): unknown {
+    if (teamDb.getTeamMember === undefined) return { success: false, error: 'Unsupported' }
+
+    const { author } = TeamGetMemberSchema.parse(params)
+    const member = teamDb.getTeamMember(author)
+    if (!member) {
+        return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
+    }
+    return { success: true, member: sanitizeMemberRecord(member) }
+}
+
+function buildTeamMemberAddRemoveTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
 
     return [
@@ -193,35 +300,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    if (teamDb.addTeamMember === undefined) return { success: false, error: 'Database adapter does not support team membership', code: 'UNSUPPORTED' }
-
-                    const input = TeamAddMemberSchema.parse(params)
-                    const caller = getCallerIdentity()
-
-                    if (typeof teamDb.listAuthorAliases === 'function') {
-                        const aliases = teamDb.listAuthorAliases(undefined, '*')
-                        const conflictingAlias = aliases.find(
-                            (a) => a.alias.toLowerCase() === input.author.toLowerCase()
-                        )
-                        if (conflictingAlias !== undefined) {
-                            throw new ValidationError(
-                                `Cannot add team member '${input.author}' because it is already registered as an author alias for '${conflictingAlias.canonicalAuthor}'.`,
-                                {
-                                    author: input.author,
-                                    canonicalAuthor: conflictingAlias.canonicalAuthor,
-                                }
-                            )
-                        }
-                    }
-
-                    // Notice: wrapWithRbac will ensure caller is 'admin' BEFORE we get here,
-                    // UNLESS the table is empty, in which case RBAC is inactive and allows everyone.
-                    // The MembersManager natively handles the bootstrap logic inside `addTeamMember`.
-
-                    const member = teamDb.addTeamMember(input.author, input.role, caller, input.display_name)
-                    triggerTeamNotifications(context)
-                    const safeMember = sanitizeMemberRecord(member)
-                    return { success: true, member: safeMember, message: `Added ${safeMember.author} as ${safeMember.role}` }
+                    return executeTeamAddMember(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -250,76 +329,53 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    if (teamDb.removeTeamMember === undefined) return { success: false, error: 'Unsupported' }
-
-                    const { author } = TeamRemoveMemberSchema.parse(params)
-
-                    const caller = getCallerIdentity()
-                    if (author.toLowerCase() === caller.toLowerCase()) {
-                        return { success: false, error: 'Cannot remove yourself. Have another admin do it.', code: 'VALIDATION_ERROR' }
-                    }
-
-                    const success = teamDb.removeTeamMember(author)
-                    if (!success) {
-                        return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
-                    }
-                    triggerTeamNotifications(context)
-                    return { success: true, message: `Removed ${author} from team` }
+                    return executeTeamRemoveMember(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
             },
         },
-        {
-            name: 'team_update_member_role',
-            title: 'Update Team Member Role',
-            description: 'Update the role of an existing team member. Requires TEAM_DB_PATH.',
-            group: 'team',
-            inputSchema: TeamUpdateMemberRoleSchemaMcp,
-            outputSchema: z.object({
-                success: z.boolean(),
-                member: TeamMemberOutputSchema.optional(),
-                error: z.string().optional(),
-            }).extend(ErrorFieldsMixin.shape),
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            capabilities: {
-                requiresAdminScope: true,
-            },
-            handler: (params: unknown) => {
-                try {
-                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    if (teamDb.updateTeamMemberRole === undefined) return { success: false, error: 'Unsupported' }
+    ]
+}
 
-                    const { author, role } = TeamUpdateMemberRoleSchema.parse(params)
-                    if (role !== 'admin' && teamDb.listTeamMembers !== undefined) {
-                        const existing = teamDb.getTeamMember !== undefined ? teamDb.getTeamMember(author) : null
-                        if (existing?.role === 'admin') {
-                            const admins = teamDb.listTeamMembers().filter((m) => m.role === 'admin')
-                            if (admins.length <= 1) {
-                                return {
-                                    success: false,
-                                    error: 'Cannot demote the last admin in the team. Promote another member to admin first.',
-                                    code: 'VALIDATION_ERROR',
-                                }
-                            }
-                        }
-                    }
-                    const updated = teamDb.updateTeamMemberRole(author, role)
-                    if (!updated) {
-                        return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
-                    }
-                    triggerTeamNotifications(context)
-                    return { success: true, member: sanitizeMemberRecord(updated) }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+function buildTeamUpdateMemberRoleTool(context: ToolContext): ToolDefinition {
+    const { teamDb } = context
+
+    return {
+        name: 'team_update_member_role',
+        title: 'Update Team Member Role',
+        description: 'Update the role of an existing team member. Requires TEAM_DB_PATH.',
+        group: 'team',
+        inputSchema: TeamUpdateMemberRoleSchemaMcp,
+        outputSchema: z.object({
+            success: z.boolean(),
+            member: TeamMemberOutputSchema.optional(),
+            error: z.string().optional(),
+        }).extend(ErrorFieldsMixin.shape),
+        annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
         },
+        capabilities: {
+            requiresAdminScope: true,
+        },
+        handler: (params: unknown) => {
+            try {
+                if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                return executeTeamUpdateMemberRole(teamDb, context, params)
+            } catch (err) {
+                return formatHandlerError(err)
+            }
+        },
+    }
+}
+
+function buildTeamMemberReadTools(context: ToolContext): ToolDefinition[] {
+    const { teamDb } = context
+
+    return [
         {
             name: 'team_list_members',
             title: 'List Team Members',
@@ -341,11 +397,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    if (teamDb.listTeamMembers === undefined) return { success: false, error: 'Unsupported' }
-                    TeamListMembersSchema.parse(params ?? {})
-
-                    const members = teamDb.listTeamMembers().map(sanitizeMemberRecord)
-                    return { success: true, members, count: members.length }
+                    return executeTeamListMembers(teamDb, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -371,18 +423,19 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    if (teamDb.getTeamMember === undefined) return { success: false, error: 'Unsupported' }
-
-                    const { author } = TeamGetMemberSchema.parse(params)
-                    const member = teamDb.getTeamMember(author)
-                    if (!member) {
-                        return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
-                    }
-                    return { success: true, member: sanitizeMemberRecord(member) }
+                    return executeTeamGetMember(teamDb, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
             },
         },
+    ]
+}
+
+export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
+    return [
+        ...buildTeamMemberAddRemoveTools(context),
+        buildTeamUpdateMemberRoleTool(context),
+        ...buildTeamMemberReadTools(context),
     ]
 }

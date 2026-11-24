@@ -161,21 +161,19 @@ export async function cleanupDeletedVectors(
     const reporter = context.teamVectorManager
         ? createBatchProgressReporter(context.progress, deleted.length, 10)
         : undefined
-    for (let i = 0; i < deleted.length; i++) {
-        const id = deleted[i]
-        if (id !== undefined) {
-            try {
-                teamDb.deleteVector(id)
-            } catch (vecErr) {
-                const msg = vecErr instanceof Error ? vecErr.message : String(vecErr)
-                logger.warning('Team batch delete vector cleanup failed', { entryId: id, error: msg })
-                warnings.push(`Vector cleanup failed for team entry ${String(id)}: ${msg}`)
-            }
+    await deleted.reduce<Promise<void>>(async (chain, id, i) => {
+        await chain
+        try {
+            teamDb.deleteVector(id)
+        } catch (vecErr) {
+            const msg = vecErr instanceof Error ? vecErr.message : String(vecErr)
+            logger.warning('Team batch delete vector cleanup failed', { entryId: id, error: msg })
+            warnings.push(`Vector cleanup failed for team entry ${String(id)}: ${msg}`)
         }
         if (reporter !== undefined) {
             await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
         }
-    }
+    }, Promise.resolve())
     if (reporter === undefined) {
         await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
     }

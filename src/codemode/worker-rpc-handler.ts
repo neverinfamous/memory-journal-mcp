@@ -10,7 +10,9 @@ import {
     exceedsMaxToolInputElements,
     resolveEffectiveMaxToolInputElements,
 } from '../utils/tool-input-bounds.js'
+import { createNullProtoRecord } from '../utils/type-guards.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { isCallable } from './worker/result-proxy-aliases.js'
 
 function safePostRpcResponse(hostPort: MessagePort, response: RpcResponse): void {
     try {
@@ -98,10 +100,7 @@ export function getAllowedMethodMetadata(apiBindings: Record<string, unknown>): 
     const cached = ALLOWED_METHODS_CACHE.get(apiBindings)
     if (cached !== undefined) return cached
     const methodList: Record<string, string[]> = {}
-    const methodSets: Record<string, ReadonlySet<string>> = Object.create(null) as Record<
-        string,
-        ReadonlySet<string>
-    >
+    const methodSets = createNullProtoRecord<ReadonlySet<string>>()
     const topLevel: string[] = []
     for (const [key, value] of Object.entries(apiBindings)) {
         if (typeof value === 'function') {
@@ -184,9 +183,8 @@ export async function handleRpcRequest(
         }
         const target = resolveRpcTarget(req, apiBindings)
 
-        if (typeof target === 'function') {
-            const callFn = (): Promise<unknown> =>
-                (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
+        if (isCallable(target)) {
+            const callFn = (): Promise<unknown> => Promise.resolve(target(...safeArgs))
             const overrides = buildRpcOverrides(req)
             response.result =
                 overrides !== undefined

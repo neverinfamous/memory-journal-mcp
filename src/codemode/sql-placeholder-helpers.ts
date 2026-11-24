@@ -5,6 +5,7 @@
  * [BOUNDARY] Worker-thread safe: pure TypeScript/JS helpers with zero host imports.
  */
 
+import { createNullProtoRecord, isRecord } from '../utils/type-guards.js'
 import { advanceQuotedChar, findTopLevelSqlKeyword } from './sql-literal-scope.js'
 
 export interface Placeholder {
@@ -15,9 +16,7 @@ export interface Placeholder {
 
 export const COLUMN_BEFORE_PLACEHOLDER = /[`"'[]?([A-Za-z_][\w]*)[`"'\]]?\s*(?:=|==|LIKE)\s*$/i
 
-export function isPlainRecord(val: unknown): val is Record<string, unknown> {
-    return typeof val === 'object' && val !== null && !Array.isArray(val)
-}
+export { isRecord as isPlainRecord }
 
 export function normalizeSqlColumn(raw: string): string {
     const col = raw.trim().replace(/[`"'[\]]/g, '').toLowerCase()
@@ -107,27 +106,24 @@ export interface SqlRecordBindIndex {
     unconsumedEntries(consumedIds: ReadonlySet<number>): { snakeCol: string; value: unknown }[]
 }
 
-const COLUMN_SYNONYMS: Record<string, readonly string[]> = Object.assign(
-    Object.create(null) as Record<string, readonly string[]>,
-    {
-        id: ['id', 'entry_id'],
-        entry_id: ['entry_id', 'id'],
-        project_number: ['project_number', 'project_id'],
-        project_id: ['project_id', 'project_number'],
-        entry_type: ['entry_type', 'type'],
-        type: ['type', 'entry_type'],
-    }
-)
+const COLUMN_SYNONYMS: Record<string, readonly string[]> = createNullProtoRecord<readonly string[]>({
+    id: ['id', 'entry_id'],
+    entry_id: ['entry_id', 'id'],
+    project_number: ['project_number', 'project_id'],
+    project_id: ['project_id', 'project_number'],
+    entry_type: ['entry_type', 'type'],
+    type: ['type', 'entry_type'],
+})
 
 export function createSqlRecordBindIndex(args: unknown[]): SqlRecordBindIndex {
     const entries: RecordEntry[] = []
-    const byExact = Object.create(null) as Record<string, RecordEntry>
-    const byStripped = Object.create(null) as Record<string, RecordEntry>
-    const byLower = Object.create(null) as Record<string, RecordEntry>
-    const bySnake = Object.create(null) as Record<string, RecordEntry>
+    const byExact = createNullProtoRecord<RecordEntry>()
+    const byStripped = createNullProtoRecord<RecordEntry>()
+    const byLower = createNullProtoRecord<RecordEntry>()
+    const bySnake = createNullProtoRecord<RecordEntry>()
 
     for (const arg of args) {
-        if (!isPlainRecord(arg)) continue
+        if (!isRecord(arg)) continue
         for (const [key, value] of Object.entries(arg)) {
             if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
             const stripped = key.replace(/^[@:$]/, '')

@@ -5,15 +5,16 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { coerceIntString, MAX_QUERY_LIMIT, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { coerceAnchorStatusAlias } from '../schemas/hallucination-healer-fields.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 
 export { prefetchBatchCommitFiles, resolveEntryAnchors } from './entry-anchors.js'
 
 function normalizeAnchorUpdateItem(rawItem: unknown): unknown {
-    if (typeof rawItem !== 'object' || rawItem === null || Array.isArray(rawItem)) {
+    if (!isRecord(rawItem)) {
         return rawItem
     }
-    const item = { ...(rawItem as Record<string, unknown>) }
+    const item: Record<string, unknown> = { ...rawItem }
     // [INVARIANT] M2: only anchor-ID aliases map to entry_anchors.id. entry_id/entryId are
     // journal entry IDs and are left unmapped so the schema rejects them (missing `id`).
     const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId']
@@ -36,8 +37,8 @@ function normalizeAnchorUpdateItem(rawItem: unknown): unknown {
 }
 
 function preprocessMarkAnchorsStale(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = { ...(val as Record<string, unknown>) }
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
     if (obj['updates'] === undefined && Array.isArray(obj['anchors'])) {
         obj['updates'] = obj['anchors']
         delete obj['anchors']

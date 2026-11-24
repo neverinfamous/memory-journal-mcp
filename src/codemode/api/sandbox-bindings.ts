@@ -2,7 +2,6 @@
  * Sandbox bindings builder for JournalApi.
  */
 
-import type { ToolGroup } from '../../types/filtering.js'
 import { sendProgress, type ProgressContext } from '../../utils/progress-utils.js'
 import type { GroupApiRecord } from './types.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from './schema-help.js'
@@ -20,7 +19,7 @@ export interface SandboxBindingsSource {
     readonly git: GroupApiRecord
     readonly memory: GroupApiRecord
     getGroups(): string[]
-    getGroupMethods(group: ToolGroup): string[]
+    getGroupMethods(group: string): string[]
 }
 
 const FACTORY_SHIM_NAMES = [
@@ -210,7 +209,7 @@ export function buildSandboxBindingsMap(
         help: (): Promise<{ groups: string[]; totalMethods: number; usage: string }> => {
             const groups = api.getGroups()
             let totalMethods = 0
-            for (const group of groups) totalMethods += api.getGroupMethods(group as ToolGroup).length
+            for (const group of groups) totalMethods += api.getGroupMethods(group).length
             return Promise.resolve({
                 groups,
                 totalMethods,

@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
 import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
+import { getErrnoCode, isRecord } from './type-guards.js'
 
 const SENSITIVE_CLI_FLAG_RE =
     /^--(?:[a-z0-9_-]+[-_])?(?:auth[-_]?token|token|secret|password|passwd|passphrase|api[-_]?key|apikey|webhook[-_]?auth|encryption[-_]?key|private[-_]?key|key)(?:=(.*))?$/i
@@ -89,8 +90,9 @@ export function sanitizeIssueInput(
         if (jsonRes.resolved) {
             return sanitizeIssueInput(jsonRes.value, depth + 1, seen, budget)
         }
+        if (!isRecord(value)) return '[Unserializable]'
         const clean: Record<string, unknown> = {}
-        const entries = Object.entries(value as Record<string, unknown>)
+        const entries = Object.entries(value)
         const limit = Math.min(entries.length, MAX_ISSUE_COLLECTION_ITEMS)
         for (let i = 0; i < limit; i++) {
             const pair = entries[i]
@@ -148,8 +150,21 @@ async function isUnsafeIssueFile(targetPath: string): Promise<boolean> {
         const info = await fsPromises.lstat(targetPath)
         return info.isSymbolicLink() || !info.isFile()
     } catch (err: unknown) {
-        const code = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined
-        return code !== 'ENOENT'
+        return getErrnoCode(err) !== 'ENOENT'
+    }
+}
+
+async function rotateArchivePair(logFile: string, index: number): Promise<boolean> {
+    const oldArchive = `${logFile}.${String(index)}`
+    const newArchive = `${logFile}.${String(index + 1)}`
+    if ((await isUnsafeIssueFile(oldArchive)) || (await isUnsafeIssueFile(newArchive))) {
+        return false
+    }
+    try {
+        await fsPromises.rename(oldArchive, newArchive)
+        return true
+    } catch (renameErr: unknown) {
+        return getErrnoCode(renameErr) === 'ENOENT'
     }
 }
 
@@ -158,29 +173,21 @@ async function rotateIssueLogIfNeeded(logFile: string): Promise<boolean> {
         const info = await fsPromises.lstat(logFile)
         if (info.isSymbolicLink() || !info.isFile()) return false
         if (info.size < MAX_ISSUE_LOG_BYTES) return true
-        for (let i = MAX_ISSUE_ARCHIVES - 1; i >= 1; i--) {
-            const oldArchive = `${logFile}.${String(i)}`
-            const newArchive = `${logFile}.${String(i + 1)}`
-            if ((await isUnsafeIssueFile(oldArchive)) || (await isUnsafeIssueFile(newArchive))) {
-                return false
-            }
-            try {
-                await fsPromises.rename(oldArchive, newArchive)
-            } catch (renameErr: unknown) {
-                const code =
-                    renameErr instanceof Error && 'code' in renameErr
-                        ? (renameErr as NodeJS.ErrnoException).code
-                        : undefined
-                if (code !== 'ENOENT') return false
-            }
-        }
+        const archiveIndices = Array.from(
+            { length: Math.max(0, MAX_ISSUE_ARCHIVES - 1) },
+            (_, offset) => MAX_ISSUE_ARCHIVES - 1 - offset
+        )
+        const rotatedAll = await archiveIndices.reduce<Promise<boolean>>(
+            async (okPromise, idx) => ((await okPromise) ? rotateArchivePair(logFile, idx) : false),
+            Promise.resolve(true)
+        )
+        if (!rotatedAll) return false
         const firstArchive = `${logFile}.1`
         if (await isUnsafeIssueFile(firstArchive)) return false
         await fsPromises.rename(logFile, firstArchive)
         return true
     } catch (err: unknown) {
-        const code = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined
-        return code === 'ENOENT'
+        return getErrnoCode(err) === 'ENOENT'
     }
 }
 

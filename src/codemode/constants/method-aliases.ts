@@ -5,8 +5,10 @@
  * Maps alias name -> canonical method name.
  */
 
+import { createNullProtoRecord } from '../../utils/type-guards.js'
+
 function mapToTarget(keys: readonly string[], target: string): Record<string, string> {
-    const out = Object.create(null) as Record<string, string>
+    const out = createNullProtoRecord<string>()
     for (const k of keys) out[k] = target
     return out
 }
@@ -14,7 +16,7 @@ function mapToTarget(keys: readonly string[], target: string): Record<string, st
 function nullProtoRecord<T = string>(
     ...sources: (Record<string, T> | undefined)[]
 ): Record<string, T> {
-    const out = Object.create(null) as Record<string, T>
+    const out = createNullProtoRecord<T>()
     for (const src of sources) {
         if (src === undefined) continue
         for (const k of Object.keys(src)) {

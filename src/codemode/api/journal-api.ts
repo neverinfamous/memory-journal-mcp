@@ -206,8 +206,8 @@ export class JournalApi {
         return [...this.toolsByGroup.keys()].sort()
     }
 
-    getGroupMethods(group: ToolGroup): string[] {
-        const groupApi = this.groupApiMap[group]
+    getGroupMethods(group: string): string[] {
+        const groupApi = Object.hasOwn(this.groupApiMap, group) ? this.groupApiMap[group] : undefined
         if (!groupApi) return []
         return Object.keys(groupApi)
             .filter((k) => k !== 'help')

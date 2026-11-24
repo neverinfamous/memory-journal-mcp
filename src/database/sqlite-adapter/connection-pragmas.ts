@@ -42,27 +42,33 @@ export function installStatementCache(db: Database): void {
     const stmtCache = new Map<string, ReturnType<Database['prepare']>>()
     const MAX_CACHE_SIZE = 256
 
-    db.prepare = ((source: string) => {
-        const cached = stmtCache.get(source)
-        if (cached !== undefined) {
-            stmtCache.delete(source)
-            stmtCache.set(source, cached)
-            return cached
-        }
-        if (DDL_RE.test(source)) {
-            stmtCache.clear()
-            return rawPrepare(source)
-        }
-        const stmt = rawPrepare(source)
-        if (stmtCache.size >= MAX_CACHE_SIZE) {
-            const oldestKey = stmtCache.keys().next().value
-            if (oldestKey !== undefined) {
-                stmtCache.delete(oldestKey)
+    db.prepare = new Proxy(rawPrepare, {
+        apply(target, _thisArg: unknown, argArray: unknown[]): ReturnType<Database['prepare']> {
+            const source = argArray[0]
+            if (typeof source !== 'string') {
+                throw new TypeError('Expected first argument to be a string')
             }
-        }
-        stmtCache.set(source, stmt)
-        return stmt
-    }) as Database['prepare']
+            const cached = stmtCache.get(source)
+            if (cached !== undefined) {
+                stmtCache.delete(source)
+                stmtCache.set(source, cached)
+                return cached
+            }
+            if (DDL_RE.test(source)) {
+                stmtCache.clear()
+                return target(source)
+            }
+            const stmt = target(source)
+            if (stmtCache.size >= MAX_CACHE_SIZE) {
+                const oldestKey = stmtCache.keys().next().value
+                if (oldestKey !== undefined) {
+                    stmtCache.delete(oldestKey)
+                }
+            }
+            stmtCache.set(source, stmt)
+            return stmt
+        },
+    })
 
     if (typeof db.exec === 'function') {
         const rawExec = db.exec.bind(db)

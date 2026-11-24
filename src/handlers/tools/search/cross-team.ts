@@ -346,9 +346,11 @@ export async function handleCrossTeamSearch(
         targetLabels
     )
     const merged = mergeMultipleSources(sources, args.limit, args.sort_by)
-    const finalEntries = merged.map((entry) => {
-        const rawAuthor: unknown =
-            'author' in entry ? (entry as { author?: unknown }).author : undefined
+    const finalEntries: (z.infer<typeof EntryOutputSchema> & {
+        team_db: string
+        author?: string | null
+    })[] = merged.map((entry) => {
+        const rawAuthor = entry['author']
         const author =
             typeof rawAuthor === 'string'
                 ? sanitizeAuthor(rawAuthor)
@@ -357,11 +359,14 @@ export async function handleCrossTeamSearch(
                   : undefined
         return {
             ...entry,
+            id: typeof entry['id'] === 'number' ? entry['id'] : 0,
+            entryType: typeof entry['entryType'] === 'string' ? entry['entryType'] : 'other',
+            isPersonal: typeof entry['isPersonal'] === 'boolean' ? entry['isPersonal'] : false,
             team_db: entry.team_db || '',
-            source: entry.source ?? ('team' as const),
+            source: entry.source,
             ...(author !== undefined ? { author } : {}),
         }
-    }) as (z.infer<typeof EntryOutputSchema> & { team_db: string; author?: string | null })[]
+    })
 
     const everySearchFailed = searched_dbs.length === 0 && errors.length > 0
     return {

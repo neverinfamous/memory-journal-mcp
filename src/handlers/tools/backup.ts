@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import type { ErrorResponse } from '../../types/error-types.js'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
@@ -181,7 +182,7 @@ const CleanupBackupsSchema = z
 async function executeRestoreBackup(
     params: unknown,
     context: ToolContext
-): Promise<Record<string, unknown>> {
+): Promise<Record<string, unknown> | ErrorResponse> {
     const { db, progress, config, vectorManager } = context
     const input = RestoreBackupSchema.parse(params)
 
@@ -236,8 +237,95 @@ async function executeRestoreBackup(
     }
 }
 
+async function executeBackupJournal(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown> | ErrorResponse> {
+    try {
+        const input = BackupJournalSchema.parse(params)
+        const progress = context.progress
+        await sendProgress(progress, 0, 2, 'Creating backup...')
+        const result = await context.db.exportToFile(input.name)
+        await sendProgress(progress, 2, 2, 'Backup complete')
+        return {
+            success: true,
+            message:
+                input.compress === undefined
+                    ? `Backup created successfully`
+                    : `Backup created successfully (the 'compress' parameter was ignored; compression is handled by the database engine)`,
+            filename: result.filename,
+            path: path.basename(result.path),
+            sizeBytes: result.sizeBytes,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+function executeListBackups(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    try {
+        ListBackupsSchemaMcp.parse(params ?? {})
+        const backups = context.db.listBackups()
+        const maskedBackups = backups.map((b) => ({
+            ...b,
+            path: path.basename(b.path),
+        }))
+        return {
+            backups: maskedBackups,
+            total: backups.length,
+            backupsDirectory: path.basename(context.db.getBackupsDir()),
+            hint:
+                backups.length === 0
+                    ? 'No backups found. Use backup_journal to create one.'
+                    : undefined,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+function executeCleanupBackups(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    try {
+        const { keep_count } = CleanupBackupsSchema.parse(params)
+        const result = context.db.deleteOldBackups(keep_count)
+        const hasFailed = result.failed !== undefined && result.failed.length > 0
+        const allFailed = result.deleted.length === 0 && hasFailed
+
+        return {
+            success: !allFailed,
+            deleted: result.deleted,
+            ...(hasFailed ? { failed: result.failed } : {}),
+            deletedCount: result.deleted.length,
+            keptCount: result.kept,
+            ...(hasFailed
+                ? {
+                      warning: `Failed to delete ${String(result.failed?.length ?? 0)} backup file(s).`,
+                  }
+                : {}),
+            ...(allFailed
+                ? {
+                      error: `Failed to delete ${String(result.failed?.length ?? 0)} old backup(s).`,
+                  }
+                : {}),
+            message:
+                result.deleted.length > 0
+                    ? `Deleted ${String(result.deleted.length)} old backup(s), kept ${String(result.kept)}`
+                    : hasFailed
+                      ? `Failed to delete ${String(result.failed?.length ?? 0)} backup(s); kept ${String(result.kept)}.`
+                      : `No backups to delete. Currently have ${String(result.kept)} backup(s).`,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
 export function getBackupTools(context: ToolContext): ToolDefinition[] {
-    const { db } = context
     return [
         {
             name: 'backup_journal',
@@ -253,27 +341,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
-                try {
-                    const input = BackupJournalSchema.parse(params)
-                    const progress = context.progress
-                    await sendProgress(progress, 0, 2, 'Creating backup...')
-                    const result = await db.exportToFile(input.name)
-                    await sendProgress(progress, 2, 2, 'Backup complete')
-                    return {
-                        success: true,
-                        message:
-                            input.compress === undefined
-                                ? `Backup created successfully`
-                                : `Backup created successfully (the 'compress' parameter was ignored; compression is handled by the database engine)`,
-                        filename: result.filename,
-                        path: path.basename(result.path),
-                        sizeBytes: result.sizeBytes,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeBackupJournal(params, context),
         },
         {
             name: 'list_backups',
@@ -288,27 +356,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    ListBackupsSchemaMcp.parse(params ?? {})
-                    const backups = db.listBackups()
-                    const maskedBackups = backups.map((b) => ({
-                        ...b,
-                        path: path.basename(b.path),
-                    }))
-                    return {
-                        backups: maskedBackups,
-                        total: backups.length,
-                        backupsDirectory: path.basename(db.getBackupsDir()),
-                        hint:
-                            backups.length === 0
-                                ? 'No backups found. Use backup_journal to create one.'
-                                : undefined,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeListBackups(params, context),
         },
         {
             name: 'restore_backup',
@@ -349,40 +397,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    const { keep_count } = CleanupBackupsSchema.parse(params)
-                    const result = db.deleteOldBackups(keep_count)
-                    const hasFailed = result.failed !== undefined && result.failed.length > 0
-                    const allFailed = result.deleted.length === 0 && hasFailed
-
-                    return {
-                        success: !allFailed,
-                        deleted: result.deleted,
-                        ...(hasFailed ? { failed: result.failed } : {}),
-                        deletedCount: result.deleted.length,
-                        keptCount: result.kept,
-                        ...(hasFailed
-                            ? {
-                                  warning: `Failed to delete ${String(result.failed?.length ?? 0)} backup file(s).`,
-                              }
-                            : {}),
-                        ...(allFailed
-                            ? {
-                                  error: `Failed to delete ${String(result.failed?.length ?? 0)} old backup(s).`,
-                              }
-                            : {}),
-                        message:
-                            result.deleted.length > 0
-                                ? `Deleted ${String(result.deleted.length)} old backup(s), kept ${String(result.kept)}`
-                                : hasFailed
-                                  ? `Failed to delete ${String(result.failed?.length ?? 0)} backup(s); kept ${String(result.kept)}.`
-                                  : `No backups to delete. Currently have ${String(result.kept)} backup(s).`,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeCleanupBackups(params, context),
         },
     ]
 }

@@ -38,7 +38,7 @@ export function getEntryRevisions(
         return []
     }
 
-    const stmt = db.prepare(`
+    const stmt = db.prepare<unknown[], EntryRevision>(`
         SELECT id, entry_id as entryId, revision_number as revisionNumber,
                content_snapshot as contentSnapshot, changed_at as changedAt,
                changed_by as changedBy
@@ -47,7 +47,7 @@ export function getEntryRevisions(
         ORDER BY revision_number DESC
     `)
 
-    return stmt.all(id) as EntryRevision[]
+    return stmt.all(id)
 }
 
 export const getEntryHistory = getEntryRevisions
@@ -109,9 +109,11 @@ export function snapshotAndEvictRevisions(
     previousContent: string
 ): void {
     const maxRevRow = db
-        .prepare('SELECT MAX(revision_number) as maxRev FROM entry_revisions WHERE entry_id = ?')
-        .get(entryId) as { maxRev: number | null }
-    const nextRev = (maxRevRow.maxRev ?? 0) + 1
+        .prepare<unknown[], { maxRev: number | null }>(
+            'SELECT MAX(revision_number) as maxRev FROM entry_revisions WHERE entry_id = ?'
+        )
+        .get(entryId)
+    const nextRev = (maxRevRow?.maxRev ?? 0) + 1
 
     db.prepare(
         'INSERT INTO entry_revisions (entry_id, revision_number, content_snapshot, changed_at, changed_by) VALUES (?, ?, ?, ?, ?)'

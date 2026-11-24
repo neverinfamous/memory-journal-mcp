@@ -141,6 +141,142 @@ const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
 
 /* resolveTeamImportContextAuthor and executeTeamExportMarkdown live in ./io-scope-helpers.ts */
 
+async function executeTeamImportMarkdown(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): Promise<unknown> {
+    const input = TeamImportMarkdownSchema.parse(params)
+    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
+        input.source_dir,
+        input.workspace_id,
+        input.project_number,
+        context
+    )
+    if (projectNumber === undefined) {
+        return missingTeamIoProjectNumberError(input.workspace_id)
+    }
+
+    const allowedRoots = context.config?.allowedIoRoots ?? []
+    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
+    await sendProgress(context.progress, 1, 2, 'Importing team entries...')
+
+    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
+    if ('errorResponse' in authorCtx) {
+        return authorCtx.errorResponse
+    }
+    const result = await importMarkdownEntries(
+        input.source_dir,
+        teamDb,
+        {
+            dry_run: input.dry_run,
+            limit: input.limit,
+            author: authorCtx.author,
+            isPersonal: false,
+            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
+            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
+            project_number: projectNumber,
+            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
+            ...(context.config !== undefined ? { config: context.config } : {}),
+        },
+        context.teamVectorManager,
+        allowedRoots
+    )
+
+    if (!result.success && result.errors.length > 0) {
+        const successCount = result.created + result.updated + result.skipped
+        const total = successCount + result.errors.length
+        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+        throw new AggregateMcpError(
+            message,
+            result.errors.map((e) => ({ message: e.error, file: e.file })),
+            { result }
+        )
+    }
+
+    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
+        triggerTeamNotifications(context)
+    }
+    await sendProgress(context.progress, 2, 2, 'Team import complete')
+    return result
+}
+
+async function executeTeamImportExternal(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): Promise<unknown> {
+    const input = TeamImportExternalSchema.parse(params)
+    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
+        input.source_dir,
+        input.workspace_id,
+        input.project_number,
+        context
+    )
+    if (projectNumber === undefined) {
+        return missingTeamIoProjectNumberError(input.workspace_id)
+    }
+
+    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
+    if ('errorResponse' in authorCtx) {
+        return authorCtx.errorResponse
+    }
+
+    const allowedRoots = context.config?.allowedIoRoots ?? []
+    const progress = context.progress
+    await sendProgress(progress, 0, 3, 'Reading files...')
+
+    const { parsedFiles, errors, skipped: emptySkipped } = await readAndConvertExternalMarkdownFiles(
+        input.source_dir,
+        input.limit,
+        input.source_format,
+        input.default_entry_type,
+        allowedRoots,
+        progress
+    )
+
+    await sendProgress(progress, 2, 3, 'Importing entries...')
+    const result = await processImportBatch(
+        parsedFiles,
+        teamDb,
+        {
+            dry_run: input.dry_run,
+            limit: input.limit,
+            author: authorCtx.author,
+            isPersonal: false,
+            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
+            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
+            project_number: projectNumber,
+            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
+            ...(context.config !== undefined ? { config: context.config } : {}),
+        },
+        context.teamVectorManager
+    )
+    result.skipped += emptySkipped
+
+    if (errors.length > 0) {
+        result.success = false
+        result.errors.push(...errors)
+    }
+
+    if (!result.success && result.errors.length > 0) {
+        const successCount = result.created + result.updated + result.skipped
+        const total = successCount + result.errors.length
+        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+        throw new AggregateMcpError(
+            message,
+            result.errors.map((e) => ({ message: e.error, file: e.file })),
+            { result }
+        )
+    }
+
+    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
+        triggerTeamNotifications(context)
+    }
+    await sendProgress(progress, 3, 3, 'Team import complete')
+    return result
+}
+
 export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
 
@@ -189,59 +325,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
-                    const input = TeamImportMarkdownSchema.parse(params)
-                    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
-                        input.source_dir,
-                        input.workspace_id,
-                        input.project_number,
-                        context
-                    )
-                    if (projectNumber === undefined) {
-                        return missingTeamIoProjectNumberError(input.workspace_id)
-                    }
-
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-                    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
-                    await sendProgress(context.progress, 1, 2, 'Importing team entries...')
-
-                    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
-                    if ('errorResponse' in authorCtx) {
-                        return authorCtx.errorResponse
-                    }
-                    const result = await importMarkdownEntries(
-                        input.source_dir,
-                        teamDb,
-                        {
-                            dry_run: input.dry_run,
-                            limit: input.limit,
-                            author: authorCtx.author,
-                            isPersonal: false,
-                            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
-                            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
-                            project_number: projectNumber,
-                            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
-                            ...(context.config !== undefined ? { config: context.config } : {}),
-                        },
-                        context.teamVectorManager,
-                        allowedRoots
-                    )
-
-                    if (!result.success && result.errors.length > 0) {
-                        const successCount = result.created + result.updated + result.skipped
-                        const total = successCount + result.errors.length
-                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
-                        throw new AggregateMcpError(
-                            message,
-                            result.errors.map((e) => ({ message: e.error, file: e.file })),
-                            { result }
-                        )
-                    }
-
-                    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
-                        triggerTeamNotifications(context)
-                    }
-                    await sendProgress(context.progress, 2, 2, 'Team import complete')
-                    return result
+                    return await executeTeamImportMarkdown(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -266,75 +350,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
-                    const input = TeamImportExternalSchema.parse(params)
-                    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
-                        input.source_dir,
-                        input.workspace_id,
-                        input.project_number,
-                        context
-                    )
-                    if (projectNumber === undefined) {
-                        return missingTeamIoProjectNumberError(input.workspace_id)
-                    }
-
-                    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
-                    if ('errorResponse' in authorCtx) {
-                        return authorCtx.errorResponse
-                    }
-
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-                    const progress = context.progress
-                    await sendProgress(progress, 0, 3, 'Reading files...')
-
-                    const { parsedFiles, errors, skipped: emptySkipped } = await readAndConvertExternalMarkdownFiles(
-                        input.source_dir,
-                        input.limit,
-                        input.source_format,
-                        input.default_entry_type,
-                        allowedRoots,
-                        progress
-                    )
-
-                    await sendProgress(progress, 2, 3, 'Importing entries...')
-                    const result = await processImportBatch(
-                        parsedFiles,
-                        teamDb,
-                        {
-                            dry_run: input.dry_run,
-                            limit: input.limit,
-                            author: authorCtx.author,
-                            isPersonal: false,
-                            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
-                            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
-                            project_number: projectNumber,
-                            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
-                            ...(context.config !== undefined ? { config: context.config } : {}),
-                        },
-                        context.teamVectorManager
-                    )
-                    result.skipped += emptySkipped
-
-                    if (errors.length > 0) {
-                        result.success = false
-                        result.errors.push(...errors)
-                    }
-
-                    if (!result.success && result.errors.length > 0) {
-                        const successCount = result.created + result.updated + result.skipped
-                        const total = successCount + result.errors.length
-                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
-                        throw new AggregateMcpError(
-                            message,
-                            result.errors.map((e) => ({ message: e.error, file: e.file })),
-                            { result }
-                        )
-                    }
-
-                    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
-                        triggerTeamNotifications(context)
-                    }
-                    await sendProgress(progress, 3, 3, 'Team import complete')
-                    return result
+                    return await executeTeamImportExternal(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

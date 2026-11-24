@@ -26,10 +26,9 @@ function collectDryRun(
     }
 
     if (options.hardDeleteOlderThanDays > 0) {
-        const rows = db.prepare(queries.hardDelete.sql).all(...queries.hardDelete.params) as {
-            id: number | bigint
-            age_days: number
-        }[]
+        const rows = db
+            .prepare<unknown[], { id: number | bigint; age_days: number }>(queries.hardDelete.sql)
+            .all(...queries.hardDelete.params)
         candidates.hardDeleted = rows.map((r) => ({
             id: toNumberId(r.id),
             age_days: r.age_days,
@@ -38,11 +37,8 @@ function collectDryRun(
     if (options.pruneOlderThanDays > 0) {
         const sql = `WITH ${queries.cte} ${queries.prune.sql}`
         const rows = db
-            .prepare(sql)
-            .all(...queries.cteParams, ...queries.prune.params) as {
-            id: number | bigint
-            importance_score: number
-        }[]
+            .prepare<unknown[], { id: number | bigint; importance_score: number }>(sql)
+            .all(...queries.cteParams, ...queries.prune.params)
         candidates.pruned = rows.map((r) => ({
             id: toNumberId(r.id),
             importance_score: r.importance_score,
@@ -51,11 +47,8 @@ function collectDryRun(
     if (options.archiveOlderThanDays > 0) {
         const sql = `WITH ${queries.cte} ${queries.archive.sql}`
         const rows = db
-            .prepare(sql)
-            .all(...queries.cteParams, ...queries.archive.params) as {
-            id: number | bigint
-            importance_score: number
-        }[]
+            .prepare<unknown[], { id: number | bigint; importance_score: number }>(sql)
+            .all(...queries.cteParams, ...queries.archive.params)
         candidates.archived = rows.map((r) => ({
             id: toNumberId(r.id),
             importance_score: r.importance_score,
@@ -77,7 +70,7 @@ function deleteVecChunk(db: NativeDb, placeholders: string, chunk: number[]): vo
 }
 
 function executeHardDeleteStep(db: NativeDb, query: CandidateQuery): number {
-    const rows = db.prepare(query.sql).all(...query.params) as { id: number | bigint }[]
+    const rows = db.prepare<unknown[], { id: number | bigint }>(query.sql).all(...query.params)
     const ids = rows.map((r) => toNumberId(r.id))
     let hardDeletedCount = 0
     for (const { placeholders, params } of bucketInParams(ids, SCOPED_IN_PARAM_BUCKETS)) {
@@ -96,9 +89,9 @@ function executePruneStep(
     deletedAt: string
 ): number {
     const selectSql = `WITH ${cte} ${query.sql}`
-    const rows = db.prepare(selectSql).all(...cteParams, ...query.params) as {
-        id: number | bigint
-    }[]
+    const rows = db
+        .prepare<unknown[], { id: number | bigint }>(selectSql)
+        .all(...cteParams, ...query.params)
     const ids = rows.map((r) => toNumberId(r.id))
     if (ids.length === 0) return 0
 

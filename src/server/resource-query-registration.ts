@@ -28,14 +28,23 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isRequestHandlerMap(value: unknown): value is RequestHandlerMap {
+    if (!(value instanceof Map)) return false
+    const entries: Iterable<[unknown, unknown]> = value.entries()
+    for (const [k, v] of entries) {
+        if (typeof k !== 'string' || typeof v !== 'function') return false
+    }
+    return true
+}
+
 function getServerRequestHandlers(server: McpServer): RequestHandlerMap | undefined {
     if (!('server' in server) || !isPlainRecord(server.server)) {
         return undefined
     }
     const rawServer: object = server.server
     const handlers: unknown = Reflect.get(rawServer, '_requestHandlers')
-    if (handlers instanceof Map) {
-        return handlers as RequestHandlerMap
+    if (isRequestHandlerMap(handlers)) {
+        return handlers
     }
     return undefined
 }

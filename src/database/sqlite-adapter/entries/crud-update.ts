@@ -283,11 +283,8 @@ export function performUpdateEntry(
     const scopeUpdate = callerWorkspace !== '*'
 
     const doUpdate = (): boolean => {
-        const existing = (
-            scopedSelect
-                ? db.prepare(selectSql).get(id, callerWorkspace)
-                : db.prepare(selectSql).get(id)
-        ) as ExistingEntryRow | undefined
+        const selectStmt = db.prepare<unknown[], ExistingEntryRow>(selectSql)
+        const existing = scopedSelect ? selectStmt.get(id, callerWorkspace) : selectStmt.get(id)
         if (existing === undefined) return false
 
         assertUpdateAllowed(id, existing, callerWorkspace, isRegisteredCaller, input)

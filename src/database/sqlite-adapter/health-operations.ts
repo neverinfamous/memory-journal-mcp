@@ -55,9 +55,17 @@ export class HealthOperations {
         `
         const nativeDb = this.connection.getNativeDb?.()
         if (nativeDb !== undefined) {
-            const row = nativeDb.prepare(countSql).get() as
-                | { entry_count?: number; deleted_count?: number; rel_count?: number; tag_count?: number }
-                | undefined
+            const row = nativeDb
+                .prepare<
+                    unknown[],
+                    {
+                        entry_count?: number
+                        deleted_count?: number
+                        rel_count?: number
+                        tag_count?: number
+                    }
+                >(countSql)
+                .get()
             return {
                 entryCount: row?.entry_count ?? 0,
                 deletedEntryCount: row?.deleted_count ?? 0,
@@ -65,12 +73,14 @@ export class HealthOperations {
                 tagCount: row?.tag_count ?? 0,
             }
         }
+        const toCount = (val: unknown): number =>
+            typeof val === 'number' ? val : typeof val === 'bigint' ? Number(val) : 0
         const row = this.connection.exec(countSql)[0]?.values[0]
         return {
-            entryCount: (row?.[0] as number) ?? 0,
-            deletedEntryCount: (row?.[1] as number) ?? 0,
-            relationshipCount: (row?.[2] as number) ?? 0,
-            tagCount: (row?.[3] as number) ?? 0,
+            entryCount: toCount(row?.[0]),
+            deletedEntryCount: toCount(row?.[1]),
+            relationshipCount: toCount(row?.[2]),
+            tagCount: toCount(row?.[3]),
         }
     }
 

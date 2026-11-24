@@ -2,6 +2,8 @@
  * Shared Zod preprocessors for batch create, update, and delete tool schemas.
  */
 
+import { isRecord } from '../../../../utils/type-guards.js'
+
 const WORKSPACE_ALIAS_KEYS = ['workspace_id', 'workspaceId', 'workspace', 'repo'] as const
 const PROJECT_ALIAS_KEYS = [
     'project_number',
@@ -85,8 +87,8 @@ export function preprocessBatchCreateEntries(val: unknown): unknown {
     if (Array.isArray(val)) {
         return { entries: val as unknown[] }
     }
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
+    if (isRecord(val)) {
+        const obj: Record<string, unknown> = { ...val }
         normalizeRootBatchAliases(obj)
         if (obj['entries'] === undefined && Array.isArray(obj['items'])) {
             obj['entries'] = obj['items']
@@ -94,8 +96,8 @@ export function preprocessBatchCreateEntries(val: unknown): unknown {
         }
         if (Array.isArray(obj['entries'])) {
             obj['entries'] = obj['entries'].map((e: unknown) => {
-                if (typeof e === 'object' && e !== null) {
-                    const eObj = { ...(e as Record<string, unknown>) }
+                if (isRecord(e)) {
+                    const eObj: Record<string, unknown> = { ...e }
                     inheritRootBatchScope(eObj, obj, true, true)
                     return eObj
                 }
@@ -109,12 +111,12 @@ export function preprocessBatchCreateEntries(val: unknown): unknown {
 }
 
 export function preprocessBatchUpdates(val: unknown, propagateRootProject = true): unknown {
-    if (!Array.isArray(val) && (typeof val !== 'object' || val === null)) {
+    if (!Array.isArray(val) && !isRecord(val)) {
         return val
     }
     const obj: Record<string, unknown> = Array.isArray(val)
         ? { updates: val as unknown[] }
-        : { ...(val as Record<string, unknown>) }
+        : { ...val }
 
     normalizeRootBatchAliases(obj)
     let updatesArr = obj['updates']
@@ -130,8 +132,8 @@ export function preprocessBatchUpdates(val: unknown, propagateRootProject = true
     }
     if (Array.isArray(updatesArr)) {
         const newUpdates = updatesArr.map((u: unknown) => {
-            if (typeof u === 'object' && u !== null) {
-                const uObj = { ...(u as Record<string, unknown>) }
+            if (isRecord(u)) {
+                const uObj: Record<string, unknown> = { ...u }
                 if (uObj['id'] !== undefined && uObj['entry_id'] === undefined) {
                     uObj['entry_id'] = uObj['id']
                     Reflect.deleteProperty(uObj, 'id')
@@ -163,8 +165,8 @@ export function preprocessBatchDeleteIds(val: unknown): unknown {
     if (Array.isArray(val)) {
         return { entry_ids: (val as unknown[]).map(parseBatchIdItem) }
     }
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
+    if (isRecord(val)) {
+        const obj: Record<string, unknown> = { ...val }
         normalizeRootBatchAliases(obj)
         for (const aliasKey of ['ids', 'id', 'items', 'entries'] as const) {
             if (obj[aliasKey] !== undefined && obj['entry_ids'] === undefined) {

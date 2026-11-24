@@ -4,10 +4,11 @@
  * used by `createShimMjProxy`.
  */
 
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 import { wrapResult } from '../worker-result-proxy.js'
 import { wrapPromise } from '../proxy-helpers.js'
-import { IMMUTABLE_PROXY_TRAPS } from './result-proxy-aliases.js'
+import { IMMUTABLE_PROXY_TRAPS, isCallable } from './result-proxy-aliases.js'
 import { createCallableShim } from './namespace-shims.js'
 export {
     createAdaptersShim,
@@ -44,10 +45,10 @@ const ENTRY_LIST_ALIASES = new Set([
 
 export function createEntriesDomainProxy(target: Record<string, unknown>): unknown {
     const listFunc = getGroupProp(target, 'core', 'get_recent_entries') ?? getGroupProp(target, 'core', 'getRecentEntries')
-    if (typeof listFunc !== 'function') return undefined
+    if (!isCallable(listFunc)) return undefined
 
     const callableEntries = function (this: unknown, ...args: unknown[]): unknown {
-        return (listFunc as (...a: unknown[]) => unknown).apply(this, args)
+        return listFunc.apply(this, args)
     }
 
     const createFn = getGroupProp(target, 'core', 'create_entry') ?? getGroupProp(target, 'core', 'createEntry')
@@ -124,18 +125,18 @@ export function createGetReadFindInterceptor(
             const parsedId = parsePositiveProjectNumber(arg)
             if (parsedId !== undefined) {
                 const payload = extraOpts !== undefined ? { ...extraOpts, entry_id: parsedId } : { entry_id: parsedId }
-                return typeof getFn === 'function'
+                return isCallable(getFn)
                     ? extraOpts !== undefined
-                        ? (getFn as (...a: unknown[]) => unknown)(payload)
-                        : (getFn as (...a: unknown[]) => unknown)(payload, ...rest)
+                        ? getFn(payload)
+                        : getFn(payload, ...rest)
                     : undefined
             }
             if (typeof arg === 'string') {
                 const payload = extraOpts !== undefined ? { ...extraOpts, query: arg } : { query: arg }
-                return typeof searchFn === 'function'
+                return isCallable(searchFn)
                     ? extraOpts !== undefined
-                        ? (searchFn as (...a: unknown[]) => unknown)(payload)
-                        : (searchFn as (...a: unknown[]) => unknown)(payload, ...rest)
+                        ? searchFn(payload)
+                        : searchFn(payload, ...rest)
                     : Promise.resolve({
                           success: false,
                           code: 'VALIDATION_ERROR',
@@ -145,13 +146,13 @@ export function createGetReadFindInterceptor(
         }
         if (arg !== null && typeof arg === 'object') {
             if ('entry_id' in arg || 'id' in arg) {
-                return typeof getFn === 'function' ? (getFn as (...a: unknown[]) => unknown)(...args) : undefined
+                return isCallable(getFn) ? getFn(...args) : undefined
             }
             if ('query' in arg || 'tags' in arg || 'search' in arg || 'text' in arg || 'q' in arg) {
-                return typeof searchFn === 'function' ? (searchFn as (...a: unknown[]) => unknown)(...args) : undefined
+                return isCallable(searchFn) ? searchFn(...args) : undefined
             }
         }
-        return typeof getFn === 'function' ? (getFn as (...a: unknown[]) => unknown)(...args) : undefined
+        return isCallable(getFn) ? getFn(...args) : undefined
     }
 }
 
@@ -172,25 +173,22 @@ const PROJECT_LIST_PROPS = new Set([
     'list', 'listProjects', 'list_projects', 'getAll', 'all', 'getProjects', 'get_projects',
 ])
 
-const DISABLED_PROJECT_PROP_MAP: Record<string, string> = Object.assign(
-    Object.create(null) as Record<string, string>,
-    {
-        get: 'get_project',
-        getProject: 'get_project',
-        get_project: 'get_project',
-        find: 'get_project',
-        register: 'register_project',
-        registerProject: 'register_project',
-        register_project: 'register_project',
-        update: 'update_project',
-        updateProject: 'update_project',
-        update_project: 'update_project',
-        delete: 'delete_project',
-        deleteProject: 'delete_project',
-        delete_project: 'delete_project',
-        remove: 'delete_project',
-    }
-)
+const DISABLED_PROJECT_PROP_MAP: Record<string, string> = createNullProtoRecord<string>({
+    get: 'get_project',
+    getProject: 'get_project',
+    get_project: 'get_project',
+    find: 'get_project',
+    register: 'register_project',
+    registerProject: 'register_project',
+    register_project: 'register_project',
+    update: 'update_project',
+    updateProject: 'update_project',
+    update_project: 'update_project',
+    delete: 'delete_project',
+    deleteProject: 'delete_project',
+    delete_project: 'delete_project',
+    remove: 'delete_project',
+})
 
 function resolveProjectDomainProp(
     p: string | symbol,
@@ -233,16 +231,16 @@ export function createShimProjectsDomain(
 ): object {
     const projectsFn = function (this: unknown, ...args: unknown[]): unknown {
         const baseProjectsProxy = target['projects']
-        if (typeof baseProjectsProxy === 'function') {
-            return (baseProjectsProxy as (...a: unknown[]) => unknown).apply(this, args)
+        if (isCallable(baseProjectsProxy)) {
+            return baseProjectsProxy.apply(this, args)
         }
         const listProjectsFn =
             getGroupProp(target, 'admin', 'listProjects') ??
             getGroupProp(target, 'admin', 'list_projects') ??
             getGroupProp(target, 'core', 'listProjects') ??
             getGroupProp(target, 'core', 'list_projects')
-        if (typeof listProjectsFn === 'function') {
-            return (listProjectsFn as (...a: unknown[]) => unknown).apply(this, args)
+        if (isCallable(listProjectsFn)) {
+            return listProjectsFn.apply(this, args)
         }
         return disabledProjectTool('list_projects')()
     }
@@ -264,9 +262,9 @@ export function createSearchDomainProxy(target: Record<string, unknown>): unknow
         return undefined
     }
     const searchFunc = (Reflect.get(searchGroup, 'search_entries') as unknown) ?? (Reflect.get(searchGroup, 'searchEntries') as unknown)
-    if (typeof searchFunc === 'function') {
+    if (isCallable(searchFunc)) {
         const callableSearch = function (this: unknown, ...args: unknown[]): unknown {
-            return (searchFunc as (...a: unknown[]) => unknown).apply(this, args)
+            return searchFunc.apply(this, args)
         }
         Object.assign(callableSearch, {
             search: searchFunc,
@@ -377,18 +375,17 @@ export function createAppendInterceptor(
     target: Record<string, unknown>
 ): ((arg1: unknown, arg2?: unknown, arg3?: unknown) => unknown) | undefined {
     const createEntry = getGroupProp(target, 'core', 'createEntry')
-    if (typeof createEntry !== 'function') return undefined
-    const callCreate = createEntry as (args: unknown) => unknown
+    if (!isCallable(createEntry)) return undefined
     return (arg1: unknown, arg2?: unknown, arg3?: unknown): unknown => {
         const firstMeta = readAppendMetadata(arg1)
         if (firstMeta !== undefined) {
             const secondMeta = arg3 === undefined ? readAppendMetadata(arg2) : undefined
-            return callCreate(secondMeta !== undefined ? { ...firstMeta, ...secondMeta } : arg1)
+            return createEntry(secondMeta !== undefined ? { ...firstMeta, ...secondMeta } : arg1)
         }
-        if (typeof arg1 === 'string' && arg2 === undefined && arg3 === undefined) return callCreate(arg1)
+        if (typeof arg1 === 'string' && arg2 === undefined && arg3 === undefined) return createEntry(arg1)
         if (typeof arg1 === 'string' && arg3 === undefined) {
             const twoArgMeta = readAppendMetadata(arg2)
-            if (twoArgMeta !== undefined) return callCreate({ ...twoArgMeta, content: arg1 })
+            if (twoArgMeta !== undefined) return createEntry({ ...twoArgMeta, content: arg1 })
         }
 
         const tags = Array.isArray(arg1) ? arg1 : [typeof arg1 === 'string' ? arg1 : 'test']
@@ -411,6 +408,6 @@ export function createAppendInterceptor(
             }
         }
 
-        return callCreate(payload)
+        return createEntry(payload)
     }
 }

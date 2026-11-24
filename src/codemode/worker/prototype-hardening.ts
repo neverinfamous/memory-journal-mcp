@@ -5,6 +5,7 @@
 
 import * as nodePath from 'node:path'
 import * as vm from 'node:vm'
+import { isCallable, isObjectOrFunction } from './result-proxy-aliases.js'
 
 export const OPTIONAL_RUNTIME_GLOBALS = [
     'AggregateError',
@@ -115,11 +116,21 @@ function freezeNamespaceMembers(
     }
 }
 
+function safeGetPrototypeOf(val: unknown): object | null {
+    return isObjectOrFunction(val) ? Reflect.getPrototypeOf(val) : null
+}
+
+function getPrototypeProp(target: object | null): object | null {
+    if (target === null) return null
+    const proto: unknown = Reflect.get(target, 'prototype')
+    return isObjectOrFunction(proto) ? proto : null
+}
+
 function collectOuterNodeErrorPrototypes(): object[] {
     const out: object[] = []
     const triggers: (() => unknown)[] = [
         () => {
-            nodePath.posix.basename('a', 123 as unknown as string)
+            void Reflect.apply(nodePath.posix.basename, nodePath.posix, ['a', 123])
         },
         () => new URL('invalid://[').href,
         () => {
@@ -131,10 +142,10 @@ function collectOuterNodeErrorPrototypes(): object[] {
             trigger()
         } catch (err: unknown) {
             if (typeof err === 'object' && err !== null) {
-                let cur: object | null = Object.getPrototypeOf(err) as object | null
+                let cur: object | null = Reflect.getPrototypeOf(err)
                 while (cur !== null && cur !== Error.prototype && cur !== Object.prototype) {
                     out.push(cur)
-                    cur = Object.getPrototypeOf(cur) as object | null
+                    cur = Reflect.getPrototypeOf(cur)
                 }
             }
         }
@@ -165,31 +176,57 @@ function freezeOuterBuiltinCtors(failures: string[]): void {
     }
 }
 
-function collectIteratorHelperPrototypes(
-    GlobalIter: {
-        prototype?: object | null
-        from?: (src: unknown) => { map?: (fn: (x: unknown) => unknown) => unknown }
-    } | undefined
-): (object | null)[] {
-    if (typeof GlobalIter?.from !== 'function') return []
+function collectIteratorHelperPrototypes(GlobalIter: object | undefined): (object | null)[] {
+    if (GlobalIter === undefined) return []
+    const fromFn: unknown = Reflect.get(GlobalIter, 'from')
+    if (!isCallable(fromFn)) return []
     const out: (object | null)[] = []
     try {
-        const mapped = GlobalIter.from([]).map?.((x: unknown) => x)
+        const iterObj: unknown = fromFn.call(GlobalIter, [])
+        const mapFn: unknown = isObjectOrFunction(iterObj) ? Reflect.get(iterObj, 'map') : undefined
+        const mapped: unknown = isCallable(mapFn) ? mapFn.call(iterObj, (x: unknown) => x) : undefined
         if (mapped !== undefined && mapped !== null) {
-            out.push(Object.getPrototypeOf(mapped) as object | null)
+            out.push(safeGetPrototypeOf(mapped))
         }
     } catch {
         // Iterator helpers unavailable
     }
     try {
-        const wrapped = GlobalIter.from({ next: () => ({ done: true, value: undefined }) })
+        const wrapped: unknown = fromFn.call(GlobalIter, {
+            next: () => ({ done: true, value: undefined }),
+        })
         if (wrapped !== undefined && wrapped !== null) {
-            out.push(Object.getPrototypeOf(wrapped) as object | null)
+            out.push(safeGetPrototypeOf(wrapped))
         }
     } catch {
         // WrapForValidIteratorPrototype unavailable
     }
     return out
+}
+
+function collectIntlSegmentPrototypes(): [object | null, object | null] {
+    const rawIntl: unknown = Reflect.get(globalThis, 'Intl')
+    if (!isObjectOrFunction(rawIntl)) return [null, null]
+    const segmenterCtor: unknown = Reflect.get(rawIntl, 'Segmenter')
+    if (typeof segmenterCtor !== 'function') return [null, null]
+    try {
+        const segInstance: unknown = Reflect.construct(segmenterCtor, [])
+        if (!isObjectOrFunction(segInstance)) return [null, null]
+        const segFn: unknown = Reflect.get(segInstance, 'segment')
+        if (!isCallable(segFn)) return [null, null]
+        const segments: unknown = segFn.call(segInstance, 'a')
+        const segmentsProto = safeGetPrototypeOf(segments)
+        let segmentIterProto: object | null = null
+        if (isObjectOrFunction(segments)) {
+            const iterFn: unknown = Reflect.get(segments, Symbol.iterator)
+            if (isCallable(iterFn)) {
+                segmentIterProto = safeGetPrototypeOf(iterFn.call(segments))
+            }
+        }
+        return [segmentsProto, segmentIterProto]
+    } catch {
+        return [null, null]
+    }
 }
 
 /**
@@ -201,55 +238,28 @@ function collectIteratorHelperPrototypes(
  * A single warning is written to stderr because the worker has no logger.
  */
 function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
-    const AsyncFnProto = Object.getPrototypeOf(async function () {
+    const AsyncFnProto = Reflect.getPrototypeOf(async function () {
         /* noop */
-    }) as object | null
-    const GenFnProto = Object.getPrototypeOf(function* () {
+    })
+    const GenFnProto = Reflect.getPrototypeOf(function* () {
         /* noop */
-    }) as { prototype?: object | null } | null
-    const AsyncGenFnProto = Object.getPrototypeOf(async function* () {
+    })
+    const AsyncGenFnProto = Reflect.getPrototypeOf(async function* () {
         /* noop */
-    }) as { prototype?: object | null } | null
-    const GenProto = GenFnProto?.prototype ?? null
-    const AsyncGenProto = AsyncGenFnProto?.prototype ?? null
-    const ArrayIterProto = Object.getPrototypeOf([][Symbol.iterator]()) as object | null
-    const IterProto = ArrayIterProto !== null ? (Object.getPrototypeOf(ArrayIterProto) as object | null) : null
-    const StringIterProto = Object.getPrototypeOf(''[Symbol.iterator]()) as object | null
-    const MapIterProto = Object.getPrototypeOf(new Map()[Symbol.iterator]()) as object | null
-    const SetIterProto = Object.getPrototypeOf(new Set()[Symbol.iterator]()) as object | null
-    const RegExpStringIterProto = Object.getPrototypeOf(/a/[Symbol.matchAll]('')) as object | null
-    const AsyncIterProto =
-        AsyncGenProto !== null ? (Object.getPrototypeOf(AsyncGenProto) as object | null) : null
-    const TypedArrayCtor = Object.getPrototypeOf(Uint8Array) as { prototype?: object | null } | null
-    const TypedArrayProto = TypedArrayCtor?.prototype ?? null
-    const GlobalIter = (
-        globalThis as {
-            Iterator?: {
-                prototype?: object | null
-                from?: (src: unknown) => { map?: (fn: (x: unknown) => unknown) => unknown }
-            }
-        }
-    ).Iterator
-    const GlobalIntl = (
-        globalThis as {
-            Intl?: {
-                Segmenter?: new () => { segment: (s: string) => Iterable<unknown> }
-            }
-        }
-    ).Intl
-    let SegmentsProto: object | null = null
-    let SegmentIterProto: object | null = null
-    if (typeof GlobalIntl?.Segmenter === 'function') {
-        try {
-            const segments = new GlobalIntl.Segmenter().segment('a')
-            SegmentsProto = Object.getPrototypeOf(segments) as object | null
-            const iter = segments[Symbol.iterator]()
-            SegmentIterProto = Object.getPrototypeOf(iter) as object | null
-        } catch {
-            SegmentsProto = null
-            SegmentIterProto = null
-        }
-    }
+    })
+    const GenProto = getPrototypeProp(GenFnProto)
+    const AsyncGenProto = getPrototypeProp(AsyncGenFnProto)
+    const ArrayIterProto = Reflect.getPrototypeOf([][Symbol.iterator]())
+    const IterProto = ArrayIterProto !== null ? Reflect.getPrototypeOf(ArrayIterProto) : null
+    const StringIterProto = Reflect.getPrototypeOf(''[Symbol.iterator]())
+    const MapIterProto = Reflect.getPrototypeOf(new Map()[Symbol.iterator]())
+    const SetIterProto = Reflect.getPrototypeOf(new Set()[Symbol.iterator]())
+    const RegExpStringIterProto = Reflect.getPrototypeOf(/a/[Symbol.matchAll](''))
+    const AsyncIterProto = AsyncGenProto !== null ? Reflect.getPrototypeOf(AsyncGenProto) : null
+    const TypedArrayCtor = Reflect.getPrototypeOf(Uint8Array)
+    const TypedArrayProto = getPrototypeProp(TypedArrayCtor)
+    const rawGlobalIter: unknown = Reflect.get(globalThis, 'Iterator')
+    const GlobalIter = isObjectOrFunction(rawGlobalIter) ? rawGlobalIter : undefined
     return [
         Object.prototype,
         Function.prototype,
@@ -265,13 +275,12 @@ function collectGeneratorAndIteratorPrototypes(): (object | null)[] {
         SetIterProto,
         RegExpStringIterProto,
         ...collectIteratorHelperPrototypes(GlobalIter),
-        SegmentsProto,
-        SegmentIterProto,
+        ...collectIntlSegmentPrototypes(),
         AsyncIterProto,
-        TypedArrayCtor ?? null,
+        TypedArrayCtor,
         TypedArrayProto,
         GlobalIter ?? null,
-        GlobalIter?.prototype ?? null,
+        getPrototypeProp(GlobalIter ?? null),
         ...collectOuterNodeErrorPrototypes(),
     ]
 }

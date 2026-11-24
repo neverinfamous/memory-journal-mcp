@@ -2,6 +2,10 @@ import { logger } from '../../utils/logger.js'
 import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
 import type { GitHubClient } from './client.js'
 import type { GitHubMilestone } from '../../types/index.js'
+import {
+    isCachedGitHubMilestoneOrNull,
+    isCachedGitHubMilestones,
+} from './cache-helpers.js'
 
 interface RawGitHubMilestone {
     number: number
@@ -49,8 +53,8 @@ export class MilestonesManager {
 
         const cappedLimit = Math.min(Math.max(1, limit), 100)
         const cacheKey = `milestones:${owner}:${repo}:${state}:${String(cappedLimit)}`
-        const cached = this.client.getCached(cacheKey) as GitHubMilestone[] | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedGitHubMilestones(cached)) return cached
 
         try {
             const response = await this.client.octokit.issues.listMilestones({
@@ -88,8 +92,8 @@ export class MilestonesManager {
         }
 
         const cacheKey = `milestone:${owner}:${repo}:${String(milestoneNumber)}`
-        const cached = this.client.getCached(cacheKey) as GitHubMilestone | null | undefined
-        if (cached !== undefined) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedGitHubMilestoneOrNull(cached)) return cached
 
         try {
             const response = await this.client.octokit.issues.getMilestone({
@@ -189,9 +193,8 @@ export class MilestonesManager {
                 milestone_number: milestoneNumber,
                 title: updates.title,
                 description: updates.description,
-                // GitHub accepts `due_on: null` to clear the due date; the Octokit types only
-                // declare `string`, so the null crosses the SDK boundary via a cast.
-                due_on: (updates.dueOn === null ? null : updates.dueOn) as string | undefined,
+                // GitHub accepts `due_on: null` to clear the due date.
+                due_on: updates.dueOn === null ? null : updates.dueOn,
                 state: updates.state,
             })
 

@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import type { ToolHandlerConfig } from '../../../types/index.js'
-import type {
-    BriefingConfigurableKey,
+import {
     ConfigManager,
-    MutatedConfigFields,
+    type BriefingConfigurableKey,
+    type MutatedConfigFields,
 } from '../../../utils/config-manager.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
@@ -27,10 +28,10 @@ function normalizeConfigProjectNumber(obj: Record<string, unknown>): void {
 }
 
 function preprocessUpdateConfig(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        let obj = { ...(val as Record<string, unknown>) }
-        if (typeof obj['config'] === 'object' && obj['config'] !== null && !Array.isArray(obj['config'])) {
-            const nested = obj['config'] as Record<string, unknown>
+    if (isRecord(val)) {
+        let obj: Record<string, unknown> = { ...val }
+        if (isRecord(obj['config'])) {
+            const nested = obj['config']
             delete obj['config']
             const merged: Record<string, unknown> = { ...nested }
             for (const [k, v] of Object.entries(obj)) {
@@ -308,16 +309,31 @@ function applyScopeConfigurationUpdate(
     return true
 }
 
+interface ConfigManagerLike {
+    getConfig: () => { briefingConfig: StoredBriefingConfig }
+    updateConfig: ConfigManager['updateConfig']
+}
+
+function isConfigManager(val: unknown): val is ConfigManagerLike {
+    if (val instanceof ConfigManager) return true
+    return (
+        isRecord(val) &&
+        typeof val['getConfig'] === 'function' &&
+        typeof val['updateConfig'] === 'function'
+    )
+}
+
 export function handleUpdateConfiguration(
     args: UpdateConfigurationArgs,
     config: ToolHandlerConfig
 ): Promise<{ success: boolean; updated: string[] }> {
     if (!config.runtime) throw new Error('Runtime is not available')
-    const configManager = config.runtime.configManager as ConfigManager | undefined
+    const rawMgr = config.runtime.configManager
 
-    if (!configManager) {
+    if (!isConfigManager(rawMgr)) {
         throw new Error('ConfigManager is not initialized in this runtime')
     }
+    const configManager = rawMgr
 
     const updates: Partial<Parameters<ConfigManager['updateConfig']>[0]> = {}
     const updatedKeys: string[] = []

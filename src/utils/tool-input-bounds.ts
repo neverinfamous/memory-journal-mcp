@@ -29,8 +29,11 @@ const CANONICAL_INDEX_RE = /^(?:0|[1-9]\d{0,9})$/
 
 const mapSizeDesc = Object.getOwnPropertyDescriptor(Map.prototype, 'size')
 const setSizeDesc = Object.getOwnPropertyDescriptor(Set.prototype, 'size')
-const typedArrayProto = Object.getPrototypeOf(Uint8Array.prototype) as object
-const typedArrayLengthDesc = Object.getOwnPropertyDescriptor(typedArrayProto, 'length')
+const typedArrayProto: unknown = Object.getPrototypeOf(Uint8Array.prototype)
+const typedArrayLengthDesc =
+    typedArrayProto !== null && typeof typedArrayProto === 'object'
+        ? Object.getOwnPropertyDescriptor(typedArrayProto, 'length')
+        : undefined
 const byteLengthDescriptors = [
     Object.getOwnPropertyDescriptor(DataView.prototype, 'byteLength'),
     Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength'),
@@ -102,7 +105,6 @@ function tryReadAuthenticSet(cur: object): { size: number; values: IterableItera
 
 function pushOwnObjectKeys(cur: object, stack: unknown[], skipArrayIndicesBelow?: number): number {
     const keys = Object.keys(cur)
-    const rec = cur as Record<string, unknown>
     let extraCount = 0
     for (const key of keys) {
         if (skipArrayIndicesBelow !== undefined && CANONICAL_INDEX_RE.test(key)) {
@@ -110,7 +112,7 @@ function pushOwnObjectKeys(cur: object, stack: unknown[], skipArrayIndicesBelow?
             if (idx < skipArrayIndicesBelow) continue
         }
         extraCount++
-        const val = rec[key]
+        const val: unknown = Reflect.get(cur, key)
         if (val !== null && typeof val === 'object') stack.push(val)
     }
     return extraCount

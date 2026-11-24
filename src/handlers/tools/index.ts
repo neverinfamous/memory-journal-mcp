@@ -66,6 +66,7 @@ import {
 } from './call-guards.js'
 import { getAuthContext } from '../../auth/auth-context.js'
 import { getRequestContext, requestContextStorage } from '../../utils/request-context.js'
+import { isRecord } from '../../utils/type-guards.js'
 
 // Re-export for backward compatibility
 export type { ToolHandlerConfig }
@@ -234,6 +235,10 @@ export function isCacheHit(
     return true
 }
 
+function isCachedToolContextRefs(val: unknown): val is CachedToolContextRefs {
+    return isRecord(val) && 'db' in val && isRecord(val['db'])
+}
+
 function hasValidToolCache(
     db: IDatabaseAdapter,
     vectorManager?: VectorSearchManager,
@@ -244,14 +249,13 @@ function hasValidToolCache(
 ): boolean {
     if (config?.runtime) {
         const rt = config.runtime
-        const refs = rt.cachedContextRefs as typeof cachedContextRefs
+        const refs = isCachedToolContextRefs(rt.cachedContextRefs) ? rt.cachedContextRefs : null
         if (isCacheHit(refs, rt.toolMapCache, db, vectorManager, github, config, teamDb, teamVectorManager)) {
             return true
         }
         return (
             isBareRuntimeWrapperConfig(config) &&
             rt.toolMapCache !== null &&
-            refs !== undefined &&
             refs !== null &&
             isCacheHit(refs, rt.toolMapCache, db, vectorManager, github, refs.config, teamDb, refs.teamVectorManager)
         )

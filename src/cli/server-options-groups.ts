@@ -104,7 +104,7 @@ function resolveValidatedDatabaseKey(
         ? `--${cliKey.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`
         : cliKey
     return catchConfig(() => {
-        const val = resolver.resolve<unknown>(cliKey, envKey)
+        const val = resolver.resolve(cliKey, envKey)
         if (val === undefined) return fallback
         if (typeof val !== 'string') {
             throw new Error(`Invalid ${label}: expected string path, got ${typeof val}.`)
@@ -182,7 +182,7 @@ export function resolveDatabasePaths(
  */
 export function resolveAuthTokenOption(resolver: ConfigResolver): string | undefined {
     if (resolver.isCliProvided('authToken')) {
-        const cliVal = resolver.resolve<string>('authToken')
+        const cliVal = resolver.resolveString('authToken')
         if (cliVal !== undefined) {
             if (cliVal.trim() === '') {
                 throw new Error('FATAL: Authentication token cannot be empty or whitespace-only.')
@@ -207,7 +207,7 @@ export function resolveAuthTokenOption(resolver: ConfigResolver): string | undef
         }
         return rawEnv
     }
-    const cfgVal = resolver.resolve<string>('authToken')
+    const cfgVal = resolver.resolveString('authToken')
     if (typeof cfgVal === 'string' && cfgVal !== '') {
         if (cfgVal.trim() === '') {
             throw new Error('FATAL: Authentication token cannot be whitespace-only.')
@@ -240,13 +240,13 @@ export function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: Ca
         enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
         authToken: catchConfig(() => resolveAuthTokenOption(resolver), undefined),
         oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
-        oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),
-        oauthAudience: catchConfig(() => resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
-        oauthJwksUri: catchConfig(() => resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
+        oauthIssuer: catchConfig(() => resolver.resolveString('oauthIssuer', 'OAUTH_ISSUER'), undefined),
+        oauthAudience: catchConfig(() => resolver.resolveString('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
+        oauthJwksUri: catchConfig(() => resolver.resolveString('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
         oauthClockTolerance: catchConfig(() => resolver.resolveInt('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0) ?? 60, 60),
         allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
         trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
-        publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
+        publicOrigin: catchConfig(() => resolver.resolveString('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
     }
 }
 
@@ -298,7 +298,7 @@ export function resolveInstructionLevelOption(
     catchConfig: CatchConfig
 ): 'essential' | 'detailed' | 'full' | undefined {
     return catchConfig((): 'essential' | 'detailed' | 'full' | undefined => {
-        const raw = resolver.resolve<unknown>('instructionLevel', 'INSTRUCTION_LEVEL')
+        const raw = resolver.resolve('instructionLevel', 'INSTRUCTION_LEVEL')
         if (raw === undefined || raw === null) return undefined
         if (typeof raw !== 'string') {
             throw new Error(`Invalid --instruction-level: expected string, got ${typeof raw}. Use essential, detailed, or full.`)
@@ -317,7 +317,7 @@ export function resolveTeamDefaultRoleOption(
     catchConfig: CatchConfig
 ): TeamDefaultRole {
     return catchConfig((): TeamDefaultRole => {
-        const raw = resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied'
+        const raw = resolver.resolveString('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied'
         const parsed = teamDefaultRoleSchema.safeParse(raw)
         if (!parsed.success) {
             throw new Error(`Invalid team default role '${raw}'. Use admin, member, viewer, or denied.`)
@@ -333,7 +333,7 @@ export function resolvePruneImportanceThresholdOption(
     return catchConfig(
         () =>
             parseImportanceThresholdOption(
-                resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD'),
+                resolver.resolve('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD'),
                 'pruneImportanceThreshold',
                 0.15
             ),
@@ -346,7 +346,7 @@ export function resolveMetricsExportOption(
     catchConfig: CatchConfig
 ): 'prometheus' | undefined {
     return catchConfig<'prometheus' | undefined>(() => {
-        const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT')
+        const raw = resolver.resolveString('metricsExport', 'METRICS_EXPORT')
         if (raw) {
             if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`)
             return 'prometheus'
@@ -360,7 +360,7 @@ export function resolveMaxToolInputElementsOption(
     catchConfig: CatchConfig
 ): number | undefined {
     return catchConfig(() => {
-        const raw = resolver.resolve<unknown>('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS')
+        const raw = resolver.resolve('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS')
         if (raw === undefined || raw === null) return undefined
         if (raw === Infinity || (typeof raw === 'string' && raw.trim().toLowerCase() === 'infinity')) {
             return Infinity
@@ -370,7 +370,7 @@ export function resolveMaxToolInputElementsOption(
 }
 
 function resolveMetricsPathOption(resolver: ConfigResolver): string | undefined {
-    const val = resolver.resolve<unknown>('metricsPath', 'METRICS_PATH')
+    const val = resolver.resolve('metricsPath', 'METRICS_PATH')
     if (val === undefined || val === null) return undefined
     if (typeof val !== 'string') {
         throw new Error(`Invalid metricsPath: expected string, got ${typeof val}`)

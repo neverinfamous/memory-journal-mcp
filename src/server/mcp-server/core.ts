@@ -6,7 +6,7 @@ import { getResources } from '../../handlers/resources/index.js'
 import { getPrompts } from '../../handlers/prompts/index.js'
 import { sanitizeDefaultWorkspaceId } from '../../utils/workspace-registry-match.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
-import type { PromptDefinition, ResourceDefinition } from '../registration.js'
+import { toPromptDefinitions, toResourceDefinitions } from '../definition-parsers.js'
 
 import type { ServerContext, ServerOptions } from './types.js'
 import { initializeDependencies } from './initialization.js'
@@ -162,8 +162,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const { baseConfig, customToolHandlerConfig } = buildServerToolConfigs(context, options)
         const { allTools, allToolNames } = loadAndValidateTools(context, customToolHandlerConfig)
 
-        const resources = getResources()
-        const prompts = getPrompts()
+        const resources = toResourceDefinitions(getResources())
+        const prompts = toPromptDefinitions(getPrompts())
 
         registerConfigChangeListener({
             configManager,
@@ -177,8 +177,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             createServerInstance(
                 context,
                 options,
-                prompts as PromptDefinition[],
-                resources as ResourceDefinition[],
+                prompts,
+                resources,
                 allTools,
                 allToolNames,
                 customToolHandlerConfig

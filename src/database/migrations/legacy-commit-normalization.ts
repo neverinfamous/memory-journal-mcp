@@ -65,7 +65,7 @@ function hasTable(db: Database, name: string): boolean {
 }
 
 function hasColumns(db: Database, table: string, columns: readonly string[]): boolean {
-    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    const rows = db.prepare<unknown[], { name: string }>(`PRAGMA table_info(${table})`).all()
     const names = new Set(rows.map((row) => row.name.toLowerCase()))
     return columns.every((col) => names.has(col))
 }
@@ -81,33 +81,33 @@ function isSchemaSupported(db: Database): boolean {
 
 function findCommitNarrativeIds(db: Database): number[] {
     const rows = db
-        .prepare(
+        .prepare<unknown[], CommitCandidateRow>(
             `SELECT id, content, auto_context AS autoContext FROM memory_journal WHERE auto_context LIKE ?`
         )
-        .all(`%${SESSION_COMMITS_MARKER}%`) as CommitCandidateRow[]
+        .all(`%${SESSION_COMMITS_MARKER}%`)
     return rows.filter((row) => isLegacyCommitNarrative(row)).map((row) => row.id)
 }
 
 function findTaggedIds(db: Database): Set<number> {
     const rows = db
-        .prepare(
+        .prepare<unknown[], { entryId: number }>(
             `SELECT et.entry_id AS entryId FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE LOWER(t.name) = ?`
         )
-        .all(COMMIT_NARRATIVE_TAG) as { entryId: number }[]
+        .all(COMMIT_NARRATIVE_TAG)
     return new Set(rows.map((row) => row.entryId))
 }
 
 function planEntryTypeRewrites(db: Database): EntryTypeRewrite[] {
     const placeholders = ENTRY_TYPES.map(() => '?').join(', ')
     const groups = db
-        .prepare(
+        .prepare<unknown[], EntryTypeGroupRow>(
             `SELECT entry_type AS entryType, significance_type AS significanceType, COUNT(*) AS c
              FROM memory_journal
              WHERE entry_type IS NULL OR entry_type NOT IN (${placeholders})
              GROUP BY entry_type, significance_type
              ORDER BY entry_type, significance_type`
         )
-        .all(...ENTRY_TYPES) as EntryTypeGroupRow[]
+        .all(...ENTRY_TYPES)
     return groups.map((group) => {
         const target = canonicalizeStoredEntryType(group.entryType ?? '', group.significanceType)
         return {
@@ -166,9 +166,9 @@ function tagCommitRows(db: Database, ids: readonly number[]): void {
     db.prepare('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)').run(
         COMMIT_NARRATIVE_TAG
     )
-    const tagRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(COMMIT_NARRATIVE_TAG) as
-        | { id: number }
-        | undefined
+    const tagRow = db
+        .prepare<unknown[], { id: number }>('SELECT id FROM tags WHERE name = ?')
+        .get(COMMIT_NARRATIVE_TAG)
     if (tagRow === undefined) return
     const link = db.prepare('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)')
     let linked = 0

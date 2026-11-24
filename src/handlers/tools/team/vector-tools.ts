@@ -32,6 +32,41 @@ const TeamVectorStatsStrictSchema = z
     })
     .strict()
 
+function executeTeamGetVectorIndexStats(
+    teamDb: ToolContext['teamDb'],
+    teamVectorManager: ToolContext['teamVectorManager'],
+    params: unknown
+): unknown {
+    try {
+        const parsed = TeamVectorStatsStrictSchema.parse(params ?? {})
+        const hasScope =
+            parsed.workspace_id !== undefined ||
+            parsed.project_number !== undefined ||
+            parsed.session_id !== undefined
+        if (!teamDb) {
+            return { success: false, available: false, error: TEAM_DB_ERROR_RESPONSE.error }
+        }
+
+        if (!teamVectorManager) {
+            return { success: false, available: false, error: 'Team vector search not available' }
+        }
+
+        const stats = teamVectorManager.getStats()
+        return {
+            success: true,
+            available: true,
+            itemCount: stats.itemCount,
+            modelName: stats.modelName,
+            dimensions: stats.dimensions,
+            ...(hasScope
+                ? { scopeNote: 'Database-wide team vector index statistics' }
+                : {}),
+        }
+    } catch (err) {
+        return { ...formatHandlerError(err), available: false }
+    }
+}
+
 export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
     const { teamDb, teamVectorManager } = context
 
@@ -66,36 +101,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    const parsed = TeamVectorStatsStrictSchema.parse(params ?? {})
-                    const hasScope =
-                        parsed.workspace_id !== undefined ||
-                        parsed.project_number !== undefined ||
-                        parsed.session_id !== undefined
-                    if (!teamDb) {
-                        return { success: false, available: false, error: TEAM_DB_ERROR_RESPONSE.error }
-                    }
-
-                    if (!teamVectorManager) {
-                        return { success: false, available: false, error: 'Team vector search not available' }
-                    }
-
-                    const stats = teamVectorManager.getStats()
-                    return {
-                        success: true,
-                        available: true,
-                        itemCount: stats.itemCount,
-                        modelName: stats.modelName,
-                        dimensions: stats.dimensions,
-                        ...(hasScope
-                            ? { scopeNote: 'Database-wide team vector index statistics' }
-                            : {}),
-                    }
-                } catch (err) {
-                    return { ...formatHandlerError(err), available: false }
-                }
-            },
+            handler: (params: unknown) => executeTeamGetVectorIndexStats(teamDb, teamVectorManager, params),
         },
         {
             name: 'team_rebuild_vector_index',

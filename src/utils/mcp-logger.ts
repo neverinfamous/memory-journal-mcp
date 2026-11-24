@@ -10,6 +10,7 @@ import { type McpServer } from '@modelcontextprotocol/server'
 import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
 import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
 import { onLogLevelChange } from './logger.js'
+import { createNullProtoRecord, isRecord } from './type-guards.js'
 
 /**
  * Narrow interface for MCP protocol log notification dispatch.
@@ -156,7 +157,10 @@ export class McpLogger {
             if (jsonRes.resolved) {
                 return this.sanitizeValue(jsonRes.value, depth + 1, seen)
             }
-            return this.sanitizePlainRecord(value as Record<string, unknown>, depth, seen)
+            if (!isRecord(value)) {
+                return '[Unserializable]'
+            }
+            return this.sanitizePlainRecord(value, depth, seen)
         } finally {
             seen.delete(value)
         }
@@ -167,7 +171,7 @@ export class McpLogger {
         depth = 0,
         seen = new WeakSet()
     ): Record<string, unknown> {
-        const sanitized = Object.create(null) as Record<string, unknown>
+        const sanitized = createNullProtoRecord()
         for (const [k, v] of Object.entries(record)) {
             if (
                 k === '__proto__' ||

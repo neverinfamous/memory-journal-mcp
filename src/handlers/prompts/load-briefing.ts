@@ -1,3 +1,4 @@
+import type { ProjectRegistryEntry } from '../../types/index.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef, PromptMessage } from './index.js'
 import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
@@ -22,7 +23,7 @@ function getProjectNumber(entry: unknown): number | undefined {
 }
 
 function buildInteractiveProjectListResponse(
-    registry: Record<string, unknown>,
+    registry: Record<string, ProjectRegistryEntry>,
     registryKeys: string[],
     activeWorkspace: string
 ): { messages: PromptMessage[] } {
@@ -45,7 +46,7 @@ function buildInteractiveProjectListResponse(
 
     const rows = registryKeys
         .map((key) => {
-            const entry = registry[key] as { path?: string }
+            const entry = registry[key]
             const projectPath = entry?.path ?? '-'
             const projectNumber = getProjectNumber(entry)
             const idCell = projectNumber !== undefined ? String(projectNumber) : '-'
@@ -70,7 +71,7 @@ function buildInteractiveProjectListResponse(
 
 function resolveRequestedProjectUris(
     requestedProjects: string[],
-    registry: Record<string, unknown>,
+    registry: Record<string, ProjectRegistryEntry>,
     registryKeys: string[]
 ): { resolvedUris: string[]; notFound: string[]; ambiguous: string[] } {
     const resolvedUris: string[] = []
@@ -128,7 +129,7 @@ function resolveRequestedProjectUris(
 }
 
 function resolveActiveBriefingLabel(
-    registry: Record<string, unknown>,
+    registry: Record<string, ProjectRegistryEntry>,
     registryKeys: string[],
     briefingConfig?: BriefingConfig,
     runtime?: object | null
@@ -136,7 +137,7 @@ function resolveActiveBriefingLabel(
     const resolvedWs = resourceWorkspace({
         briefingConfig: {
             ...briefingConfig,
-            projectRegistry: registry as BriefingConfig['projectRegistry'],
+            projectRegistry: registry,
         },
         ...(runtime !== undefined ? { runtime } : {}),
     })
@@ -169,7 +170,7 @@ function resolveActiveBriefingLabel(
 }
 
 function buildBriefingLoadErrorResponse(
-    registry: Record<string, unknown>,
+    registry: Record<string, ProjectRegistryEntry>,
     registryKeys: string[],
     notFound: string[],
     ambiguous: string[]
@@ -215,7 +216,7 @@ function handleLoadBriefingPrompt(
               .filter(Boolean)
         : []
 
-    const registry: Record<string, unknown> =
+    const registry: Record<string, ProjectRegistryEntry> =
         briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig() ?? {}
     const registryKeys = Object.keys(registry)
     const activeWorkspace = resolveActiveBriefingLabel(registry, registryKeys, briefingConfig, runtime)

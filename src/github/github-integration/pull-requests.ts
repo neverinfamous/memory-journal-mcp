@@ -7,6 +7,25 @@ import type {
     CopilotReviewSummary,
 } from '../../types/index.js'
 import type { PullRequestDetails } from './types.js'
+import {
+    isCachedGitHubPullRequests,
+    isCachedGitHubReviewComments,
+    isCachedGitHubReviews,
+    isCachedPullRequestDetailsOrNull,
+} from './cache-helpers.js'
+
+function normalizeReviewState(state: string): GitHubReview['state'] {
+    switch (state) {
+        case 'APPROVED':
+        case 'CHANGES_REQUESTED':
+        case 'COMMENTED':
+        case 'DISMISSED':
+        case 'PENDING':
+            return state
+        default:
+            return 'COMMENTED'
+    }
+}
 
 export class PullRequestsManager {
     /** Known Copilot bot login patterns */
@@ -30,8 +49,8 @@ export class PullRequestsManager {
         }
 
         const cacheKey = `prs:${owner}:${repo}:${state}:${String(limit)}`
-        const cached = this.client.getCached(cacheKey) as GitHubPullRequest[] | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedGitHubPullRequests(cached)) return cached
 
         try {
             const response = await this.client.octokit.pulls.list({
@@ -77,8 +96,8 @@ export class PullRequestsManager {
         }
 
         const cacheKey = `pr:${owner}:${repo}:${String(prNumber)}`
-        const cached = this.client.getCached(cacheKey) as PullRequestDetails | null | undefined
-        if (cached !== undefined) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedPullRequestDetailsOrNull(cached)) return cached
 
         try {
             const response = await this.client.octokit.pulls.get({
@@ -133,8 +152,8 @@ export class PullRequestsManager {
         if (!this.client.octokit) throw new Error('GitHub API not available')
 
         const cacheKey = `reviews:${owner}:${repo}:${String(prNumber)}`
-        const cached = this.client.getCached(cacheKey) as GitHubReview[] | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedGitHubReviews(cached)) return cached
 
         try {
             const response = await this.client.octokit.rest.pulls.listReviews({
@@ -147,7 +166,7 @@ export class PullRequestsManager {
             const reviews: GitHubReview[] = response.data.map((r) => ({
                 id: r.id,
                 author: r.user?.login ?? 'unknown',
-                state: r.state as GitHubReview['state'],
+                state: normalizeReviewState(r.state),
                 body: r.body ?? '',
                 submittedAt: r.submitted_at ?? r.commit_id ?? new Date().toISOString(),
                 isCopilot: PullRequestsManager.isCopilotAuthor(r.user?.login ?? ''),
@@ -173,8 +192,8 @@ export class PullRequestsManager {
         if (!this.client.octokit) throw new Error('GitHub API not available')
 
         const cacheKey = `review-comments:${owner}:${repo}:${String(prNumber)}`
-        const cached = this.client.getCached(cacheKey) as GitHubReviewComment[] | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedGitHubReviewComments(cached)) return cached
 
         try {
             const response = await this.client.octokit.rest.pulls.listReviewComments({

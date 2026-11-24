@@ -2,14 +2,37 @@
  * memory-journal-mcp — SSRF & DNS Lookup Guards for OAuth / JWKS Endpoints
  */
 
-import { isIP } from 'node:net'
+import { isIP, type LookupFunction } from 'node:net'
 import { promises as dns } from 'node:dns'
 import { ConfigurationError } from '../types/errors.js'
 import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
+import { isRecord } from '../utils/type-guards.js'
 
 export interface ResolvedPublicAddress {
     address: string
     family: 4 | 6
+}
+
+/**
+ * Create a Node `https.RequestOptions['lookup']` callback pinned to previously
+ * SSRF-validated public DNS addresses (supports both single and `{ all: true }` lookups).
+ */
+export function createPinnedDnsLookup(
+    primary: ResolvedPublicAddress,
+    resolvedRecords: readonly ResolvedPublicAddress[]
+): LookupFunction {
+    return (_hostname, options, callback) => {
+        const wantAll =
+            typeof options === 'object' &&
+            options !== null &&
+            'all' in options &&
+            options.all === true
+        if (wantAll) {
+            callback(null, [...resolvedRecords])
+            return
+        }
+        callback(null, primary.address, primary.family)
+    }
 }
 
 /**
@@ -36,9 +59,9 @@ export async function resolveSafePublicDnsAddresses(
 
     try {
         const rawLookup: unknown = await dns.lookup(bareHost, { all: true })
-        const records = Array.isArray(rawLookup)
+        const records: unknown[] = Array.isArray(rawLookup)
             ? rawLookup
-            : rawLookup !== null && typeof rawLookup === 'object' && 'address' in rawLookup
+            : isRecord(rawLookup) && 'address' in rawLookup
               ? [rawLookup]
               : []
 
@@ -50,15 +73,14 @@ export async function resolveSafePublicDnsAddresses(
 
         const resolved: ResolvedPublicAddress[] = []
         for (const rec of records) {
-            if (rec === null || typeof rec !== 'object' || !('address' in rec)) continue
-            const addr = String((rec as { address: unknown }).address)
+            if (!isRecord(rec) || !('address' in rec)) continue
+            const addr = String(rec['address'])
             if (isPrivateOrLoopbackAddress(addr)) {
                 throw new ConfigurationError(
                     `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${addr}`
                 )
             }
-            const rawFam =
-                'family' in rec ? (rec as { family?: unknown }).family : undefined
+            const rawFam = rec['family']
             const family: 4 | 6 = rawFam === 6 || addr.includes(':') ? 6 : 4
             resolved.push({ address: addr, family })
         }

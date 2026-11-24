@@ -2,6 +2,8 @@
  * Zod schema parameter introspection helpers for dynamic help resources.
  */
 
+import { isRecord } from '../../utils/type-guards.js'
+
 export interface ParameterInfo {
     name: string
     type: string
@@ -56,16 +58,20 @@ const ZOD_TRANSPARENT_WRAPPERS = new Set([
     'ZodCatch',
 ])
 
+function isThunk(fn: unknown): fn is () => unknown {
+    return typeof fn === 'function'
+}
+
 function getZodDef(node: Record<string, unknown>): Record<string, unknown> | undefined {
     const direct = node['_def'] ?? node['def']
-    if (direct !== null && direct !== undefined && typeof direct === 'object') {
-        return direct as Record<string, unknown>
+    if (isRecord(direct)) {
+        return direct
     }
     const zodProp = node['_zod']
-    if (zodProp !== null && zodProp !== undefined && typeof zodProp === 'object') {
-        const zDef = (zodProp as Record<string, unknown>)['def']
-        if (zDef !== null && zDef !== undefined && typeof zDef === 'object') {
-            return zDef as Record<string, unknown>
+    if (isRecord(zodProp)) {
+        const zDef = zodProp['def']
+        if (isRecord(zDef)) {
+            return zDef
         }
     }
     return undefined
@@ -93,25 +99,24 @@ function unwrapDefChild(
 ): { schema?: Record<string, unknown>; def?: Record<string, unknown> } | null {
     for (const key of keys) {
         const candidate = def[key]
-        if (candidate === null || candidate === undefined || typeof candidate !== 'object') {
+        if (!isRecord(candidate)) {
             continue
         }
-        const rec = candidate as Record<string, unknown>
-        if (isTransformNode(rec)) {
+        if (isTransformNode(candidate)) {
             continue
         }
-        const childDef = getZodDef(rec)
+        const childDef = getZodDef(candidate)
         if (key === 'in' && 'out' in def && def['out'] !== undefined) {
-            const inType = readDefTypeName(childDef ?? rec)
+            const inType = readDefTypeName(childDef ?? candidate)
             if (inType === 'unknown' || inType === 'ZodUnknown' || inType === 'any' || inType === 'ZodAny') {
                 continue
             }
         }
         if (childDef !== undefined) {
-            return { schema: rec, def: childDef }
+            return { schema: candidate, def: childDef }
         }
-        if (readDefTypeName(rec) !== undefined || 'shape' in rec) {
-            return { def: rec }
+        if (readDefTypeName(candidate) !== undefined || 'shape' in candidate) {
+            return { def: candidate }
         }
     }
     return null
@@ -142,13 +147,12 @@ function unwrapLazyDef(
     currentDef: Record<string, unknown>
 ): { schema: Record<string, unknown>; def: Record<string, unknown> } | null {
     const getter = currentDef['getter']
-    const lazyNext: unknown = typeof getter === 'function' ? (getter as () => unknown)() : undefined
-    if (lazyNext === null || lazyNext === undefined || typeof lazyNext !== 'object') {
+    const lazyNext: unknown = isThunk(getter) ? getter() : undefined
+    if (!isRecord(lazyNext)) {
         return null
     }
-    const nextSchema = lazyNext as Record<string, unknown>
-    const nextDef = getZodDef(nextSchema)
-    return nextDef !== undefined ? { schema: nextSchema, def: nextDef } : null
+    const nextDef = getZodDef(lazyNext)
+    return nextDef !== undefined ? { schema: lazyNext, def: nextDef } : null
 }
 
 /**
@@ -227,10 +231,6 @@ export function peelZodType(
     return { typeName: 'unknown', isOptional: optionalDecided ?? false, description }
 }
 
-function isPlainRecord(val: unknown): val is Record<string, unknown> {
-    return val !== null && val !== undefined && typeof val === 'object'
-}
-
 function unwrapSchemaTarget(
     inputObj: Record<string, unknown>
 ):
@@ -238,10 +238,11 @@ function unwrapSchemaTarget(
     | { kind: 'object'; schema: Record<string, unknown> } {
     let schema = inputObj
     for (let loopDepth = 0; loopDepth < 16 && !('shape' in schema); loopDepth++) {
-        if (typeof schema['innerType'] === 'function') {
-            const next: unknown = (schema['innerType'] as () => unknown)()
-            if (next === null || next === undefined || typeof next !== 'object') break
-            schema = next as Record<string, unknown>
+        const innerType = schema['innerType']
+        if (isThunk(innerType)) {
+            const next: unknown = innerType()
+            if (!isRecord(next)) break
+            schema = next
             continue
         }
         const defObj = getZodDef(schema)
@@ -264,12 +265,12 @@ function unwrapSchemaTarget(
             }
         }
         const outProp = schema['out']
-        if (isPlainRecord(outProp) && 'shape' in outProp) {
+        if (isRecord(outProp) && 'shape' in outProp) {
             schema = outProp
             continue
         }
         const inProp = schema['in']
-        if (isPlainRecord(inProp)) {
+        if (isRecord(inProp)) {
             schema = inProp
             continue
         }
@@ -298,13 +299,12 @@ function extractIntersectionParameters(
 function extractShapeParameters(shape: Record<string, unknown>): ParameterInfo[] {
     const params: ParameterInfo[] = []
     for (const [name, fieldSchema] of Object.entries(shape)) {
-        if (fieldSchema === undefined || fieldSchema === null || typeof fieldSchema !== 'object') {
+        if (!isRecord(fieldSchema)) {
             continue
         }
-        const field = fieldSchema as Record<string, unknown>
-        const rawDef = getZodDef(field)
+        const rawDef = getZodDef(fieldSchema)
         if (!rawDef) continue
-        const { typeName, isOptional, description } = peelZodType(rawDef, field)
+        const { typeName, isOptional, description } = peelZodType(rawDef, fieldSchema)
         params.push({
             name,
             type: typeName,
@@ -316,23 +316,18 @@ function extractShapeParameters(shape: Record<string, unknown>): ParameterInfo[]
 }
 
 function extractParametersImpl(inputSchema: unknown, depth: number): ParameterInfo[] {
-    if (
-        depth >= 16 ||
-        inputSchema === undefined ||
-        inputSchema === null ||
-        typeof inputSchema !== 'object'
-    ) {
+    if (depth >= 16 || !isRecord(inputSchema)) {
         return []
     }
-    const target = unwrapSchemaTarget(inputSchema as Record<string, unknown>)
+    const target = unwrapSchemaTarget(inputSchema)
     if (target.kind === 'intersection') {
         return extractIntersectionParameters(target.def, depth)
     }
     const rawShape: unknown = target.schema['shape']
-    if (rawShape === undefined || rawShape === null || typeof rawShape !== 'object') {
+    if (!isRecord(rawShape)) {
         return []
     }
-    return extractShapeParameters(rawShape as Record<string, unknown>)
+    return extractShapeParameters(rawShape)
 }
 
 const EXTRACTED_PARAMETERS_CACHE = new WeakMap<object, ParameterInfo[]>()

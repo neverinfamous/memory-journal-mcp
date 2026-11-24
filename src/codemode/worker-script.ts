@@ -289,8 +289,8 @@ async function executeCode(
             return makeZeroMetricError(prepared.error)
         }
         const script = getOrCompileVmScript(`"use strict";\n(async () => {\n${prepared.transformed}\n})()`)
-        const resultPromise = script.runInContext(context, { timeout: vmTimeoutMs }) as Promise<unknown>
-        const result = await resultPromise
+        const rawExecution: unknown = script.runInContext(context, { timeout: vmTimeoutMs })
+        const result: unknown = await Promise.resolve(rawExecution)
         const endTime = performance.now()
         const endCpu = process.cpuUsage(startCpu)
         const metrics: ExecutionMetrics = {

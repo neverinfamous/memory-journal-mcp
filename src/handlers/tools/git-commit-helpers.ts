@@ -21,6 +21,7 @@ import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
 import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
 import { getUncommittedStateAsync } from '../../vendor/lib-git-history/uncommitted.js'
 import { readLatestGitTag } from './git-staleness.js'
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 
 export interface FetchCommitsInput {
     maxCount?: number | undefined
@@ -253,7 +254,7 @@ function fenceCommitMetadata(
     if (typeof meta.trust === 'string') fenced.trust = ensureInlineFenced(meta.trust)
     if (typeof meta.confidence === 'string') fenced.confidence = ensureInlineFenced(meta.confidence)
     if (meta.customTrailers !== undefined) {
-        const fencedCustom = Object.create(null) as Record<string, string[]>
+        const fencedCustom = createNullProtoRecord<string[]>()
         for (const [k, vals] of Object.entries(meta.customTrailers)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
             fencedCustom[fenceNonCanonicalRefOrKey(k, true)] = vals.map(ensureInlineFenced)
@@ -302,7 +303,7 @@ export function fenceCommitEntry(c: CommitEntry): CommitEntry {
         }))
     }
     if (c.trailersObj !== undefined) {
-        const fencedTrailers = Object.create(null) as Record<string, string>
+        const fencedTrailers = createNullProtoRecord<string>()
         for (const [k, v] of Object.entries(c.trailersObj)) {
             if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
             fencedTrailers[fenceNonCanonicalRefOrKey(k, true)] = ensureInlineFenced(v)

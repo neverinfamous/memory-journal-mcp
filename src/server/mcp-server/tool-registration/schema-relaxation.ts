@@ -13,6 +13,15 @@ export function isStandardSchemaWithJson(value: unknown): value is StandardSchem
     )
 }
 
+type ZeroArgMethod = () => unknown
+
+function hasZeroArgMethod<K extends string>(
+    obj: object,
+    method: K
+): obj is Record<K, ZeroArgMethod> {
+    return method in obj && typeof Reflect.get(obj, method) === 'function'
+}
+
 function relaxInputSchemaRecursive(schema: unknown, depth: number): unknown {
     if (depth > 16 || typeof schema !== 'object' || schema === null) {
         return schema
@@ -23,25 +32,24 @@ function relaxInputSchemaRecursive(schema: unknown, depth: number): unknown {
     if (schema instanceof z.ZodPipe) {
         const relaxedIn = relaxInputSchemaRecursive(schema.in, depth + 1)
         const relaxedOut = relaxInputSchemaRecursive(schema.out, depth + 1)
-        if (relaxedIn !== schema.in || relaxedOut !== schema.out) {
-            return z.pipe(relaxedIn as z.ZodType, relaxedOut as z.ZodType)
+        if (
+            (relaxedIn !== schema.in || relaxedOut !== schema.out) &&
+            relaxedIn instanceof z.ZodType &&
+            relaxedOut instanceof z.ZodType
+        ) {
+            return z.pipe(relaxedIn, relaxedOut)
         }
         return schema
     }
-    if ('partial' in schema && typeof schema.partial === 'function') {
-        const relaxed = (
-            schema as {
-                partial: () => {
-                    loose?: () => StandardSchemaWithJSON
-                    passthrough?: () => StandardSchemaWithJSON
-                }
+    if (hasZeroArgMethod(schema, 'partial')) {
+        const relaxed = schema.partial()
+        if (typeof relaxed === 'object' && relaxed !== null) {
+            if (hasZeroArgMethod(relaxed, 'loose')) {
+                return relaxed.loose()
             }
-        ).partial()
-        if (typeof relaxed.loose === 'function') {
-            return relaxed.loose()
-        }
-        if (typeof relaxed.passthrough === 'function') {
-            return relaxed.passthrough()
+            if (hasZeroArgMethod(relaxed, 'passthrough')) {
+                return relaxed.passthrough()
+            }
         }
     }
     return schema
@@ -65,11 +73,13 @@ function tryRelaxOutputSchema(outSchema: unknown): StandardSchemaWithJSON | unde
     if (typeof outSchema !== 'object' || outSchema === null) {
         return undefined
     }
-    if ('loose' in outSchema && typeof outSchema.loose === 'function') {
-        return (outSchema as { loose: () => StandardSchemaWithJSON }).loose()
+    if (hasZeroArgMethod(outSchema, 'loose')) {
+        const res = outSchema.loose()
+        return isStandardSchemaWithJson(res) ? res : undefined
     }
-    if ('passthrough' in outSchema && typeof outSchema.passthrough === 'function') {
-        return (outSchema as { passthrough: () => StandardSchemaWithJSON }).passthrough()
+    if (hasZeroArgMethod(outSchema, 'passthrough')) {
+        const res = outSchema.passthrough()
+        return isStandardSchemaWithJson(res) ? res : undefined
     }
     return undefined
 }

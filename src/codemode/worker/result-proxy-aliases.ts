@@ -3,6 +3,18 @@
  * to keep file line counts comfortably under budget. Pure TypeScript, zero npm imports.
  */
 
+import { createNullProtoRecord } from '../../utils/type-guards.js'
+
+export type UnknownCallable = (...args: unknown[]) => unknown
+
+export function isCallable(val: unknown): val is UnknownCallable {
+    return typeof val === 'function'
+}
+
+export function isObjectOrFunction(val: unknown): val is object {
+    return (typeof val === 'object' && val !== null) || typeof val === 'function'
+}
+
 const TOTAL_COLLECTION_KEYS: ReadonlySet<string> = new Set([
     'entries',
     'results',
@@ -226,20 +238,39 @@ export function resolveWrappedAliasProp(
     return resolveCollectionAndGraphAliasProp(targetRecord, prop, wrapResultFn)
 }
 
-/** Deep-clone and freeze plain objects/arrays with cycle memoization so context bags cannot mutate across calls. */
-export function deepFreezeContextClone(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+function deepFreezeContextValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
     if (value === null || typeof value !== 'object') return value
     if (seen.has(value)) return seen.get(value)
     if (Array.isArray(value)) {
         const clone: unknown[] = []
         seen.set(value, clone)
-        for (const item of value) clone.push(deepFreezeContextClone(item, seen))
+        for (const item of value) clone.push(deepFreezeContextValue(item, seen))
         return Object.freeze(clone)
     }
-    const clone = Object.create(null) as Record<string, unknown>
+    return deepFreezeContextRecord(value, seen)
+}
+
+function deepFreezeContextRecord(
+    value: object,
+    seen: WeakMap<object, unknown>
+): Record<string, unknown> {
+    if (seen.has(value)) {
+        const existing = seen.get(value)
+        if (isObjectOrFunction(existing) && !Array.isArray(existing)) {
+            const frozenExisting: Record<string, unknown> = {}
+            Object.setPrototypeOf(frozenExisting, null)
+            return Object.assign(frozenExisting, existing)
+        }
+    }
+    const clone = createNullProtoRecord()
     seen.set(value, clone)
     for (const k of Object.keys(value)) {
-        clone[k] = deepFreezeContextClone(Reflect.get(value, k), seen)
+        clone[k] = deepFreezeContextValue(Reflect.get(value, k), seen)
     }
     return Object.freeze(clone)
+}
+
+/** Deep-clone and freeze plain objects/arrays with cycle memoization so context bags cannot mutate across calls. */
+export function deepFreezeContextClone(value: Record<string, unknown>): Record<string, unknown> {
+    return deepFreezeContextRecord(value, new WeakMap<object, unknown>())
 }

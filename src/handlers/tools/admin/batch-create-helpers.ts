@@ -131,9 +131,13 @@ export async function prepareBatchCreateInputs(
         context
     )
 
-    const prepared: PreparedBatchEntry[] = []
+    const chunks: ResolvedBatchScope[][] = []
     for (let i = 0; i < scopedEntries.length; i += BATCH_ENTRY_CONCURRENCY) {
-        const chunk = scopedEntries.slice(i, i + BATCH_ENTRY_CONCURRENCY)
+        chunks.push(scopedEntries.slice(i, i + BATCH_ENTRY_CONCURRENCY))
+    }
+    const prepared: PreparedBatchEntry[] = []
+    await chunks.reduce(async (prev, chunk) => {
+        await prev
         const outcomes = await Promise.allSettled(
             chunk.map((item) => hydratePreparedBatchEntry(item, context, prefetchedCommitFiles))
         )
@@ -143,7 +147,7 @@ export async function prepareBatchCreateInputs(
             }
             prepared.push(outcome.value)
         }
-    }
+    }, Promise.resolve())
     return prepared
 }
 
@@ -284,7 +288,8 @@ async function indexSharedTeamVectors(
             // Fall back per entry below for exact per-entry warning isolation.
         }
     }
-    for (const teamEntry of sharedEntries) {
+    await sharedEntries.reduce(async (prev, teamEntry) => {
+        await prev
         try {
             await teamVectorManager.addEntry(teamEntry)
         } catch (vecErr) {
@@ -292,5 +297,5 @@ async function indexSharedTeamVectors(
                 `Team vector indexing failed for shared entry ${String(teamEntry.id)}: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
             )
         }
-    }
+    }, Promise.resolve())
 }

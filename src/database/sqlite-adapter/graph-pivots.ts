@@ -81,7 +81,7 @@ export function queryRelationshipDegrees(
     const peerWs = scoped ? ' AND p.workspace_id = ?' : ''
     const srcWs = scoped ? ' AND m.workspace_id = ?' : ''
     const rows = db
-        .prepare(
+        .prepare<unknown[], { entry_id: number; degree: number }>(
             `WITH ids(id) AS (SELECT CAST(value AS INTEGER) FROM json_each(?))
              SELECT ids.id AS entry_id,
                     (SELECT COUNT(*) FROM relationships r CROSS JOIN memory_journal p ON p.id = r.to_entry_id
@@ -93,10 +93,7 @@ export function queryRelationshipDegrees(
              FROM ids
              CROSS JOIN memory_journal m ON m.id = ids.id AND m.deleted_at IS NULL${srcWs}`
         )
-        .all(...(scoped ? [JSON.stringify(ids), ws, ws, ws] : [JSON.stringify(ids)])) as {
-        entry_id: number
-        degree: number
-    }[]
+        .all(...(scoped ? [JSON.stringify(ids), ws, ws, ws] : [JSON.stringify(ids)]))
     for (const row of rows) result.set(row.entry_id, row.degree)
     return result
 }
@@ -128,7 +125,10 @@ export function queryActiveThreads(
         ? [sinceFloor, sinceIso, ws, ws, nowIso, nowIso, sinceFloor, sinceIso, limit]
         : [sinceFloor, sinceIso, nowIso, nowIso, sinceFloor, sinceIso, limit]
     const rows = db
-        .prepare(
+        .prepare<
+            unknown[],
+            { entry_id: number; entry_type: string; content: string; recent_links: number }
+        >(
             `WITH recent_edges AS MATERIALIZED (
                  SELECT r.from_entry_id, r.to_entry_id, r.created_at
                  FROM relationships r
@@ -171,12 +171,7 @@ export function queryActiveThreads(
              ORDER BY activity_score DESC, recent_links DESC, dp.hub DESC
              LIMIT ?`
         )
-        .all(...params) as {
-        entry_id: number
-        entry_type: string
-        content: string
-        recent_links: number
-    }[]
+        .all(...params)
     return rows.map((r) => ({
         entryId: r.entry_id,
         entryType: r.entry_type,
@@ -197,14 +192,14 @@ export function queryRecentLinkageStats(
     // Bind order: linkedPredicate peer workspace (x2), outer workspace, coarse floor, window start.
     const params: unknown[] = scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso]
     const row = db
-        .prepare(
+        .prepare<unknown[], { recent: number; unlinked: number }>(
             `SELECT COUNT(*) AS recent,
                     COALESCE(SUM(CASE WHEN ${linkedPredicate('e', scoped)} THEN 0 ELSE 1 END), 0) AS unlinked
              FROM memory_journal e
              WHERE e.deleted_at IS NULL${entryWs}
                AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)`
         )
-        .get(...params) as { recent: number; unlinked: number } | undefined
+        .get(...params)
     return { recentEntries: row?.recent ?? 0, unlinkedEntries: row?.unlinked ?? 0 }
 }
 
@@ -225,7 +220,7 @@ export function queryEntryIdsByCommitShas(
     const entryWs = scoped ? ' AND workspace_id = ?' : ''
     const params: unknown[] = scoped ? [ws, JSON.stringify(wanted)] : [JSON.stringify(wanted)]
     const rows = db
-        .prepare(
+        .prepare<unknown[], { wanted: string; entry_id: number }>(
             `WITH ctx AS MATERIALIZED (
                  SELECT id, auto_context FROM memory_journal
                  WHERE deleted_at IS NULL${entryWs}
@@ -241,7 +236,7 @@ export function queryEntryIdsByCommitShas(
                )
              GROUP BY s.value`
         )
-        .all(...params) as { wanted: string; entry_id: number }[]
+        .all(...params)
     for (const row of rows) result.set(row.wanted, row.entry_id)
     return result
 }
@@ -253,17 +248,15 @@ function fetchEdgeEndpointNodes(
     const nodeIds = [...new Set(edges.flatMap((e) => [e.from, e.to]))]
     if (nodeIds.length === 0) return []
     const rows = db
-        .prepare(
+        .prepare<
+            unknown[],
+            { id: number; entry_type: string; content: string; timestamp: string }
+        >(
             `SELECT id, entry_type, content, timestamp FROM memory_journal
              WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
              ORDER BY id DESC`
         )
-        .all(JSON.stringify(nodeIds)) as {
-        id: number
-        entry_type: string
-        content: string
-        timestamp: string
-    }[]
+        .all(JSON.stringify(nodeIds))
     return rows.map((r) => ({
         id: r.id,
         entryType: r.entry_type,
@@ -288,7 +281,7 @@ export function queryRecentNeighborhood(
     const endpointWs = scoped ? ' WHERE mf.workspace_id = ? AND mt.workspace_id = ?' : ''
     const sinceFloor = utcDateFloor(sinceIso)
     const edgeRows = db
-        .prepare(
+        .prepare<unknown[], { from_id: number; to_id: number; type: string }>(
             `WITH recent AS MATERIALIZED (
                  SELECT id FROM memory_journal
                  WHERE deleted_at IS NULL${recentWs}
@@ -312,26 +305,19 @@ export function queryRecentNeighborhood(
              ORDER BY r.id DESC
              LIMIT ?`
         )
-        .all(...(scoped ? [ws, sinceFloor, sinceIso, ws, ws, edgeLimit] : [sinceFloor, sinceIso, edgeLimit])) as {
-        from_id: number
-        to_id: number
-        type: string
-    }[]
+        .all(...(scoped ? [ws, sinceFloor, sinceIso, ws, ws, edgeLimit] : [sinceFloor, sinceIso, edgeLimit]))
     const edges = edgeRows.map((r) => ({ from: r.from_id, to: r.to_id, type: r.type }))
     const nodes = fetchEdgeEndpointNodes(db, edges)
     const entryWs = scoped ? ' AND e.workspace_id = ?' : ''
     const windowRows = db
-        .prepare(
+        .prepare<unknown[], { id: number; is_linked: number }>(
             `SELECT e.id AS id, ${linkedPredicate('e', scoped)} AS is_linked
              FROM memory_journal e
              WHERE e.deleted_at IS NULL${entryWs}
                AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)
              ORDER BY e.id DESC`
         )
-        .all(...(scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso])) as {
-        id: number
-        is_linked: number
-    }[]
+        .all(...(scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso]))
     const unlinkedIds: number[] = []
     for (const r of windowRows) {
         if (r.is_linked === 0) unlinkedIds.push(r.id)
@@ -378,7 +364,10 @@ export function queryEntriesSharingAnchors(
         limit,
     ]
     const rows = db
-        .prepare(
+        .prepare<
+            unknown[],
+            { entry_id: number; entry_type: string; content: string; shared: number }
+        >(
             `SELECT m.id AS entry_id, m.entry_type AS entry_type, m.content AS content,
                     COUNT(DISTINCT other.anchor_path) AS shared
              FROM entry_anchors mine
@@ -390,12 +379,7 @@ export function queryEntriesSharingAnchors(
              ORDER BY shared DESC, m.id DESC
              LIMIT ?`
         )
-        .all(...params) as {
-        entry_id: number
-        entry_type: string
-        content: string
-        shared: number
-    }[]
+        .all(...params)
     return rows.map((r) => ({
         entryId: r.entry_id,
         entryType: r.entry_type,

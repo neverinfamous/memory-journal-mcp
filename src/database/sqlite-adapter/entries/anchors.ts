@@ -15,14 +15,14 @@ export function getAnchorsByEntryIds(
     const scopeId = effectiveWorkspace(workspaceId)
     const wsClause = scopeId === '*' ? '' : ' AND mj.workspace_id = ?'
     for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
-        const stmt = db.prepare(
+        const stmt = db.prepare<unknown[], Anchor>(
             `SELECT ea.id, ea.entry_id as entryId, ea.anchor_path as anchorPath,
                     ea.anchor_type as anchorType, ea.status, ea.last_checked_at as lastCheckedAt
              FROM entry_anchors ea
              INNER JOIN memory_journal mj ON mj.id = ea.entry_id
              WHERE ea.entry_id IN (${placeholders}) AND mj.deleted_at IS NULL${wsClause}`
         )
-        const rows = (scopeId === '*' ? stmt.all(...params) : stmt.all(...params, scopeId)) as Anchor[]
+        const rows = scopeId === '*' ? stmt.all(...params) : stmt.all(...params, scopeId)
         for (const row of rows) {
             let list = result.get(row.entryId)
             if (list === undefined) {
@@ -63,21 +63,21 @@ export function getAnchorsByEntryId(
     const { db } = context
     const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
-        const stmt = db.prepare(`
+        const stmt = db.prepare<unknown[], Anchor>(`
             SELECT ea.id, ea.entry_id as entryId, ea.anchor_path as anchorPath, ea.anchor_type as anchorType, ea.status, ea.last_checked_at as lastCheckedAt
             FROM entry_anchors ea
             INNER JOIN memory_journal mj ON mj.id = ea.entry_id
             WHERE ea.entry_id = ? AND mj.workspace_id = ? AND mj.deleted_at IS NULL
         `)
-        return stmt.all(entryId, scopeId) as Anchor[]
+        return stmt.all(entryId, scopeId)
     }
-    const stmt = db.prepare(`
+    const stmt = db.prepare<unknown[], Anchor>(`
         SELECT ea.id, ea.entry_id as entryId, ea.anchor_path as anchorPath, ea.anchor_type as anchorType, ea.status, ea.last_checked_at as lastCheckedAt
         FROM entry_anchors ea
         INNER JOIN memory_journal mj ON mj.id = ea.entry_id
         WHERE ea.entry_id = ? AND mj.deleted_at IS NULL
     `)
-    return stmt.all(entryId) as Anchor[]
+    return stmt.all(entryId)
 }
 
 /**

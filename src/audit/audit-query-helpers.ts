@@ -8,10 +8,9 @@
 
 import type { RequestContext } from '../utils/request-context.js'
 import { getActiveSessionProject } from '../utils/workspace-resolver.js'
-import { estimateTokens, safeJsonStringify } from '../observability/token-estimator.js'
-import { logger } from '../utils/logger.js'
 import { parseCanonicalPositiveInt, parsePositiveProjectNumber } from '../utils/safe-positive-int.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { isRecord } from '../utils/type-guards.js'
 import {
     ADMIN_PROMPT_NAMES,
     canonicalizeMemoryResourceUri,
@@ -64,35 +63,59 @@ function resolveSensitiveCategoryFromNormalized(normalized: string, rawOrName: s
     return 'read'
 }
 
+function normalizeAuditCategory(raw: unknown): AuditCategory {
+    if (raw === 'read' || raw === 'write' || raw === 'admin' || raw === 'team' || raw === 'audit') {
+        return raw
+    }
+    return 'read'
+}
+
+function filterStringArray(val: unknown): string[] {
+    if (!Array.isArray(val)) return []
+    const out: string[] = []
+    for (const item of val) {
+        if (typeof item === 'string') out.push(item)
+    }
+    return out
+}
+
+function buildParsedAuditEntry(rec: Record<string, unknown>): AuditEntry | null {
+    if (
+        typeof rec['tool'] !== 'string' ||
+        typeof rec['timestamp'] !== 'string' ||
+        typeof rec['success'] !== 'boolean'
+    ) {
+        return null
+    }
+    if (rec['user'] !== undefined && rec['user'] !== null && typeof rec['user'] !== 'string') return null
+    if (rec['category'] !== undefined && typeof rec['category'] !== 'string') return null
+    if (rec['workspaceId'] !== undefined && typeof rec['workspaceId'] !== 'string') return null
+    if (rec['projectNumber'] !== undefined && typeof rec['projectNumber'] !== 'number') return null
+    return {
+        timestamp: rec['timestamp'],
+        requestId: typeof rec['requestId'] === 'string' ? rec['requestId'] : '',
+        ...(typeof rec['sessionId'] === 'string' ? { sessionId: rec['sessionId'] } : {}),
+        tool: rec['tool'],
+        category: normalizeAuditCategory(rec['category']),
+        scope: typeof rec['scope'] === 'string' ? rec['scope'] : '',
+        user: typeof rec['user'] === 'string' ? rec['user'] : null,
+        scopes: filterStringArray(rec['scopes']),
+        durationMs: typeof rec['durationMs'] === 'number' ? rec['durationMs'] : 0,
+        success: rec['success'],
+        ...(typeof rec['error'] === 'string' ? { error: rec['error'] } : {}),
+        ...(isRecord(rec['args']) ? { args: rec['args'] } : {}),
+        ...(typeof rec['tokenEstimate'] === 'number' ? { tokenEstimate: rec['tokenEstimate'] } : {}),
+        ...(typeof rec['workspaceId'] === 'string' ? { workspaceId: rec['workspaceId'] } : {}),
+        ...(typeof rec['projectNumber'] === 'number' ? { projectNumber: rec['projectNumber'] } : {}),
+    }
+}
+
 /** Parse one JSONL audit line; returns null for empty, unparseable, or malformed lines. */
 export function parseAuditLine(line: string | undefined): AuditEntry | null {
     if (!line || line.trim().length === 0) return null
     try {
         const parsed: unknown = JSON.parse(line)
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-            return null
-        }
-        const record = parsed as Record<string, unknown>
-        if (
-            typeof record['tool'] !== 'string' ||
-            typeof record['timestamp'] !== 'string' ||
-            typeof record['success'] !== 'boolean'
-        ) {
-            return null
-        }
-        if (record['user'] !== undefined && record['user'] !== null && typeof record['user'] !== 'string') {
-            return null
-        }
-        if (record['category'] !== undefined && typeof record['category'] !== 'string') {
-            return null
-        }
-        if (record['workspaceId'] !== undefined && typeof record['workspaceId'] !== 'string') {
-            return null
-        }
-        if (record['projectNumber'] !== undefined && typeof record['projectNumber'] !== 'number') {
-            return null
-        }
-        return parsed as AuditEntry
+        return isRecord(parsed) ? buildParsedAuditEntry(parsed) : null
     } catch {
         return null
     }
@@ -144,14 +167,13 @@ export function extractSensitiveTargetFromArgs(toolName: string, args: unknown):
         const hit = checkUriKeyTarget(toolName)
         if (hit !== undefined) return hit
     }
-    if (typeof args !== 'object' || args === null) return undefined
-    const record = args as Record<string, unknown>
+    if (!isRecord(args)) return undefined
 
     let trimmedName: string | undefined
     let trimmedCapName: string | undefined
 
     for (const key of AUDIT_URI_KEYS) {
-        const val = record[key]
+        const val = args[key]
         if (typeof val !== 'string') continue
         const trimmed = val.trim()
         if (trimmed === '') continue
@@ -171,13 +193,14 @@ export function extractSensitiveTargetFromArgs(toolName: string, args: unknown):
     }
 
     for (const key of PROMPT_TARGET_KEYS) {
+        const rawPromptArg = args[key]
         const trimmed =
             key === 'name'
                 ? trimmedName
                 : key === 'Name'
                   ? trimmedCapName
-                  : typeof record[key] === 'string'
-                    ? record[key].trim()
+                  : typeof rawPromptArg === 'string'
+                    ? rawPromptArg.trim()
                     : ''
         if (trimmed === undefined || trimmed === '') continue
         if (isSensitivePromptName(trimmed)) {
@@ -257,9 +280,8 @@ export function extractAuditScopeFromArgs(
     let explicitWildcardWorkspace = false
     let explicitZeroProject = false
 
-    if (typeof args === 'object' && args !== null) {
-        const record = args as Record<string, unknown>
-        const rawWs = [record['workspace_id'], record['workspaceId'], record['workspace']].find(
+    if (isRecord(args)) {
+        const rawWs = [args['workspace_id'], args['workspaceId'], args['workspace']].find(
             (v): v is string => typeof v === 'string' && v.trim() !== ''
         )
         if (rawWs !== undefined) {
@@ -267,7 +289,7 @@ export function extractAuditScopeFromArgs(
             if (trimmedWs === '*') explicitWildcardWorkspace = true
             else workspaceId = sanitizeErrorForLogging(trimmedWs).slice(0, 255)
         }
-        const rawProj = [record['project_number'], record['projectNumber']].find(
+        const rawProj = [args['project_number'], args['projectNumber']].find(
             (v) => v !== undefined && !(typeof v === 'string' && v.trim() === '')
         )
         const parsedProject = parsePositiveProjectNumber(rawProj)
@@ -411,53 +433,4 @@ export function extractAuditScopeFromUri(
     )
 }
 
-function extractRecordText(val: unknown): string | undefined {
-    return typeof val === 'object' && val !== null && typeof (val as { text?: unknown }).text === 'string'
-        ? (val as { text: string }).text
-        : undefined
-}
-
-function estimateEnvelopeTextTokens(result: unknown): number | undefined {
-    if (typeof result !== 'object' || result === null) return undefined
-    const rec = result as Record<string, unknown>
-    if (Array.isArray(rec['contents'])) {
-        let total = 0
-        for (const item of rec['contents']) {
-            const text = extractRecordText(item)
-            if (text === undefined) return undefined
-            total += estimateTokens(text, 'json')
-        }
-        return total
-    }
-    if (Array.isArray(rec['messages'])) {
-        let total = 0
-        for (const msg of rec['messages']) {
-            const content =
-                typeof msg === 'object' && msg !== null ? (msg as { content?: unknown }).content : undefined
-            const text = extractRecordText(content)
-            if (text === undefined) return undefined
-            total += estimateTokens(text, 'prose')
-        }
-        return total
-    }
-    return undefined
-}
-
-/** Estimate token count for resource/prompt operation audit records, avoiding full JSON stringification on envelopes. */
-export function estimateOperationResultTokens(result: unknown, name: string): number | undefined {
-    if (typeof result === 'object' && result !== null) {
-        const fastTokens = estimateEnvelopeTextTokens(result)
-        if (fastTokens !== undefined) return fastTokens
-        try {
-            return estimateTokens(safeJsonStringify(result), 'json')
-        } catch (serializeError) {
-            logger.debug('Token estimate skipped: result is not serializable', {
-                module: 'Audit',
-                tool: name,
-                error: serializeError instanceof Error ? serializeError.message : String(serializeError),
-            })
-            return undefined
-        }
-    }
-    return typeof result === 'string' ? estimateTokens(result, 'prose') : undefined
-}
+export { estimateOperationResultTokens } from './audit-arg-scrubber.js'

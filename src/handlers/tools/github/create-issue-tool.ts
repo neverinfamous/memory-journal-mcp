@@ -5,6 +5,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { fenceUntrustedInline } from '../../resources/shared.js'
 import { coerceIntString, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
@@ -21,8 +22,8 @@ export { detectScopeMismatch, resolveIssueEntryScope, scopeMismatchResponse }
 
 const CreateIssueHandlerInputSchema = z.preprocess(
     (val: unknown) => {
-        if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-        const obj = { ...(val as Record<string, unknown>) }
+        if (!isRecord(val)) return val
+        const obj: Record<string, unknown> = { ...val }
         if ('journal_content' in obj) {
             if (obj['entry_content'] === undefined && obj['journal_content'] !== undefined) {
                 obj['entry_content'] = obj['journal_content']

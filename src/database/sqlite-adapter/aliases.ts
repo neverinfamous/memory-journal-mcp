@@ -42,10 +42,10 @@ export class AliasManager {
                     )
                     .run(alias, canonicalAuthor, createdBy ?? null, storedWorkspace)
                 const row = nativeDb
-                    .prepare(
+                    .prepare<unknown[], Record<string, unknown>>(
                         `SELECT * FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
                     )
-                    .get(alias, storedWorkspace) as Record<string, unknown> | undefined
+                    .get(alias, storedWorkspace)
                 if (!row) {
                     throw new QueryError(`Failed to retrieve newly added alias: ${alias}`)
                 }
@@ -135,7 +135,9 @@ export class AliasManager {
 
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
-                const rows = nativeDb.prepare(query).all(...params) as Record<string, unknown>[]
+                const rows = nativeDb
+                    .prepare<unknown[], Record<string, unknown>>(query)
+                    .all(...params)
                 return rows.map((row) => this.mapToAuthorAlias(row))
             }
 
@@ -176,9 +178,9 @@ export class AliasManager {
             const params = scoped ? [rawAuthor, scopeId] : [rawAuthor]
             const nativeDb = this.db.getNativeDb?.()
             if (nativeDb !== undefined) {
-                const row = nativeDb.prepare(sql).get(...params) as
-                    | { canonical_author?: unknown }
-                    | undefined
+                const row = nativeDb
+                    .prepare<unknown[], { canonical_author?: unknown }>(sql)
+                    .get(...params)
                 return typeof row?.canonical_author === 'string' ? row.canonical_author : rawAuthor
             }
             const results = this.db.exec(sql, params)
@@ -220,10 +222,9 @@ export class AliasManager {
                     : `SELECT alias, canonical_author FROM author_aliases WHERE alias COLLATE NOCASE IN (${placeholders}) ORDER BY workspace_id ASC`
                 const params = scoped ? [...chunk, scopeId] : chunk
                 if (nativeDb !== undefined) {
-                    const rows = nativeDb.prepare(sql).all(...params) as {
-                        alias: unknown
-                        canonical_author: unknown
-                    }[]
+                    const rows = nativeDb
+                        .prepare<unknown[], { alias: unknown; canonical_author: unknown }>(sql)
+                        .all(...params)
                     for (const row of rows) {
                         resolvedByLower.set(String(row.alias).toLowerCase(), String(row.canonical_author))
                     }

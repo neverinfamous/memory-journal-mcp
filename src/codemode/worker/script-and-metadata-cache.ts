@@ -7,19 +7,20 @@
 
 import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import type { SandboxResult } from '../types.js'
+import { isCallable } from './result-proxy-aliases.js'
 
-const nativeErrorIsError = Reflect.get(Error, 'isError') as
-    | ((value: unknown) => value is Error)
-    | undefined
+const rawNativeErrorIsError: unknown = Reflect.get(Error, 'isError')
+const nativeErrorIsError = isCallable(rawNativeErrorIsError) ? rawNativeErrorIsError : undefined
 
 /**
  * Cross-realm `Error` guard using ES2025 `Error.isError` when available (avoiding deprecated
  * `util.types.isNativeError`) with `instanceof Error` fallback on older runtimes.
  */
 export function isCrossRealmError(value: unknown): value is Error {
-    return typeof nativeErrorIsError === 'function'
-        ? nativeErrorIsError(value)
+    return nativeErrorIsError !== undefined
+        ? nativeErrorIsError.call(Error, value) === true
         : value instanceof Error
 }
 
@@ -122,7 +123,7 @@ let cachedMethodList: Record<string, string[]> = Object.freeze({})
 let cachedSchemaList: Record<string, Record<string, string>> | undefined
 
 function freezeMethodList(raw: Record<string, string[]>): Record<string, string[]> {
-    const frozen = Object.create(null) as Record<string, string[]>
+    const frozen = createNullProtoRecord<string[]>()
     for (const group of Object.keys(raw)) {
         const methods = Reflect.get(raw, group)
         const copy: string[] = Array.isArray(methods) ? [...methods] : []
@@ -136,10 +137,10 @@ function freezeSchemaList(
     raw: Record<string, Record<string, string>> | undefined
 ): Record<string, Record<string, string>> | undefined {
     if (raw === undefined) return undefined
-    const frozen = Object.create(null) as Record<string, Record<string, string>>
+    const frozen = createNullProtoRecord<Record<string, string>>()
     for (const group of Object.keys(raw)) {
         const schemas = Reflect.get(raw, group)
-        const groupFrozen = Object.create(null) as Record<string, string>
+        const groupFrozen = createNullProtoRecord<string>()
         if (schemas !== null && schemas !== undefined && typeof schemas === 'object') {
             for (const key of Object.keys(schemas)) {
                 const desc = Reflect.get(schemas, key)

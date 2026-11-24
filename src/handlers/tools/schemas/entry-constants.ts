@@ -4,6 +4,8 @@
  * normalizers and schema help (`dist/worker-script.js`) bundle zero external packages.
  */
 
+import { isRecord } from '../../../utils/type-guards.js'
+
 export const ENTRY_TYPES = [
     'personal_reflection',
     'project_decision',
@@ -76,8 +78,8 @@ export function normalizeSignificanceValue(raw: string): string | undefined {
  * Mutates the params object directly before Zod validation.
  */
 export function coerceSignificanceAlias(params: unknown): void {
-    if (params !== null && params !== undefined && typeof params === 'object') {
-        const obj = params as Record<string, unknown>
+    if (isRecord(params)) {
+        const obj = params
         if (typeof obj['significance_type'] === 'string') {
             const normalized = normalizeSignificanceValue(obj['significance_type'])
             if (normalized === undefined) {
@@ -183,8 +185,8 @@ export function preprocessRelationshipItem(item: unknown): unknown {
             }
         }
     }
-    if (item !== null && typeof item === 'object') {
-        const relObj = item as Record<string, unknown>
+    if (isRecord(item)) {
+        const relObj = item
         const rawTarget = pickRecordField(relObj, RELATIONSHIP_TARGET_KEYS)
         let targetId: unknown = rawTarget
         if (typeof rawTarget === 'string') {

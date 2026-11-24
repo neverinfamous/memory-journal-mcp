@@ -9,6 +9,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { RELATIONSHIP_TYPES } from '../../types/entities.js'
 import { logger } from '../../utils/logger.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
+import { isRecord } from '../../utils/type-guards.js'
 
 export function buildSummaryPromptText(params: {
     target: 'personal' | 'team'
@@ -80,7 +81,7 @@ export function fetchTargetEntryContext(
     projectNumber?: number
 ): string {
     try {
-        const recentRes = targetDb.getRecentEntries(
+        const rawRes: unknown = targetDb.getRecentEntries(
             1,
             undefined,
             'timestamp',
@@ -88,11 +89,13 @@ export function fetchTargetEntryContext(
             false,
             workspaceId,
             projectNumber
-        ) as { entries?: unknown[] } | unknown[]
-        const recent = (Array.isArray(recentRes) ? recentRes[0] : recentRes.entries?.[0]) as
-            | Record<string, unknown>
-            | undefined
-        if (!recent) return ''
+        )
+        const recent: unknown = Array.isArray(rawRes)
+            ? rawRes[0]
+            : isRecord(rawRes) && Array.isArray(rawRes['entries'])
+              ? rawRes['entries'][0]
+              : undefined
+        if (!isRecord(recent)) return ''
         return `
 **Target Entry Details (Pre-fetched for your convenience):**
 - **ID:** ${String(recent['id'])}

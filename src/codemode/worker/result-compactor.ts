@@ -5,6 +5,7 @@
 
 import type { SandboxResult } from '../types.js'
 import { unwrapResultProxy } from '../worker-result-proxy.js'
+import { isCallable } from './result-proxy-aliases.js'
 import { isCrossRealmError, safeFormatSandboxError } from './script-and-metadata-cache.js'
 
 const MAX_COMPACTION_DEPTH = 6
@@ -123,9 +124,9 @@ export function compactOversizedResult(
     seen.add(val)
 
     try {
-        const toJsonFn = Reflect.get(val, 'toJSON') as unknown
-        if (typeof toJsonFn === 'function') {
-            const converted = (toJsonFn as () => unknown).call(val)
+        const toJsonFn: unknown = Reflect.get(val, 'toJSON')
+        if (isCallable(toJsonFn)) {
+            const converted = toJsonFn.call(val)
             if (converted !== val) {
                 return compactOversizedResult(converted, limitBytes, depth + 1, seen, budget)
             }

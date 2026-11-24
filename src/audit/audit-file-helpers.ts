@@ -7,6 +7,7 @@ import { constants as fsConstants } from 'node:fs'
 import { lstat, open, rename } from 'node:fs/promises'
 import { logger } from '../utils/logger.js'
 import type { getRequestContext } from '../utils/request-context.js'
+import { getErrnoCode, isRecord } from '../utils/type-guards.js'
 import type { AuditEntry, AuditSearchFilters } from './types.js'
 import {
     AUDIT_URI_KEYS,
@@ -21,11 +22,7 @@ import {
 const AUDIT_SEARCH_CHUNK_BYTES = 65_536
 
 /** Extract `err.code` when `err` is an error-like object with a string `code`. */
-export function nodeErrorCode(err: unknown): string | undefined {
-    if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
-    const code = err.code
-    return typeof code === 'string' ? code : undefined
-}
+export { getErrnoCode as nodeErrorCode }
 
 /**
  * Returns true if `filePath` exists as a symbolic link or non-regular file (directory, FIFO, device).
@@ -36,7 +33,7 @@ export async function isUnsafeSymlinkOrSpecialFile(filePath: string): Promise<bo
         const info = await lstat(filePath)
         return info.isSymbolicLink() || !info.isFile()
     } catch (err: unknown) {
-        if (nodeErrorCode(err) === 'ENOENT') return false
+        if (getErrnoCode(err) === 'ENOENT') return false
         return true
     }
 }
@@ -72,6 +69,80 @@ function decodeReversedAuditChunk(
     }
 }
 
+function processDecodedAuditLines(
+    chunkText: string,
+    filters: AuditSearchFilters,
+    remainingLimit: number,
+    results: AuditEntry[]
+): { skippedLines: number; limitReached: boolean } {
+    let skippedLines = 0
+    const lines = chunkText.split('\n')
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const rawLine = lines[i]
+        if (rawLine === undefined || rawLine.length === 0) continue
+        const entry = parseAuditLine(rawLine)
+        if (entry === null) {
+            skippedLines++
+            continue
+        }
+        if (!matchesAuditFilters(entry, filters)) continue
+        results.push(entry)
+        if (results.length >= remainingLimit) {
+            return { skippedLines, limitReached: true }
+        }
+    }
+    return { skippedLines, limitReached: false }
+}
+
+async function readAuditChunksBackward(
+    fh: Awaited<ReturnType<typeof open>>,
+    buf: Buffer,
+    pos: number,
+    trailingBytes: Buffer,
+    filters: AuditSearchFilters,
+    remainingLimit: number,
+    results: AuditEntry[],
+    skippedLines: number
+): Promise<{ skippedLines: number; limitReached: boolean }> {
+    if (pos <= 0) return { skippedLines, limitReached: false }
+    const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
+    const startOffset = pos - readLen
+    const { bytesRead } = await fh.read(buf, 0, readLen, startOffset)
+    let nextTrailing = trailingBytes
+    let nextSkipped = skippedLines
+    if (bytesRead > 0) {
+        const decoded = decodeReversedAuditChunk(
+            buf.subarray(0, bytesRead),
+            trailingBytes,
+            startOffset
+        )
+        nextTrailing = decoded.trailingBytes
+        nextSkipped += decoded.overflowSkipped
+        if (decoded.chunkText !== undefined) {
+            const lineRes = processDecodedAuditLines(
+                decoded.chunkText,
+                filters,
+                remainingLimit,
+                results
+            )
+            nextSkipped += lineRes.skippedLines
+            if (lineRes.limitReached) {
+                return { skippedLines: nextSkipped, limitReached: true }
+            }
+        }
+    }
+    return readAuditChunksBackward(
+        fh,
+        buf,
+        startOffset,
+        nextTrailing,
+        filters,
+        remainingLimit,
+        results,
+        nextSkipped
+    )
+}
+
 export async function searchAuditFileBackward(
     filePath: string,
     filters: AuditSearchFilters,
@@ -88,48 +159,28 @@ export async function searchAuditFileBackward(
     try {
         fh = await open(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0))
     } catch (err: unknown) {
-        const code = nodeErrorCode(err)
+        const code = getErrnoCode(err)
         if (code === 'ENOENT' || code === 'EISDIR' || code === 'ELOOP') {
             return { skippedLines: 0, limitReached: false }
         }
         throw err
     }
 
-    let skippedLines = 0
     try {
         const info = await fh.stat()
         if (info.size === 0 || !info.isFile()) return { skippedLines: 0, limitReached: false }
 
         const buf = Buffer.alloc(Math.min(AUDIT_SEARCH_CHUNK_BYTES, info.size))
-        let pos = info.size
-        let trailingBytes: Buffer = Buffer.alloc(0)
-
-        while (pos > 0) {
-            const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
-            const startOffset = pos - readLen
-            const { bytesRead } = await fh.read(buf, 0, readLen, startOffset)
-            pos = startOffset
-            if (bytesRead === 0) continue
-            const decoded = decodeReversedAuditChunk(buf.subarray(0, bytesRead), trailingBytes, startOffset)
-            trailingBytes = decoded.trailingBytes
-            skippedLines += decoded.overflowSkipped
-            if (decoded.chunkText === undefined) continue
-
-            const lines = decoded.chunkText.split('\n')
-            for (let i = lines.length - 1; i >= 0; i--) {
-                const rawLine = lines[i]
-                if (rawLine === undefined || rawLine.length === 0) continue
-                const entry = parseAuditLine(rawLine)
-                if (entry === null) {
-                    skippedLines++
-                    continue
-                }
-                if (!matchesAuditFilters(entry, filters)) continue
-                results.push(entry)
-                if (results.length >= remainingLimit) return { skippedLines, limitReached: true }
-            }
-        }
-        return { skippedLines, limitReached: false }
+        return await readAuditChunksBackward(
+            fh,
+            buf,
+            info.size,
+            Buffer.alloc(0),
+            filters,
+            remainingLimit,
+            results,
+            0
+        )
     } finally {
         await Promise.resolve(fh.close()).catch(() => undefined)
     }
@@ -162,6 +213,32 @@ export async function appendRegularFileNoFollow(filePath: string, payload: strin
     }
 }
 
+async function rotateArchiveSlot(logPath: string, index: number): Promise<boolean> {
+    const oldFile = `${logPath}.${String(index)}`
+    const newFile = `${logPath}.${String(index + 1)}`
+    const [oldUnsafe, newUnsafe] = await Promise.all([
+        isUnsafeSymlinkOrSpecialFile(oldFile),
+        isUnsafeSymlinkOrSpecialFile(newFile),
+    ])
+    if (oldUnsafe || newUnsafe) {
+        logger.error('Refusing to rotate over symlink or non-regular audit archive', { module: 'Audit' })
+        return false
+    }
+    await rename(oldFile, newFile).catch((err: unknown) => {
+        if (getErrnoCode(err) === 'ENOENT') return
+        const message = err instanceof Error ? err.message : String(err)
+        logger.error(`Audit log rotation failed: ${message}`, { module: 'Audit' })
+        throw err
+    })
+    return true
+}
+
+async function rotateArchivesSequentially(logPath: string, index: number): Promise<boolean> {
+    if (index < 1) return true
+    if (!(await rotateArchiveSlot(logPath, index))) return false
+    return rotateArchivesSequentially(logPath, index - 1)
+}
+
 /**
  * Rotate the audit log file if its size meets or exceeds `maxSizeBytes`,
  * returning the updated approximate size in bytes or `null` on failure.
@@ -173,7 +250,7 @@ export async function rotateAuditLogFiles(
 ): Promise<number | null> {
     try {
         const info = await lstat(logPath).catch((err: unknown) => {
-            if (nodeErrorCode(err) !== 'ENOENT') {
+            if (getErrnoCode(err) !== 'ENOENT') {
                 const message = err instanceof Error ? err.message : String(err)
                 logger.debug(`Audit log stat failed before rotation: ${message}`, {
                     module: 'Audit',
@@ -188,22 +265,8 @@ export async function rotateAuditLogFiles(
         const currentSize = info?.size ?? 0
         if (!info || info.size < maxSizeBytes) return currentSize
 
-        for (let i = maxArchives - 1; i >= 1; i--) {
-            const oldFile = `${logPath}.${String(i)}`
-            const newFile = `${logPath}.${String(i + 1)}`
-            if (
-                (await isUnsafeSymlinkOrSpecialFile(oldFile)) ||
-                (await isUnsafeSymlinkOrSpecialFile(newFile))
-            ) {
-                logger.error('Refusing to rotate over symlink or non-regular audit archive', { module: 'Audit' })
-                return null
-            }
-            await rename(oldFile, newFile).catch((err: unknown) => {
-                if (nodeErrorCode(err) === 'ENOENT') return
-                const message = err instanceof Error ? err.message : String(err)
-                logger.error(`Audit log rotation failed: ${message}`, { module: 'Audit' })
-                throw err
-            })
+        if (!(await rotateArchivesSequentially(logPath, maxArchives - 1))) {
+            return null
         }
 
         const firstArchive = `${logPath}.1`
@@ -277,10 +340,9 @@ function canonicalizeMemorySchemeUri(raw: string, allowBareBriefing = false): st
 }
 
 function findMemoryUriInArgs(args: unknown, allowBareBriefing = false): string | undefined {
-    if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
-    const rec = args as Record<string, unknown>
+    if (!isRecord(args)) return undefined
     for (const key of AUDIT_URI_KEYS) {
-        const val = rec[key]
+        const val = args[key]
         if (typeof val !== 'string') continue
         const normalized = canonicalizeMemorySchemeUri(val, allowBareBriefing)
         if (normalized !== undefined) return normalized
@@ -312,10 +374,7 @@ export function resolveToolCallAuditScope(
     const uriScope = uriDetails.scope
     const uriWildcard = uriDetails.explicitWildcardWorkspace
     const uriInvalidProj = uriDetails.explicitInvalidProject
-    const rec =
-        typeof args === 'object' && args !== null && !Array.isArray(args)
-            ? (args as Record<string, unknown>)
-            : undefined
+    const rec = isRecord(args) ? args : undefined
     if (rec === undefined) {
         return applyActiveSessionScopeFallback(uriScope, reqCtx, uriWildcard, runtime, uriInvalidProj)
     }

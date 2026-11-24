@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import { constants as fsConstants } from 'node:fs'
 import type { Database } from 'better-sqlite3'
+import { isRecord } from '../../utils/type-guards.js'
 import {
     assertSafeTableAndIndexDdl,
     isAllowedBackupVirtualTable,
@@ -73,17 +74,19 @@ function isAllowedTrigger(name: string, tblName: string, sql: string): boolean {
  */
 export function assertSafeBackupSchemaPreIntegrity(tempDb: Database): { hasVecTable: boolean } {
     tempDb.pragma('trusted_schema = OFF')
-    const tableListRows = tempDb.pragma('table_list') as { schema?: unknown; name?: unknown; type?: unknown }[]
+    const rawTableList: unknown = tempDb.pragma('table_list')
     const virtualTableNames = new Set<string>()
-    for (const entry of tableListRows) {
-        if (entry.type === 'virtual' && typeof entry.name === 'string') {
-            virtualTableNames.add(entry.name)
+    if (Array.isArray(rawTableList)) {
+        for (const entry of rawTableList) {
+            if (isRecord(entry) && entry['type'] === 'virtual' && typeof entry['name'] === 'string') {
+                virtualTableNames.add(entry['name'])
+            }
         }
     }
 
     const rows = tempDb
-        .prepare('SELECT type, name, tbl_name, sql FROM sqlite_master')
-        .all() as SqliteMasterRow[]
+        .prepare<unknown[], SqliteMasterRow>('SELECT type, name, tbl_name, sql FROM sqlite_master')
+        .all()
 
     let hasVecTable = false
     const checkedVirtual = new Set<string>()
@@ -122,22 +125,78 @@ export function assertSafeBackupSchemaPreIntegrity(tempDb: Database): { hasVecTa
 
 /** Ensures the restored database contains the canonical regular `memory_journal` table. */
 export function assertHasMemoryJournalTable(tempDb: Database): void {
-    const tableInfo = (tempDb.pragma("table_list('memory_journal')") as { name?: unknown; type?: unknown }[])
-        .find((row) => row.name === 'memory_journal')
+    const rawTableInfo: unknown = tempDb.pragma("table_list('memory_journal')")
+    const tableInfo = Array.isArray(rawTableInfo)
+        ? rawTableInfo.find(
+              (row): row is Record<string, unknown> =>
+                  isRecord(row) && row['name'] === 'memory_journal'
+          )
+        : undefined
     const rows = tempDb
-        .prepare(
+        .prepare<unknown[], { sql?: unknown }>(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_journal'"
         )
-        .all() as { sql?: unknown }[]
+        .all()
     const row = rows[0]
     const sql = typeof row?.sql === 'string' ? row.sql : ''
     if (
         row === undefined ||
-        tableInfo?.type !== 'table' ||
+        tableInfo?.['type'] !== 'table' ||
         CREATE_VIRTUAL_TABLE_RE.test(stripSqlComments(sql))
     ) {
         throw new Error('Missing canonical memory_journal table in backup file')
     }
+}
+
+function writeAllBytes(
+    destFh: fs.promises.FileHandle,
+    buf: Buffer,
+    bytesRead: number,
+    offset: number
+): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        const writeNext = (written: number): void => {
+            if (written >= bytesRead) {
+                resolve()
+                return
+            }
+            destFh
+                .write(buf, written, bytesRead - written, offset + written)
+                .then((res) => {
+                    writeNext(written + res.bytesWritten)
+                })
+                .catch((err: unknown) => {
+                    reject(err instanceof Error ? err : new Error(String(err)))
+                })
+        }
+        writeNext(0)
+    })
+}
+
+function copyHandleChunks(
+    srcFh: fs.promises.FileHandle,
+    destFh: fs.promises.FileHandle,
+    buf: Buffer
+): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        const readNext = (offset: number): void => {
+            srcFh
+                .read(buf, 0, buf.length, offset)
+                .then(({ bytesRead }) => {
+                    if (bytesRead === 0) {
+                        resolve()
+                        return
+                    }
+                    return writeAllBytes(destFh, buf, bytesRead, offset).then(() => {
+                        readNext(offset + bytesRead)
+                    })
+                })
+                .catch((err: unknown) => {
+                    reject(err instanceof Error ? err : new Error(String(err)))
+                })
+        }
+        readNext(0)
+    })
 }
 
 /** Copies a regular non-symlink file to a new `0o600` destination using `O_NOFOLLOW`. */
@@ -162,17 +221,7 @@ export async function copyRegularFileNoFollow(sourcePath: string, destPath: stri
             0o600
         )
         const buf = Buffer.allocUnsafe(65_536)
-        let offset = 0
-        for (;;) {
-            const { bytesRead } = await srcFh.read(buf, 0, buf.length, offset)
-            if (bytesRead === 0) break
-            let written = 0
-            while (written < bytesRead) {
-                const res = await destFh.write(buf, written, bytesRead - written, offset + written)
-                written += res.bytesWritten
-            }
-            offset += bytesRead
-        }
+        await copyHandleChunks(srcFh, destFh, buf)
     } catch (err) {
         if (destFh !== undefined) {
             await destFh.close().catch(() => undefined)

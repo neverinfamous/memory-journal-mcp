@@ -3,7 +3,7 @@ import * as https from 'node:https'
 import type { IncomingMessage } from 'node:http'
 import type { AuthorizationServerMetadata } from './types.js'
 import { ConfigurationError } from '../types/errors.js'
-import type { ResolvedPublicAddress } from './jwks-ssrf-guard.js'
+import { createPinnedDnsLookup, type ResolvedPublicAddress } from './jwks-ssrf-guard.js'
 
 const AuthorizationServerMetadataSchema = z
     .object({
@@ -120,22 +120,7 @@ export function fetchDiscoveryMetadata(
             {
                 method: 'GET',
                 headers: { Accept: 'application/json', Host: hostHeader },
-                lookup: (_hostname, options, callback) => {
-                    const wantAll =
-                        typeof options === 'object' &&
-                        options !== null &&
-                        'all' in options &&
-                        options.all === true
-                    if (wantAll) {
-                        const cb = callback as unknown as (
-                            err: NodeJS.ErrnoException | null,
-                            addresses: ResolvedPublicAddress[]
-                        ) => void
-                        cb(null, [...resolvedRecords])
-                        return
-                    }
-                    callback(null, primary.address, primary.family)
-                },
+                lookup: createPinnedDnsLookup(primary, resolvedRecords),
                 timeout: timeoutMs,
             },
             (res) => {

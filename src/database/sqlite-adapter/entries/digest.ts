@@ -8,9 +8,9 @@
 import type { Database } from 'better-sqlite3'
 import { z } from 'zod'
 import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
-import { queryRow, queryRows } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { logger } from '../../../utils/logger.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { extractPreview } from '../../../handlers/resources/core/briefing/preview-helpers.js'
 
 // ============================================================================
@@ -131,6 +131,37 @@ function getUtcMonthWindow(now = new Date()): UtcMonthWindow {
     return { curYm, prevYm, prevStartIso: `${prevYm}-01`, nextStartIso: `${nextYm}-01` }
 }
 
+interface ActivityCountsRow {
+    current_count: number
+    previous_count: number
+    current_significant: number
+    total_periods: number
+    total_significant: number
+}
+
+interface StaleProjectRow {
+    project_number: number
+    last_entry_date: string
+    days_silent: number
+}
+
+interface RelDensityRow {
+    current_rels: number
+    previous_rels: number
+}
+
+interface TopImportanceRow {
+    id: number
+    importance_score: number
+    preview: string
+}
+
+interface SnapshotRow {
+    id: number
+    created_at: string
+    data: unknown
+}
+
 /** Activity trend & significance spike in a single memory_journal scan (non-strftime SUBSTR). */
 function computeActivityAndSignificance(
     db: Database,
@@ -144,30 +175,27 @@ function computeActivityAndSignificance(
     historicalAvgSignificant: number
     significanceMultiplier: number | null
 } {
-    const row = queryRow(
-        db,
-        `SELECT
+    const row = db
+        .prepare<unknown[], ActivityCountsRow>(
+            `SELECT
             COALESCE(SUM(CASE WHEN SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_count,
             COALESCE(SUM(CASE WHEN SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS previous_count,
             COALESCE(SUM(CASE WHEN significance_type IS NOT NULL AND SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_significant,
             COUNT(DISTINCT SUBSTR(timestamp, 1, 7)) AS total_periods,
             COALESCE(SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END), 0) AS total_significant
         FROM memory_journal
-        WHERE deleted_at IS NULL${s.filter}`,
-        win.curYm,
-        win.prevYm,
-        win.curYm,
-        ...s.params
-    )
-    const currentPeriodEntries = (row?.['current_count'] as number) ?? 0
-    const previousPeriodEntries = (row?.['previous_count'] as number) ?? 0
+        WHERE deleted_at IS NULL${s.filter}`
+        )
+        .get(win.curYm, win.prevYm, win.curYm, ...s.params)
+    const currentPeriodEntries = row?.current_count ?? 0
+    const previousPeriodEntries = row?.previous_count ?? 0
     const activityGrowthPercent =
         previousPeriodEntries > 0
             ? Math.round(((currentPeriodEntries - previousPeriodEntries) / previousPeriodEntries) * 100)
             : null
-    const currentPeriodSignificant = (row?.['current_significant'] as number) ?? 0
-    const totalPeriods = (row?.['total_periods'] as number) ?? 1
-    const totalSignificant = (row?.['total_significant'] as number) ?? 0
+    const currentPeriodSignificant = row?.current_significant ?? 0
+    const totalPeriods = row?.total_periods ?? 1
+    const totalSignificant = row?.total_significant ?? 0
     const historicalAvgSignificant =
         totalPeriods > 0 ? Math.round((totalSignificant / totalPeriods) * 10) / 10 : 0
     const significanceMultiplier =
@@ -186,9 +214,9 @@ function computeActivityAndSignificance(
 
 /** Projects with no entries in the last N days. */
 function computeStaleProjects(db: Database, s: DigestScope): StaleProject[] {
-    const staleRows = queryRows(
-        db,
-        `SELECT
+    const staleRows = db
+        .prepare<unknown[], StaleProjectRow>(
+            `SELECT
             project_number,
             MAX(timestamp) AS last_entry_date,
             CAST(julianday('now') - julianday(MAX(timestamp)) AS INTEGER) AS days_silent
@@ -196,14 +224,13 @@ function computeStaleProjects(db: Database, s: DigestScope): StaleProject[] {
         WHERE deleted_at IS NULL AND project_number IS NOT NULL${s.filter}
         GROUP BY project_number
         HAVING days_silent > ?
-        ORDER BY days_silent DESC, project_number ASC`,
-        ...s.params,
-        STALE_PROJECT_THRESHOLD_DAYS
-    )
+        ORDER BY days_silent DESC, project_number ASC`
+        )
+        .all(...s.params, STALE_PROJECT_THRESHOLD_DAYS)
     return staleRows.map((r) => ({
-        projectNumber: r['project_number'] as number,
-        lastEntryDate: r['last_entry_date'] as string,
-        daysSilent: r['days_silent'] as number,
+        projectNumber: r.project_number,
+        lastEntryDate: r.last_entry_date,
+        daysSilent: r.days_silent,
     }))
 }
 
@@ -215,9 +242,9 @@ function computeRelationshipDensity(
     currentPeriodEntries: number,
     previousPeriodEntries: number
 ): { currentRelDensity: number; previousRelDensity: number } {
-    const relDensityRow = queryRow(
-        db,
-        `SELECT
+    const relDensityRow = db
+        .prepare<unknown[], RelDensityRow>(
+            `SELECT
             COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_rels,
             COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS previous_rels
         FROM memory_journal m
@@ -225,15 +252,11 @@ function computeRelationshipDensity(
         CROSS JOIN memory_journal p ON p.id = r.to_entry_id
         WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id
           AND r.from_entry_id != r.to_entry_id
-          AND m.timestamp >= ? AND m.timestamp < ?${s.filterAlias}`,
-        win.curYm,
-        win.prevYm,
-        win.prevStartIso,
-        win.nextStartIso,
-        ...s.params
-    )
-    const currentRels = (relDensityRow?.['current_rels'] as number) ?? 0
-    const previousRels = (relDensityRow?.['previous_rels'] as number) ?? 0
+          AND m.timestamp >= ? AND m.timestamp < ?${s.filterAlias}`
+        )
+        .get(win.curYm, win.prevYm, win.prevStartIso, win.nextStartIso, ...s.params)
+    const currentRels = relDensityRow?.current_rels ?? 0
+    const previousRels = relDensityRow?.previous_rels ?? 0
     return {
         currentRelDensity:
             currentPeriodEntries > 0 ? Math.round((currentRels / currentPeriodEntries) * 100) / 100 : 0,
@@ -246,9 +269,9 @@ function computeRelationshipDensity(
 function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[] {
     const importanceExpr = buildImportanceSqlExpression()
     const importanceCte = buildImportanceCte(s.isScoped)
-    const topRows = queryRows(
-        db,
-        `WITH ${importanceCte}
+    const topRows = db
+        .prepare<unknown[], TopImportanceRow>(
+            `WITH ${importanceCte}
         SELECT
             e.id,
             ${importanceExpr} AS importance_score,
@@ -258,16 +281,13 @@ function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[
         LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
         WHERE e.deleted_at IS NULL${s.filterE}
         ORDER BY importance_score DESC, e.id DESC
-        LIMIT ?`,
-        ...s.params,
-        PREVIEW_SQL_LENGTH,
-        ...s.params,
-        TOP_IMPORTANCE_COUNT
-    )
+        LIMIT ?`
+        )
+        .all(...s.params, PREVIEW_SQL_LENGTH, ...s.params, TOP_IMPORTANCE_COUNT)
     return topRows.map((r) => ({
-        id: r['id'] as number,
-        score: Math.round((r['importance_score'] as number) * 100) / 100,
-        preview: extractPreview(r['preview'] as string, PREVIEW_LENGTH),
+        id: r.id,
+        score: Math.round(r.importance_score * 100) / 100,
+        preview: extractPreview(r.preview, PREVIEW_LENGTH),
     }))
 }
 
@@ -358,14 +378,14 @@ function parseSnapshotData(raw: unknown, id: unknown): Record<string, unknown> |
         })
         return null
     }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    if (!isRecord(parsed)) {
         logger.warning('Skipping non-object analytics snapshot row', {
             module: 'Digest',
             snapshotId: id,
         })
         return null
     }
-    return parsed as Record<string, unknown>
+    return parsed
 }
 
 /**
@@ -376,20 +396,20 @@ export function getLatestAnalyticsSnapshot(
     type: string,
     workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-    const row = queryRow(
-        db,
-        `SELECT id, created_at, data FROM analytics_snapshots
+    const row = db
+        .prepare<unknown[], SnapshotRow>(
+            `SELECT id, created_at, data FROM analytics_snapshots
          WHERE snapshot_type = ?
          ORDER BY created_at DESC, id DESC
-         LIMIT 1`,
-        workspaceSnapshotType(type, workspaceId)
-    )
+         LIMIT 1`
+        )
+        .get(workspaceSnapshotType(type, workspaceId))
     if (!row) return null
-    const data = parseSnapshotData(row['data'], row['id'])
+    const data = parseSnapshotData(row.data, row.id)
     if (data === null) return null
     return {
-        id: row['id'] as number,
-        createdAt: row['created_at'] as string,
+        id: row.id,
+        createdAt: row.created_at,
         data,
     }
 }
@@ -403,22 +423,21 @@ export function getAnalyticsSnapshots(
     limit = 10,
     workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-    const rows = queryRows(
-        db,
-        `SELECT id, created_at, data FROM analytics_snapshots
+    const rows = db
+        .prepare<unknown[], SnapshotRow>(
+            `SELECT id, created_at, data FROM analytics_snapshots
          WHERE snapshot_type = ?
          ORDER BY created_at DESC, id DESC
-         LIMIT ?`,
-        workspaceSnapshotType(type, workspaceId),
-        limit
-    )
+         LIMIT ?`
+        )
+        .all(workspaceSnapshotType(type, workspaceId), limit)
     const snapshots: { id: number; createdAt: string; data: Record<string, unknown> }[] = []
     for (const r of rows) {
-        const data = parseSnapshotData(r['data'], r['id'])
+        const data = parseSnapshotData(r.data, r.id)
         if (data === null) continue
         snapshots.push({
-            id: r['id'] as number,
-            createdAt: r['created_at'] as string,
+            id: r.id,
+            createdAt: r.created_at,
             data,
         })
     }

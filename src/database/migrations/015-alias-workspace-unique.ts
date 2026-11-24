@@ -10,8 +10,10 @@ export const Migration015AliasWorkspaceUnique: Migration = {
     name: '015-alias-workspace-unique',
     up(db: Database): void {
         const table = db
-            .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'author_aliases'`)
-            .get() as { sql: string } | undefined
+            .prepare<unknown[], { sql: string }>(
+                `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'author_aliases'`
+            )
+            .get()
         if (table === undefined) return
         if (/UNIQUE\s*\(\s*alias\s*,\s*workspace_id\s*\)/i.test(table.sql)) return
 

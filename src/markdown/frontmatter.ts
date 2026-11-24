@@ -11,6 +11,7 @@
  */
 
 import { z } from 'zod'
+import { isRecord } from '../utils/type-guards.js'
 import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
 import {
     RELATIONSHIP_TARGET_KEYS,
@@ -19,12 +20,11 @@ import {
 } from '../handlers/tools/schemas/constants-and-primitives.js'
 
 function preprocessFrontmatterRelationship(item: unknown): unknown {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) return item
-    const rec = item as Record<string, unknown>
-    const rawTarget = pickRecordField(rec, RELATIONSHIP_TARGET_KEYS)
+    if (!isRecord(item)) return item
+    const rawTarget = pickRecordField(item, RELATIONSHIP_TARGET_KEYS)
     const parsedTarget = typeof rawTarget === 'string' ? parseCanonicalPositiveInt(rawTarget) : undefined
     const target_id = parsedTarget ?? rawTarget
-    const rawType = pickRecordField(rec, RELATIONSHIP_TYPE_KEYS)
+    const rawType = pickRecordField(item, RELATIONSHIP_TYPE_KEYS)
     return { type: rawType, target_id }
 }
 

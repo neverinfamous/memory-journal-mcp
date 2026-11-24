@@ -8,7 +8,7 @@
 export function isCrossRealmError(value: unknown): value is Error {
     const isErrFn: unknown = Reflect.get(Error, 'isError')
     if (typeof isErrFn === 'function') {
-        return (isErrFn as (v: unknown) => boolean)(value)
+        return Reflect.apply(isErrFn, Error, [value]) === true
     }
     return value instanceof Error
 }
@@ -33,7 +33,7 @@ export function tryResolveToJson(
         return { resolved: false }
     }
     try {
-        const res: unknown = (toJsonFn as () => unknown).call(value)
+        const res: unknown = Reflect.apply(toJsonFn, value, [])
         if (res === value) return { resolved: false }
         return { resolved: true, value: res }
     } catch {

@@ -9,6 +9,7 @@ import {
     getCallerIdentity,
 } from '../../handlers/tools/team/rbac.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../../utils/security-utils.js'
+import { getErrnoCode } from '../../utils/type-guards.js'
 import { assertSyntacticallySafeCliPath } from './cli-input-reader.js'
 import {
     findCanonicalRegistryKey,
@@ -98,24 +99,27 @@ export function resolveCliReadScope(
 
 /** Walk `dirPath` and every existing ancestor upward, rejecting any symlink. */
 export async function assertNonSymlinkCliAncestors(dirPath: string): Promise<void> {
+    const ancestors: string[] = []
     let current = path.resolve(dirPath)
     while (true) {
-        try {
-            const stats = await fsPromises.lstat(current)
-            if (stats.isSymbolicLink()) {
-                throw new Error(`Symlinks are forbidden for CLI directory paths: ${current}`)
-            }
-        } catch (err: unknown) {
-            const code =
-                typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
-            if (code !== 'ENOENT') {
-                throw err
-            }
-        }
+        ancestors.push(current)
         const parent = path.dirname(current)
         if (parent === current) break
         current = parent
     }
+    await ancestors.reduce<Promise<void>>(async (prev, ancestor) => {
+        await prev
+        try {
+            const stats = await fsPromises.lstat(ancestor)
+            if (stats.isSymbolicLink()) {
+                throw new Error(`Symlinks are forbidden for CLI directory paths: ${ancestor}`)
+            }
+        } catch (err: unknown) {
+            if (getErrnoCode(err) !== 'ENOENT') {
+                throw err
+            }
+        }
+    }, Promise.resolve())
 }
 
 /** Validate a CLI directory flag against null bytes, ancestor symlinks, and path traversal. */

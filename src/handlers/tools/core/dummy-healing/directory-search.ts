@@ -242,12 +242,17 @@ export async function searchDirectoryAsync(
                 // Directory stream may already be closed after iteration.
             })
         }
-        for (const sub of subdirs) {
-            if (results.length >= maxResults || state.dirents >= MAX_SEARCH_DIRENTS || state.files >= MAX_SEARCH_FILES) {
-                break
+        await subdirs.reduce(async (prev, sub) => {
+            await prev
+            if (
+                results.length >= maxResults ||
+                state.dirents >= MAX_SEARCH_DIRENTS ||
+                state.files >= MAX_SEARCH_FILES
+            ) {
+                return
             }
             await traverse(sub, depth + 1)
-        }
+        }, Promise.resolve())
     }
 
     await traverse(dir, 0)

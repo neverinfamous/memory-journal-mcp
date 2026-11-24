@@ -3,6 +3,32 @@ import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
 import type { GitHubClient } from './client.js'
 import type { RepoInfo, LocalGitStatus } from './types.js'
 import type { GitHubWorkflowRun } from '../../types/index.js'
+import { isCachedRepoInfo, isCachedWorkflowRuns } from './cache-helpers.js'
+
+function normalizeWorkflowStatus(status: string | null): GitHubWorkflowRun['status'] {
+    switch (status) {
+        case 'queued':
+        case 'in_progress':
+        case 'completed':
+            return status
+        case null:
+        default:
+            return 'completed'
+    }
+}
+
+function normalizeWorkflowConclusion(conclusion: string | null): GitHubWorkflowRun['conclusion'] {
+    switch (conclusion) {
+        case 'success':
+        case 'failure':
+        case 'cancelled':
+        case 'skipped':
+        case null:
+            return conclusion
+        default:
+            return null
+    }
+}
 
 const RESOLVES_ISSUE_PATTERN = /(?:fix|fixes|resolve|resolves|close|closes)\s+#(\d+)/gi
 
@@ -55,7 +81,8 @@ export class RepositoryManager {
     }
 
     getCachedRepoInfo(): RepoInfo | null {
-        return (this.client.getCached('repoInfo') as RepoInfo | undefined) ?? null
+        const cached = this.client.getCached('repoInfo')
+        return isCachedRepoInfo(cached) ? cached : null
     }
 
     setCachedRepoInfo(info: RepoInfo): void {
@@ -108,8 +135,8 @@ export class RepositoryManager {
         }
 
         const cacheKey = `workflows:${owner}:${repo}:${String(limit)}`
-        const cached = this.client.getCached(cacheKey) as GitHubWorkflowRun[] | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedWorkflowRuns(cached)) return cached
 
         try {
             const response = await this.client.octokit.rest.actions.listWorkflowRunsForRepo({
@@ -122,13 +149,8 @@ export class RepositoryManager {
             const result = response.data.workflow_runs.map((run) => ({
                 id: run.id,
                 name: run.name ?? 'Unknown Workflow',
-                status: run.status as 'queued' | 'in_progress' | 'completed',
-                conclusion: run.conclusion as
-                    | 'success'
-                    | 'failure'
-                    | 'cancelled'
-                    | 'skipped'
-                    | null,
+                status: normalizeWorkflowStatus(run.status),
+                conclusion: normalizeWorkflowConclusion(run.conclusion),
                 url: run.html_url,
                 headBranch: run.head_branch ?? '',
                 headSha: run.head_sha,

@@ -16,6 +16,7 @@ import { TEAM_DB_ERROR_RESPONSE, assertCanonicalFallbackToolAllowed } from './te
 import { enforceTeamRbac, getCallerIdentity } from './team/rbac.js'
 import { executeTeamVisualizeRelationships } from './team/relationship-tools.js'
 import { extractPreview, redactHomePaths } from '../resources/core/briefing/preview-helpers.js'
+import { isRecord } from '../../utils/type-guards.js'
 import {
     LinkEntriesSchema,
     LinkEntriesSchemaMcp,
@@ -166,16 +167,50 @@ function buildRelationshipMermaid(
 
 type VisualizeInput = ReturnType<typeof VisualizeInputSchema.parse>
 
+interface TeamVisualizeNode {
+    id: number
+    label: string
+}
+
+interface TeamVisualizeEdge {
+    from: number
+    to: number
+    type: string
+}
+
+function parseTeamVisualizeNodes(raw: unknown): TeamVisualizeNode[] {
+    if (!Array.isArray(raw)) return []
+    const out: TeamVisualizeNode[] = []
+    for (const item of raw) {
+        if (isRecord(item) && typeof item['id'] === 'number' && typeof item['label'] === 'string') {
+            out.push({ id: item['id'], label: item['label'] })
+        }
+    }
+    return out
+}
+
+function parseTeamVisualizeEdges(raw: unknown): TeamVisualizeEdge[] {
+    if (!Array.isArray(raw)) return []
+    const out: TeamVisualizeEdge[] = []
+    for (const item of raw) {
+        if (
+            isRecord(item) &&
+            typeof item['from'] === 'number' &&
+            typeof item['to'] === 'number' &&
+            typeof item['type'] === 'string'
+        ) {
+            out.push({ from: item['from'], to: item['to'], type: item['type'] })
+        }
+    }
+    return out
+}
+
 function formatTeamVisualizePayload(
     input: VisualizeInput,
     teamRes: Record<string, unknown>
 ): Record<string, unknown> {
-    const rawNodes = Array.isArray(teamRes['nodes'])
-        ? (teamRes['nodes'] as { id: number; label: string }[])
-        : []
-    const rawEdges = Array.isArray(teamRes['edges'])
-        ? (teamRes['edges'] as { from: number; to: number; type: string }[])
-        : []
+    const rawNodes = parseTeamVisualizeNodes(teamRes['nodes'])
+    const rawEdges = parseTeamVisualizeEdges(teamRes['edges'])
     const edges =
         input.relationship_type !== undefined
             ? rawEdges.filter((e) => e.type === input.relationship_type)

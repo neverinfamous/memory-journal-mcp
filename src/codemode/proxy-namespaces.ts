@@ -349,7 +349,7 @@ export function createContextNamespaceProxy(contextObj?: Record<string, unknown>
         ...(wsId !== undefined ? { workspace_id: wsId, workspaceId: wsId } : {}),
         ...(contextObj ?? {}),
     }
-    const contextData = deepFreezeContextClone(rawContextData) as Record<string, unknown>
+    const contextData = deepFreezeContextClone(rawContextData)
 
     const getContextRpc = (keyOrObj?: unknown): Promise<unknown> => {
         if (typeof keyOrObj === 'string') {

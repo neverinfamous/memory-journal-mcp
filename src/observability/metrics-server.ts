@@ -3,6 +3,7 @@ import * as http from 'node:http';
 import { hasScope, SCOPES } from '../auth/scopes.js';
 import { logger } from '../utils/logger.js';
 import { isPlaceholderAuthToken } from '../utils/security-utils.js';
+import { getErrnoCode } from '../utils/type-guards.js';
 import type { ServerRuntime } from '../utils/maintenance-lock.js';
 import { formatPrometheusMetrics } from './prometheus-formatter.js';
 
@@ -306,8 +307,7 @@ export function startMetricsServer(
         if (!server.listening) {
             state.listenFailed = true;
         }
-        const err = error as { code?: string } | null | undefined;
-        if (typeof err === 'object' && err !== null && err.code === 'EADDRINUSE') {
+        if (getErrnoCode(error) === 'EADDRINUSE') {
             logger.warning(
                 `Metrics server port ${port} is already in use; standalone metrics server disabled for this instance`,
                 { module: 'MetricsServer' }

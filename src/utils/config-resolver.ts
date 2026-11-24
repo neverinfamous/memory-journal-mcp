@@ -4,6 +4,7 @@ import { parse as parseYaml } from 'yaml'
 import { logger } from './logger.js'
 import { ConfigurationError } from '../types/errors.js'
 import { readSafeRegularConfigTextSync } from './config-file-safety.js'
+import { isRecord } from './type-guards.js'
 
 /** Minimal Commander-compatible interface needed by ConfigResolver and CLI helpers. */
 export interface CliCommandLike {
@@ -109,16 +110,15 @@ export class ConfigResolver {
                 const parsed: unknown = /\.ya?ml$/i.test(filePath)
                     ? parseYaml(content)
                     : JSON.parse(content)
-                if (
-                    parsed !== null &&
-                    parsed !== undefined &&
-                    (typeof parsed !== 'object' || Array.isArray(parsed))
-                ) {
+                if (parsed === null || parsed === undefined) {
+                    this.configFileOptions = {}
+                } else if (isRecord(parsed)) {
+                    this.configFileOptions = parsed
+                } else {
                     throw new ConfigurationError(
                         `Configuration file ${filePath} must contain a top-level YAML/JSON object`
                     )
                 }
-                this.configFileOptions = (parsed as Record<string, unknown> | null | undefined) ?? {}
                 this.loadedConfigPath = filePath
                 logger.info('Loaded configuration from file', {
                     module: 'ConfigResolver',
@@ -143,11 +143,17 @@ export class ConfigResolver {
      * Resolves a configuration option following precedence:
      * CLI flag > Env Var > Config File > Default
      */
+    public resolve(cliKey: string, envKey?: string): unknown
+    public resolve<T>(
+        cliKey: string,
+        envKey: string | undefined,
+        parser: (val: unknown) => T
+    ): T | undefined
     public resolve<T>(
         cliKey: string,
         envKey?: string,
         parser?: (val: unknown) => T
-    ): T | undefined {
+    ): unknown {
         let value: unknown
         let source: 'cli' | 'env' | 'config' | 'default' = 'default'
 
@@ -189,10 +195,34 @@ export class ConfigResolver {
         }
 
         try {
-            return parser ? parser(value) : (value as T)
+            return parser !== undefined ? parser(value) : value
         } catch (err) {
             throw new ConfigurationError(`Failed to parse configuration for ${cliKey} (source: ${source}): ${err instanceof Error ? err.message : String(err)}`, { cause: err instanceof Error ? err : undefined })
         }
+    }
+
+    /** Resolve an optional string configuration value, rejecting non-string config values. */
+    public resolveString(cliKey: string, envKey?: string): string | undefined {
+        const val = this.resolve(cliKey, envKey)
+        if (val === undefined || val === null) return undefined
+        if (typeof val !== 'string') {
+            throw new ConfigurationError(
+                `Invalid string configuration for ${cliKey}: expected string, got ${typeof val}`
+            )
+        }
+        return val
+    }
+
+    /** Resolve an optional string-or-number configuration value, rejecting other types. */
+    public resolveStringOrNumber(cliKey: string, envKey?: string): string | number | undefined {
+        const val = this.resolve(cliKey, envKey)
+        if (val === undefined || val === null) return undefined
+        if (typeof val !== 'string' && typeof val !== 'number') {
+            throw new ConfigurationError(
+                `Invalid configuration for ${cliKey}: expected string or number, got ${typeof val}`
+            )
+        }
+        return val
     }
 
     private _parseNumeric(val: unknown, cliKey: string, min?: number, max?: number, isFloat = false): number {
@@ -229,7 +259,7 @@ export class ConfigResolver {
         min?: number,
         max?: number
     ): number {
-        const val = this.resolve<unknown>(cliKey, envKey)
+        const val = this.resolve(cliKey, envKey)
         if (val === undefined || val === null) {
             throw new ConfigurationError(`Missing required numeric configuration for ${cliKey}`)
         }
@@ -247,7 +277,7 @@ export class ConfigResolver {
         min?: number,
         max?: number
     ): number | undefined {
-        const val = this.resolve<unknown>(cliKey, envKey)
+        const val = this.resolve(cliKey, envKey)
         if (val === undefined || val === null) {
             return undefined
         }
@@ -269,7 +299,7 @@ export class ConfigResolver {
         min?: number,
         max?: number
     ): number | undefined {
-        const val = this.resolve<unknown>(cliKey, envKey)
+        const val = this.resolve(cliKey, envKey)
         if (val === undefined || val === null) {
             return undefined
         }
@@ -289,7 +319,7 @@ export class ConfigResolver {
         cliKey: string,
         envKey?: string
     ): boolean | undefined {
-        const val = this.resolve<unknown>(cliKey, envKey)
+        const val = this.resolve(cliKey, envKey)
         if (val === undefined || val === null) return undefined
         if (typeof val === 'string' && val.trim() === '') {
             if (this.isCliProvided(cliKey) || this.hasConfigFileKey(cliKey)) {
@@ -317,7 +347,7 @@ export class ConfigResolver {
         cliKey: string,
         envKey?: string
     ): string[] | undefined {
-        const val = this.resolve<unknown>(cliKey, envKey)
+        const val = this.resolve(cliKey, envKey)
         if (val === undefined || val === null) return undefined
 
         if (Array.isArray(val)) {

@@ -213,6 +213,26 @@ function handleConsolidateAuthors(context: ToolContext) {
 // Tool Registration
 // ============================================================================
 
+function createTeamConsolidateAuthorsTool(context: ToolContext): ToolDefinition {
+    return {
+        name: 'team_consolidate_authors',
+        title: 'Consolidate Authors',
+        description:
+            "Retroactively rewrite all past entries matching an author's aliases to the canonical author name. Requires admin role. This operation modifies database entries.",
+        group: 'team',
+        inputSchema: ConsolidateAuthorsSchemaMcp,
+        outputSchema: ConsolidateAuthorsOutputSchema,
+        annotations: {
+            readOnlyHint: false,
+            destructiveHint: true,
+            idempotentHint: false,
+            openWorldHint: false,
+        },
+        handler: handleConsolidateAuthors(context),
+        capabilities: { requiresAdminScope: true },
+    }
+}
+
 export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -279,21 +299,6 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             handler: handleResolveAuthor(context),
             capabilities: { requiresAdminScope: true },
         },
-        {
-            name: 'team_consolidate_authors',
-            title: 'Consolidate Authors',
-            description: 'Retroactively rewrite all past entries matching an author\'s aliases to the canonical author name. Requires admin role. This operation modifies database entries.',
-            group: 'team',
-            inputSchema: ConsolidateAuthorsSchemaMcp,
-            outputSchema: ConsolidateAuthorsOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: true,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: handleConsolidateAuthors(context),
-            capabilities: { requiresAdminScope: true },
-        },
+        createTeamConsolidateAuthorsTool(context),
     ]
 }

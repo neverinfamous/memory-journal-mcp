@@ -15,7 +15,7 @@ function hasOriginColumn(db: Database): boolean {
     if (cached !== undefined && (schemaVersion === undefined || cached.schemaVersion === schemaVersion)) {
         return cached.hasCol
     }
-    const rows = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
+    const rows = db.prepare<unknown[], { name: string }>('PRAGMA table_info(memory_journal)').all()
     const hasCol = rows.some((row) => row.name === 'origin_personal_id')
     if (hasCol || schemaVersion !== undefined) {
         originColumnCache.set(db, { schemaVersion: schemaVersion ?? -1, hasCol })
@@ -33,10 +33,10 @@ export function getMirrorOrigins(db: Database, entryIds: readonly number[]): Map
     const unique = Array.from(new Set(entryIds))
     for (const { placeholders, params } of bucketInParams(unique)) {
         const rows = db
-            .prepare(
+            .prepare<unknown[], { id: number; originPersonalId: number }>(
                 `SELECT id, origin_personal_id AS originPersonalId FROM memory_journal WHERE id IN (${placeholders}) AND origin_personal_id IS NOT NULL`
             )
-            .all(...params) as { id: number; originPersonalId: number }[]
+            .all(...params)
         for (const row of rows) origins.set(row.id, row.originPersonalId)
     }
     return origins

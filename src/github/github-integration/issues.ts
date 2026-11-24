@@ -2,6 +2,11 @@ import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
 import type { GitHubIssue } from '../../types/index.js'
 import type { IssueDetails } from './types.js'
+import {
+    isCachedGitHubIssues,
+    isCachedIssueComments,
+    isCachedIssueDetailsOrNull,
+} from './cache-helpers.js'
 
 export class IssuesManager {
     constructor(private client: GitHubClient) {}
@@ -18,8 +23,8 @@ export class IssuesManager {
         }
 
         const cacheKey = `issues:${owner}:${repo}:${state}:${String(limit)}`
-        const cached = this.client.getCached(cacheKey) as GitHubIssue[] | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedGitHubIssues(cached)) return cached
 
         try {
             const response = await this.client.octokit.issues.listForRepo({
@@ -65,8 +70,8 @@ export class IssuesManager {
         }
 
         const cacheKey = `issue:${owner}:${repo}:${String(issueNumber)}`
-        const cached = this.client.getCached(cacheKey) as IssueDetails | null | undefined
-        if (cached !== undefined) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedIssueDetailsOrNull(cached)) return cached
 
         try {
             const response = await this.client.octokit.issues.get({
@@ -127,10 +132,8 @@ export class IssuesManager {
         }
 
         const cacheKey = `issue-comments:${owner}:${repo}:${String(issueNumber)}:${String(_limit)}`
-        const cached = this.client.getCached(cacheKey) as
-            | { author: string; body: string; createdAt: string }[]
-            | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedIssueComments(cached)) return cached
 
         try {
             const response = await this.client.octokit.issues.listComments({

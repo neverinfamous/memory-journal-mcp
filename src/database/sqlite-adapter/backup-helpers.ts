@@ -244,8 +244,10 @@ export function countActiveEntries(ctx: IDatabaseConnection): number {
     const nativeDb = ctx.getNativeDb?.()
     if (nativeDb !== undefined) {
         const row = nativeDb
-            .prepare('SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL')
-            .get() as { c?: unknown } | undefined
+            .prepare<unknown[], { c?: unknown }>(
+                'SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL'
+            )
+            .get()
         const raw = row?.c
         if (typeof raw === 'number') return raw
         return typeof raw === 'bigint' ? Number(raw) : 0
@@ -341,9 +343,9 @@ export async function applySwappedDatabase(
 
     const nativeDb = ctx.getNativeDb?.()
     if (nativeDb !== undefined) {
-        const integrityRow = nativeDb.prepare('PRAGMA integrity_check').get() as
-            | Record<string, unknown>
-            | undefined
+        const integrityRow = nativeDb
+            .prepare<unknown[], Record<string, unknown>>('PRAGMA integrity_check')
+            .get()
         const integrityVal =
             integrityRow !== undefined ? Object.values(integrityRow)[0] : undefined
         if (integrityVal !== 'ok') {

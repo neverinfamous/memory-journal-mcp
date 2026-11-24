@@ -330,8 +330,10 @@ export function replaceOutsideNonCode(
     let spans: readonly NonCodeSpan[] | undefined
     return src.replace(regex, (...args: unknown[]) => {
         const match = typeof args[0] === 'string' ? args[0] : ''
-        const fullStr = typeof args.at(-1) === 'string' ? (args.at(-1) as string) : src
-        const offset = typeof args.at(-2) === 'number' ? (args.at(-2) as number) : 0
+        const lastArg = args.at(-1)
+        const secondLastArg = args.at(-2)
+        const fullStr = typeof lastArg === 'string' ? lastArg : src
+        const offset = typeof secondLastArg === 'number' ? secondLastArg : 0
         spans ??= buildNonCodeSpans(fullStr)
         if (isOffsetInNonCodeSpan(spans, offset)) return match
         const captures = args.slice(1, -2).map((v) => (typeof v === 'string' ? v : ''))

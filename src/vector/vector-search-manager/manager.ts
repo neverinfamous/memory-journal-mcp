@@ -8,13 +8,17 @@ import { rebuildIndex, verifyVecTableSchema } from './rebuild.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
 import {
     dbPathFromAdapter,
+    invokeSingleEmbeddingPipeline,
     isModelCachedOnDisk,
     isTransientFileLockError,
+    loadTransformersModule,
     MODEL_LOAD_RETRY_DELAY_MS,
     resolveEmbeddingCacheDir,
+    type TransformersPipelineModule,
 } from './model-cache.js'
 import {
     collectCandidates,
+    embedTextsSequentiallySettled,
     formatEntryForEmbedding,
     resolveCandidates,
     runPipelineBatchEmbeddingsSettled,
@@ -44,7 +48,7 @@ export class VectorSearchManager {
     private dimensions: number | null = null
     // Lazy-loaded dependencies
     private pipeline: unknown = null
-    private transformers: unknown = null
+    private transformers: TransformersPipelineModule | null = null
     private initializationPromise: Promise<void> | null = null
     private ready = false
 
@@ -98,61 +102,51 @@ export class VectorSearchManager {
     private async loadDefaultEmbeddingModel(): Promise<void> {
         return withModelLoadLock(async () => {
             const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
-            if (this.transformers === null) {
-                // [PERF]: Keep dynamic specifier non-literal so tsc/eslint skip 429 @huggingface/transformers .d.ts files
-                const transformersModuleName = '@huggingface/transformers'
-                this.transformers = (await import(transformersModuleName)) as unknown
-            }
-            const transformersModule = this.transformers as {
-                pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
-                env: { allowRemoteModels: boolean; cacheDir: string; localModelPath: string }
-            }
+            this.transformers ??= await loadTransformersModule()
+            const transformersModule = this.transformers
             const cachedLocally = isModelCachedOnDisk(cacheDir, this.modelName)
-            transformersModule.env.allowRemoteModels = !cachedLocally
-            transformersModule.env.cacheDir = cacheDir
-            transformersModule.env.localModelPath = cacheDir
+            transformersModule.env['allowRemoteModels'] = !cachedLocally
+            transformersModule.env['cacheDir'] = cacheDir
+            transformersModule.env['localModelPath'] = cacheDir
 
             logger.info(`Loading embedding model: ${this.modelName}`)
             this.pipeline = await this.loadPipelineWithRetry(transformersModule, cacheDir, cachedLocally)
             logger.info('Embedding model loaded')
 
-            const pipelineFunc = this.pipeline as (
-                text: string,
-                options: unknown
-            ) => Promise<{ data: unknown[] }>
-            const testResult = await pipelineFunc('test', { pooling: 'mean', normalize: true })
-            this.dimensions = testResult.data.length
+            const testVec = await invokeSingleEmbeddingPipeline(this.pipeline, 'test')
+            this.dimensions = testVec.length
             logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
         })
     }
 
     private async loadPipelineWithRetry(
-        transformersModule: {
-            pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
-            env: { allowRemoteModels: boolean }
-        },
+        transformersModule: TransformersPipelineModule,
         cacheDir: string,
-        cachedLocally: boolean
+        cachedLocally: boolean,
+        attempt = 1,
+        maxAttempts = 5
     ): Promise<unknown> {
-        const maxAttempts = 5
-        let lastError: unknown
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                if (attempt > 1 && (cachedLocally || isModelCachedOnDisk(cacheDir, this.modelName))) {
-                    transformersModule.env.allowRemoteModels = false
-                }
-                return await transformersModule.pipeline('feature-extraction', this.modelName, { dtype: 'fp32' })
-            } catch (pipelineErr) {
-                lastError = pipelineErr
-                if (attempt < maxAttempts && isTransientFileLockError(pipelineErr)) {
-                    transformersModule.env.allowRemoteModels = true
-                    await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt))
-                    continue
-                }
-                throw pipelineErr
+        try {
+            if (attempt > 1 && (cachedLocally || isModelCachedOnDisk(cacheDir, this.modelName))) {
+                transformersModule.env['allowRemoteModels'] = false
             }
+            return await transformersModule.pipeline('feature-extraction', this.modelName, {
+                dtype: 'fp32',
+            })
+        } catch (pipelineErr) {
+            if (attempt < maxAttempts && isTransientFileLockError(pipelineErr)) {
+                transformersModule.env['allowRemoteModels'] = true
+                await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt))
+                return this.loadPipelineWithRetry(
+                    transformersModule,
+                    cacheDir,
+                    cachedLocally,
+                    attempt + 1,
+                    maxAttempts
+                )
+            }
+            throw pipelineErr
         }
-        throw lastError instanceof Error ? lastError : new Error('Failed to load embedding model')
     }
 
     private async _initialize(): Promise<void> {
@@ -215,11 +209,9 @@ export class VectorSearchManager {
             !this.hasCustomEmbeddingGenerator() &&
             this.transformers !== null &&
             text.length <= QUERY_EMBEDDING_CACHE_MAX_CHARS
-        const pipelineFunc = this.pipeline as (text: string, options: unknown) => Promise<{ data: number[] }>
-        const vec = await getOrComputeCachedEmbedding(this.modelName, text, canCache, async () => {
-            const result = await pipelineFunc(text, { pooling: 'mean', normalize: true })
-            return new Float32Array(result.data)
-        })
+        const vec = await getOrComputeCachedEmbedding(this.modelName, text, canCache, () =>
+            invokeSingleEmbeddingPipeline(this.pipeline, text)
+        )
         if (vec.length !== dims) {
             throw new Error(`Embedding dimension mismatch: expected ${String(dims)}, got ${String(vec.length)}`)
         }
@@ -243,18 +235,9 @@ export class VectorSearchManager {
             throw new Error('Vector search not initialized properly. Cannot rebuild index.')
         }
         if (this.hasCustomEmbeddingGenerator()) {
-            const settled: PromiseSettledResult<Float32Array>[] = []
-            for (const text of texts) {
-                try {
-                    settled.push({
-                        status: 'fulfilled',
-                        value: await this.generateEmbedding(text, { bypassQueryCache: true }),
-                    })
-                } catch (reason) {
-                    settled.push({ status: 'rejected', reason })
-                }
-            }
-            return settled
+            return embedTextsSequentiallySettled(texts, 0, (text) =>
+                this.generateEmbedding(text, { bypassQueryCache: true })
+            )
         }
         return runPipelineBatchEmbeddingsSettled(this.pipeline, texts, dims, (text) =>
             this.generateEmbedding(text, { bypassQueryCache: true })

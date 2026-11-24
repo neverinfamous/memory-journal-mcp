@@ -26,6 +26,7 @@ import {
     TeamEntryDetailOutputSchema,
     TeamTagsListOutputSchema,
 } from './core-search-output-schemas.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 
 export {
     TeamEntryOutputSchema,
@@ -134,8 +135,8 @@ export const TeamCreateEntrySchema = z.preprocess(
                 (data.tags?.includes('session-summary') && data.auto_context)
             ) {
                 try {
-                    const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>
-                    const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined
+                    const ac: unknown = JSON.parse(data.auto_context || '{}')
+                    const commits = isRecord(ac) ? ac['commits'] : undefined
                     if (!Array.isArray(commits) || commits.length === 0) {
                         ctx.addIssue({
                             code: 'custom',

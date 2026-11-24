@@ -92,7 +92,9 @@ export async function resolveFallbackRegistryRepo(
         }
     }
 
-    for (const key of fallbackKeys) {
+    const probeFallbackAt = async (index: number): Promise<GitHubRepoResolved | undefined> => {
+        const key = fallbackKeys[index]
+        if (key === undefined) return undefined
         const project = registry[key]
         if (project && typeof project.path === 'string' && project.path.trim() !== '') {
             const fallbackGithub = getGitHubIntegration(project.path, runtime)
@@ -107,6 +109,8 @@ export async function resolveFallbackRegistryRepo(
                 }
             }
         }
+        return probeFallbackAt(index + 1)
     }
-    return undefined
+
+    return probeFallbackAt(0)
 }

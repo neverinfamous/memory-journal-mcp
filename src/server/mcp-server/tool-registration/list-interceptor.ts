@@ -1,5 +1,6 @@
 import type { ConfigManager } from '../../../utils/config-manager.js'
 import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
+import { isRecord } from '../../../utils/type-guards.js'
 
 export type RequestHandlerMap = Map<string, (req: unknown, ext: unknown) => Promise<unknown>>
 
@@ -20,12 +21,13 @@ export function attachListToolsInterceptor(
         const raw = currentConfig.toolFilterConfig?.raw
 
         const result = await listToolsHandler(request, extra)
-        const res = result as { tools?: { name: string }[] } | undefined
-        if (Array.isArray(res?.tools)) {
-            res.tools = res.tools.filter(
+        if (isRecord(result) && Array.isArray(result['tools'])) {
+            result['tools'] = result['tools'].filter(
                 (t) =>
-                    enabledSet.has(t.name) &&
-                    isToolVisibleForFilter(t.name, readOnlyHints.get(t.name), raw)
+                    isRecord(t) &&
+                    typeof t['name'] === 'string' &&
+                    enabledSet.has(t['name']) &&
+                    isToolVisibleForFilter(t['name'], readOnlyHints.get(t['name']), raw)
             )
         }
         return result

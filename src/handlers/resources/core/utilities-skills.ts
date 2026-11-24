@@ -135,17 +135,24 @@ async function scanSkillsDir(
     const dirNames = entries.filter((e) => e.isDirectory()).map((e) => e.name)
     const skills: { name: string; path: string; excerpt: string; source: string }[] = []
 
+    const chunks: string[][] = []
     for (let i = 0; i < dirNames.length; i += SKILLS_READ_CONCURRENCY) {
-        const chunk = dirNames.slice(i, i + SKILLS_READ_CONCURRENCY)
-        const settled = await Promise.allSettled(
-            chunk.map((skillName) => readSingleSkillEntry(dir, skillName, source))
-        )
-        for (const outcome of settled) {
-            if (outcome.status === 'fulfilled' && outcome.value !== null) {
-                skills.push(outcome.value)
-            }
-        }
+        chunks.push(dirNames.slice(i, i + SKILLS_READ_CONCURRENCY))
     }
+    await chunks.reduce<Promise<void>>(
+        (chain, chunk) =>
+            chain.then(async () => {
+                const settled = await Promise.allSettled(
+                    chunk.map((skillName) => readSingleSkillEntry(dir, skillName, source))
+                )
+                for (const outcome of settled) {
+                    if (outcome.status === 'fulfilled' && outcome.value !== null) {
+                        skills.push(outcome.value)
+                    }
+                }
+            }),
+        Promise.resolve()
+    )
     return skills
 }
 

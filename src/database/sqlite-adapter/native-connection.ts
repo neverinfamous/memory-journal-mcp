@@ -3,6 +3,7 @@ import type { Database } from 'better-sqlite3'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
+import { isRecord } from '../../utils/type-guards.js'
 import { isMissingTableError } from './schema-errors.js'
 import { applySqlCipherKey } from './sqlcipher-key.js'
 import { ConnectionError } from '../../types/errors.js'
@@ -51,6 +52,10 @@ function stripSqlStringsAndComments(sql: string): string {
         i++
     }
     return out
+}
+
+function isDatabaseHandle(db: unknown): db is Database {
+    return isRecord(db) && typeof db['prepare'] === 'function' && typeof db['close'] === 'function'
 }
 
 export class NativeConnectionManager implements IDatabaseConnection {
@@ -173,11 +178,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
             let ftsCount = 0
             let ftsCountKnown = false
             try {
-                ftsCount = (
-                    db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
-                        c: number
-                    }
-                ).c
+                ftsCount =
+                    db
+                        .prepare<unknown[], { c: number }>('SELECT COUNT(*) as c FROM fts_content_docsize')
+                        .get()?.c ?? 0
                 ftsCountKnown = true
             } catch (err) {
                 if (!isMissingTableError(err)) {
@@ -188,11 +192,12 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 }
             }
 
-            const entryCount = (
+            const entryCount =
                 db
-                    .prepare('SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL')
-                    .get() as { c: number }
-            ).c
+                    .prepare<unknown[], { c: number }>(
+                        'SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL'
+                    )
+                    .get()?.c ?? 0
             let needsRebuild = false
             let rebuildReason = ''
 
@@ -278,7 +283,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         // Use pre-compiled regex to detect true mutations that should return an empty set
         const isMutation = IS_MUTATION_RE.test(strippedSql)
 
-        const stmt = db.prepare(sql)
+        const stmt = db.prepare<unknown[], Record<string, unknown>>(sql)
 
         if (isMutation || !stmt.reader) {
             // It's a mutation, don't try to read rows back
@@ -291,16 +296,14 @@ export class NativeConnectionManager implements IDatabaseConnection {
         }
 
         // It's a SELECT/PRAGMA with a reader
-        const rows =
-            params && params.length > 0
-                ? (stmt.all(...params) as Record<string, unknown>[])
-                : (stmt.all() as Record<string, unknown>[])
+        const rows = params && params.length > 0 ? stmt.all(...params) : stmt.all()
 
-        if (rows.length === 0) {
+        const firstRow = rows[0]
+        if (firstRow === undefined) {
             return []
         }
 
-        const columns = Object.keys(rows[0] as object)
+        const columns = Object.keys(firstRow)
         const values: unknown[][] = rows.map((row) => columns.map((col) => row[col]))
 
         return [{ columns, values }]
@@ -406,12 +409,14 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     setDbAndInitialized(db: unknown): void {
-        const nativeDb = db as Database
-        this.db = nativeDb
-        if (typeof nativeDb.pragma === 'function') {
-            applyNativePragmas(nativeDb)
+        if (!isDatabaseHandle(db)) {
+            throw new ConnectionError('Invalid database handle passed to setDbAndInitialized.')
         }
-        installStatementCache(nativeDb)
+        this.db = db
+        if (typeof db.pragma === 'function') {
+            applyNativePragmas(db)
+        }
+        installStatementCache(db)
         this.initialized = true
     }
 
@@ -421,7 +426,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
     getVectorMetadata(key: string): string | undefined {
         const db = this.ensureDb()
-        const row = db.prepare('SELECT value FROM vector_metadata WHERE key = ?').get(key) as { value: string } | undefined
+        const row = db
+            .prepare<unknown[], { value: string }>('SELECT value FROM vector_metadata WHERE key = ?')
+            .get(key)
         return row?.value
     }
 

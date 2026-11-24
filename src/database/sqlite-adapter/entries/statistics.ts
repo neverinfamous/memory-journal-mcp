@@ -6,6 +6,7 @@ import {
 } from '../../workspace-scope.js'
 import { validateDateFormatPattern } from '../../../utils/security-utils.js'
 import { logger } from '../../../utils/logger.js'
+import { createNullProtoRecord } from '../../../utils/type-guards.js'
 
 /** Maximum number of period rows returned in the activity timeline */
 const MAX_PERIOD_ROWS = 52
@@ -52,16 +53,15 @@ function getTypeCounts(
     dateFilter: string,
     dateParams: unknown[]
 ): { totalEntries: number; entriesByType: Record<string, number> } {
-    const entriesByType = Object.create(null) as Record<string, number>
+    const entriesByType = createNullProtoRecord<number>()
     let totalEntries = 0
 
     const sql =
         dateParams.length > 0
             ? `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter} GROUP BY entry_type`
             : `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL GROUP BY entry_type`
-    const typeRows = (
-        dateParams.length > 0 ? db.prepare(sql).all(...dateParams) : db.prepare(sql).all()
-    ) as { entry_type: string; count: number }[]
+    const stmt = db.prepare<unknown[], { entry_type: string; count: number }>(sql)
+    const typeRows = dateParams.length > 0 ? stmt.all(...dateParams) : stmt.all()
     for (const row of typeRows) {
         entriesByType[row.entry_type] = row.count
         totalEntries += row.count
@@ -76,7 +76,7 @@ function getPeriodRows(
     dateParams: unknown[]
 ): PeriodRow[] {
     return db
-        .prepare(
+        .prepare<unknown[], PeriodRow>(
             `SELECT
         strftime(?, timestamp) as period,
         COUNT(*) as total_count,
@@ -87,7 +87,7 @@ function getPeriodRows(
     ORDER BY period DESC
     LIMIT ${String(MAX_PERIOD_ROWS)}`
         )
-        .all(dateFormat, ...dateParams) as PeriodRow[]
+        .all(dateFormat, ...dateParams)
 }
 
 function getRelationshipCounts(
@@ -111,7 +111,7 @@ function getRelationshipCounts(
         ? `FROM memory_journal m CROSS JOIN relationships r ON r.from_entry_id = m.id`
         : `FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id`
     const relTypeRows = db
-        .prepare(
+        .prepare<unknown[], { relationship_type: string; count: number }>(
             `
         SELECT r.relationship_type, COUNT(*) as count
         ${relStartFrom}
@@ -119,17 +119,14 @@ function getRelationshipCounts(
         GROUP BY r.relationship_type
     `
         )
-        .all(...dateParams) as {
-        relationship_type: string
-        count: number
-    }[]
+        .all(...dateParams)
     let totalRelationships = 0
     for (const row of relTypeRows) {
         totalRelationships += row.count
     }
 
     const linkedEntriesRow = db
-        .prepare(
+        .prepare<unknown[], { count: number }>(
             `SELECT COUNT(*) as count FROM memory_journal m
              WHERE m.deleted_at IS NULL${dateFilter}
                AND (
@@ -145,11 +142,11 @@ function getRelationshipCounts(
                    )
                )`
         )
-        .get(...dateParams) as { count: number }
+        .get(...dateParams)
 
     return {
         totalRelationships,
-        linkedCount: linkedEntriesRow.count,
+        linkedCount: linkedEntriesRow?.count ?? 0,
         relTypeRows,
     }
 }
@@ -159,7 +156,7 @@ function buildRelationshipBreakdown(relTypeRows: { relationship_type: string; co
     relationshipBreakdown: Record<string, number>
 } {
     const causalMetrics = { blocked_by: 0, resolved: 0, caused: 0 }
-    const relationshipBreakdown = Object.create(null) as Record<string, number>
+    const relationshipBreakdown = createNullProtoRecord<number>()
     for (const relType of [
         'evolves_from',
         'references',
@@ -281,7 +278,15 @@ function buildProjectBreakdown(
 ): Record<string, unknown>[] {
     const { db } = context
     const projRows = db
-        .prepare(
+        .prepare<
+            unknown[],
+            {
+                project_number: number
+                entry_count: number
+                sample_issue_url: string | null
+                sample_pr_url: string | null
+            }
+        >(
             `SELECT 
                     project_number, 
                     COUNT(*) as entry_count,
@@ -292,12 +297,7 @@ function buildProjectBreakdown(
             GROUP BY project_number
             ORDER BY entry_count DESC, project_number ASC`
         )
-        .all(...dateParams) as {
-        project_number: number
-        entry_count: number
-        sample_issue_url: string | null
-        sample_pr_url: string | null
-    }[]
+        .all(...dateParams)
 
     return projRows.map((r) => {
         let name: string | undefined = undefined

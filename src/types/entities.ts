@@ -2,6 +2,8 @@
  * Memory Journal MCP Server - Database Entity Types
  */
 
+import { createNullProtoRecord } from '../utils/type-guards.js'
+
 /**
  * Entry types for journal entries
  */
@@ -247,15 +249,12 @@ export interface CreateTeamEntryInput extends CreateEntryInput {
 /**
  * Common hallucinated tags -> canonical tags
  */
-export const TAG_ALIASES: Record<string, string> = Object.assign(
-    Object.create(null) as Record<string, string>,
-    {
-        'session_summary': 'session-summary',
-        'team_session_summary': 'session-summary',
-        'team-session-summary': 'session-summary',
-        'team session summary': 'session-summary',
-        'commit_narrative': 'commit-narrative',
-        'bug_fix': 'bug-fix',
-        'feature_implementation': 'feature',
-    }
-)
+export const TAG_ALIASES: Record<string, string> = createNullProtoRecord<string>({
+    'session_summary': 'session-summary',
+    'team_session_summary': 'session-summary',
+    'team-session-summary': 'session-summary',
+    'team session summary': 'session-summary',
+    'commit_narrative': 'commit-narrative',
+    'bug_fix': 'bug-fix',
+    'feature_implementation': 'feature',
+})

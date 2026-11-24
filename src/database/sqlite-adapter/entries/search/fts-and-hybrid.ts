@@ -35,12 +35,12 @@ function fetchPostLimitSnippets(
     if (sanitized === '') return snippetMap
     for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
-            .prepare(
+            .prepare<unknown[], { id: number; highlight_snippet: string }>(
                 `SELECT rowid AS id, snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet
                  FROM fts_content
                  WHERE fts_content MATCH ? AND rowid IN (${placeholders})`
             )
-            .all(sanitized, ...params) as { id: number; highlight_snippet: string }[]
+            .all(sanitized, ...params)
         for (const row of rows) {
             snippetMap.set(row.id, row.highlight_snippet)
         }

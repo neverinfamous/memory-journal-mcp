@@ -15,6 +15,7 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 
 import { fenceNonCanonicalRefOrKey } from '../../../../utils/security-utils.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import { sliceUntrustedInline } from '../../fencing-helpers.js'
 import type { GitHistorySummary } from './system-section.js'
 
@@ -148,8 +149,8 @@ export async function readRepoIndicatorsAsync(root: string | null): Promise<{
     const healthPromise = fsPromises
         .readFile(path.join(root, '.test-output', 'health-status.json'), 'utf-8')
         .then((content) => {
-            const parsed = JSON.parse(content) as { ok?: boolean }
-            return typeof parsed.ok === 'boolean' ? parsed.ok : null
+            const parsed: unknown = JSON.parse(content)
+            return isRecord(parsed) && typeof parsed['ok'] === 'boolean' ? parsed['ok'] : null
         })
         .catch(() => null)
     const [hasCodeMap, localCheck] = await Promise.all([codeMapPromise, healthPromise])

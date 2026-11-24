@@ -13,6 +13,7 @@ import {
     healAgentHallucinations,
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from '../../core/index.js'
 import {
     preprocessBatchCreateEntries,
@@ -27,8 +28,8 @@ const WORKSPACE_DESC =
 
 function preprocessUpdateEntry(val: unknown): unknown {
     const healedVal = healAgentHallucinations(val)
-    if (typeof healedVal === 'object' && healedVal !== null) {
-        const obj = { ...(healedVal as Record<string, unknown>) }
+    if (isRecord(healedVal)) {
+        const obj: Record<string, unknown> = { ...healedVal }
         let modified = false
         if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
             obj['entry_id'] = obj['id']
@@ -189,18 +190,17 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         .strict()
 )
 
+function preprocessDeleteEntryId(val: unknown): unknown {
+    if (isRecord(val) && val['id'] !== undefined && val['entry_id'] === undefined) {
+        const obj: Record<string, unknown> = { ...val, entry_id: val['id'] }
+        delete obj['id']
+        return obj
+    }
+    return val
+}
+
 export const DeleteEntrySchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) }
-            if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
-                obj['entry_id'] = obj['id']
-                delete obj['id']
-                return obj
-            }
-        }
-        return val
-    },
+    preprocessDeleteEntryId,
     z
         .object({
             entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
@@ -217,19 +217,7 @@ export const DeleteEntrySchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
 export const DeleteEntrySchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) }
-            let modified = false
-            if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
-                obj['entry_id'] = obj['id']
-                delete obj['id']
-                modified = true
-            }
-            return modified ? obj : val
-        }
-        return val
-    },
+    preprocessDeleteEntryId,
     z
         .object({
             entry_id: relaxedNumber()

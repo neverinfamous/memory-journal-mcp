@@ -8,6 +8,7 @@
 
 import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
 import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
+import { createNullProtoRecord } from './type-guards.js'
 
 type LogLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical'
 
@@ -25,6 +26,10 @@ const LOG_LEVELS: Record<LogLevel, number> = {
     warning: 4,
     error: 3,
     critical: 2,
+}
+
+function isLogLevel(val: string): val is LogLevel {
+    return Object.hasOwn(LOG_LEVELS, val)
 }
 
 function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unknown {
@@ -96,7 +101,7 @@ class Logger {
         delete extras['operation']
 
         // Sanitize error and string fields recursively to prevent token/secret leakage in nested log contexts
-        const sanitizedExtras = Object.create(null) as Record<string, unknown>
+        const sanitizedExtras = createNullProtoRecord()
         const rootSeen = new WeakSet()
         if (context !== undefined) rootSeen.add(context)
         for (const [k, v] of Object.entries(extras)) {
@@ -159,10 +164,9 @@ class Logger {
     setLevel(level: LogLevel): void {
         const raw = typeof level === 'string' ? level.trim().toLowerCase() : ''
         const normalized = raw === 'warn' ? 'warning' : raw
-        if (Object.hasOwn(LOG_LEVELS, normalized)) {
-            const validLevel = normalized as LogLevel
-            this.minLevel = LOG_LEVELS[validLevel]
-            for (const listener of logLevelListeners) listener(validLevel)
+        if (isLogLevel(normalized)) {
+            this.minLevel = LOG_LEVELS[normalized]
+            for (const listener of logLevelListeners) listener(normalized)
         }
     }
 }
@@ -178,6 +182,6 @@ export function onLogLevelChange(listener: LogLevelListener): void {
 // Get log level from environment (validated against known levels; map 'warn' -> 'warning' for mcp-logger parity)
 const rawLevelInput = (process.env['LOG_LEVEL'] ?? 'info').trim().toLowerCase()
 const rawLevel = rawLevelInput === 'warn' ? 'warning' : rawLevelInput
-const envLevel: LogLevel = Object.hasOwn(LOG_LEVELS, rawLevel) ? (rawLevel as LogLevel) : 'info'
+const envLevel: LogLevel = isLogLevel(rawLevel) ? rawLevel : 'info'
 
 export const logger = new Logger(envLevel)

@@ -6,6 +6,10 @@ import { ProjectsManager } from './projects.js'
 import { MilestonesManager } from './milestones.js'
 import { InsightsManager } from './insights.js'
 import { RepositoryManager } from './repository.js'
+import {
+    isCachedProjectContext,
+    isGitHubRateLimitResponse,
+} from './cache-helpers.js'
 import type {
     GitHubIssue,
     GitHubMilestone,
@@ -95,12 +99,15 @@ export class GitHubIntegration {
 
     async getRateLimit(): Promise<GitHubRateLimitResponse> {
         const cached = this.client.getCachedWithTtl('rate-limit', 30_000)
-        if (cached !== undefined) return cached as GitHubRateLimitResponse
+        if (isGitHubRateLimitResponse(cached)) return cached
 
         if (!this.client.octokit) throw new Error('GitHub API not available')
         const { data } = await this.client.octokit.rateLimit.get()
+        if (!isGitHubRateLimitResponse(data)) {
+            throw new Error('Invalid rate limit response from GitHub API')
+        }
         this.client.setCache('rate-limit', data)
-        return data as GitHubRateLimitResponse
+        return data
     }
 
     clearCache(): void {
@@ -273,8 +280,8 @@ export class GitHubIntegration {
                 : detected
         const cacheKey =
             target !== undefined ? `context:repo:${target.owner}/${target.repo}` : 'context:repo'
-        const cached = this.client.getCached(cacheKey) as ProjectContext | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedProjectContext(cached)) return cached
 
         const context: ProjectContext = {
             repoName: repoInfo.repo,

@@ -46,150 +46,116 @@ export function buildDigestSignalForPrompt(db: IDatabaseAdapter, workspaceId?: s
     return lines.join('\n') + '\n\n'
 }
 
+function buildDigestAnalyticsPrompt(spec: {
+    name: string
+    description: string
+    headline: string
+    summaryTask: string
+}): InternalPromptDef {
+    return {
+        name: spec.name,
+        description: spec.description,
+        icons: [ICON_PROMPT],
+        handler: (
+            _args: Record<string, string> | undefined,
+            db: IDatabaseAdapter,
+            _teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: Partial<BriefingConfig>,
+            runtime?: object | null
+        ) => {
+            const digestSignal = buildDigestSignalForPrompt(
+                db,
+                resourceWorkspace({
+                    briefingConfig,
+                    ...(runtime !== undefined ? { runtime } : {}),
+                })
+            )
+
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `${digestSignal}${spec.headline}\n${spec.summaryTask}\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
+                        },
+                    },
+                ],
+            }
+        },
+    }
+}
+
+function buildGoalTrackerPrompt(): InternalPromptDef {
+    return {
+        name: 'goal-tracker',
+        description: 'Milestone and achievement tracking',
+        icons: [ICON_PROMPT],
+        handler: (
+            _args: Record<string, string> | undefined,
+            db: IDatabaseAdapter,
+            _teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: Partial<BriefingConfig>,
+            runtime?: object | null
+        ) => {
+            const entries = db.getSignificantEntries(
+                20,
+                undefined,
+                resourceWorkspace({
+                    briefingConfig,
+                    ...(runtime !== undefined ? { runtime } : {}),
+                })
+            )
+
+            const mappedEntries = entries.map((e) => ({
+                id: e.id,
+                type: e.entryType,
+                timestamp: e.timestamp,
+                content: sliceUntrustedInline(e.content, 250, '...'),
+            }))
+
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `Track goals and milestones based on significant entries.\nSummarize progress toward goals and highlight achievements.\n\nSources:\n${JSON.stringify(mappedEntries, null, 2)}`,
+                        },
+                    },
+                ],
+            }
+        },
+    }
+}
+
 /**
  * Get analytical workflow prompt definitions
  */
 export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
     return [
-        {
+        buildDigestAnalyticsPrompt({
             name: 'prepare-standup',
             description: 'Prepare a daily standup summary (Yesterday, Today, Blockers)',
-            icons: [ICON_PROMPT],
-            handler: (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                _teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const digestSignal = buildDigestSignalForPrompt(
-                    db,
-                    resourceWorkspace({
-                        briefingConfig,
-                        ...(runtime !== undefined ? { runtime } : {}),
-                    })
-                )
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}Execute a standup analysis.\nPrepare a daily standup summary (Yesterday, Today, Blockers).\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
+            headline: 'Execute a standup analysis.',
+            summaryTask: 'Prepare a daily standup summary (Yesterday, Today, Blockers).',
+        }),
+        buildDigestAnalyticsPrompt({
             name: 'prepare-retro',
-            description: 'Prepare a sprint retrospective (What went well, What could improve, Action items)',
-            icons: [ICON_PROMPT],
-            handler: (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                _teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const digestSignal = buildDigestSignalForPrompt(
-                    db,
-                    resourceWorkspace({
-                        briefingConfig,
-                        ...(runtime !== undefined ? { runtime } : {}),
-                    })
-                )
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}Execute a retro analysis.\nPrepare a sprint retrospective (What went well, What could improve, Action items).\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
+            description:
+                'Prepare a sprint retrospective (What went well, What could improve, Action items)',
+            headline: 'Execute a retro analysis.',
+            summaryTask:
+                'Prepare a sprint retrospective (What went well, What could improve, Action items).',
+        }),
+        buildDigestAnalyticsPrompt({
             name: 'weekly-digest',
             description: 'Create a weekly digest formatted day-by-day',
-            icons: [ICON_PROMPT],
-            handler: (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                _teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const digestSignal = buildDigestSignalForPrompt(
-                    db,
-                    resourceWorkspace({
-                        briefingConfig,
-                        ...(runtime !== undefined ? { runtime } : {}),
-                    })
-                )
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}Execute a weekly digest analysis.\nCreate a weekly digest formatted day-by-day.\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'goal-tracker',
-            description: 'Milestone and achievement tracking',
-            icons: [ICON_PROMPT],
-            handler: (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                _teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const entries = db.getSignificantEntries(
-                    20,
-                    undefined,
-                    resourceWorkspace({
-                        briefingConfig,
-                        ...(runtime !== undefined ? { runtime } : {}),
-                    })
-                )
-
-                const mappedEntries = entries.map((e) => ({
-                    id: e.id,
-                    type: e.entryType,
-                    timestamp: e.timestamp,
-                    content: sliceUntrustedInline(e.content, 250, '...'),
-                }))
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Track goals and milestones based on significant entries.\nSummarize progress toward goals and highlight achievements.\n\nSources:\n${JSON.stringify(mappedEntries, null, 2)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
+            headline: 'Execute a weekly digest analysis.',
+            summaryTask: 'Create a weekly digest formatted day-by-day.',
+        }),
+        buildGoalTrackerPrompt(),
     ]
 }

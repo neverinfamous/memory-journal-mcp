@@ -100,9 +100,9 @@ export async function indexBatchEntries(
     }
 
     const reporter = createBatchProgressReporter(progress, entryIds.length, 10)
-    for (let i = 0; i < entryIds.length; i++) {
-        const entryId = entryIds[i]
-        if (entryId !== undefined && (shouldIndex === undefined || shouldIndex(entryId))) {
+    await entryIds.reduce(async (prev, entryId, i) => {
+        await prev
+        if (shouldIndex === undefined || shouldIndex(entryId)) {
             try {
                 const indexedWorkspace = workspaceByEntryId?.get(entryId) ?? workspaceId
                 const target = entryById.get(entryId) ?? entryId
@@ -117,6 +117,6 @@ export async function indexBatchEntries(
             }
         }
         await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entryIds.length)}...`)
-    }
+    }, Promise.resolve())
     return { indexStatuses, indexErrors }
 }

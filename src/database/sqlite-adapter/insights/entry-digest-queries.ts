@@ -22,13 +22,13 @@ function hydrateTagsMap(connection: NativeConnectionManager, entryIds: number[])
     const db = connection.getNativeDb()
     for (const { placeholders, params } of bucketInParams(entryIds)) {
         const rows = db
-            .prepare(
+            .prepare<unknown[], { entryId: number; tag: string }>(
                 `SELECT entry_tags.entry_id as entryId, tags.name as tag
                  FROM entry_tags
                  JOIN tags ON entry_tags.tag_id = tags.id
                  WHERE entry_tags.entry_id IN (${placeholders})`
             )
-            .all(...params) as { entryId: number; tag: string }[]
+            .all(...params)
         for (const row of rows) {
             const list = tagsMap.get(row.entryId)
             if (list) {
@@ -80,7 +80,7 @@ export function getWorkflowActionEntries(
     sql += ` ORDER BY timestamp DESC, id DESC LIMIT ?`
     params.push(limit)
 
-    const rows = connection.getNativeDb().prepare(sql).all(...params) as RawEntryRow[]
+    const rows = connection.getNativeDb().prepare<unknown[], RawEntryRow>(sql).all(...params)
     return rowsToDigestEntries(connection, rows)
 }
 
@@ -107,7 +107,7 @@ export function getSignificantEntries(
     sql += ` ORDER BY timestamp DESC, id DESC LIMIT ?`
     params.push(limit)
 
-    const rows = connection.getNativeDb().prepare(sql).all(...params) as RawEntryRow[]
+    const rows = connection.getNativeDb().prepare<unknown[], RawEntryRow>(sql).all(...params)
     return rowsToDigestEntries(connection, rows)
 }
 

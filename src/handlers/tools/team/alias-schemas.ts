@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { isRecord } from '../../../utils/type-guards.js'
 
 const aliasNames = ['text', 'message', 'description', 'name', 'from', 'source']
 const canonicalNames = ['target', 'to', 'canonical', 'dest']
@@ -11,8 +12,8 @@ type AliasPreprocessTarget = 'add' | 'remove' | 'list' | 'resolve' | 'consolidat
 const createAliasPreprocessor =
     (target: AliasPreprocessTarget) =>
     (val: unknown): unknown => {
-        if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-        const obj = { ...(val as Record<string, unknown>) }
+        if (!isRecord(val)) return val
+        const obj: Record<string, unknown> = { ...val }
         let modified = false
 
         if (target === 'add' || target === 'remove') {

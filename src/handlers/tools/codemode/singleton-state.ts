@@ -6,6 +6,7 @@ import { createJournalApi, getCachedSandboxSchemas, type JournalApi } from '../.
 import type { RegistryOpsConfig } from '../../../codemode/api/types.js'
 import { isFilterEffectivelyReadOnly, isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import { ConfigManager } from '../../../utils/config-manager.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { createContextualSecureDispatcher } from './secure-dispatcher.js'
 import { getCodemodeInvocationState } from './invocation-store.js'
@@ -137,6 +138,22 @@ function buildFilteredTools(
  * session context and active filter/readonly configuration so WorkerSandbox RPC
  * method metadata and schema caches remain warm across invocations.
  */
+function toProjectRegistryMap(raw: Record<string, unknown>): Record<string, ProjectRegistryEntry> {
+    const out: Record<string, ProjectRegistryEntry> = {}
+    for (const [key, val] of Object.entries(raw)) {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+        if (!isRecord(val)) continue
+        const entry: ProjectRegistryEntry = {
+            path: typeof val['path'] === 'string' ? val['path'] : '',
+            ...(typeof val['project_number'] === 'number'
+                ? { project_number: val['project_number'] }
+                : {}),
+        }
+        out[key] = entry
+    }
+    return out
+}
+
 function buildRegistryOpsConfig(context: ToolContext): RegistryOpsConfig {
     const cfgMgr = context.config?.runtime?.configManager
     return {
@@ -144,7 +161,7 @@ function buildRegistryOpsConfig(context: ToolContext): RegistryOpsConfig {
             cfgMgr instanceof ConfigManager ? cfgMgr.getConfigFilePath() : undefined,
         onRegistryUpdate: (nextRegistry: Record<string, unknown>): void => {
             if (context.config === undefined) return
-            const typed = nextRegistry as Record<string, ProjectRegistryEntry>
+            const typed = toProjectRegistryMap(nextRegistry)
             context.config.projectRegistry = typed
             if (context.config.briefingConfig !== undefined) {
                 context.config.briefingConfig.projectRegistry = typed

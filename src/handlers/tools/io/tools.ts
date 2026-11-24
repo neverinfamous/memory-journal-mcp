@@ -180,7 +180,8 @@ async function executeExportMarkdown(
         )
     }
     await sendProgress(progress, 3, 3, 'Export complete')
-    return result as unknown as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    return Object.assign(out, result)
 }
 
 export function getIoTools(context: ToolContext): ToolDefinition[] {

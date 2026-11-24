@@ -21,6 +21,7 @@ import {
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import type { BriefingConfig } from '../../shared.js'
 import {
     fetchGitHistoryFromRepoAsync,
@@ -224,8 +225,11 @@ async function loadCachedTestHealthAsync(targetPath?: string | null): Promise<Te
             .readFile(path.join(root, '.test-output', 'coverage', 'coverage-summary.json'), 'utf-8')
             .catch(() => null)
         if (raw !== null) {
-            const summary = JSON.parse(raw) as { total?: { lines?: { pct?: number } } }
-            const coverage = summary.total?.lines?.pct ?? 0
+            const summary: unknown = JSON.parse(raw)
+            const total = isRecord(summary) ? summary['total'] : undefined
+            const lines = isRecord(total) ? total['lines'] : undefined
+            const pct = isRecord(lines) ? lines['pct'] : undefined
+            const coverage = typeof pct === 'number' ? pct : 0
             let unitTests = 0
             let e2eTests = 0
             try {

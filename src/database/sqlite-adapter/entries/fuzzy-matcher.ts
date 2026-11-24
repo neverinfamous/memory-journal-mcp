@@ -93,25 +93,23 @@ export function buildVocabulary(db: Database, workspaceId?: string): string[] {
 
     // Get tag names
     try {
-        const tags = (
-            scoped
-                ? db
-                      .prepare(
-                          `SELECT DISTINCT t.name FROM tags t
-                           JOIN entry_tags et ON et.tag_id = t.id
-                           JOIN memory_journal mj ON mj.id = et.entry_id
-                           WHERE mj.workspace_id = ? AND mj.deleted_at IS NULL`
-                      )
-                      .all(scopeId)
-                : db
-                      .prepare(
-                          `SELECT DISTINCT t.name FROM tags t
-                           INNER JOIN entry_tags et ON et.tag_id = t.id
-                           INNER JOIN memory_journal mj ON mj.id = et.entry_id
-                           WHERE mj.deleted_at IS NULL`
-                      )
-                      .all()
-        ) as { name: string }[]
+        const tags = scoped
+            ? db
+                  .prepare<unknown[], { name: string }>(
+                      `SELECT DISTINCT t.name FROM tags t
+                       JOIN entry_tags et ON et.tag_id = t.id
+                       JOIN memory_journal mj ON mj.id = et.entry_id
+                       WHERE mj.workspace_id = ? AND mj.deleted_at IS NULL`
+                  )
+                  .all(scopeId)
+            : db
+                  .prepare<unknown[], { name: string }>(
+                      `SELECT DISTINCT t.name FROM tags t
+                       INNER JOIN entry_tags et ON et.tag_id = t.id
+                       INNER JOIN memory_journal mj ON mj.id = et.entry_id
+                       WHERE mj.deleted_at IS NULL`
+                  )
+                  .all()
         for (const tag of tags) {
             vocab.add(tag.name.toLowerCase())
         }
@@ -121,19 +119,17 @@ export function buildVocabulary(db: Database, workspaceId?: string): string[] {
 
     // Get all distinct entry types
     try {
-        const types = (
-            scoped
-                ? db
-                      .prepare(
-                          'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND workspace_id = ? AND deleted_at IS NULL'
-                      )
-                      .all(scopeId)
-                : db
-                      .prepare(
-                          'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND deleted_at IS NULL'
-                      )
-                      .all()
-        ) as { entry_type: string }[]
+        const types = scoped
+            ? db
+                  .prepare<unknown[], { entry_type: string }>(
+                      'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND workspace_id = ? AND deleted_at IS NULL'
+                  )
+                  .all(scopeId)
+            : db
+                  .prepare<unknown[], { entry_type: string }>(
+                      'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND deleted_at IS NULL'
+                  )
+                  .all()
         for (const type of types) {
             vocab.add(type.entry_type.toLowerCase())
         }

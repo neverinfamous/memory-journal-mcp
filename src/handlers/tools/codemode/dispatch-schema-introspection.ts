@@ -15,6 +15,7 @@ interface ZodDefLike {
     right?: unknown
     shape?: unknown
     options?: unknown[]
+    getter?: () => unknown
 }
 
 interface ZodLike {
@@ -77,7 +78,7 @@ function checkDefAcceptsKey(
         return opts.some((opt) => checkSchemaAcceptsKey(opt, key, visited))
     }
     if (typeName === 'ZodLazy' || typeName === 'lazy') {
-        const getter = (def as { getter?: () => unknown }).getter
+        const getter = def.getter
         const next =
             typeof getter === 'function'
                 ? getter()

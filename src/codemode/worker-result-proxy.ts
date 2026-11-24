@@ -8,6 +8,7 @@
 
 import {
     IMMUTABLE_PROXY_TRAPS,
+    isCallable,
     resolvePaginationAndStatsProp,
     resolveWrappedAliasProp,
 } from './worker/result-proxy-aliases.js'
@@ -102,8 +103,8 @@ function findPrimaryArrayKey(
 
 function bindArrayMethod(arr: unknown[], prop: string): ((...args: unknown[]) => unknown) | undefined {
     const method: unknown = Reflect.get(arr, prop)
-    if (typeof method === 'function') {
-        return (method as (...a: unknown[]) => unknown).bind(arr)
+    if (isCallable(method)) {
+        return method.bind(arr)
     }
     return undefined
 }
@@ -122,7 +123,7 @@ function failedResultMessage(target: object): string {
     return baseMsg
 }
 
-function createFailedResultProxy(result: object): unknown {
+function createFailedResultProxy(result: object): object {
     return new Proxy(result, {
         ownKeys: (target) => Reflect.ownKeys(target),
         getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
@@ -155,7 +156,7 @@ function createFailedResultProxy(result: object): unknown {
     })
 }
 
-function createArrayResultProxy(arr: unknown[]): unknown {
+function createArrayResultProxy(arr: unknown[]): object {
     const boundMethods = new Map<PropertyKey, unknown>()
     return new Proxy(arr, {
         ownKeys: (target) => Reflect.ownKeys(target),
@@ -171,10 +172,10 @@ function createArrayResultProxy(arr: unknown[]): unknown {
             }
             if (prop in target) {
                 const val: unknown = Reflect.get(target, prop, receiver)
-                if (typeof val === 'function') {
+                if (isCallable(val)) {
                     let bound = boundMethods.get(prop)
                     if (bound === undefined) {
-                        bound = (val as (...args: unknown[]) => unknown).bind(target)
+                        bound = val.bind(target)
                         boundMethods.set(prop, bound)
                     }
                     return bound
@@ -390,6 +391,14 @@ export function unwrapResultProxy(val: unknown): unknown {
     return val
 }
 
+function cloneNonExtensibleTarget(result: object): object {
+    if (Array.isArray(result)) {
+        const arr: unknown[] = result
+        return [...arr]
+    }
+    return { ...result }
+}
+
 /**
  * Wrap an API result with smart proxy behavior for improved DX.
  */
@@ -411,17 +420,15 @@ export function wrapResult(result: unknown): unknown {
     }
 
     const targetObj: object = !Object.isExtensible(result)
-        ? Array.isArray(result)
-            ? [...(result as unknown[])]
-            : { ...(result as Record<string, unknown>) }
+        ? cloneNonExtensibleTarget(result)
         : result
 
     if ('success' in targetObj && Reflect.get(targetObj, 'success') === false) {
-        return cacheProxyPair(result, createFailedResultProxy(targetObj) as object)
+        return cacheProxyPair(result, createFailedResultProxy(targetObj))
     }
 
     if (Array.isArray(targetObj)) {
-        return cacheProxyPair(result, createArrayResultProxy(targetObj) as object)
+        return cacheProxyPair(result, createArrayResultProxy(targetObj))
     }
 
     return cacheProxyPair(

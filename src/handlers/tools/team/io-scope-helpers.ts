@@ -258,6 +258,45 @@ async function readAndConvertSingleExternalFile(
     }
 }
 
+async function readExternalMarkdownChunks(
+    pinnedSourceDir: string,
+    mdFiles: string[],
+    sourceFormat: SourceFormat,
+    defaultEntryType: EntryType | undefined
+): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[]; skipped: number }> {
+    const parsedFiles: ParsedFile[] = []
+    const errors: { file: string; error: string }[] = []
+    let skipped = 0
+    const READ_CONCURRENCY = 16
+    const chunks: string[][] = []
+    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        chunks.push(mdFiles.slice(i, i + READ_CONCURRENCY))
+    }
+    await chunks.reduce<Promise<void>>(async (chain, chunk) => {
+        await chain
+        if (realpathSync.native(pinnedSourceDir) !== pinnedSourceDir) {
+            throw new Error('Source directory realpath changed during import scan.')
+        }
+        const outcomes = await Promise.all(
+            chunk.map((filename) =>
+                readAndConvertSingleExternalFile(
+                    pinnedSourceDir,
+                    filename,
+                    [pinnedSourceDir],
+                    sourceFormat,
+                    defaultEntryType
+                )
+            )
+        )
+        for (const outcome of outcomes) {
+            if (outcome.status === 'parsed') parsedFiles.push(outcome.file)
+            else if (outcome.status === 'skipped') skipped++
+            else errors.push({ file: outcome.file, error: outcome.error })
+        }
+    }, Promise.resolve())
+    return { parsedFiles, errors, skipped }
+}
+
 export async function readAndConvertExternalMarkdownFiles(
     sourceDir: string,
     limit: number,
@@ -289,34 +328,7 @@ export async function readAndConvertExternalMarkdownFiles(
     const mdFiles = allMdFiles.slice(0, limit)
 
     await sendProgress(progress, 1, 3, 'Converting external formats...')
-    const parsedFiles: ParsedFile[] = []
-    const errors: { file: string; error: string }[] = []
-    let skipped = 0
-    const READ_CONCURRENCY = 16
-    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
-        if (realpathSync.native(pinnedSourceDir) !== pinnedSourceDir) {
-            throw new Error('Source directory realpath changed during import scan.')
-        }
-        const chunk = mdFiles.slice(i, i + READ_CONCURRENCY)
-        const outcomes = await Promise.all(
-            chunk.map((filename) =>
-                readAndConvertSingleExternalFile(
-                    pinnedSourceDir,
-                    filename,
-                    [pinnedSourceDir],
-                    sourceFormat,
-                    defaultEntryType
-                )
-            )
-        )
-        for (const outcome of outcomes) {
-            if (outcome.status === 'parsed') parsedFiles.push(outcome.file)
-            else if (outcome.status === 'skipped') skipped++
-            else errors.push({ file: outcome.file, error: outcome.error })
-        }
-    }
-
-    return { parsedFiles, errors, skipped }
+    return readExternalMarkdownChunks(pinnedSourceDir, mdFiles, sourceFormat, defaultEntryType)
 }
 
 export type TeamImportContextAuthor =

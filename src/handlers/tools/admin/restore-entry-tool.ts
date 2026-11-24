@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import type { ErrorResponse } from '../../../types/error-types.js'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
@@ -18,8 +20,8 @@ export function projectOwnershipMismatch(
 }
 
 function normalizeRestoreEntryParams(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = { ...(val as Record<string, unknown>) }
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
     if ('id' in obj) {
         if (obj['entry_id'] === undefined) {
             obj['entry_id'] = obj['id']
@@ -40,10 +42,69 @@ const RestoreEntryStrictSchema = z.preprocess(
         .strict()
 )
 
+async function executeRestoreEntry(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown> | ErrorResponse> {
+    const { db, vectorManager } = context
+    try {
+        const { entry_id, project_number, workspace_id } = RestoreEntryStrictSchema.parse(params)
+        let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+        if (workspace_id === undefined && project_number === undefined) {
+            const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
+            if (existingByPk?.workspaceId !== undefined) {
+                wsId = existingByPk.workspaceId
+            }
+        }
+        if (project_number !== undefined) {
+            const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
+            if (projectOwnershipMismatch(project_number, scoped?.projectNumber)) {
+                return {
+                    success: false,
+                    entryId: entry_id,
+                    error: `Entry ${String(entry_id)} not found or not deleted`,
+                    code: 'RESOURCE_NOT_FOUND',
+                    category: 'resource',
+                    suggestion: 'Verify the entry ID and project number',
+                    recoverable: true,
+                }
+            }
+        }
+        const success = db.restoreEntry(entry_id, wsId)
+        if (!success) {
+            return {
+                success: false,
+                entryId: entry_id,
+                error: `Entry ${String(entry_id)} not found or not deleted`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                suggestion: 'Verify the entry ID',
+                recoverable: true,
+            }
+        }
+        // [SIDE-EFFECT] M4: soft-delete removed the vector; re-index on restore.
+        const restored = db.getEntryById(entry_id, wsId)
+        const indexStatus = await autoIndexEntry(
+            vectorManager,
+            db,
+            restored ?? entry_id,
+            restored?.workspaceId ?? wsId
+        )
+        return {
+            success,
+            entryId: entry_id,
+            indexStatus,
+            ...(indexStatus === 'failed'
+                ? { warning: 'Entry restored, but vector re-indexing failed.' }
+                : {}),
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
 /** Build the `restore_entry` admin tool (extracted from `admin/core-tools.ts`, Appendix A). */
 export function createRestoreEntryTool(context: ToolContext): ToolDefinition {
-    const { db, vectorManager } = context
-
     return {
         name: 'restore_entry',
         title: 'Restore Entry',
@@ -51,11 +112,8 @@ export function createRestoreEntryTool(context: ToolContext): ToolDefinition {
         group: 'admin',
         inputSchema: z.preprocess(
             (val: unknown) => {
-                if (typeof val === 'object' && val !== null) {
-                    const obj = val as Record<string, unknown>
-                    if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
-                        return { ...obj, entry_id: obj['id'] }
-                    }
+                if (isRecord(val) && val['id'] !== undefined && val['entry_id'] === undefined) {
+                    return { ...val, entry_id: val['id'] }
                 }
                 return val
             },
@@ -82,62 +140,6 @@ export function createRestoreEntryTool(context: ToolContext): ToolDefinition {
             idempotentHint: false,
             openWorldHint: false,
         },
-        handler: async (params: unknown) => {
-            try {
-                const { entry_id, project_number, workspace_id } =
-                    RestoreEntryStrictSchema.parse(params)
-                let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                if (workspace_id === undefined && project_number === undefined) {
-                    const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                    if (existingByPk?.workspaceId !== undefined) {
-                        wsId = existingByPk.workspaceId
-                    }
-                }
-                if (project_number !== undefined) {
-                    const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                    if (projectOwnershipMismatch(project_number, scoped?.projectNumber)) {
-                        return {
-                            success: false,
-                            entryId: entry_id,
-                            error: `Entry ${String(entry_id)} not found or not deleted`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the entry ID and project number',
-                            recoverable: true,
-                        }
-                    }
-                }
-                const success = db.restoreEntry(entry_id, wsId)
-                if (!success) {
-                    return {
-                        success: false,
-                        entryId: entry_id,
-                        error: `Entry ${String(entry_id)} not found or not deleted`,
-                        code: 'RESOURCE_NOT_FOUND',
-                        category: 'resource',
-                        suggestion: 'Verify the entry ID',
-                        recoverable: true,
-                    }
-                }
-                // [SIDE-EFFECT] M4: soft-delete removed the vector; re-index on restore.
-                const restored = db.getEntryById(entry_id, wsId)
-                const indexStatus = await autoIndexEntry(
-                    vectorManager,
-                    db,
-                    restored ?? entry_id,
-                    restored?.workspaceId ?? wsId
-                )
-                return {
-                    success,
-                    entryId: entry_id,
-                    indexStatus,
-                    ...(indexStatus === 'failed'
-                        ? { warning: 'Entry restored, but vector re-indexing failed.' }
-                        : {}),
-                }
-            } catch (err) {
-                return formatHandlerError(err)
-            }
-        },
+        handler: (params: unknown) => executeRestoreEntry(params, context),
     }
 }

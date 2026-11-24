@@ -2,6 +2,7 @@ import type { ToolDefinition, ToolContext, ProjectRegistryEntry } from '../../..
 import { ConfigManager } from '../../../utils/config-manager.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { isForbiddenProjectKey } from '../../../utils/project-registry-guards.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import { GetProjectSchemaMcp, ListProjectsSchemaMcp, ProjectOutputSchema } from './schemas.js'
 
@@ -52,26 +53,59 @@ export function applyDefaultsChange(
     }
 }
 
+function toRawRegistryEntry(val: unknown): RawRegistryEntry | undefined {
+    if (!isRecord(val)) return undefined
+    const entry: RawRegistryEntry = {
+        path: typeof val['path'] === 'string' ? val['path'] : '',
+    }
+    for (const [k, v] of Object.entries(val)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+        if (k === 'path' || k === 'project_number' || k === 'id' || k === 'description') continue
+        Object.defineProperty(entry, k, {
+            value: v,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+        })
+    }
+    if (typeof val['project_number'] === 'number') entry.project_number = val['project_number']
+    if (typeof val['id'] === 'number') entry.id = val['id']
+    if (typeof val['description'] === 'string') entry.description = val['description']
+    return entry
+}
+
 export function readRegistryObject(value: unknown): RawRegistry | undefined {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
-    return value as RawRegistry
+    if (!isRecord(value)) return undefined
+    const out: RawRegistry = {}
+    for (const [key, entryVal] of Object.entries(value)) {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+        const parsed = toRawRegistryEntry(entryVal)
+        if (parsed !== undefined) {
+            out[key] = parsed
+        }
+    }
+    return out
+}
+
+function hasGetConfig(val: unknown): val is { getConfig: () => unknown } {
+    return isRecord(val) && 'getConfig' in val && typeof val['getConfig'] === 'function'
+}
+
+function hasUpdateConfig(
+    val: unknown
+): val is { updateConfig: (cfg: Record<string, unknown>) => unknown } {
+    return isRecord(val) && 'updateConfig' in val && typeof val['updateConfig'] === 'function'
 }
 
 function readManagerRegistry(manager: unknown): RawRegistry | undefined {
     if (manager instanceof ConfigManager) {
         return readRegistryObject(manager.getConfig().briefingConfig.projectRegistry)
     }
-    if (
-        manager !== null &&
-        manager !== undefined &&
-        typeof manager === 'object' &&
-        'getConfig' in manager &&
-        typeof (manager as { getConfig?: unknown }).getConfig === 'function'
-    ) {
-        const mgrLike = manager as {
-            getConfig: () => { briefingConfig?: { projectRegistry?: unknown } } | undefined
+    if (hasGetConfig(manager)) {
+        const cfg = manager.getConfig()
+        if (isRecord(cfg) && isRecord(cfg['briefingConfig'])) {
+            return readRegistryObject(cfg['briefingConfig']['projectRegistry'])
         }
-        return readRegistryObject(mgrLike.getConfig()?.briefingConfig?.projectRegistry)
     }
     return undefined
 }
@@ -98,24 +132,13 @@ export function syncManagerRegistry(
         manager.updateConfig({ briefingConfig })
         return
     }
-    if (
-        manager !== null &&
-        manager !== undefined &&
-        typeof manager === 'object' &&
-        'updateConfig' in manager &&
-        typeof (manager as { updateConfig?: unknown }).updateConfig === 'function'
-    ) {
-        const mgrLike = manager as {
-            getConfig?: () => { briefingConfig?: Record<string, unknown> }
-            updateConfig: (cfg: Record<string, unknown>) => unknown
-        }
-        const existingBriefing = mgrLike.getConfig?.()?.briefingConfig ?? {}
-        const briefingConfig = { ...existingBriefing, projectRegistry: reg }
-        applyDefaultsChange(
-            briefingConfig as { defaultWorkspaceId?: string; defaultProjectNumber?: number },
-            change
-        )
-        mgrLike.updateConfig({ briefingConfig })
+    if (hasUpdateConfig(manager)) {
+        const rawCfg = hasGetConfig(manager) ? manager.getConfig() : undefined
+        const existingBriefing =
+            isRecord(rawCfg) && isRecord(rawCfg['briefingConfig']) ? rawCfg['briefingConfig'] : {}
+        const briefingConfig: Record<string, unknown> = { ...existingBriefing, projectRegistry: reg }
+        applyDefaultsChange(briefingConfig, change)
+        manager.updateConfig({ briefingConfig })
     }
 }
 

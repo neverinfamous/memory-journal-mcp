@@ -87,8 +87,12 @@ async function fetchRepoCommitFilesBatch(
     } catch {
         if (shas.length <= 1) return new Map()
         const mapped = new Map<string, string[]>()
+        const shaChunks: (readonly string[])[] = []
         for (let i = 0; i < shas.length; i += GIT_SHOW_BATCH_CONCURRENCY) {
-            const chunk = shas.slice(i, i + GIT_SHOW_BATCH_CONCURRENCY)
+            shaChunks.push(shas.slice(i, i + GIT_SHOW_BATCH_CONCURRENCY))
+        }
+        await shaChunks.reduce(async (prev, chunk) => {
+            await prev
             const outcomes = await Promise.allSettled(
                 chunk.map(async (sha) => {
                     const { stdout } = await execFileAsync(
@@ -110,7 +114,7 @@ async function fetchRepoCommitFilesBatch(
                     mapped.set(outcome.value.sha, outcome.value.files)
                 }
             }
-        }
+        }, Promise.resolve())
         return mapped
     }
 }
@@ -143,8 +147,12 @@ export async function prefetchBatchCommitFiles(
     }
 
     const repoJobs = Array.from(shasByRepo.entries())
+    const repoChunks: [string, Set<string>][][] = []
     for (let i = 0; i < repoJobs.length; i += GIT_SHOW_BATCH_CONCURRENCY) {
-        const chunk = repoJobs.slice(i, i + GIT_SHOW_BATCH_CONCURRENCY)
+        repoChunks.push(repoJobs.slice(i, i + GIT_SHOW_BATCH_CONCURRENCY))
+    }
+    await repoChunks.reduce(async (prev, chunk) => {
+        await prev
         const outcomes = await Promise.allSettled(
             chunk.map(async ([repoPath, shaSet]) => {
                 const attemptedShas = Array.from(shaSet)
@@ -164,7 +172,7 @@ export async function prefetchBatchCommitFiles(
                 )
             }
         }
-    }
+    }, Promise.resolve())
     return result
 }
 

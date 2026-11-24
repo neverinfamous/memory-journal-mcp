@@ -22,6 +22,7 @@ import type {
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { createNullProtoRecord, isRecord } from '../utils/type-guards.js'
 import {
     isCrossRealmDate,
     isCrossRealmError,
@@ -158,8 +159,7 @@ function sanitizeAuditMapNode(
     seen: WeakSet<object>,
     budget: { count: number }
 ): Record<string, unknown> {
-    const out: Record<string, unknown> = {}
-    Object.setPrototypeOf(out, null)
+    const out = createNullProtoRecord()
     let count = 0
     for (const [mk, mv] of value.entries()) {
         if (count++ >= MAX_AUDIT_EGRESS_OBJECT_KEYS || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) {
@@ -224,9 +224,8 @@ function sanitizeAuditArgNode(
         if (jsonRes.resolved) {
             return sanitizeAuditArgNode(jsonRes.value, depth + 1, seen, budget)
         }
-        const entries = Object.entries(value as Record<string, unknown>)
-        const out: Record<string, unknown> = {}
-        Object.setPrototypeOf(out, null)
+        const entries = isRecord(value) ? Object.entries(value) : []
+        const out = createNullProtoRecord()
         const limit = Math.min(entries.length, MAX_AUDIT_EGRESS_OBJECT_KEYS)
         for (let i = 0; i < limit; i++) {
             const pair = entries[i]
@@ -252,15 +251,13 @@ function sanitizeAuditArgNode(
 
 /** Fence untrusted non-canonical audit fields and scrub secret tokens before MCP egress. */
 export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
-    const isPlainArgs = typeof e.args === 'object' && e.args !== null && !Array.isArray(e.args)
     let cleanArgs: Record<string, unknown> | undefined
-    if (isPlainArgs) {
+    if (isRecord(e.args)) {
         const sanitized = sanitizeAuditArgNode(e.args, 0, new WeakSet(), { count: 0 })
-        if (typeof sanitized === 'object' && sanitized !== null && !Array.isArray(sanitized)) {
-            cleanArgs = sanitized as Record<string, unknown>
+        if (isRecord(sanitized)) {
+            cleanArgs = sanitized
         } else {
-            const wrapped: Record<string, unknown> = {}
-            Object.setPrototypeOf(wrapped, null)
+            const wrapped = createNullProtoRecord()
             wrapped['value'] = sanitized
             cleanArgs = wrapped
         }

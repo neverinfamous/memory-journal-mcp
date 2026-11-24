@@ -19,6 +19,7 @@ import {
     setScopedProjectRegistryReader,
 } from '../../codemode/normalizers/generic-field-aliases.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import { isRecord } from '../../utils/type-guards.js'
 
 setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
 setScopedProjectRegistryReader(() => {
@@ -39,9 +40,9 @@ function stripMarkerArray(items: unknown[]): unknown[] {
 }
 
 function stripInternalNormalizerMarkers(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null) return val
     if (Array.isArray(val)) return stripMarkerArray(val)
-    const record = val as Record<string, unknown>
+    if (!isRecord(val)) return val
+    const record = val
     const hasMarker = '_alias_derived_workspace' in record
     const rawEntries = Array.isArray(record['entries']) ? (record['entries'] as unknown[]) : undefined
     const cleanedEntries = rawEntries !== undefined ? stripMarkerArray(rawEntries) : undefined
@@ -124,7 +125,8 @@ function injectProjectNamesRecursive(
         return mutated
     }
 
-    const record = obj as Record<string, unknown>
+    if (!isRecord(obj)) return false
+    const record = obj
     const pNum =
         typeof record['projectNumber'] === 'number'
             ? record['projectNumber']
@@ -257,8 +259,8 @@ export function wrapToolHandlerWithInterceptors(
     toolName: string,
     handler: (params: unknown) => unknown,
     config?: ToolHandlerConfig
-): (args: Record<string, unknown>) => Promise<unknown> {
-    const innerHandler = (args: Record<string, unknown>): Promise<unknown> =>
+): (params: unknown) => Promise<unknown> {
+    const innerHandler = (args: unknown): Promise<unknown> =>
         Promise.resolve(handler(args)).then((res) => {
             injectProjectNames(res, config?.projectRegistry)
             return res
@@ -266,7 +268,11 @@ export function wrapToolHandlerWithInterceptors(
     const metricsInstance = config?.runtime?.metrics
     const metricsWrapped =
         metricsInstance !== undefined
-            ? wrapWithMetrics(toolName, innerHandler, metricsInstance)
+            ? wrapWithMetrics(
+                  toolName,
+                  (args: Record<string, unknown>) => innerHandler(args),
+                  metricsInstance
+              )
             : innerHandler
 
     const interceptor =
@@ -274,18 +280,31 @@ export function wrapToolHandlerWithInterceptors(
             ? config.runtime.auditInterceptor
             : null
 
-    const baseHandler =
+    const runIntercepted = (args: Record<string, unknown>): Promise<unknown> =>
         interceptor !== null && interceptor !== undefined
-            ? (args: Record<string, unknown>): Promise<unknown> =>
-                  interceptor.around(toolName, args, () => metricsWrapped(args))
-            : metricsWrapped
+            ? interceptor.around(toolName, args, () => metricsWrapped(args))
+            : metricsWrapped(args)
 
-    return async (args: Record<string, unknown>): Promise<unknown> => {
+    return async (params: unknown): Promise<unknown> => {
         const hasScopedRegistry = config?.projectRegistry !== undefined
-        let cleanArgs = args
+        if (!isRecord(params)) {
+            if (hasScopedRegistry) {
+                const existing = getRequestContext()
+                return await requestContextStorage.run(
+                    {
+                        ...existing,
+                        hasProjectRegistry: true,
+                        projectRegistry: config.projectRegistry,
+                    },
+                    () => innerHandler(params)
+                )
+            }
+            return await innerHandler(params)
+        }
+        let cleanArgs = params
         let useTest = false
-        if ('use_test_db' in args) {
-            cleanArgs = { ...args }
+        if ('use_test_db' in params) {
+            cleanArgs = { ...params }
             useTest = cleanArgs['use_test_db'] === true
             delete cleanArgs['use_test_db']
         }
@@ -299,10 +318,10 @@ export function wrapToolHandlerWithInterceptors(
                         ? { hasProjectRegistry: true, projectRegistry: config.projectRegistry }
                         : {}),
                 },
-                () => baseHandler(cleanArgs)
+                () => runIntercepted(cleanArgs)
             )
         }
-        return await baseHandler(cleanArgs)
+        return await runIntercepted(cleanArgs)
     }
 }
 
@@ -318,24 +337,19 @@ function extendSchemaWithUseTestDb(rawSchema: unknown): unknown {
     let extended = rawSchema
     if (rawSchema instanceof z.ZodObject) {
         extended = rawSchema.extend(USE_TEST_DB_EXTEND_SHAPE)
-    } else if (rawSchema instanceof z.ZodPipe && rawSchema.out instanceof z.ZodObject) {
-        extended = z.pipe(
-            rawSchema.in as z.ZodType,
-            rawSchema.out.extend(USE_TEST_DB_EXTEND_SHAPE)
-        )
+    } else if (
+        rawSchema instanceof z.ZodPipe &&
+        rawSchema.out instanceof z.ZodObject &&
+        rawSchema.in instanceof z.ZodType
+    ) {
+        extended = z.pipe(rawSchema.in, rawSchema.out.extend(USE_TEST_DB_EXTEND_SHAPE))
     } else if (rawSchema instanceof z.ZodPipe && rawSchema.in instanceof z.ZodObject) {
         const extendedIn: z.ZodType = rawSchema.in.extend(USE_TEST_DB_EXTEND_SHAPE)
-        const origOut = rawSchema.out as z.ZodType
+        const origOut = rawSchema.out
         const preserveTestDbOut = z.unknown().transform((val: unknown, ctx) => {
-            const hasTestDb =
-                typeof val === 'object' &&
-                val !== null &&
-                !Array.isArray(val) &&
-                Object.hasOwn(val, 'use_test_db')
-            const testDbVal: unknown = hasTestDb
-                ? (val as Record<string, unknown>)['use_test_db']
-                : undefined
-            const parsed = origOut.safeParse(val)
+            const hasTestDb = isRecord(val) && Object.hasOwn(val, 'use_test_db')
+            const testDbVal: unknown = hasTestDb ? val['use_test_db'] : undefined
+            const parsed = z.safeParse(origOut, val)
             if (!parsed.success) {
                 for (const issue of parsed.error.issues) {
                     ctx.addIssue({
@@ -349,12 +363,10 @@ function extendSchemaWithUseTestDb(rawSchema: unknown): unknown {
             if (
                 hasTestDb &&
                 testDbVal !== undefined &&
-                typeof parsed.data === 'object' &&
-                parsed.data !== null &&
-                !Array.isArray(parsed.data) &&
+                isRecord(parsed.data) &&
                 !Object.hasOwn(parsed.data, 'use_test_db')
             ) {
-                return { ...(parsed.data as Record<string, unknown>), use_test_db: testDbVal }
+                return { ...parsed.data, use_test_db: testDbVal }
             }
             return parsed.data
         })
@@ -379,7 +391,7 @@ export function instrumentToolDefinitions(
         return {
             ...t,
             inputSchema: schema,
-            handler: finalHandler as (params: unknown) => unknown,
+            handler: finalHandler,
         }
     })
 }

@@ -71,7 +71,7 @@ export function getCrossProjectInsights(
 
     const db = connection.getNativeDb()
     const projects = db
-        .prepare(
+        .prepare<unknown[], Record<string, unknown>>(
             `
         SELECT project_number, COUNT(*) as entry_count,
                SUBSTR(MIN(timestamp), 1, 10) as first_entry,
@@ -83,7 +83,7 @@ export function getCrossProjectInsights(
         ORDER BY entry_count DESC, project_number ASC
         `
         )
-        .all(...sqlParams, options.minEntries) as Record<string, unknown>[]
+        .all(...sqlParams, options.minEntries)
 
     attachTopTags(connection, projects, scopeId, startBound, endBound)
 
@@ -129,7 +129,11 @@ function attachTopTags(
     if (projects.length === 0) return
 
     const uniqueProjectNumbers = Array.from(
-        new Set(projects.map((p) => p['project_number'] as number))
+        new Set(
+            projects
+                .map((p) => p['project_number'])
+                .filter((pn): pn is number => typeof pn === 'number')
+        )
     )
     const mjWsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
     // [INVARIANT] Bind only the workspace param here; project filtering is already
@@ -153,7 +157,7 @@ function attachTopTags(
 
     for (const { placeholders, params } of bucketInParams(uniqueProjectNumbers, TOP_TAG_BUCKETS)) {
         const tagRows = nativeDb
-            .prepare(
+            .prepare<unknown[], { project_number: number; name: string; count: number }>(
                 `
             SELECT mj.project_number as project_number, t.name as name, COUNT(*) as count
             FROM memory_journal mj
@@ -164,11 +168,7 @@ function attachTopTags(
             ORDER BY count DESC, t.name ASC
             `
             )
-            .all(...params, ...wsOnly, ...dateParams) as {
-            project_number: number
-            name: string
-            count: number
-        }[]
+            .all(...params, ...wsOnly, ...dateParams)
         for (const row of tagRows) {
             const list = tagMap.get(row.project_number) ?? []
             list.push({ name: row.name, count: row.count })
@@ -177,7 +177,8 @@ function attachTopTags(
     }
 
     for (const p of projects) {
-        p['top_tags'] = (tagMap.get(p['project_number'] as number) ?? []).slice(0, 5)
+        const pn = p['project_number']
+        p['top_tags'] = (typeof pn === 'number' ? (tagMap.get(pn) ?? []) : []).slice(0, 5)
     }
 }
 
@@ -195,7 +196,7 @@ function queryInactiveProjects(
 
     return connection
         .getNativeDb()
-        .prepare(
+        .prepare<unknown[], { project_number: number; last_entry_date: string }>(
             `
         SELECT project_number, MAX(SUBSTR(timestamp, 1, 10)) as last_entry_date
         FROM memory_journal
@@ -205,5 +206,5 @@ function queryInactiveProjects(
         ORDER BY last_entry_date ASC, project_number ASC
         `
         )
-        .all(...wsParams, cutoffDate) as { project_number: number; last_entry_date: string }[]
+        .all(...wsParams, cutoffDate)
 }

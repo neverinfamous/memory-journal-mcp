@@ -10,6 +10,7 @@ import {
     isForbiddenProjectKey,
     pairStoredScope,
 } from '../../utils/workspace-registry-match.js'
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import { isRecord } from './shared-utils.js'
 
@@ -73,7 +74,7 @@ export function readProjectRegistryPayload(
     value: unknown
 ): Record<string, ProjectRegistryEntry> | undefined {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-    const registry = Object.create(null) as Record<string, ProjectRegistryEntry>
+    const registry = createNullProtoRecord<ProjectRegistryEntry>()
     for (const [key, entry] of Object.entries(value)) {
         if (isForbiddenProjectKey(key) || !isRecord(entry)) continue
         const pathValue = entry['path']

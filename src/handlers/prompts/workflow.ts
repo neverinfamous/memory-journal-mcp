@@ -95,203 +95,88 @@ function resolveWorkflowPromptScope(
     return scope
 }
 
+function buildScopedWorkflowPromptDef(
+    name: string,
+    description: string,
+    target: 'personal' | 'team',
+    generator: typeof generateSummaryPrompt
+): InternalPromptDef {
+    return {
+        name,
+        description,
+        icons: [ICON_PROMPT],
+        ...(target === 'team' ? { capabilities: { requiresTeamScope: true } } : {}),
+        arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
+        handler: (
+            args: Record<string, string> | undefined,
+            db: IDatabaseAdapter,
+            teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: Partial<BriefingConfig>,
+            runtime?: object | null
+        ) => {
+            const scope = resolveWorkflowPromptScope(args, briefingConfig)
+            const ws = resolvePromptPriorWorkspace(
+                briefingConfig,
+                scope.workspaceHint,
+                undefined,
+                runtime
+            )
+            return generator(
+                db,
+                teamDb,
+                target,
+                ws,
+                briefingConfig,
+                scope.projectNumber,
+                scope.explicitDefaultRequested,
+                target === 'team' ? runtime : undefined
+            )
+        },
+    }
+}
+
 /**
  * Get workflow prompt definitions
  */
 export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
     return [
-        {
-            name: 'session-summary',
-            description: 'Create a formatted session summary entry',
-            icons: [ICON_PROMPT],
-            arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
-            handler: (
-                args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const scope = resolveWorkflowPromptScope(args, briefingConfig)
-                const ws = resolvePromptPriorWorkspace(
-                    briefingConfig,
-                    scope.workspaceHint,
-                    undefined,
-                    runtime
-                )
-                return generateSummaryPrompt(
-                    db,
-                    teamDb,
-                    'personal',
-                    ws,
-                    briefingConfig,
-                    scope.projectNumber,
-                    scope.explicitDefaultRequested
-                )
-            },
-        },
-        {
-            name: 'team-session-summary',
-            description: 'Create a formatted team session summary entry',
-            icons: [ICON_PROMPT],
-            capabilities: { requiresTeamScope: true },
-            arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
-            handler: (
-                args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const scope = resolveWorkflowPromptScope(args, briefingConfig)
-                const ws = resolvePromptPriorWorkspace(
-                    briefingConfig,
-                    scope.workspaceHint,
-                    undefined,
-                    runtime
-                )
-                return generateSummaryPrompt(
-                    db,
-                    teamDb,
-                    'team',
-                    ws,
-                    briefingConfig,
-                    scope.projectNumber,
-                    scope.explicitDefaultRequested,
-                    runtime
-                )
-            },
-        },
-        {
-            name: 'create-entry',
-            description: 'Create a structured mid-thread journal entry',
-            icons: [ICON_PROMPT],
-            arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
-            handler: (
-                args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const scope = resolveWorkflowPromptScope(args, briefingConfig)
-                const ws = resolvePromptPriorWorkspace(
-                    briefingConfig,
-                    scope.workspaceHint,
-                    undefined,
-                    runtime
-                )
-                return generateEntryPrompt(
-                    db,
-                    teamDb,
-                    'personal',
-                    ws,
-                    briefingConfig,
-                    scope.projectNumber,
-                    scope.explicitDefaultRequested
-                )
-            },
-        },
-        {
-            name: 'create-team-entry',
-            description: 'Create a structured mid-thread team journal entry',
-            icons: [ICON_PROMPT],
-            capabilities: { requiresTeamScope: true },
-            arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
-            handler: (
-                args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const scope = resolveWorkflowPromptScope(args, briefingConfig)
-                const ws = resolvePromptPriorWorkspace(
-                    briefingConfig,
-                    scope.workspaceHint,
-                    undefined,
-                    runtime
-                )
-                return generateEntryPrompt(
-                    db,
-                    teamDb,
-                    'team',
-                    ws,
-                    briefingConfig,
-                    scope.projectNumber,
-                    scope.explicitDefaultRequested,
-                    runtime
-                )
-            },
-        },
-        {
-            name: 'update-entry',
-            description: 'Safely update an existing mid-thread entry or session summary',
-            icons: [ICON_PROMPT],
-            arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
-            handler: (
-                args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const scope = resolveWorkflowPromptScope(args, briefingConfig)
-                const ws = resolvePromptPriorWorkspace(
-                    briefingConfig,
-                    scope.workspaceHint,
-                    undefined,
-                    runtime
-                )
-                return generateUpdateEntryPrompt(
-                    db,
-                    teamDb,
-                    'personal',
-                    ws,
-                    briefingConfig,
-                    scope.projectNumber,
-                    scope.explicitDefaultRequested
-                )
-            },
-        },
-        {
-            name: 'update-team-entry',
-            description: 'Safely update an existing team entry or team session summary',
-            icons: [ICON_PROMPT],
-            capabilities: { requiresTeamScope: true },
-            arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
-            handler: (
-                args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>,
-                runtime?: object | null
-            ) => {
-                const scope = resolveWorkflowPromptScope(args, briefingConfig)
-                const ws = resolvePromptPriorWorkspace(
-                    briefingConfig,
-                    scope.workspaceHint,
-                    undefined,
-                    runtime
-                )
-                return generateUpdateEntryPrompt(
-                    db,
-                    teamDb,
-                    'team',
-                    ws,
-                    briefingConfig,
-                    scope.projectNumber,
-                    scope.explicitDefaultRequested,
-                    runtime
-                )
-            },
-        },
+        buildScopedWorkflowPromptDef(
+            'session-summary',
+            'Create a formatted session summary entry',
+            'personal',
+            generateSummaryPrompt
+        ),
+        buildScopedWorkflowPromptDef(
+            'team-session-summary',
+            'Create a formatted team session summary entry',
+            'team',
+            generateSummaryPrompt
+        ),
+        buildScopedWorkflowPromptDef(
+            'create-entry',
+            'Create a structured mid-thread journal entry',
+            'personal',
+            generateEntryPrompt
+        ),
+        buildScopedWorkflowPromptDef(
+            'create-team-entry',
+            'Create a structured mid-thread team journal entry',
+            'team',
+            generateEntryPrompt
+        ),
+        buildScopedWorkflowPromptDef(
+            'update-entry',
+            'Safely update an existing mid-thread entry or session summary',
+            'personal',
+            generateUpdateEntryPrompt
+        ),
+        buildScopedWorkflowPromptDef(
+            'update-team-entry',
+            'Safely update an existing team entry or team session summary',
+            'team',
+            generateUpdateEntryPrompt
+        ),
         ...getWorkflowMaintenancePromptDefinitions(),
     ]
 }

@@ -161,6 +161,10 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     getProject: SCOPES.READ,
 }
 
+export function isToolGroup(key: string): key is ToolGroup {
+    return Object.hasOwn(TOOL_GROUP_SCOPES, key)
+}
+
 // Derived arrays for backward compatibility
 const groupsForScope = (maxScope: StandardScope): ToolGroup[] => {
     const hierarchy: Record<StandardScope, number> = {
@@ -172,9 +176,13 @@ const groupsForScope = (maxScope: StandardScope): ToolGroup[] => {
         full: 3,
     }
     const maxLevel = hierarchy[maxScope]
-    return (Object.entries(TOOL_GROUP_SCOPES) as [ToolGroup, StandardScope][])
-        .filter(([, scope]) => hierarchy[scope] <= maxLevel)
-        .map(([group]) => group)
+    const result: ToolGroup[] = []
+    for (const [group, scope] of Object.entries(TOOL_GROUP_SCOPES)) {
+        if (isToolGroup(group) && hierarchy[scope] <= maxLevel) {
+            result.push(group)
+        }
+    }
+    return result
 }
 
 /**

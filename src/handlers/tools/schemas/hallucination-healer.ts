@@ -23,6 +23,7 @@ import {
     CONTENT_ALIASES,
 } from './constants-and-primitives.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import {
     normalizeTagsField,
     mapKnownEntryTypeAlias,
@@ -70,8 +71,8 @@ function toStr(v: unknown, pretty = false): string {
 const CONTEXT_WRAPPER_KEYS = new Set(['content', 'text', 'raw', 'body'])
 
 function extractUnwrappedContextWrapper(val: unknown): string | undefined {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return undefined
-    const rec = val as Record<string, unknown>
+    if (!isRecord(val)) return undefined
+    const rec = val
     const rawContent = rec['content']
     if (typeof rawContent !== 'string' || rawContent.trim() === '') return undefined
     const keys = Object.keys(rec)
@@ -230,13 +231,9 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
 function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean {
     let modified = false
 
-    if (
-        'entry' in obj &&
-        typeof obj['entry'] === 'object' &&
-        obj['entry'] !== null &&
-        !Array.isArray(obj['entry'])
-    ) {
-        const nested = obj['entry'] as Record<string, unknown>
+    const rawNestedEntry = obj['entry']
+    if (isRecord(rawNestedEntry)) {
+        const nested = rawNestedEntry
         Reflect.deleteProperty(obj, 'entry')
         for (const [k, v] of Object.entries(nested)) {
             if (obj[k] === undefined && v !== undefined) obj[k] = v
@@ -300,8 +297,8 @@ function synthesizeFallbackAnchorContent(obj: Record<string, unknown>): boolean 
     const paths = obj['anchors']
         .map((a) => {
             if (typeof a === 'string') return a.trim()
-            if (typeof a === 'object' && a !== null && 'anchor_path' in a) {
-                const p = (a as Record<string, unknown>)['anchor_path']
+            if (isRecord(a) && 'anchor_path' in a) {
+                const p = a['anchor_path']
                 return typeof p === 'string' ? p.trim() : ''
             }
             return ''
@@ -349,9 +346,9 @@ function remapAgentKeyAliases(obj: Record<string, unknown>): boolean {
  * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
  */
 export function healAgentHallucinations(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    if (!isRecord(val)) return val
 
-    const obj = { ...(val as Record<string, unknown>) }
+    const obj: Record<string, unknown> = { ...val }
     let modified = false
 
     if (remapAgentKeyAliases(obj)) modified = true

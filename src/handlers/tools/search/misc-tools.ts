@@ -46,8 +46,76 @@ const READ_ONLY_ANNOTATIONS = {
     openWorldHint: false,
 } as const
 
+function executeGetVectorIndexStats(
+    vectorManager: ToolContext['vectorManager'],
+    params: unknown
+): unknown {
+    try {
+        EmptyStrictSchema.parse(params ?? {})
+        if (!vectorManager) {
+            return {
+                success: false,
+                available: false,
+                error: 'Vector search not available',
+                code: 'CONFIGURATION_ERROR',
+                category: 'configuration',
+                suggestion:
+                    'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                recoverable: false,
+            }
+        }
+        const stats = vectorManager.getStats()
+        return { success: true, available: true, ...stats }
+    } catch (err) {
+        const formatted = formatHandlerError(err)
+        if (
+            typeof params === 'object' &&
+            params !== null &&
+            !Array.isArray(params) &&
+            ('workspace_id' in params ||
+                'workspaceId' in params ||
+                'project_number' in params ||
+                'projectNumber' in params)
+        ) {
+            return {
+                ...formatted,
+                suggestion:
+                    '🛠️ AUTONOMOUS HEALING: get_vector_index_stats reports database-wide vector index statistics and accepts no parameters. Re-call with empty arguments: mj.search.getVectorIndexStats({}).',
+            }
+        }
+        return formatted
+    }
+}
+
+function executeListDeletedEntries(context: ToolContext, params: unknown): unknown {
+    try {
+        const parsed = ListDeletedEntriesStrictSchema.parse(params)
+        const rawWs = parsed.workspace_id ?? parsed.workspaceId
+        const rawProj = parsed.project_number ?? parsed.projectNumber
+        const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
+        const projectNumber = alignedProjectFilter(
+            wsId,
+            rawProj,
+            activeProjectRegistry(context.config?.projectRegistry)
+        )
+        const result = context.db.getDeletedEntries({
+            limit: parsed.limit,
+            offset: parsed.offset,
+            workspaceId: wsId,
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
+        })
+        return {
+            success: true,
+            entries: result.entries.map((e) => ({ ...e, source: 'personal' as const })),
+            count: result.count,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
 export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager } = context;
+    const { vectorManager } = context
     return [
         {
             name: 'get_vector_index_stats',
@@ -57,43 +125,7 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             inputSchema: EmptyStrictSchema,
             outputSchema: VectorStatsOutputSchema,
             annotations: READ_ONLY_ANNOTATIONS,
-            handler: (params: unknown) => {
-                try {
-                    EmptyStrictSchema.parse(params ?? {})
-                    if (!vectorManager) {
-                        return {
-                            success: false,
-                            available: false,
-                            error: 'Vector search not available',
-                            code: 'CONFIGURATION_ERROR',
-                            category: 'configuration',
-                            suggestion:
-                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
-                            recoverable: false,
-                        }
-                    }
-                    const stats = vectorManager.getStats()
-                    return { success: true, available: true, ...stats }
-                } catch (err) {
-                    const formatted = formatHandlerError(err)
-                    if (
-                        typeof params === 'object' &&
-                        params !== null &&
-                        !Array.isArray(params) &&
-                        ('workspace_id' in params ||
-                            'workspaceId' in params ||
-                            'project_number' in params ||
-                            'projectNumber' in params)
-                    ) {
-                        return {
-                            ...formatted,
-                            suggestion:
-                                '🛠️ AUTONOMOUS HEALING: get_vector_index_stats reports database-wide vector index statistics and accepts no parameters. Re-call with empty arguments: mj.search.getVectorIndexStats({}).',
-                        }
-                    }
-                    return formatted
-                }
-            },
+            handler: (params: unknown) => executeGetVectorIndexStats(vectorManager, params),
         },
         {
             name: 'list_deleted_entries',
@@ -103,32 +135,7 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             inputSchema: ListDeletedEntriesMcpSchema,
             outputSchema: EntriesListOutputSchema,
             annotations: READ_ONLY_ANNOTATIONS,
-            handler: (params: unknown) => {
-                try {
-                    const parsed = ListDeletedEntriesStrictSchema.parse(params)
-                    const rawWs = parsed.workspace_id ?? parsed.workspaceId
-                    const rawProj = parsed.project_number ?? parsed.projectNumber
-                    const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
-                    const projectNumber = alignedProjectFilter(
-                        wsId,
-                        rawProj,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
-                    const result = db.getDeletedEntries({
-                        limit: parsed.limit,
-                        offset: parsed.offset,
-                        workspaceId: wsId,
-                        ...(projectNumber !== undefined ? { projectNumber } : {}),
-                    })
-                    return {
-                        success: true,
-                        entries: result.entries.map((e) => ({ ...e, source: 'personal' as const })),
-                        count: result.count,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeListDeletedEntries(context, params),
         },
-    ];
+    ]
 }

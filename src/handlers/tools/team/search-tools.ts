@@ -140,6 +140,39 @@ function executeTeamSearchByDateRange(
 // Tool Definitions
 // ============================================================================
 
+function executeTeamListDeletedEntries(
+    context: ToolContext,
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    params: unknown
+): unknown {
+    const { limit, offset, project_number, workspace_id } = TeamListDeletedEntriesSchema.parse(params)
+    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+    const projectNumber = resolveTeamProjectNumber(
+        context,
+        wsId,
+        project_number,
+        workspace_id
+    )
+    if (projectNumber == null) {
+        return {
+            success: false,
+            error: 'Missing project_number. Cross-tenant queries without project_number are not allowed.',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            suggestion: 'Specify a project_number or workspace_id.',
+            recoverable: true,
+        }
+    }
+    const result = teamDb.getDeletedEntries({
+        limit,
+        offset,
+        workspaceId: wsId,
+        projectNumber,
+    })
+    const enriched = enrichSearchResultsWithAuthors(teamDb, result.entries)
+    return { success: true, entries: enriched, count: result.count }
+}
+
 export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
 
@@ -206,32 +239,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    const { limit, offset, project_number, workspace_id } = TeamListDeletedEntriesSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(
-                        context,
-                        wsId,
-                        project_number,
-                        workspace_id
-                    )
-                    if (projectNumber == null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. Cross-tenant queries without project_number are not allowed.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify a project_number or workspace_id.',
-                            recoverable: true,
-                        }
-                    }
-                    const result = teamDb.getDeletedEntries({
-                        limit,
-                        offset,
-                        workspaceId: wsId,
-                        projectNumber,
-                    })
-                    const enriched = enrichSearchResultsWithAuthors(teamDb, result.entries)
-                    return { success: true, entries: enriched, count: result.count }
+                    return executeTeamListDeletedEntries(context, teamDb, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

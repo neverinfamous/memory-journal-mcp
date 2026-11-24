@@ -3,6 +3,7 @@
  */
 
 import * as path from 'node:path'
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { isRecord, safeString } from '../normalizers/shared-utils.js'
 import {
     readProjectRegistryFile,
@@ -68,10 +69,7 @@ export function createGetConfigFn(
 function toGuardRegistry(
     registry: Record<string, unknown>
 ): Record<string, { path?: string; project_number?: number }> {
-    const out = Object.create(null) as Record<
-        string,
-        { path?: string; project_number?: number }
-    >
+    const out = createNullProtoRecord<{ path?: string; project_number?: number }>()
     for (const [k, v] of Object.entries(registry)) {
         if (isRecord(v)) {
             out[k] = {

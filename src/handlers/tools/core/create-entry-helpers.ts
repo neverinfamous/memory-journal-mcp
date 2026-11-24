@@ -7,6 +7,7 @@ import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { sendProgress, type ProgressContext } from '../../../utils/progress-utils.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { canonicalizeTeamAuthor, enforceTeamRbac, getCallerIdentity } from '../team/rbac.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
@@ -247,10 +248,10 @@ export function tryResolveEntryResourceUri(
     params: unknown,
     context: ToolContext
 ): Promise<unknown> | undefined {
-    if (context.config?.agentHealing === false || typeof params !== 'object' || params === null) {
+    if (context.config?.agentHealing === false || !isRecord(params)) {
         return undefined
     }
-    const obj = params as Record<string, unknown>
+    const obj = params
     if (obj['entry_id'] !== undefined || typeof obj['uri'] !== 'string') return undefined
     const uri = obj['uri'].trim()
     if (!uri.startsWith('memory://') || /^memory:\/\/(?:entries|entry)\/\d+$/i.test(uri)) {

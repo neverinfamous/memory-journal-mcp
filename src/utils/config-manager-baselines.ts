@@ -62,7 +62,7 @@ export function collectBriefingBaselines(
     initialConfig: DynamicConfig,
     initialFile: Record<string, unknown> | null,
     keyMap: BriefingKeyMapping,
-    isValidValue: (value: unknown, kind: BriefingValueKind) => boolean,
+    isValidValue: (value: unknown, kind: BriefingValueKind) => value is number | boolean,
     explicitBriefingOverrides?: Partial<Record<BriefingConfigurableKey, number | boolean>>
 ): {
     initialBriefingBaseline: BriefingBaselineMap
@@ -78,13 +78,14 @@ export function collectBriefingBaselines(
             initialFile !== null
                 ? readBriefingConfigEntry(initialFile, fileKey, aliases)
                 : undefined
-        const hasFileVal = match !== undefined && isValidValue(match.value, kind)
+        const fileVal = match?.value
+        const hasFileVal = isValidValue(fileVal, kind)
         if (hasFileVal) {
-            lastFileBriefingValues.set(target, match.value as number | boolean)
+            lastFileBriefingValues.set(target, fileVal)
         }
         const explicitOverride = explicitBriefingOverrides?.[target]
         const curVal = initialConfig.briefingConfig[target]
-        const fromFile = explicitOverride === undefined && hasFileVal && match.value === curVal
+        const fromFile = explicitOverride === undefined && hasFileVal && fileVal === curVal
         if (fromFile) {
             briefingKeysFromFile.add(target)
         } else if (explicitOverride !== undefined && isValidValue(explicitOverride, kind)) {

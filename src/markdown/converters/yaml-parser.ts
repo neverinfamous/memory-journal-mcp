@@ -9,6 +9,8 @@
  * established pattern of zero-dependency parsers for better supply chain security.
  */
 
+import { createNullProtoRecord } from '../../utils/type-guards.js'
+
 /** Structure of extracted YAML frontmatter */
 export type FrontmatterData = Record<string, string | string[]>;
 
@@ -79,7 +81,7 @@ function extractFrontmatterHeaderBounds(
 }
 
 function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
-    const metadata = Object.create(null) as FrontmatterData
+    const metadata = createNullProtoRecord<string | string[]>()
     let currentArrayKey: string | null = null
     let currentArray: string[] = []
 
@@ -133,11 +135,11 @@ function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
 export function parseYamlFrontmatter(content: string): YamlParseResult {
     const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
     if (clean.length > MAX_FRONTMATTER_CONTENT_LENGTH) {
-        return { metadata: Object.create(null) as FrontmatterData, body: clean }
+        return { metadata: createNullProtoRecord<string | string[]>(), body: clean }
     }
     const extracted = extractFrontmatterHeaderBounds(clean)
     if (extracted === null) {
-        return { metadata: Object.create(null) as FrontmatterData, body: clean }
+        return { metadata: createNullProtoRecord<string | string[]>(), body: clean }
     }
     return {
         metadata: parseYamlFrontmatterLines(extracted.fmLines),

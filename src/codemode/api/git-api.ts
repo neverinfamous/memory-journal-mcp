@@ -2,6 +2,8 @@
  * memory-journal-mcp - Code Mode API Interceptions for Git Tools
  */
 
+import { isRecord } from '../../utils/type-guards.js'
+
 function remapGitParamAliases(methodName: string, obj: Record<string, unknown>): void {
     const isSearchCommits = methodName === 'search_commits' || methodName === 'searchCommits'
     for (const key of ['text', 'message', 'description', 'q', 'search']) {
@@ -45,14 +47,9 @@ export function applyGitInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } | null {
-    if (
-        GIT_METHODS.has(methodName) &&
-        args.length === 1 &&
-        typeof args[0] === 'object' &&
-        args[0] !== null &&
-        !Array.isArray(args[0])
-    ) {
-        const obj: Record<string, unknown> = { ...(args[0] as Record<string, unknown>) }
+    const firstArg = args[0]
+    if (GIT_METHODS.has(methodName) && args.length === 1 && isRecord(firstArg)) {
+        const obj: Record<string, unknown> = { ...firstArg }
         args[0] = obj
         remapGitParamAliases(methodName, obj)
 

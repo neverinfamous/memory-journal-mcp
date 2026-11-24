@@ -19,9 +19,11 @@ import {
 import { validateProjectRegistryObject } from '../server-options-parsers.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
+import { isRecord } from '../../utils/type-guards.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 import { formatCliError } from './cli-output.js'
 import {
+    extractStoredProjectRegistry,
     resolveProjectConfigPath,
     syncCliTopLevelDefaults,
     withIsolatedProjectConfigEnv,
@@ -76,8 +78,9 @@ function parsePositiveCliProjectNumber(raw: unknown): number {
 export function projectListAction(options: Record<string, unknown>, command: Command): void {
     handleProjectDumpConfig(options, command)
     const config = loadConfig(options)
-    const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
-    
+    const rawRegistry = config['projectRegistry']
+    const registry = isRecord(rawRegistry) ? rawRegistry : {}
+
     if (isJsonOutput(options, command)) {
         process.stdout.write(JSON.stringify(registry, null, 2) + '\n')
         return
@@ -89,7 +92,11 @@ export function projectListAction(options: Record<string, unknown>, command: Com
     }
 
     for (const [name, data] of Object.entries(registry)) {
-        process.stdout.write(`${name}: ${data.path} (Project Number: ${data.project_number ?? 'None'})\n`)
+        if (!isRecord(data)) continue
+        const projPath = typeof data['path'] === 'string' ? data['path'] : ''
+        const projNum =
+            typeof data['project_number'] === 'number' ? data['project_number'] : 'None'
+        process.stdout.write(`${name}: ${projPath} (Project Number: ${projNum})\n`)
     }
 }
 
@@ -156,11 +163,26 @@ function validateAndRegisterProjectEntry(
     }
 
     const config = loadConfig(options)
-    config['projectRegistry'] ??= {}
-    const registry = config['projectRegistry'] as Record<
-        string,
-        { path: string; project_number?: number }
-    >
+    const rawRegistry = config['projectRegistry']
+    if (rawRegistry !== undefined && !isRecord(rawRegistry)) {
+        process.stderr.write('Invalid project registry entry: expected an object\n')
+        process.exit(1)
+    }
+    const registry = extractStoredProjectRegistry(rawRegistry)
+    if (
+        rawRegistry !== undefined &&
+        Object.keys(rawRegistry).length !== Object.keys(registry).length
+    ) {
+        try {
+            validateProjectRegistryObject(rawRegistry)
+        } catch (e: unknown) {
+            process.stderr.write(
+                `Invalid project registry entry: ${e instanceof Error ? e.message : String(e)}\n`
+            )
+            process.exit(1)
+        }
+    }
+    config['projectRegistry'] = registry
     const keyConflict = findCaseInsensitiveKeyConflict(registry, name)
     if (keyConflict !== undefined) {
         process.stderr.write(`Project '${keyConflict}' already exists (conflicts with '${name}').\n`)
@@ -357,7 +379,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     }
 
     const config = loadConfig(options)
-    const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
+    const registry = extractStoredProjectRegistry(config['projectRegistry'])
 
     if (!Object.hasOwn(registry, name)) {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
@@ -426,7 +448,7 @@ export function projectDeleteAction(name: string, options: Record<string, unknow
     }
 
     const config = loadConfig(options)
-    const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
+    const registry = extractStoredProjectRegistry(config['projectRegistry'])
 
     if (!Object.hasOwn(registry, name)) {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)

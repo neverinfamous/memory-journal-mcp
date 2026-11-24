@@ -1,6 +1,7 @@
 import type { ToolContext } from '../../../../types/index.js'
 import { AuthorizationError, PermissionError, ValidationError } from '../../../../types/errors.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import { getPrompt, getPrompts } from '../../../prompts/index.js'
 
 export async function handlePrompt(
@@ -8,8 +9,7 @@ export async function handlePrompt(
     promptName: string,
     context?: ToolContext
 ): Promise<unknown> {
-    const rawArgs =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
+    const rawArgs = isRecord(params) ? params : {}
     const stringArgs: Record<string, string> = {}
     for (const [k, v] of Object.entries(rawArgs)) {
         if (typeof v === 'string') stringArgs[k] = v
@@ -77,8 +77,9 @@ export function handleListPrompts(toolName: string): unknown {
     return {
         success: true,
         prompts: getPrompts().map((p) => {
-            const rest = { ...(p as Record<string, unknown>) }
-            delete rest['capabilities']
+            const rest: Record<string, unknown> = {}
+            Object.assign(rest, p)
+            Reflect.deleteProperty(rest, 'capabilities')
             return rest
         }),
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (prompts/list). The available prompts were returned successfully.`,
@@ -90,10 +91,7 @@ export async function handleGetPrompt(
     toolName: string,
     context?: ToolContext
 ): Promise<unknown> {
-    const rawArgs =
-        typeof params === 'object' && params !== null && !Array.isArray(params)
-            ? (params as Record<string, unknown>)
-            : {}
+    const rawArgs = isRecord(params) ? params : {}
     const explicitPromptName =
         typeof rawArgs['name'] === 'string' && rawArgs['name'].trim() !== ''
             ? rawArgs['name'].trim()
@@ -112,11 +110,7 @@ export async function handleGetPrompt(
         }
     }
     const targetPromptName = explicitPromptName ?? 'load-briefing'
-    const nestedArgs = (
-        typeof rawArgs['arguments'] === 'object' && rawArgs['arguments'] !== null
-            ? rawArgs['arguments']
-            : rawArgs
-    ) as Record<string, unknown>
+    const nestedArgs = isRecord(rawArgs['arguments']) ? rawArgs['arguments'] : rawArgs
     const stringArgs: Record<string, string> = {}
     for (const [k, v] of Object.entries(nestedArgs)) {
         if (k !== 'name' && k !== 'prompt' && k !== 'prompt_name' && k !== 'arguments') {

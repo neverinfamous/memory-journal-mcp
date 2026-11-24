@@ -1,15 +1,16 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { RelationshipType, ToolHandlerConfig } from '../../types/index.js'
 import { z } from 'zod'
-import { AuthorizationError, ValidationError } from '../../types/errors.js'
+import { ValidationError, AuthorizationError } from '../../types/errors.js'
 import type { CliCommandLike } from '../../utils/config-resolver.js'
+import { isRecord } from '../../utils/type-guards.js'
 import { CliExitError } from './db-core.js'
 import { resolveEntryAnchors } from '../../handlers/tools/core/entry-anchors.js'
 import { linkRequestedRelationships } from '../../handlers/tools/relationship-linking.js'
 import {
+    extractUpdateEntryCliOptions,
     prepareCliEntryUpdate,
     validateCliUpdateArgsAndTarget,
-    type UpdateEntryCliOptions,
 } from './entry-update-helpers.js'
 import { formatCliError } from './cli-output.js'
 import {
@@ -22,6 +23,7 @@ import {
 } from './entry-payload.js'
 import {
     applyCliEntryFlagAliases,
+    extractHealedEntryOptions,
     firstNonBlankString,
     validateCliEntryContent,
     type HealedEntryOptions,
@@ -272,10 +274,31 @@ async function runCreateEntry(
     return exitCode
 }
 
+function isCliCommandLike(val: unknown): val is CliCommandLike {
+    return (
+        isRecord(val) &&
+        typeof val['name'] === 'function' &&
+        typeof val['getOptionValueSource'] === 'function'
+    )
+}
+
+function extractCliCommandAndRawOptions(
+    args: unknown[],
+    fallbackName: string
+): { command: CliCommandLike; rawOptions: unknown; restArgs: unknown[] } {
+    const rawCommand = args.length > 0 ? args[args.length - 1] : undefined
+    const command: CliCommandLike = isCliCommandLike(rawCommand)
+        ? rawCommand
+        : { name: () => fallbackName, getOptionValueSource: () => undefined }
+    const rawOptions = args.length > 1 ? args[args.length - 2] : {}
+    const restArgs = args.length > 2 ? args.slice(0, args.length - 2) : []
+    return { command, rawOptions, restArgs }
+}
+
 export async function createEntryAction(...args: unknown[]): Promise<void> {
-    const command = args[args.length - 1] as CliCommandLike
-    const options = (args.length > 1 ? args[args.length - 2] : {}) as HealedEntryOptions
-    applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
+    const { command, rawOptions, restArgs } = extractCliCommandAndRawOptions(args, 'create')
+    const options = extractHealedEntryOptions(rawOptions)
+    applyCliEntryFlagAliases(options, restArgs)
     const exitCode = await runCreateEntry(options, command)
     if (exitCode !== undefined) process.exit(exitCode)
 }
@@ -376,9 +399,9 @@ async function enforceCliUpdateTeamPermissions(
 }
 
 export async function updateEntryAction(...args: unknown[]): Promise<void> {
-    const command = args[args.length - 1] as CliCommandLike
-    const options = (args.length > 1 ? args[args.length - 2] : {}) as UpdateEntryCliOptions
-    applyCliEntryFlagAliases(options, args.slice(0, args.length - 2))
+    const { command, rawOptions, restArgs } = extractCliCommandAndRawOptions(args, 'update')
+    const options = extractUpdateEntryCliOptions(rawOptions)
+    applyCliEntryFlagAliases(options, restArgs)
     const { db, config } = await getDb(options, command)
     let exitCode: number | undefined
     try {

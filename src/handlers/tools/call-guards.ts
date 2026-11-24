@@ -19,6 +19,7 @@ import {
 } from '../../utils/tool-input-bounds.js'
 import { applyArgInterceptions } from './arg-interceptions.js'
 import { assertToolFilterAllowsCall } from './dummy-filter-helpers.js'
+import { isRecord } from '../../utils/type-guards.js'
 
 export function applyToolHealingArgs(
     name: string,
@@ -31,7 +32,8 @@ export function applyToolHealingArgs(
     try {
         const intercept = applyArgInterceptions(name, [args])
         if ('error' in intercept) return intercept
-        return { args: (intercept.args[0] as Record<string, unknown>) ?? args }
+        const first = intercept.args[0]
+        return { args: isRecord(first) ? first : args }
     } finally {
         restoreActiveProjectRegistryState(prevRegistryState)
     }

@@ -67,8 +67,10 @@ export class TagsManager {
             const tagIds: number[] = []
             for (const { placeholders, params } of bucketInParams(uniqueTags)) {
                 const rows = db
-                    .prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`)
-                    .all(...params) as { id: number }[]
+                    .prepare<unknown[], { id: number }>(
+                        `SELECT id FROM tags WHERE name IN (${placeholders})`
+                    )
+                    .all(...params)
                 for (const row of rows) tagIds.push(row.id)
             }
             if (tagIds.length === 0) return
@@ -96,12 +98,12 @@ export class TagsManager {
 
     getTagsForEntry(entryId: number): string[] {
         const rows = this.db
-            .prepare(
+            .prepare<unknown[], { name: string }>(
                 `SELECT t.name FROM tags t
                  JOIN entry_tags et ON t.id = et.tag_id
                  WHERE et.entry_id = ?`
             )
-            .all(entryId) as { name: string }[]
+            .all(entryId)
 
         return rows.map((r) => r.name)
     }
@@ -112,13 +114,13 @@ export class TagsManager {
 
         for (const { placeholders, params } of bucketInParams(ids)) {
             const rows = this.db
-                .prepare(
+                .prepare<unknown[], { entry_id: number; name: string }>(
                     `SELECT et.entry_id, t.name
                      FROM entry_tags et
                      JOIN tags t ON et.tag_id = t.id
                      WHERE et.entry_id IN (${placeholders})`
                 )
-                .all(...params) as { entry_id: number; name: string }[]
+                .all(...params)
 
             for (const row of rows) {
                 const existing = tagMap.get(row.entry_id)
@@ -159,7 +161,7 @@ export class TagsManager {
             params.push(scopedProject)
         }
         const rows = this.db
-            .prepare(
+            .prepare<unknown[], { id: number; name: string; usage_count: number }>(
                 `SELECT t.id, t.name, COUNT(et.entry_id) as usage_count
                  FROM tags t
                  JOIN entry_tags et ON t.id = et.tag_id
@@ -169,7 +171,7 @@ export class TagsManager {
                  HAVING COUNT(et.entry_id) > 0
                  ORDER BY usage_count DESC, t.name ASC`
             )
-            .all(...params) as { id: number; name: string; usage_count: number }[]
+            .all(...params)
 
         return rows.map((r) => ({ id: r.id, name: r.name, usageCount: r.usage_count }))
     }
@@ -243,12 +245,12 @@ export class TagsManager {
             selectParams.push(scopedProject)
         }
         const entryRows = this.db
-            .prepare(
+            .prepare<unknown[], { entry_id: number }>(
                 `SELECT et.entry_id FROM entry_tags et
                  JOIN memory_journal mj ON et.entry_id = mj.id
                  WHERE ${conditions.join(' AND ')}`
             )
-            .all(...selectParams) as { entry_id: number }[]
+            .all(...selectParams)
         return entryRows.map((r) => r.entry_id)
     }
 
@@ -256,8 +258,8 @@ export class TagsManager {
     private linkTargetTagToEntries(targetTagId: number, entryIds: number[]): number {
         const db = this.db
         const existingRows = db
-            .prepare('SELECT entry_id FROM entry_tags WHERE tag_id = ?')
-            .all(targetTagId) as { entry_id: number }[]
+            .prepare<unknown[], { entry_id: number }>('SELECT entry_id FROM entry_tags WHERE tag_id = ?')
+            .all(targetTagId)
         const existingEntryIds = new Set(existingRows.map((r) => r.entry_id))
         const newEntryIds = entryIds.filter((id) => !existingEntryIds.has(id))
         if (newEntryIds.length === 0) return 0
@@ -281,9 +283,9 @@ export class TagsManager {
     /** Resolve an existing source tag id and purge orphaned `entry_tags` links. */
     private resolveSourceTagId(sourceTag: string): number {
         const db = this.db
-        const sourceRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(sourceTag) as
-            | { id: number }
-            | undefined
+        const sourceRow = db
+            .prepare<unknown[], { id: number }>('SELECT id FROM tags WHERE name = ?')
+            .get(sourceTag)
         if (!sourceRow) throw new ResourceNotFoundError('Tag', sourceTag)
         const sourceTagId = sourceRow.id
         db.prepare(
@@ -296,9 +298,9 @@ export class TagsManager {
     private ensureTargetTagId(_sourceTagId: number, targetTag: string): number {
         const db = this.db
         db.prepare('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)').run(targetTag)
-        const targetRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(targetTag) as
-            | { id: number }
-            | undefined
+        const targetRow = db
+            .prepare<unknown[], { id: number }>('SELECT id FROM tags WHERE name = ?')
+            .get(targetTag)
         if (!targetRow) throw new QueryError(`Failed to get or create target tag: ${targetTag}`)
         const targetTagId = targetRow.id
 
@@ -353,9 +355,9 @@ export class TagsManager {
         }
 
         const remaining = db
-            .prepare('SELECT COUNT(*) as count FROM entry_tags WHERE tag_id = ?')
-            .get(sourceTagId) as { count: number }
-        const sourceDeleted = remaining.count === 0
+            .prepare<unknown[], { count: number }>('SELECT COUNT(*) as count FROM entry_tags WHERE tag_id = ?')
+            .get(sourceTagId)
+        const sourceDeleted = (remaining?.count ?? 0) === 0
         if (sourceDeleted) {
             db.prepare('DELETE FROM tags WHERE id = ?').run(sourceTagId)
         }

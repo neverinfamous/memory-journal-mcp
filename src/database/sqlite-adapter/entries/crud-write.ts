@@ -292,10 +292,10 @@ function findExistingIdsForDelete(
     const wsClause = hasWorkspaceFilter ? ' AND workspace_id = ?' : ''
     for (const { placeholders, params } of bucketInParams(uniqueIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
-            .prepare(
+            .prepare<unknown[], { id: number }>(
                 `SELECT id FROM memory_journal WHERE id IN (${placeholders})${deletedFilter}${wsClause}`
             )
-            .all(...(hasWorkspaceFilter ? [...params, scopeId] : params)) as { id: number }[]
+            .all(...(hasWorkspaceFilter ? [...params, scopeId] : params))
         for (const row of rows) existingIds.add(row.id)
     }
     return existingIds

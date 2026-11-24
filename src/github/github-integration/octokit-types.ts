@@ -169,7 +169,7 @@ export interface OctokitClient {
             milestone_number: number
             title?: string | undefined
             description?: string | undefined
-            due_on?: string | undefined
+            due_on?: string | null | undefined
             state?: 'open' | 'closed' | undefined
         }) => Promise<{ data: OctokitMilestoneData }>
         deleteMilestone: (params: {

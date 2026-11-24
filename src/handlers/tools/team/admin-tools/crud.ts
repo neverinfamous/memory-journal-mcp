@@ -296,6 +296,83 @@ function executeTeamDeleteEntry(
 // Tool Definitions
 // ============================================================================
 
+async function executeTeamRestoreEntry(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): Promise<unknown> {
+    const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
+
+    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
+    const projectNumber = resolveTeamMutationProjectNumber(
+        context,
+        wsId,
+        project_number,
+        workspace_id,
+        existing?.projectNumber
+    )
+    if (projectNumber === undefined || projectNumber === null) {
+        return missingProjectNumberResponse()
+    }
+    wsId = resolveWriteWorkspaceId(
+        workspace_id ?? existing?.workspaceId,
+        projectNumber,
+        context.config
+    )
+
+    // Verify entry exists and belongs to project (if projectNumber is specified)
+    if (
+        !existing ||
+        (existing.projectNumber !== projectNumber &&
+            !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing))
+    ) {
+        return {
+            success: false,
+            entryId: entry_id,
+            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
+        }
+    }
+
+    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'restore', wsId)
+    if (denied !== null) return denied
+
+    const success = teamDb.restoreEntry(entry_id, wsId)
+    if (!success) {
+        return {
+            success: false,
+            entryId: entry_id,
+            error: `Team entry ${String(entry_id)} not found or not deleted`,
+        }
+    }
+
+    let indexStatus: string | undefined
+    let warning: string | undefined
+    const restored = teamDb.getEntryById(entry_id, wsId)
+    if (
+        context.teamVectorManager !== undefined &&
+        restored !== null &&
+        restored !== undefined
+    ) {
+        try {
+            await context.teamVectorManager.addEntry(restored)
+            indexStatus = 'success'
+        } catch (vecErr) {
+            indexStatus = 'failed'
+            warning = `Team vector re-indexing failed: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+        }
+    }
+
+    triggerTeamNotifications(context)
+
+    return {
+        success: true,
+        entryId: entry_id,
+        ...(indexStatus !== undefined ? { indexStatus } : {}),
+        ...(warning !== undefined ? { warning } : {}),
+    }
+}
+
 export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
 
@@ -366,77 +443,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-
-                    const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
-
-                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
-                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    const projectNumber = resolveTeamMutationProjectNumber(
-                        context,
-                        wsId,
-                        project_number,
-                        workspace_id,
-                        existing?.projectNumber
-                    )
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return missingProjectNumberResponse()
-                    }
-                    wsId = resolveWriteWorkspaceId(
-                        workspace_id ?? existing?.workspaceId,
-                        projectNumber,
-                        context.config
-                    )
-
-                    // Verify entry exists and belongs to project (if projectNumber is specified)
-                    if (
-                        !existing ||
-                        (existing.projectNumber !== projectNumber &&
-                            !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing))
-                    ) {
-                        return {
-                            success: false,
-                            entryId: entry_id,
-                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
-                        }
-                    }
-
-                    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'restore', wsId)
-                    if (denied !== null) return denied
-
-                    const success = teamDb.restoreEntry(entry_id, wsId)
-                    if (!success) {
-                        return {
-                            success: false,
-                            entryId: entry_id,
-                            error: `Team entry ${String(entry_id)} not found or not deleted`,
-                        }
-                    }
-
-                    let indexStatus: string | undefined
-                    let warning: string | undefined
-                    const restored = teamDb.getEntryById(entry_id, wsId)
-                    if (
-                        context.teamVectorManager !== undefined &&
-                        restored !== null &&
-                        restored !== undefined
-                    ) {
-                        try {
-                            await context.teamVectorManager.addEntry(restored)
-                            indexStatus = 'success'
-                        } catch (vecErr) {
-                            indexStatus = 'failed'
-                            warning = `Team vector re-indexing failed: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
-                        }
-                    }
-
-                    triggerTeamNotifications(context)
-
-                    return {
-                        success: true,
-                        entryId: entry_id,
-                        ...(indexStatus !== undefined ? { indexStatus } : {}),
-                        ...(warning !== undefined ? { warning } : {}),
-                    }
+                    return await executeTeamRestoreEntry(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

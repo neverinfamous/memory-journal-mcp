@@ -89,9 +89,9 @@ export class VectorOperations {
         let rows: { entry_id: number; distance: number }[]
         let k = Math.min(Math.max(1, limit * VECTOR_KNN_OVERFETCH), VECTOR_KNN_MAX_K)
         try {
-            const stmt = db.prepare(sql)
+            const stmt = db.prepare<unknown[], { entry_id: number; distance: number }>(sql)
             runKnn = (kVal: number): { entry_id: number; distance: number }[] =>
-                stmt.all(...params(kVal)) as { entry_id: number; distance: number }[]
+                stmt.all(...params(kVal))
             rows = runKnn(k)
         } catch (error: unknown) {
             if (isMissingTableError(error)) {
@@ -121,8 +121,10 @@ export class VectorOperations {
             countParams.push(projectNumber)
         }
         const countRow = db
-            .prepare(`SELECT COUNT(*) as count FROM memory_journal WHERE ${countClauses.join(' AND ')}`)
-            .get(...countParams) as { count: number } | undefined
+            .prepare<unknown[], { count: number }>(
+                `SELECT COUNT(*) as count FROM memory_journal WHERE ${countClauses.join(' AND ')}`
+            )
+            .get(...countParams)
         const targetRows = Math.min(limit, countRow?.count ?? 0)
         if (targetRows === 0) return []
 
@@ -170,8 +172,10 @@ export class VectorOperations {
         try {
             const db = this.connection.getNativeDb()
             const row = db
-                .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
-                .get(BigInt(entryId)) as { embedding: Buffer } | undefined
+                .prepare<unknown[], { embedding: Buffer }>(
+                    'SELECT embedding FROM vec_embeddings WHERE entry_id = ?'
+                )
+                .get(BigInt(entryId))
             if (!row) return null
             const count = Math.floor(row.embedding.byteLength / Float32Array.BYTES_PER_ELEMENT)
             if (row.embedding.byteOffset % Float32Array.BYTES_PER_ELEMENT === 0) {
@@ -198,8 +202,10 @@ export class VectorOperations {
             for (const { placeholders, params } of bucketInParams(entryIds)) {
                 const bigIds = params.map((id) => BigInt(Math.trunc(id)))
                 const rows = db
-                    .prepare(`SELECT entry_id FROM vec_embeddings WHERE entry_id IN (${placeholders})`)
-                    .all(...bigIds) as { entry_id: number | bigint }[]
+                    .prepare<unknown[], { entry_id: number | bigint }>(
+                        `SELECT entry_id FROM vec_embeddings WHERE entry_id IN (${placeholders})`
+                    )
+                    .all(...bigIds)
                 for (const row of rows) {
                     existing.add(typeof row.entry_id === 'bigint' ? Number(row.entry_id) : row.entry_id)
                 }
@@ -243,8 +249,8 @@ export class VectorOperations {
         try {
             const row = this.connection
                 .getNativeDb()
-                .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
-                .get() as { count: number } | undefined
+                .prepare<unknown[], { count: number }>('SELECT COUNT(*) as count FROM vec_embeddings')
+                .get()
             return row?.count ?? 0
         } catch (error: unknown) {
             if (isMissingTableError(error)) {

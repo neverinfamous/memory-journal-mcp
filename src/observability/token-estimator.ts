@@ -17,6 +17,7 @@
  */
 
 import { logger } from '../utils/logger.js'
+import { isRecord } from '../utils/type-guards.js'
 
 export type ContentType = 'prose' | 'json' | 'code'
 
@@ -104,13 +105,14 @@ export function estimatePayloadTokens(payload: unknown): number {
     if (typeof payload === 'object') {
         const cached = payloadTokenCache.get(payload)
         if (cached !== undefined) return cached
-        const obj = payload as Record<string, unknown>
-        const meta = obj['_meta']
-        if (typeof meta === 'object' && meta !== null) {
-            const existing = (meta as Record<string, unknown>)['tokenEstimate']
-            if (typeof existing === 'number') {
-                payloadTokenCache.set(payload, existing)
-                return existing
+        if (isRecord(payload)) {
+            const meta = payload['_meta']
+            if (isRecord(meta)) {
+                const existing = meta['tokenEstimate']
+                if (typeof existing === 'number') {
+                    payloadTokenCache.set(payload, existing)
+                    return existing
+                }
             }
         }
         const cachedJson = serializedPayloadCache.get(payload)
@@ -270,27 +272,25 @@ function injectIntoExistingMeta(
  * @returns Payload with `_meta.tokenEstimate` added
  */
 export function injectTokenEstimate(payload: unknown): unknown {
-    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    if (!isRecord(payload)) {
         return payload
     }
 
-    const obj = payload as Record<string, unknown>
-    const rawMeta = obj['_meta']
-    const hasMeta = typeof rawMeta === 'object' && rawMeta !== null
-    const existingMeta = hasMeta ? (rawMeta as Record<string, unknown>) : {}
+    const rawMeta = payload['_meta']
+    const existingMeta = isRecord(rawMeta) ? rawMeta : {}
 
     if (typeof existingMeta['tokenEstimate'] === 'number') {
         const est = existingMeta['tokenEstimate']
-        const enriched = { ...obj, _meta: { ...existingMeta, tokenEstimate: est } }
+        const enriched = { ...payload, _meta: { ...existingMeta, tokenEstimate: est } }
         payloadTokenCache.set(enriched, est)
         return enriched
     }
 
-    if (!('_meta' in obj) || rawMeta === undefined) {
+    if (!('_meta' in payload) || rawMeta === undefined) {
         const cachedRawJson = serializedPayloadCache.get(payload)
         if (cachedRawJson !== undefined && cachedRawJson.startsWith('{') && cachedRawJson.endsWith('}')) {
             const cachedEst = payloadTokenCache.get(payload) ?? estimateTokens(cachedRawJson, 'json')
-            const enriched = { ...obj, _meta: { tokenEstimate: cachedEst } }
+            const enriched = { ...payload, _meta: { tokenEstimate: cachedEst } }
             const finalJson =
                 cachedRawJson === '{}'
                     ? `{"_meta":{"tokenEstimate":${String(cachedEst)}}}`
@@ -300,14 +300,14 @@ export function injectTokenEstimate(payload: unknown): unknown {
             return enriched
         }
 
-        if (!('_meta' in obj) && Object.keys(obj).length === 0) {
+        if (!('_meta' in payload) && Object.keys(payload).length === 0) {
             const enriched = { _meta: { tokenEstimate: TOKEN_EMPTY_META_ESTIMATE } }
             payloadTokenCache.set(enriched, TOKEN_EMPTY_META_ESTIMATE)
             serializedPayloadCache.set(enriched, TOKEN_EMPTY_META_JSON)
             return enriched
         }
 
-        const placeholder = { ...obj, _meta: { tokenEstimate: TOKEN_ESTIMATE_SENTINEL } }
+        const placeholder = { ...payload, _meta: { tokenEstimate: TOKEN_ESTIMATE_SENTINEL } }
         try {
             const placeholderJson = JSON.stringify(placeholder, bigintReplacer)
             if (placeholderJson.endsWith(TOKEN_SENTINEL_META_SUFFIX)) {
@@ -320,7 +320,7 @@ export function injectTokenEstimate(payload: unknown): unknown {
                         0,
                         placeholderJson.length - TOKEN_SENTINEL_TAIL.length
                     ) + `${String(tokenEstimate)}}}`
-                const enriched = { ...obj, _meta: { tokenEstimate } }
+                const enriched = { ...payload, _meta: { tokenEstimate } }
                 payloadTokenCache.set(enriched, tokenEstimate)
                 serializedPayloadCache.set(enriched, finalJson)
                 return enriched
@@ -330,5 +330,5 @@ export function injectTokenEstimate(payload: unknown): unknown {
         }
     }
 
-    return injectIntoExistingMeta(payload, obj, existingMeta)
+    return injectIntoExistingMeta(payload, payload, existingMeta)
 }

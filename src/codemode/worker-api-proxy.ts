@@ -6,6 +6,7 @@
  * hallucination handling, and schema() introspection on every method.
  */
 
+import { createNullProtoRecord } from '../utils/type-guards.js'
 import { wrapResult } from './worker-result-proxy.js'
 import { METHOD_ALIASES } from './constants/method-aliases.js'
 import { applyArgInterceptions } from './param-normalizer.js'
@@ -339,7 +340,7 @@ export function buildApiProxy(
     readonlyMode?: boolean,
     contextObj?: Record<string, unknown>
 ): Record<string, unknown> {
-    const api = Object.create(null) as Record<string, unknown>
+    const api = createNullProtoRecord()
     const methodToGroup = new Map<string, string>()
     for (const [gName, mList] of Object.entries(methods)) {
         if (!Array.isArray(mList)) continue

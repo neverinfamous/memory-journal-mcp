@@ -222,10 +222,16 @@ async function processBatch(
             }
         }
     } else {
-        for (const entry of toEmbed) {
-            const vector = await embedEntry(manager, entry, stats)
-            if (vector !== null) vectorsToUpsert.push(vector)
-        }
+        const vectors = await toEmbed.reduce<Promise<{ entryId: number; embedding: Float32Array }[]>>(
+            async (accPromise, entry) => {
+                const acc = await accPromise
+                const vector = await embedEntry(manager, entry, stats)
+                if (vector !== null) acc.push(vector)
+                return acc
+            },
+            Promise.resolve([])
+        )
+        vectorsToUpsert.push(...vectors)
     }
 
     // Upsert the batch into the database
@@ -256,6 +262,88 @@ function cleanupStaleVectorsSafely(dbAdapter: IDatabaseAdapter): string | undefi
     }
 }
 
+interface RebuildLoopContext {
+    manager: VectorSearchManager
+    dbAdapter: IDatabaseAdapter
+    totalEntries: number
+    pageSize: number
+    batchSize: number
+    force: boolean
+    skipExistenceCheck: boolean
+    wsScope: string
+    projectNumber: number | undefined
+    progress: ProgressContext | undefined
+    stats: RebuildStats
+    useKeyset: boolean
+}
+
+async function processPageBatchesSequentially(
+    ctx: RebuildLoopContext,
+    entries: JournalEntry[],
+    pageExistingVectorIds: ReadonlySet<number> | undefined,
+    offset: number,
+    batchOffset: number
+): Promise<void> {
+    if (batchOffset >= entries.length) return
+    const batch = entries.slice(batchOffset, batchOffset + ctx.batchSize)
+    const didEmbed = await processBatch(
+        ctx.manager,
+        ctx.dbAdapter,
+        batch,
+        ctx.force,
+        ctx.skipExistenceCheck,
+        ctx.projectNumber,
+        pageExistingVectorIds,
+        ctx.stats
+    )
+    if (didEmbed) {
+        await new Promise((resolve) => setTimeoutFn(resolve, 0))
+    }
+    await sendProgress(
+        ctx.progress,
+        offset + batchOffset + batch.length,
+        ctx.totalEntries,
+        `Indexing... (${ctx.stats.indexed} indexed, ${ctx.stats.skipped} skipped)`
+    )
+    return processPageBatchesSequentially(
+        ctx,
+        entries,
+        pageExistingVectorIds,
+        offset,
+        batchOffset + ctx.batchSize
+    )
+}
+
+async function runRebuildPagesSequentially(
+    ctx: RebuildLoopContext,
+    offset: number,
+    cursor: { timestamp: string; id: number } | undefined
+): Promise<void> {
+    if (offset >= ctx.totalEntries) return
+    const entries = ctx.useKeyset
+        ? ctx.dbAdapter.getEntriesAfter?.(ctx.pageSize, ctx.wsScope, ctx.projectNumber, cursor) ?? []
+        : ctx.dbAdapter.getEntriesPage(offset, ctx.pageSize, ctx.wsScope, ctx.projectNumber).entries
+    if (entries.length === 0) return
+
+    const pageExistingVectorIds = lookupExistingBatchVectorIds(
+        ctx.dbAdapter,
+        entries,
+        ctx.force,
+        ctx.skipExistenceCheck,
+        ctx.projectNumber
+    )
+    await processPageBatchesSequentially(ctx, entries, pageExistingVectorIds, offset, 0)
+
+    let nextCursor = cursor
+    if (ctx.useKeyset) {
+        if (entries.length < ctx.pageSize) return
+        const last = entries[entries.length - 1]
+        if (last === undefined) return
+        nextCursor = { timestamp: last.timestamp, id: last.id }
+    }
+    return runRebuildPagesSequentially(ctx, offset + ctx.pageSize, nextCursor)
+}
+
 async function runRebuildLoop(
     manager: VectorSearchManager,
     dbAdapter: IDatabaseAdapter,
@@ -269,55 +357,24 @@ async function runRebuildLoop(
     progress: ProgressContext | undefined,
     stats: RebuildStats
 ): Promise<void> {
-    const useKeyset = typeof dbAdapter.getEntriesAfter === 'function'
-    let cursor: { timestamp: string; id: number } | undefined
-    let offset = 0
-    while (offset < totalEntries) {
-        const entries = useKeyset
-            ? dbAdapter.getEntriesAfter?.(pageSize, wsScope, projectNumber, cursor) ?? []
-            : dbAdapter.getEntriesPage(offset, pageSize, wsScope, projectNumber).entries
-        if (entries.length === 0) break
-
-        const pageExistingVectorIds = lookupExistingBatchVectorIds(
+    await runRebuildPagesSequentially(
+        {
+            manager,
             dbAdapter,
-            entries,
+            totalEntries,
+            pageSize,
+            batchSize,
             force,
             skipExistenceCheck,
-            projectNumber
-        )
-
-        for (let i = 0; i < entries.length; i += batchSize) {
-            const batch = entries.slice(i, i + batchSize)
-            const didEmbed = await processBatch(
-                manager,
-                dbAdapter,
-                batch,
-                force,
-                skipExistenceCheck,
-                projectNumber,
-                pageExistingVectorIds,
-                stats
-            )
-
-            if (didEmbed) {
-                await new Promise((resolve) => setTimeoutFn(resolve, 0))
-            }
-            await sendProgress(
-                progress,
-                offset + i + batch.length,
-                totalEntries,
-                `Indexing... (${stats.indexed} indexed, ${stats.skipped} skipped)`
-            )
-        }
-
-        if (useKeyset) {
-            if (entries.length < pageSize) break
-            const last = entries[entries.length - 1]
-            if (last === undefined) break
-            cursor = { timestamp: last.timestamp, id: last.id }
-        }
-        offset += pageSize
-    }
+            wsScope,
+            projectNumber,
+            progress,
+            stats,
+            useKeyset: typeof dbAdapter.getEntriesAfter === 'function',
+        },
+        0,
+        undefined
+    )
 }
 
 /**

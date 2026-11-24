@@ -27,12 +27,12 @@ async function applyBatchAutoLinks(
     createdIndexes: number[],
     relationshipWarnings: string[]
 ): Promise<void> {
-    for (let i = 0; i < results.length; i++) {
-        const createdEntry = results[i]
+    await results.reduce(async (prev, createdEntry, i) => {
+        await prev
         const sourceIndex = createdIndexes[i]
-        if (!createdEntry || sourceIndex === undefined) continue
+        if (sourceIndex === undefined) return
         const rawEntry = input.entries[sourceIndex]
-        if (rawEntry?.auto_link !== true) continue
+        if (rawEntry?.auto_link !== true) return
         const prep = prepared[sourceIndex]?.input
         await applyAutoLinksForEntry({
             db: context.db,
@@ -46,7 +46,7 @@ async function applyBatchAutoLinks(
             hasExplicitRelationships:
                 rawEntry.relationships !== undefined && rawEntry.relationships.length > 0,
         })
-    }
+    }, Promise.resolve())
 }
 
 async function linkBatchEntries(

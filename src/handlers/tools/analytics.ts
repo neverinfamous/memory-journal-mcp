@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import type { ErrorResponse } from '../../types/error-types.js'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
@@ -307,6 +308,83 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
 // Tool Definitions
 // ============================================================================
 
+function executeGetStatistics(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    try {
+        const {
+            group_by,
+            start_date,
+            end_date,
+            project_breakdown,
+            workspace_id,
+            project_number,
+        } = GetStatisticsSchema.parse(omitNonStrictStatisticsKeys(params))
+        const resolvedProjectNumber = coerceAnalyticsProjectNumber(project_number)
+        // [INTENT] M1: project_breakdown spans all registered projects, so default the
+        // scope to '*' unless the caller named a workspace/project explicitly.
+        const wsId =
+            project_breakdown &&
+            workspace_id === undefined &&
+            resolvedProjectNumber === undefined
+                ? '*'
+                : resolveWorkspaceId(workspace_id, resolvedProjectNumber, context.config)
+        const effectiveProjectFilter = alignedProjectFilter(
+            wsId,
+            resolvedProjectNumber,
+            activeProjectRegistry(context.config?.projectRegistry)
+        )
+        const stats = context.db.getStatistics(
+            group_by,
+            start_date,
+            end_date,
+            project_breakdown,
+            wsId,
+            ...(effectiveProjectFilter !== undefined ? [effectiveProjectFilter] : [])
+        )
+        return { success: true, ...(stats as object), groupBy: group_by }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+function executeGetCrossProjectInsights(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    try {
+        const input = CrossProjectInsightsInputSchema.parse(omitNonStrictCrossProjectKeys(params))
+        const resolvedProjectNumber = coerceAnalyticsProjectNumber(input.project_number)
+        // [INTENT] M1: cross-project insights span all projects unless workspace_id or
+        // project_number is specified by the caller.
+        const wsId =
+            input.workspace_id === undefined && resolvedProjectNumber === undefined
+                ? '*'
+                : resolveWorkspaceId(input.workspace_id, resolvedProjectNumber, context.config)
+        const effectiveProjectFilter = alignedProjectFilter(
+            wsId,
+            resolvedProjectNumber,
+            activeProjectRegistry(context.config?.projectRegistry)
+        )
+
+        const results = context.db.getCrossProjectInsights({
+            startDate: input.start_date,
+            endDate: input.end_date,
+            minEntries: input.min_entries,
+            inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
+            workspaceId: wsId,
+            ...(effectiveProjectFilter !== undefined
+                ? { projectNumber: effectiveProjectFilter }
+                : {}),
+        })
+
+        return formatCrossProjectInsightsResponse(results, input.min_entries)
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
 export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -323,43 +401,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    const {
-                        group_by,
-                        start_date,
-                        end_date,
-                        project_breakdown,
-                        workspace_id,
-                        project_number,
-                    } = GetStatisticsSchema.parse(omitNonStrictStatisticsKeys(params))
-                    const resolvedProjectNumber = coerceAnalyticsProjectNumber(project_number)
-                    // [INTENT] M1: project_breakdown spans all registered projects, so default the
-                    // scope to '*' unless the caller named a workspace/project explicitly.
-                    const wsId =
-                        project_breakdown &&
-                        workspace_id === undefined &&
-                        resolvedProjectNumber === undefined
-                            ? '*'
-                            : resolveWorkspaceId(workspace_id, resolvedProjectNumber, context.config)
-                    const effectiveProjectFilter = alignedProjectFilter(
-                        wsId,
-                        resolvedProjectNumber,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
-                    const stats = context.db.getStatistics(
-                        group_by,
-                        start_date,
-                        end_date,
-                        project_breakdown,
-                        wsId,
-                        ...(effectiveProjectFilter !== undefined ? [effectiveProjectFilter] : [])
-                    )
-                    return { success: true, ...(stats as object), groupBy: group_by }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeGetStatistics(params, context),
         },
         {
             name: 'get_cross_project_insights',
@@ -375,40 +417,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    const input = CrossProjectInsightsInputSchema.parse(
-                        omitNonStrictCrossProjectKeys(params)
-                    )
-                    const resolvedProjectNumber = coerceAnalyticsProjectNumber(input.project_number)
-                    // [INTENT] M1: cross-project insights span all projects unless workspace_id or
-                    // project_number is specified by the caller.
-                    const wsId =
-                        input.workspace_id === undefined && resolvedProjectNumber === undefined
-                            ? '*'
-                            : resolveWorkspaceId(input.workspace_id, resolvedProjectNumber, context.config)
-                    const effectiveProjectFilter = alignedProjectFilter(
-                        wsId,
-                        resolvedProjectNumber,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
-
-                    const results = context.db.getCrossProjectInsights({
-                        startDate: input.start_date,
-                        endDate: input.end_date,
-                        minEntries: input.min_entries,
-                        inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
-                        workspaceId: wsId,
-                        ...(effectiveProjectFilter !== undefined
-                            ? { projectNumber: effectiveProjectFilter }
-                            : {}),
-                    })
-
-                    return formatCrossProjectInsightsResponse(results, input.min_entries)
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeGetCrossProjectInsights(params, context),
         },
     ]
 }

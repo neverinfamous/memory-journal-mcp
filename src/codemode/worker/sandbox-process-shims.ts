@@ -4,6 +4,7 @@
 
 import type { SafeFsShim } from './node-shims.js'
 import { createCallableShim, createSchemaShim, wrapDelegatingTool } from './namespace-shims.js'
+import { isCallable, isObjectOrFunction } from './result-proxy-aliases.js'
 import { safeFormatSandboxError } from './script-and-metadata-cache.js'
 
 export const FACTORY_SHIM_NAMES = [
@@ -109,10 +110,10 @@ export function getGroupMethod(
     method: string
 ): ((...args: unknown[]) => unknown) | undefined {
     const g = shimMj[group]
-    if ((typeof g === 'object' && g !== null) || typeof g === 'function') {
-        const fn = Reflect.get(g, method) as unknown
-        if (typeof fn === 'function') {
-            return fn as (...args: unknown[]) => unknown
+    if (isObjectOrFunction(g)) {
+        const fn: unknown = Reflect.get(g, method)
+        if (isCallable(fn)) {
+            return fn
         }
     }
     return undefined
@@ -167,12 +168,11 @@ export function createDisabledSpawnShim(
     label = 'spawn'
 ): (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => Record<string, unknown> {
     return (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
-        const cb =
-            typeof cbOrOptions === 'function'
-                ? (cbOrOptions as (...args: unknown[]) => unknown)
-                : typeof maybeCb === 'function'
-                  ? (maybeCb as (...args: unknown[]) => unknown)
-                  : undefined
+        const cb = isCallable(cbOrOptions)
+            ? cbOrOptions
+            : isCallable(maybeCb)
+              ? maybeCb
+              : undefined
         if (cb !== undefined) {
             try {
                 cb(new Error(`${label} is disabled in the sandbox`), '', '')
@@ -210,14 +210,14 @@ export function createChildProcessShims(): Record<string, unknown> {
             error: new Error('spawnSync is disabled in the sandbox'),
         }),
         exec: (_cmd: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
-            const cb = typeof cbOrOptions === 'function' ? cbOrOptions : maybeCb
-            if (typeof cb === 'function') {
+            const cb = isCallable(cbOrOptions)
+                ? cbOrOptions
+                : isCallable(maybeCb)
+                  ? maybeCb
+                  : undefined
+            if (cb !== undefined) {
                 try {
-                    ;(cb as (...args: unknown[]) => unknown)(
-                        new Error('exec is disabled in the sandbox'),
-                        '',
-                        ''
-                    )
+                    cb(new Error('exec is disabled in the sandbox'), '', '')
                 } catch (callbackError) {
                     // Callback errors must not escape the shim; the worker has no logger, so use stderr.
                     process.stderr.write(
@@ -418,8 +418,8 @@ export function buildMemoryAndFactoryShims(
         if (name === 'append') {
             aliases[name] = (...args: unknown[]): unknown => {
                 const appendFn = shimMj['append']
-                return typeof appendFn === 'function'
-                    ? (appendFn as (...a: unknown[]) => unknown)(...args)
+                return isCallable(appendFn)
+                    ? appendFn(...args)
                     : directCreateFn(...args)
             }
         } else {

@@ -51,7 +51,7 @@ function getTableColumns(
     if (exists === undefined) {
         return null
     }
-    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    const rows = db.prepare<unknown[], { name: string }>(`PRAGMA table_info(${table})`).all()
     const cols = new Set(rows.map((row) => row.name.toLowerCase()))
     cache.set(table, cols)
     return cols

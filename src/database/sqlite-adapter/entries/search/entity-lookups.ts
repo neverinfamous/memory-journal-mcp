@@ -45,7 +45,16 @@ export function getLatestEntryPerProject(
     context: EntriesSharedContext
 ): Map<string, { id: number; timestamp: string; entryType: string }> {
     const rows = context.db
-        .prepare(
+        .prepare<
+            unknown[],
+            {
+                workspace_id: string | null
+                project_number: number
+                id: number
+                timestamp: string
+                entry_type: string
+            }
+        >(
             `SELECT workspace_id, project_number, id, timestamp, entry_type
              FROM (
                  SELECT workspace_id, project_number, id, timestamp, entry_type,
@@ -58,13 +67,7 @@ export function getLatestEntryPerProject(
              )
              WHERE rn = 1`
         )
-        .all() as {
-        workspace_id: string | null
-        project_number: number
-        id: number
-        timestamp: string
-        entry_type: string
-    }[]
+        .all()
     const map = new Map<string, { id: number; timestamp: string; entryType: string }>()
     for (const r of rows) {
         const ws = r.workspace_id ?? 'default'

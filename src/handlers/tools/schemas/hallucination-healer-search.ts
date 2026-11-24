@@ -5,6 +5,7 @@
 import { healSortByField, healIncludeArchivedField } from './hallucination-healer-fields.js'
 import { normalizeProjectFields } from './hallucination-healer-scope.js'
 import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import {
     SESSION_SUMMARY_TAG_ALIASES,
     TECHNICAL_NOTE_ALIASES,
@@ -91,8 +92,8 @@ export function unpackFilterContainers(obj: Record<string, unknown>): boolean {
         const val = obj[containerKey]
         Reflect.deleteProperty(obj, containerKey)
         modified = true
-        if (typeof val !== 'object' || val === null || Array.isArray(val)) continue
-        for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        if (!isRecord(val)) continue
+        for (const [k, v] of Object.entries(val)) {
             if (obj[k] === undefined && v !== undefined) obj[k] = v
         }
     }
@@ -202,9 +203,9 @@ function normalizeIsoDateField(obj: Record<string, unknown>, key: 'start_date' |
 
 /** Read-safe preprocessor for search schemas: normalizes search filters without synthesizing `content` or write `tags`. */
 export function healSearchPayload(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    if (!isRecord(val)) return val
 
-    const obj = { ...(val as Record<string, unknown>) }
+    const obj: Record<string, unknown> = { ...val }
     let modified = false
 
     if (unpackFilterContainers(obj)) modified = true

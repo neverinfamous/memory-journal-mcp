@@ -22,8 +22,8 @@ function ensureMigrationsTable(db: Database): void {
 /** True when a table with the given name exists in the database. */
 function tableExists(db: Database, name: string): boolean {
     const row = db
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`)
-        .get(name) as { name: string } | undefined
+        .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`)
+        .get(name)
     return row !== undefined
 }
 
@@ -94,9 +94,7 @@ function retrofitPreMigrationDb(db: Database): void {
 
         ensureMigrationsTable(db)
 
-        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
-            name: string
-        }[]
+        const tableInfo = db.prepare<unknown[], { name: string }>('PRAGMA table_info(memory_journal)').all()
         const columns = new Set(tableInfo.map((row) => row.name))
         const retrofittedVersions = detectAppliedVersions(db, columns)
 
@@ -125,9 +123,7 @@ export const MigrationManager = {
             retrofitPreMigrationDb(db)
             ensureMigrationsTable(db)
 
-            const rows = db.prepare('SELECT version FROM schema_migrations').all() as {
-                version: number
-            }[]
+            const rows = db.prepare<unknown[], { version: number }>('SELECT version FROM schema_migrations').all()
             const applied = new Set(rows.map((row) => row.version))
 
             for (const migration of MIGRATIONS) {

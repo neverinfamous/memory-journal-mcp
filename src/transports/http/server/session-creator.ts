@@ -41,25 +41,16 @@ function nonEmptyClaim(val: unknown): string | undefined {
 
 export function resolveRequestSubject(): string | undefined {
     const auth = getAuthContext()
-    if (auth?.authenticated === false) return undefined
-    const claims = auth?.claims as
-        | {
-              sub?: string
-              email?: string
-              email_verified?: boolean
-              client_id?: string
-              subject?: string
-              clientId?: string
-          }
-        | undefined
+    if (auth?.authenticated === false || auth?.claims === undefined) return undefined
+    const claims = auth.claims
     const verifiedEmail =
-        claims?.email_verified === true ? nonEmptyClaim(claims.email) : undefined
+        claims['email_verified'] === true ? nonEmptyClaim(claims['email']) : undefined
     return (
-        nonEmptyClaim(claims?.sub) ??
+        nonEmptyClaim(claims.sub) ??
         verifiedEmail ??
-        nonEmptyClaim(claims?.client_id) ??
-        nonEmptyClaim(claims?.subject) ??
-        nonEmptyClaim(claims?.clientId)
+        nonEmptyClaim(claims.client_id) ??
+        nonEmptyClaim(claims['subject']) ??
+        nonEmptyClaim(claims['clientId'])
     )
 }
 

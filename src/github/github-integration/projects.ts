@@ -4,6 +4,7 @@ import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import type { GitHubClient } from './client.js'
 import { groupItemsIntoColumns, type ProjectV2Data } from './kanban-columns.js'
 import type { KanbanBoard, ProjectV2StatusOption } from '../../types/index.js'
+import { isCachedKanbanBoard } from './cache-helpers.js'
 
 function toSafeGitHubError(error: unknown): string {
     const raw = error instanceof Error ? error.message : String(error)
@@ -202,7 +203,11 @@ export class ProjectsManager {
                 ? [cachedSource, ...defaultOrder.filter((s) => s !== cachedSource)]
                 : defaultOrder
 
-        for (const source of probeOrder) {
+        const probeAt = async (
+            index: number
+        ): Promise<{ project: ProjectV2Data | null; source: string }> => {
+            const source = probeOrder[index]
+            if (source === undefined) return { project: null, source: '' }
             try {
                 const project = await this.probeProjectSource(
                     source,
@@ -221,9 +226,10 @@ export class ProjectsManager {
                     module: 'GitHub',
                 })
             }
+            return probeAt(index + 1)
         }
 
-        return { project: null, source: '' }
+        return probeAt(0)
     }
 
     async getProjectKanban(
@@ -239,8 +245,8 @@ export class ProjectsManager {
 
         const cacheKey = `kanban:${owner}:${String(projectNumber)}:${repo ?? ''}`
         if (typeof this.client.getCached === 'function') {
-            const cached = this.client.getCached(cacheKey) as KanbanBoard | undefined
-            if (cached !== undefined) return cached
+            const cached = this.client.getCached(cacheKey)
+            if (isCachedKanbanBoard(cached)) return cached
         }
 
         const { project, source } = await this.fetchProjectV2FromSources(

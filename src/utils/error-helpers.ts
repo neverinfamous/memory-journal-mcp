@@ -12,6 +12,7 @@ import type { ErrorResponse } from '../types/error-types.js'
 import { matchSuggestion } from './errors/suggestions.js'
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from './security-utils.js'
 import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
+import { createNullProtoRecord, isRecord } from './type-guards.js'
 
 const MAX_ERROR_DETAILS_SCRUB_DEPTH = 6
 export const HOST_FILESYSTEM_PATH_RE =
@@ -26,30 +27,30 @@ function scrubObjectRecord(
         const jsonRes = tryResolveToJson(value)
         if (jsonRes.resolved) {
             const inner = scrubDetailsValue(jsonRes.value, depth + 1, seen)
-            if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) {
-                return inner as Record<string, unknown>
+            if (isRecord(inner)) {
+                return inner
             }
-            const wrapped: Record<string, unknown> = {}
-            Object.setPrototypeOf(wrapped, null)
+            const wrapped = createNullProtoRecord()
             wrapped['value'] = inner
             return wrapped
         }
     }
-    const out: Record<string, unknown> = {}
-    Object.setPrototypeOf(out, null)
+    const out = createNullProtoRecord()
     if (isCrossRealmError(value)) {
         out['name'] = sanitizeErrorForLogging(value.name)
         out['message'] = sanitizeErrorMessageForResponse(value.message)
     }
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') {
-            continue
+    if (isRecord(value)) {
+        for (const [k, v] of Object.entries(value)) {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') {
+                continue
+            }
+            const safeKey = sanitizeErrorForLogging(k)
+            out[safeKey] =
+                SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
+                    ? '[REDACTED]'
+                    : scrubDetailsValue(v, depth + 1, seen)
         }
-        const safeKey = sanitizeErrorForLogging(k)
-        out[safeKey] =
-            SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
-                ? '[REDACTED]'
-                : scrubDetailsValue(v, depth + 1, seen)
     }
     return out
 }

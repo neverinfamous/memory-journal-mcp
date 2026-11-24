@@ -3,6 +3,28 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { CANONICAL_SERVER_ENV_KEYS } from '../server-options-groups.js'
 import { ConfigurationError } from '../../types/errors.js'
+import { isForbiddenProjectKey } from '../../utils/project-registry-guards.js'
+import { isRecord } from '../../utils/type-guards.js'
+
+export interface StoredProjectEntry {
+    path: string
+    project_number?: number
+}
+
+/** Narrow a raw `projectRegistry` object into validated entries, dropping forbidden keys. */
+export function extractStoredProjectRegistry(raw: unknown): Record<string, StoredProjectEntry> {
+    const out: Record<string, StoredProjectEntry> = {}
+    if (!isRecord(raw)) return out
+    for (const [k, v] of Object.entries(raw)) {
+        if (isForbiddenProjectKey(k) || !isRecord(v) || typeof v['path'] !== 'string') continue
+        const entry: StoredProjectEntry = { path: v['path'] }
+        if (typeof v['project_number'] === 'number') {
+            entry.project_number = v['project_number']
+        }
+        out[k] = entry
+    }
+    return out
+}
 
 const DEFAULT_PROJECT_CONFIG_PATH = path.resolve(
     os.homedir(),

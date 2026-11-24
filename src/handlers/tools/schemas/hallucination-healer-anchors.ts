@@ -2,6 +2,8 @@
  * Anchor field healers extracted from hallucination-healer-fields.ts.
  */
 
+import { isRecord } from '../../../utils/type-guards.js'
+
 const ANCHOR_STATUS_ALIAS_MAP: Record<
     string,
     'pending' | 'valid' | 'stale' | 'invalidated' | 'unresolvable'
@@ -60,8 +62,9 @@ function normalizeAnchorContainer(obj: Record<string, unknown>): boolean {
         obj['anchors'] = [trimmed]
         modified = true
     }
-    if (typeof obj['anchors'] === 'object' && !Array.isArray(obj['anchors'])) {
-        const anchorRecord = obj['anchors'] as Record<string, unknown>
+    const rawAnchors = obj['anchors']
+    if (isRecord(rawAnchors)) {
+        const anchorRecord = rawAnchors
         const nestedArray =
             anchorRecord['files'] ??
             anchorRecord['paths'] ??
@@ -89,10 +92,10 @@ function normalizeSingleAnchorItem(
             changed: true,
         }
     }
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+    if (!isRecord(item)) {
         return { value: item, changed: false }
     }
-    const itemObj = item as Record<string, unknown>
+    const itemObj = item
     const rawPath =
         itemObj['anchor_path'] ??
         itemObj['anchorPath'] ??

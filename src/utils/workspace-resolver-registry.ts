@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import { logger } from './logger.js'
 import { readCachedConfigObject } from './registry-config-file.js'
 import { isForbiddenProjectKey } from './project-registry-guards.js'
+import { createNullProtoRecord, isRecord } from './type-guards.js'
 import {
     PROJECT_KEYWORD_ALIASES,
     findCanonicalRegistryKey,
@@ -50,14 +51,13 @@ function isValidLoadedRegistryEntry(
     if (isForbiddenProjectKey(key)) {
         return false
     }
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return false
-    const entry = val as Record<string, unknown>
-    if (entry['path'] !== undefined && typeof entry['path'] !== 'string') return false
+    if (!isRecord(val)) return false
+    if (val['path'] !== undefined && typeof val['path'] !== 'string') return false
     if (
-        entry['project_number'] !== undefined &&
-        (typeof entry['project_number'] !== 'number' ||
-            !Number.isSafeInteger(entry['project_number']) ||
-            entry['project_number'] <= 0)
+        val['project_number'] !== undefined &&
+        (typeof val['project_number'] !== 'number' ||
+            !Number.isSafeInteger(val['project_number']) ||
+            val['project_number'] <= 0)
     ) {
         return false
     }
@@ -69,12 +69,12 @@ const SANITIZED_REGISTRY_CACHE = new WeakMap<object, Record<string, ProjectRegis
 function sanitizeLoadedProjectRegistry(
     raw: unknown
 ): Record<string, ProjectRegistryEntry> | undefined {
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    if (!isRecord(raw)) {
         return undefined
     }
     const cached = SANITIZED_REGISTRY_CACHE.get(raw)
     if (cached !== undefined) return cached
-    const clean = Object.create(null) as Record<string, ProjectRegistryEntry>
+    const clean = createNullProtoRecord<ProjectRegistryEntry>()
     for (const [k, v] of Object.entries(raw)) {
         if (isValidLoadedRegistryEntry(k, v)) {
             clean[k] = v

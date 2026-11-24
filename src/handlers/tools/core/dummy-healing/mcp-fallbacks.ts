@@ -20,6 +20,7 @@ import { readResource, getResources } from '../../../resources/index.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { isDummyToolAllowedByFilter } from '../../dummy-filter-helpers.js'
 import { registerDynamicMemoryUriRoots } from '../../../../audit/audit-file-helpers.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import { handlePrompt, handleListPrompts, handleGetPrompt } from './mcp-prompt-fallbacks.js'
 import {
     DUMMY_RESOURCE_TOOL_NAMES,
@@ -119,10 +120,9 @@ export async function tryHandleResourceUriFallback(
             },
         }
     }
-    const forwardParams: Record<string, unknown> =
-        typeof params === 'object' && params !== null && !Array.isArray(params)
-            ? { ...(params as Record<string, unknown>), uri: trimmed }
-            : { uri: trimmed }
+    const forwardParams: Record<string, unknown> = isRecord(params)
+        ? { ...params, uri: trimmed }
+        : { uri: trimmed }
     return { handled: true, result: await handleReadResource(forwardParams, toolName, context) }
 }
 
@@ -131,10 +131,7 @@ export async function handleReadResource(
     toolName: string,
     context?: ToolContext
 ): Promise<unknown> {
-    const args =
-        typeof params === 'object' && params !== null && !Array.isArray(params)
-            ? (params as Record<string, unknown>)
-            : {}
+    const args = isRecord(params) ? params : {}
     let uri = extractUriFromArgs(args)
     if ((uri === undefined || uri === '') && toolName.startsWith('memory://')) {
         uri = toolName
@@ -197,8 +194,9 @@ export function handleListResources(toolName: string): unknown {
     return {
         success: true,
         resources: getResources().map((r) => {
-            const rest = { ...(r as Record<string, unknown>) }
-            delete rest['capabilities']
+            const rest: Record<string, unknown> = {}
+            Object.assign(rest, r)
+            Reflect.deleteProperty(rest, 'capabilities')
             return rest
         }),
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (resources/list). The available resources were returned successfully.`,
@@ -294,8 +292,8 @@ export async function handleServerInfo(
                 context.config?.briefingConfig,
                 context.config?.runtime
             )
-            if (typeof res.data === 'object' && res.data !== null) {
-                healthData = res.data as Record<string, unknown>
+            if (isRecord(res.data)) {
+                healthData = res.data
             }
         } catch (err: unknown) {
             if (err instanceof PermissionError || err instanceof AuthorizationError) throw err

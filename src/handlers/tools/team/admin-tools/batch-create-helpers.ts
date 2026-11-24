@@ -214,13 +214,12 @@ async function applyTeamBatchAutoLinks(
     inputs: Parameters<TeamDbInstance['createEntries']>[0],
     relationshipWarnings: string[]
 ): Promise<void> {
-    let linked = 0
-    for (let i = 0; i < results.length; i++) {
-        const createdEntry = results[i]
+    const linked = await results.reduce<Promise<number>>(async (chain, createdEntry, i) => {
+        const acc = await chain
         const sourceIdx = createdSourceIndices[i] ?? i
         const rawEntry = rawEntries[sourceIdx]
-        if (!createdEntry || rawEntry?.auto_link !== true) continue
-        linked += await applyAutoLinksForEntry({
+        if (rawEntry?.auto_link !== true) return acc
+        const count = await applyAutoLinksForEntry({
             db: teamDb,
             vectorManager: context.teamVectorManager,
             createdEntry,
@@ -232,7 +231,8 @@ async function applyTeamBatchAutoLinks(
             hasExplicitRelationships:
                 rawEntry.relationships !== undefined && rawEntry.relationships.length > 0,
         })
-    }
+        return acc + count
+    }, Promise.resolve(0))
     if (linked > 0) teamDb.flushSave()
 }
 

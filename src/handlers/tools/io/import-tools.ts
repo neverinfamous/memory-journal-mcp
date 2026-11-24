@@ -55,6 +55,56 @@ async function readSingleExternalFile(
     }
 }
 
+async function readExternalFileChunks(
+    fs: typeof FsPromises,
+    path: typeof PathModule,
+    openFlags: number,
+    assertSafeDirectoryPath: (dirPath: string, allowedRoots: string[]) => void,
+    assertSafeFilePath: (filepath: string, allowedRoots: string[]) => void,
+    pinnedInput: ReturnType<typeof ImportExternalSchema.parse>,
+    pinnedSourceDir: string,
+    allowedRoots: string[],
+    scopedRoots: string[],
+    mdFiles: string[]
+): Promise<{
+    parsedFiles: ParsedFile[]
+    errors: { file: string; error: string }[]
+    emptySkipped: number
+}> {
+    const parsedFiles: ParsedFile[] = []
+    const errors: { file: string; error: string }[] = []
+    let emptySkipped = 0
+    const READ_CONCURRENCY = 16
+    const chunks: string[][] = []
+    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        chunks.push(mdFiles.slice(i, i + READ_CONCURRENCY))
+    }
+
+    await chunks.reduce(async (prev, chunk) => {
+        await prev
+        assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
+        const outcomes = await Promise.all(
+            chunk.map((filename) =>
+                readSingleExternalFile(
+                    fs,
+                    path,
+                    openFlags,
+                    assertSafeFilePath,
+                    pinnedInput,
+                    scopedRoots,
+                    filename
+                )
+            )
+        )
+        for (const item of outcomes) {
+            if ('error' in item) errors.push({ file: item.filename, error: item.error })
+            else if ('skipped' in item) emptySkipped++
+            else parsedFiles.push(item.parsed)
+        }
+    }, Promise.resolve())
+    return { parsedFiles, errors, emptySkipped }
+}
+
 async function readAndConvertExternalFiles(
     input: ReturnType<typeof ImportExternalSchema.parse>,
     allowedRoots: string[]
@@ -94,36 +144,19 @@ async function readAndConvertExternalFiles(
     }
     allMdFiles.sort((a, b) => a.localeCompare(b))
     const mdFiles = allMdFiles.slice(0, input.limit)
-
-    const parsedFiles: ParsedFile[] = []
-    const errors: { file: string; error: string }[] = []
-    let emptySkipped = 0
-    const READ_CONCURRENCY = 16
     const openFlags = constants.O_RDONLY | constants.O_NOFOLLOW
-
-    for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
-        assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
-        const chunk = mdFiles.slice(i, i + READ_CONCURRENCY)
-        const outcomes = await Promise.all(
-            chunk.map((filename) =>
-                readSingleExternalFile(
-                    fs,
-                    path,
-                    openFlags,
-                    assertSafeFilePath,
-                    pinnedInput,
-                    scopedRoots,
-                    filename
-                )
-            )
-        )
-        for (const item of outcomes) {
-            if ('error' in item) errors.push({ file: item.filename, error: item.error })
-            else if ('skipped' in item) emptySkipped++
-            else parsedFiles.push(item.parsed)
-        }
-    }
-    return { parsedFiles, errors, emptySkipped }
+    return await readExternalFileChunks(
+        fs,
+        path,
+        openFlags,
+        assertSafeDirectoryPath,
+        assertSafeFilePath,
+        pinnedInput,
+        pinnedSourceDir,
+        allowedRoots,
+        scopedRoots,
+        mdFiles
+    )
 }
 
 async function executeImportExternal(
@@ -172,15 +205,61 @@ async function executeImportExternal(
         )
     }
     await sendProgress(progress, 3, 3, 'Import complete')
-    return result as unknown as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    return Object.assign(out, result)
+}
+
+async function executeImportMarkdown(
+    params: unknown,
+    context: ToolContext
+): Promise<unknown> {
+    const { db } = context
+    const input = ImportMarkdownSchema.parse(params)
+    const rejectedImport = wildcardWriteRejection(input.workspace_id)
+    if (rejectedImport !== undefined) return rejectedImport
+    const { wsId, effectiveProjectNum } = resolveImportScope(input, context.config)
+    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
+        throw new ValidationError('project_number must be a positive integer')
+    }
+
+    // Security fix: Use explicitly configured roots, without CWD fallback
+    const allowedRoots = context.config?.allowedIoRoots ?? []
+
+    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
+    await sendProgress(context.progress, 1, 2, 'Importing entries...')
+
+    const result = await importMarkdownEntries(
+        input.source_dir,
+        db,
+        {
+            dry_run: input.dry_run,
+            limit: input.limit,
+            ...(wsId !== undefined ? { workspaceId: wsId } : {}),
+            ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
+            ...(context.config !== undefined ? { config: context.config } : {}),
+        },
+        context.vectorManager,
+        allowedRoots
+    )
+
+    if (!result.success && result.errors.length > 0) {
+        const successCount = result.created + result.updated + result.skipped
+        const total = successCount + result.errors.length
+        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+
+        throw new AggregateMcpError(
+            message,
+            result.errors.map((e) => ({ message: e.error, file: e.file })),
+            { result }
+        )
+    }
+
+    await sendProgress(context.progress, 2, 2, 'Import complete')
+    return result
 }
 
 export function getIoImportTools(context: ToolContext): ToolDefinition[] {
-    const { db } = context
     return [
-        // ==================================================================
-        // import_markdown
-        // ==================================================================
         {
             name: 'import_markdown',
             title: 'Import from Markdown Files',
@@ -200,59 +279,12 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = ImportMarkdownSchema.parse(params)
-                    const rejectedImport = wildcardWriteRejection(input.workspace_id)
-                    if (rejectedImport !== undefined) return rejectedImport
-                    const { wsId, effectiveProjectNum } = resolveImportScope(input, context.config)
-                    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
-                        throw new ValidationError('project_number must be a positive integer')
-                    }
-
-                    // Determine allowed roots
-                    // Security fix: Use explicitly configured roots, without CWD fallback
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-
-                    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
-
-                    await sendProgress(context.progress, 1, 2, 'Importing entries...')
-
-                    const result = await importMarkdownEntries(
-                        input.source_dir,
-                        db,
-                        {
-                            dry_run: input.dry_run,
-                            limit: input.limit,
-                            ...(wsId !== undefined ? { workspaceId: wsId } : {}),
-                            ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
-                            ...(context.config !== undefined ? { config: context.config } : {}),
-                        },
-                        context.vectorManager,
-                        allowedRoots
-                    )
-
-                    if (!result.success && result.errors.length > 0) {
-                        const successCount = result.created + result.updated + result.skipped
-                        const total = successCount + result.errors.length
-                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
-
-                        throw new AggregateMcpError(
-                            message,
-                            result.errors.map(e => ({ message: e.error, file: e.file })),
-                            { result }
-                        )
-                    }
-
-                    await sendProgress(context.progress, 2, 2, 'Import complete')
-                    return result
+                    return await executeImportMarkdown(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
             },
         },
-
-        // ==================================================================
-        // import_external
-        // ==================================================================
         {
             name: 'import_external',
             title: 'Import from External Tools',

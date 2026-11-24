@@ -157,22 +157,21 @@ export async function readResource(
     }
 
     // Check for template matches (also use base URI)
-    for (const resource of templates) {
-        if (getTemplateRegex(resource.uri).test(baseUri)) {
-            // Authorization Hook: Enforce scope if auth context exists
-            enforceAccessBoundary(
-                baseUri,
-                'resource',
-                resource.capabilities,
-                runtime?.auditLogger
-            )
+    const templateMatch = templates.find((resource) => getTemplateRegex(resource.uri).test(baseUri))
+    if (templateMatch !== undefined) {
+        // Authorization Hook: Enforce scope if auth context exists
+        enforceAccessBoundary(
+            baseUri,
+            'resource',
+            templateMatch.capabilities,
+            runtime?.auditLogger
+        )
 
-            const result = await Promise.resolve(resource.handler(uri, context))
-            if (isResourceResult(result)) {
-                return { data: result.data, annotations: result.annotations }
-            }
-            return { data: result }
+        const result = await Promise.resolve(templateMatch.handler(uri, context))
+        if (isResourceResult(result)) {
+            return { data: result.data, annotations: result.annotations }
         }
+        return { data: result }
     }
 
     throw new ResourceNotFoundError('Resource', uri)

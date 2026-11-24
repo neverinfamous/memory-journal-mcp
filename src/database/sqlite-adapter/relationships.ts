@@ -41,13 +41,11 @@ export class RelationshipsManager {
         const scopeId = workspaceId === undefined ? undefined : effectiveWorkspace(workspaceId)
         const scoped = scopeId !== undefined && scopeId !== '*'
         const performInsert = (): number => {
-            const wsStmt = db.prepare(
+            const wsStmt = db.prepare<unknown[], { workspace_id: string }>(
                 `SELECT workspace_id FROM memory_journal WHERE id = ? AND deleted_at IS NULL${scoped ? ' AND workspace_id = ?' : ''}`
             )
             const getWs = (entryId: number): { workspace_id: string } | undefined =>
-                (scoped ? wsStmt.get(entryId, scopeId) : wsStmt.get(entryId)) as
-                    | { workspace_id: string }
-                    | undefined
+                scoped ? wsStmt.get(entryId, scopeId) : wsStmt.get(entryId)
             const fromRow = getWs(fromEntryId)
             if (!fromRow) {
                 throw new ResourceNotFoundError('Entry', String(fromEntryId))
@@ -64,7 +62,7 @@ export class RelationshipsManager {
                 )
                 .run(fromEntryId, toEntryId, relationshipType, description ?? null)
 
-            return result.lastInsertRowid as number
+            return Number(result.lastInsertRowid)
         }
         const id =
             typeof db.transaction === 'function'
@@ -95,7 +93,7 @@ export class RelationshipsManager {
             : 'mf.deleted_at IS NULL AND mt.deleted_at IS NULL'
         const buildParams = (first: unknown[]): unknown[] => (scoped ? [...first, scopeId, scopeId] : first)
         const rows = this.db
-            .prepare(
+            .prepare<unknown[], Relationship>(
                 `SELECT r.id, r.from_entry_id as fromEntryId, r.to_entry_id as toEntryId,
                         r.relationship_type as relationshipType, r.description, r.created_at as createdAt
                  FROM relationships r
@@ -110,14 +108,7 @@ export class RelationshipsManager {
                  CROSS JOIN memory_journal mt ON mt.id = r.to_entry_id
                  WHERE r.to_entry_id = ? AND r.from_entry_id != ? AND ${peerFilter}`
             )
-            .all(...buildParams([entryId]), ...buildParams([entryId, entryId])) as {
-            id: number
-            fromEntryId: number
-            toEntryId: number
-            relationshipType: RelationshipType
-            description: string | null
-            createdAt: string
-        }[]
+            .all(...buildParams([entryId]), ...buildParams([entryId, entryId]))
 
         return rows
     }
@@ -157,15 +148,8 @@ export class RelationshipsManager {
                            AND mf.deleted_at IS NULL AND mt.deleted_at IS NULL${wsFilter}`
             const wsParams = scoped ? [scopeId, scopeId] : []
             const rows = this.db
-                .prepare(sql)
-                .all(...params, ...wsParams, ...params, ...wsParams) as {
-                id: number
-                fromEntryId: number
-                toEntryId: number
-                relationshipType: RelationshipType
-                description: string | null
-                createdAt: string
-            }[]
+                .prepare<unknown[], Relationship>(sql)
+                .all(...params, ...wsParams, ...params, ...wsParams)
 
             for (const row of rows) {
                 if (seenRelIds.has(row.id)) continue
@@ -225,7 +209,7 @@ export class RelationshipsManager {
             ? [scopeId, scopeId, scopeId, scopeId, scopeId, limit]
             : [limit]
         const rows = this.db
-            .prepare(
+            .prepare<unknown[], { entry_id: number; total_links: number; content: string }>(
                 `SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
                  FROM (
                      ${linkFrom}
@@ -238,7 +222,7 @@ export class RelationshipsManager {
                  ORDER BY total_links DESC, counts.entry_id DESC
                  LIMIT ?`
             )
-            .all(...params) as { entry_id: number; total_links: number; content: string }[]
+            .all(...params)
 
         return rows.map((row) => ({
             entryId: row.entry_id,
@@ -259,7 +243,7 @@ export class RelationshipsManager {
         const params: unknown[] = scoped ? [scopeId, scopeId, scopeId] : []
 
         const row = this.db
-            .prepare(
+            .prepare<unknown[], { orphan_count: unknown }>(
                 `SELECT COUNT(*) as orphan_count
                  FROM memory_journal e
                  WHERE e.deleted_at IS NULL${filter}
@@ -274,7 +258,7 @@ export class RelationshipsManager {
                        WHERE r.to_entry_id = e.id AND r.from_entry_id != r.to_entry_id AND p.deleted_at IS NULL${peerFilter}
                    )`
             )
-            .get(...params) as { orphan_count: unknown } | undefined
+            .get(...params)
 
         return typeof row?.orphan_count === 'number' ? row.orphan_count : 0
     }

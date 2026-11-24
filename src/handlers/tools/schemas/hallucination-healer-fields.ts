@@ -13,6 +13,11 @@ import {
     pickRecordField,
     safeString,
 } from './entry-constants.js'
+import { isRecord } from '../../../utils/type-guards.js'
+
+function isUnknownArray(val: unknown): val is unknown[] {
+    return Array.isArray(val)
+}
 
 /** Fold title/heading/subject/name aliases into the content as a markdown heading. */
 function healTitleField(obj: Record<string, unknown>): boolean {
@@ -54,7 +59,7 @@ function repairSingleQuotedJson(raw: string): string | undefined {
     }
     try {
         const fixed = raw.replace(/'/g, '"')
-        const parsed = JSON.parse(fixed) as Record<string, unknown>
+        const parsed: unknown = JSON.parse(fixed)
         return JSON.stringify(parsed)
     } catch (err) {
         logNormalizerDebug('Could not repair single-quoted auto_context JSON', {
@@ -70,8 +75,8 @@ function isEmptyAutoContextJson(rawStr: string): boolean {
     if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return false
     try {
         const parsed: unknown = JSON.parse(trimmed)
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false
-        const rec = parsed as Record<string, unknown>
+        if (!isRecord(parsed)) return false
+        const rec = parsed
         const keys = Object.keys(rec)
         if (keys.length === 0) return true
         if (keys.length === 1 && keys[0] === 'commits') {
@@ -89,8 +94,9 @@ function healAutoContextField(obj: Record<string, unknown>): boolean {
     if (!('auto_context' in obj)) return false
     let modified = false
 
-    if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null && !Array.isArray(obj['auto_context'])) {
-        obj['auto_context'] = { ...(obj['auto_context'] as Record<string, unknown>) }
+    const rawAutoContext = obj['auto_context']
+    if (isRecord(rawAutoContext)) {
+        obj['auto_context'] = { ...rawAutoContext }
         healAutoContext(obj)
         try {
             obj['auto_context'] = JSON.stringify(obj['auto_context'])
@@ -223,8 +229,8 @@ function readRelationshipItem(
             }
         }
     }
-    if (typeof item !== 'object' || item === null) return { relType: canonicalType }
-    const itemObj = item as Record<string, unknown>
+    if (!isRecord(item)) return { relType: canonicalType }
+    const itemObj = item
     const rawId = pickRecordField(itemObj, RELATIONSHIP_TARGET_KEYS)
     let targetId: number | undefined
     if (typeof rawId === 'number' && Number.isSafeInteger(rawId) && rawId > 0) targetId = rawId
@@ -248,12 +254,12 @@ function pushUniqueRelationship(
     targetId: number,
     relType: string
 ): void {
-    if (!Array.isArray(obj['relationships'])) obj['relationships'] = []
-    const relList = obj['relationships'] as Record<string, unknown>[]
+    const existing = obj['relationships']
+    const relList: unknown[] = isUnknownArray(existing) ? existing : []
+    if (!isUnknownArray(existing)) obj['relationships'] = relList
     const alreadyExists = relList.some(
         (r) =>
-            typeof r === 'object' &&
-            r !== null &&
+            isRecord(r) &&
             RELATIONSHIP_TARGET_KEYS.some((k) => r[k] === targetId) &&
             RELATIONSHIP_TYPE_KEYS.some((k) => r[k] === relType)
     )

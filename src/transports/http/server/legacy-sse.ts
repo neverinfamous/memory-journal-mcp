@@ -1,4 +1,11 @@
-import type { Transport, JSONRPCMessage } from '@modelcontextprotocol/server'
+import {
+    isJSONRPCErrorResponse,
+    isJSONRPCNotification,
+    isJSONRPCRequest,
+    isJSONRPCResultResponse,
+    type JSONRPCMessage,
+    type Transport,
+} from '@modelcontextprotocol/server'
 import { randomUUID } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { logger } from '../../../utils/logger.js'
@@ -125,20 +132,19 @@ export class LegacySSEServerTransport implements Transport {
             return
         }
 
-        const body = req.body as unknown
+        const body: unknown = req.body
         if (
-            body === undefined ||
-            body === null ||
-            typeof body !== 'object' ||
-            Array.isArray(body) ||
-            typeof Reflect.get(body, 'jsonrpc') !== 'string'
+            !isJSONRPCRequest(body) &&
+            !isJSONRPCNotification(body) &&
+            !isJSONRPCResultResponse(body) &&
+            !isJSONRPCErrorResponse(body)
         ) {
             res.status(400).json({ error: 'Invalid JSON body' })
             return
         }
 
         if (this.onmessage) {
-            this.onmessage(req.body as JSONRPCMessage)
+            this.onmessage(body)
         }
         
         // Legacy POST /messages must respond with 202 Accepted

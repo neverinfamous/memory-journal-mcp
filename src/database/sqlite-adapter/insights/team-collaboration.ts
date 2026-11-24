@@ -47,10 +47,10 @@ export function getAuthorStatistics(
              ) resolved
              GROUP BY resolved.author
              ORDER BY count DESC, resolved.author ASC`
-        return connection.getNativeDb().prepare(sql).all(...params) as {
-            author: string
-            count: number
-        }[]
+        return connection
+            .getNativeDb()
+            .prepare<unknown[], { author: string; count: number }>(sql)
+            .all(...params)
     } catch (error: unknown) {
         if (!isMissingSchemaError(error)) {
             throw error
@@ -75,12 +75,12 @@ export function getAuthorsForEntries(
     try {
         for (const { placeholders, params } of bucketInParams(entryIds)) {
             const rows = db
-                .prepare(
+                .prepare<unknown[], { id: number; author: string | null }>(
                     `SELECT mj.id as id, ${authorExpr} as author
                      FROM memory_journal mj
                      WHERE mj.id IN (${placeholders})`
                 )
-                .all(...params) as { id: number; author: string | null }[]
+                .all(...params)
             for (const row of rows) {
                 authorMap.set(row.id, row.author)
             }
@@ -153,11 +153,10 @@ function queryAuthorActivityAndTotals(
         GROUP BY author, raw.period
         ORDER BY raw.period DESC, entryCount DESC, author ASC`
 
-    const rows = connection.getNativeDb().prepare(sql).all(...clause.params) as {
-        author: string
-        period: string
-        entryCount: number
-    }[]
+    const rows = connection
+        .getNativeDb()
+        .prepare<unknown[], { author: string; period: string; entryCount: number }>(sql)
+        .all(...clause.params)
     const distinctAuthors = new Set<string>()
     let totalEntries = 0
     for (const row of rows) {
@@ -199,11 +198,10 @@ function queryRelationshipMetrics(
         GROUP BY fromAuthor, toAuthor
         ORDER BY linkCount DESC, fromAuthor ASC, toAuthor ASC`
 
-    const rows = connection.getNativeDb().prepare(sql).all(...c1.params, ...c2.params) as {
-        fromAuthor: string
-        toAuthor: string
-        linkCount: number
-    }[]
+    const rows = connection
+        .getNativeDb()
+        .prepare<unknown[], { fromAuthor: string; toAuthor: string; linkCount: number }>(sql)
+        .all(...c1.params, ...c2.params)
 
     const crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[] = []
     const inboundTotals = new Map<string, number>()

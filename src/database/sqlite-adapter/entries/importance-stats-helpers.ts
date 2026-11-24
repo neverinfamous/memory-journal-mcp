@@ -39,11 +39,9 @@ function loadRelStatsChunk(
         )
         GROUP BY entry_id
     `
-    const rows = db.prepare(sql).all(...bucket, ...bucket) as {
-        entry_id: number
-        rel_count: number
-        causal_count: number
-    }[]
+    const rows = db
+        .prepare<unknown[], { entry_id: number; rel_count: number; causal_count: number }>(sql)
+        .all(...bucket, ...bucket)
     for (const row of rows) {
         const d = relData.get(row.entry_id)
         if (d) {
@@ -65,10 +63,9 @@ function loadAnchorStatsChunk(
         FROM entry_anchors WHERE entry_id IN (${marks})
         GROUP BY entry_id
     `
-    const anchorRows = db.prepare(anchorSql).all(...bucket) as {
-        entry_id: number
-        worst_status_rank: number
-    }[]
+    const anchorRows = db
+        .prepare<unknown[], { entry_id: number; worst_status_rank: number }>(anchorSql)
+        .all(...bucket)
     for (const row of anchorRows) {
         const d = relData.get(row.entry_id)
         if (d) {

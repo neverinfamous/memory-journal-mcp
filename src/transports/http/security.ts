@@ -7,6 +7,7 @@
 import type { Request, Response } from 'express'
 import { createHash } from 'node:crypto'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import type { HttpTransportConfig, RateLimitEntry } from './types.js'
 import {
     DEFAULT_RATE_LIMIT_WINDOW_MS,
@@ -231,7 +232,7 @@ function getCachedCorsPolicy(config: HttpTransportConfig): CachedCorsPolicy {
         corsOrigins = corsOrigins.filter((o) => o !== '*')
     }
     const isWildcard = corsOrigins.includes('*')
-    const whitelist = Object.create(null) as Record<string, true>
+    const whitelist = createNullProtoRecord<true>()
     if (!isWildcard) {
         for (const allowed of corsOrigins) {
             whitelist[allowed] = true

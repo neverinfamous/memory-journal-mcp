@@ -33,23 +33,34 @@ function createUnconfiguredTestVectorError(): ConfigurationError {
     )
 }
 
+function isCallable(value: unknown): value is (...args: unknown[]) => unknown {
+    return typeof value === 'function'
+}
+
 export const VectorSearchManagerProxy = {
     create(primary: VectorSearchManager, testManager?: VectorSearchManager): VectorSearchManager {
         const boundMethodCache = new WeakMap<
             object,
-            Map<PropertyKey, { raw: unknown; bound: unknown }>
+            Map<
+                PropertyKey,
+                { raw: (...args: unknown[]) => unknown; bound: (...args: unknown[]) => unknown }
+            >
         >()
-        const getBoundMethod = (targetObj: object, prop: PropertyKey, fn: unknown): unknown => {
+        const getBoundMethod = (
+            targetObj: object,
+            prop: PropertyKey,
+            fn: (...args: unknown[]) => unknown
+        ): ((...args: unknown[]) => unknown) => {
             let perTarget = boundMethodCache.get(targetObj)
             if (perTarget === undefined) {
                 perTarget = new Map()
                 boundMethodCache.set(targetObj, perTarget)
             }
             const cached = perTarget.get(prop)
-            if (cached !== undefined && cached.raw === fn) {
+            if (cached?.raw === fn) {
                 return cached.bound
             }
-            const bound = (fn as (...args: unknown[]) => unknown).bind(targetObj)
+            const bound = fn.bind(targetObj)
             perTarget.set(prop, { raw: fn, bound })
             return bound
         }
@@ -63,7 +74,7 @@ export const VectorSearchManagerProxy = {
                     }
                     if (typeof prop === 'symbol' || PASSTHROUGH_META_PROPS.has(prop)) {
                         const metaValue = Reflect.get(target, prop, target) as unknown
-                        if (typeof metaValue === 'function') {
+                        if (isCallable(metaValue)) {
                             return getBoundMethod(target, prop, metaValue)
                         }
                         return metaValue
@@ -83,7 +94,7 @@ export const VectorSearchManagerProxy = {
                 const activeTarget =
                     context?.useTestDb === true && testManager !== undefined ? testManager : target
                 const value = Reflect.get(activeTarget, prop, activeTarget) as unknown
-                if (typeof value === 'function') {
+                if (isCallable(value)) {
                     return getBoundMethod(activeTarget, prop, value)
                 }
                 return value

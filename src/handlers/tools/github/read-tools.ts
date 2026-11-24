@@ -169,6 +169,111 @@ const GetGitHubPrInputSchema = z.object({
 // Tool Definitions
 // ============================================================================
 
+async function executeGetGitHubIssues(context: ToolContext, params: unknown): Promise<unknown> {
+    try {
+        const input = GetGitHubListInputSchema.parse(params)
+        const resolved = await resolveOwnerRepo(context, input, 'would you like to query')
+        if ('error' in resolved) return resolved.response
+
+        const issues = await resolved.github.getIssues(
+            resolved.owner,
+            resolved.repo,
+            input.state,
+            input.limit
+        )
+        const safeIssues = issues.map((issue) => ({
+            ...fenceIssueMilestone(issue),
+            title: ensureInlineFenced(issue.title),
+        }))
+        return {
+            owner: resolved.owner,
+            repo: resolved.repo,
+            detectedOwner: resolved.detectedOwner,
+            detectedRepo: resolved.detectedRepo,
+            issues: safeIssues,
+            count: safeIssues.length,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+async function executeGetGitHubPrs(context: ToolContext, params: unknown): Promise<unknown> {
+    try {
+        const input = GetGitHubListInputSchema.parse(params)
+        const resolved = await resolveOwnerRepo(context, input, 'would you like to query')
+        if ('error' in resolved) return resolved.response
+
+        const pullRequests = await resolved.github.getPullRequests(
+            resolved.owner,
+            resolved.repo,
+            input.state,
+            input.limit
+        )
+        const safePrs = pullRequests.map(fenceGitHubPullRequestSummary)
+        return {
+            owner: resolved.owner,
+            repo: resolved.repo,
+            detectedOwner: resolved.detectedOwner,
+            detectedRepo: resolved.detectedRepo,
+            pullRequests: safePrs,
+            count: safePrs.length,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+async function executeGetGitHubPr(context: ToolContext, params: unknown): Promise<unknown> {
+    try {
+        const input = GetGitHubPrInputSchema.parse(params)
+        const resolved = await resolveOwnerRepo(context, input, 'is this PR from')
+        if ('error' in resolved) return resolved.response
+
+        const pullRequest = await resolved.github.getPullRequest(
+            resolved.owner,
+            resolved.repo,
+            input.pr_number
+        )
+        if (!pullRequest) {
+            return {
+                success: false,
+                error: `PR #${String(input.pr_number)} not found`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                suggestion: 'Verify the PR number exists in this repository.',
+                recoverable: true,
+                owner: resolved.owner,
+                repo: resolved.repo,
+                detectedOwner: resolved.detectedOwner,
+                detectedRepo: resolved.detectedRepo,
+            }
+        }
+
+        // Clone PR and truncate BEFORE fencing to avoid slicing inside wrapper tags
+        const safePr = fenceGitHubPullRequestDetails(pullRequest)
+        const { body, bodyTruncated, bodyFullLength } = truncateItemBody(
+            safePr.body,
+            input.truncate_body
+        )
+        safePr.body = ensureBlockFenced(body)
+
+        return {
+            pullRequest: {
+                ...safePr,
+                bodyTruncated,
+                ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
+            },
+            owner: resolved.owner,
+            repo: resolved.repo,
+            detectedOwner: resolved.detectedOwner,
+            detectedRepo: resolved.detectedRepo,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
 export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -185,39 +290,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            handler: async (params: unknown) => {
-                try {
-                    const input = GetGitHubListInputSchema.parse(params)
-
-                    const resolved = await resolveOwnerRepo(
-                        context,
-                        input,
-                        'would you like to query'
-                    )
-                    if ('error' in resolved) return resolved.response
-
-                    const issues = await resolved.github.getIssues(
-                        resolved.owner,
-                        resolved.repo,
-                        input.state,
-                        input.limit
-                    )
-                    const safeIssues = issues.map((issue) => ({
-                        ...fenceIssueMilestone(issue),
-                        title: ensureInlineFenced(issue.title),
-                    }))
-                    return {
-                        owner: resolved.owner,
-                        repo: resolved.repo,
-                        detectedOwner: resolved.detectedOwner,
-                        detectedRepo: resolved.detectedRepo,
-                        issues: safeIssues,
-                        count: safeIssues.length,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeGetGitHubIssues(context, params),
         },
         {
             name: 'get_github_prs',
@@ -233,36 +306,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            handler: async (params: unknown) => {
-                try {
-                    const input = GetGitHubListInputSchema.parse(params)
-
-                    const resolved = await resolveOwnerRepo(
-                        context,
-                        input,
-                        'would you like to query'
-                    )
-                    if ('error' in resolved) return resolved.response
-
-                    const pullRequests = await resolved.github.getPullRequests(
-                        resolved.owner,
-                        resolved.repo,
-                        input.state,
-                        input.limit
-                    )
-                    const safePrs = pullRequests.map(fenceGitHubPullRequestSummary)
-                    return {
-                        owner: resolved.owner,
-                        repo: resolved.repo,
-                        detectedOwner: resolved.detectedOwner,
-                        detectedRepo: resolved.detectedRepo,
-                        pullRequests: safePrs,
-                        count: safePrs.length,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeGetGitHubPrs(context, params),
         },
         {
             name: 'get_github_issue',
@@ -278,7 +322,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            handler: async (params: unknown) => executeGetGitHubIssue(context, params),
+            handler: (params: unknown) => executeGetGitHubIssue(context, params),
         },
         {
             name: 'get_github_pr',
@@ -294,56 +338,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            handler: async (params: unknown) => {
-                try {
-                    const input = GetGitHubPrInputSchema.parse(params)
-
-                    const resolved = await resolveOwnerRepo(context, input, 'is this PR from')
-                    if ('error' in resolved) return resolved.response
-
-                    const pullRequest = await resolved.github.getPullRequest(
-                        resolved.owner,
-                        resolved.repo,
-                        input.pr_number
-                    )
-                    if (!pullRequest) {
-                        return {
-                            success: false,
-                            error: `PR #${String(input.pr_number)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the PR number exists in this repository.',
-                            recoverable: true,
-                            owner: resolved.owner,
-                            repo: resolved.repo,
-                            detectedOwner: resolved.detectedOwner,
-                            detectedRepo: resolved.detectedRepo,
-                        }
-                    }
-
-                    // Clone PR and truncate BEFORE fencing to avoid slicing inside wrapper tags
-                    const safePr = fenceGitHubPullRequestDetails(pullRequest)
-                    const { body, bodyTruncated, bodyFullLength } = truncateItemBody(
-                        safePr.body,
-                        input.truncate_body
-                    )
-                    safePr.body = ensureBlockFenced(body)
-
-                    return {
-                        pullRequest: {
-                            ...safePr,
-                            bodyTruncated,
-                            ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
-                        },
-                        owner: resolved.owner,
-                        repo: resolved.repo,
-                        detectedOwner: resolved.detectedOwner,
-                        detectedRepo: resolved.detectedRepo,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeGetGitHubPr(context, params),
         },
         createGitHubContextTool(context),
     ]

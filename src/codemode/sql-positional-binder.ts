@@ -52,6 +52,11 @@ const CLAUSE_ID_LITERAL =
     /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)$/i
 const NAMED_PLACEHOLDER_RE = /^[@:$][A-Za-z_][\w]*$/
 
+function readAssignedProjectNumber(val: unknown): number | null | undefined {
+    if (val === null || typeof val === 'number') return val
+    return undefined
+}
+
 interface PlaceholderBindResult {
     ok: boolean
     bindIndex: SqlRecordBindIndex
@@ -167,13 +172,14 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
             : typeof whereLiteralScope['workspace_id'] === 'string'
               ? whereLiteralScope['workspace_id']
               : undefined
+    const rawWhereProj = readAssignedProjectNumber(where['project_number'])
     const whereProj =
-        where['project_number'] !== undefined
-            ? (where['project_number'] as number | null)
+        rawWhereProj !== undefined
+            ? rawWhereProj
             : typeof whereLiteralScope['project_number'] === 'number'
               ? whereLiteralScope['project_number']
               : undefined
-    const setProj = setFields['project_number'] as number | null | undefined
+    const setProj = readAssignedProjectNumber(setFields['project_number'])
     if (setProj !== undefined && whereProj !== undefined && Number(setProj) !== whereProj) {
         return UNMAPPED
     }
@@ -257,6 +263,7 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
         return UNMAPPED
     }
     const literalScope = scopeFromInsertLiterals(cleanSql)
+    const payloadProj = readAssignedProjectNumber(payload['project_number'])
     const lockedScope: SqlLockedScope = {
         workspaceId:
             typeof payload['workspace_id'] === 'string'
@@ -265,8 +272,8 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
                   ? literalScope['workspace_id']
                   : undefined,
         projectNumber:
-            payload['project_number'] !== undefined
-                ? (payload['project_number'] as number | null)
+            payloadProj !== undefined
+                ? payloadProj
                 : typeof literalScope['project_number'] === 'number'
                   ? literalScope['project_number']
                   : undefined,
@@ -306,6 +313,7 @@ function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'g
     })
     if (!bindRes.ok) return UNMAPPED
     const literalScope = scopeFromSqlLiterals(whereClause)
+    const payloadProj = readAssignedProjectNumber(payload['project_number'])
     const lockedScope: SqlLockedScope = {
         workspaceId:
             typeof payload['workspace_id'] === 'string'
@@ -314,8 +322,8 @@ function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'g
                   ? literalScope['workspace_id']
                   : undefined,
         projectNumber:
-            payload['project_number'] !== undefined
-                ? (payload['project_number'] as number | null)
+            payloadProj !== undefined
+                ? payloadProj
                 : typeof literalScope['project_number'] === 'number'
                   ? literalScope['project_number']
                   : undefined,

@@ -21,10 +21,10 @@ import { isSafeUserRegex, searchDirectoryAsync, searchSingleFileAsync } from './
 import { listBoundedDirectoryEntries, readSafeViewFile } from './fs-view-helpers.js'
 import { ValidationError } from '../../../../types/errors.js'
 import { logger } from '../../../../utils/logger.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 
 function normalizeStrippedArgs(params: unknown): Record<string, unknown> {
-    const raw =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
+    const raw = isRecord(params) ? params : {}
     const rawArgs: Record<string, unknown> = { ...raw }
     for (const [k, v] of Object.entries(raw)) {
         const stripped = k.replace(/^_+/, '')
@@ -137,12 +137,11 @@ async function tryJournalSearchFallback(
             ...(projArg !== undefined ? { project_number: projArg } : {}),
         }
         const searchResult = await Promise.resolve(searchTool.handler(searchPayload))
-        if (typeof searchResult !== 'object' || searchResult === null) return undefined
-        const searchRecord = searchResult as Record<string, unknown>
-        if (searchRecord['success'] === false) return searchResult
+        if (!isRecord(searchResult)) return undefined
+        if (searchResult['success'] === false) return searchResult
         return {
             success: true,
-            ...searchRecord,
+            ...searchResult,
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked as an MCP tool without a local directory path. It was automatically routed to journal 'search_entries' and executed successfully.`,
         }
     } catch (err) {

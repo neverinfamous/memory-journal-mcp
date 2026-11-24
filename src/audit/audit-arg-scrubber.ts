@@ -1,4 +1,7 @@
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { createNullProtoRecord, isRecord } from '../utils/type-guards.js'
+import { logger } from '../utils/logger.js'
+import { estimateTokens, safeJsonStringify } from '../observability/token-estimator.js'
 import {
     isCrossRealmDate,
     isCrossRealmError,
@@ -19,19 +22,14 @@ function scrubAndTruncateAuditString(raw: string, maxChars: number): string {
         : clean
 }
 
-function isRecordObject(val: unknown): val is Record<string, unknown> {
-    return typeof val === 'object' && val !== null
-}
-
 function scrubAuditObject(
     val: object,
     depth: number,
     seen: WeakSet<object>,
     budget: { count: number }
 ): Record<string, unknown> {
-    const entries = isRecordObject(val) ? Object.entries(val) : []
-    const out: Record<string, unknown> = {}
-    Object.setPrototypeOf(out, null)
+    const entries = isRecord(val) ? Object.entries(val) : []
+    const out = createNullProtoRecord()
     const limit = Math.min(entries.length, MAX_AUDIT_OBJECT_KEYS)
     for (let i = 0; i < limit; i++) {
         const pair = entries[i]
@@ -58,8 +56,7 @@ function scrubAuditMap(
     seen: WeakSet<object>,
     budget: { count: number }
 ): Record<string, unknown> {
-    const entries: Record<string, unknown> = {}
-    Object.setPrototypeOf(entries, null)
+    const entries = createNullProtoRecord()
     let count = 0
     for (const [mk, mv] of val.entries()) {
         if (count++ >= MAX_AUDIT_OBJECT_KEYS || budget.count >= MAX_AUDIT_TOTAL_NODES) {
@@ -134,11 +131,10 @@ export function scrubAuditArgs(args: unknown): Record<string, unknown> | undefin
         const jsonRes = tryResolveToJson(args)
         if (jsonRes.resolved) {
             const resolved = scrubAuditArgValue(jsonRes.value, 1, seen, budget)
-            if (typeof resolved === 'object' && resolved !== null && !Array.isArray(resolved)) {
-                return resolved as Record<string, unknown>
+            if (isRecord(resolved)) {
+                return resolved
             }
-            const wrapped: Record<string, unknown> = {}
-            Object.setPrototypeOf(wrapped, null)
+            const wrapped = createNullProtoRecord()
             wrapped['value'] = resolved
             return wrapped
         }
@@ -146,4 +142,55 @@ export function scrubAuditArgs(args: unknown): Record<string, unknown> | undefin
     } finally {
         seen.delete(args)
     }
+}
+
+function extractRecordText(val: unknown): string | undefined {
+    return isRecord(val) && typeof val['text'] === 'string' ? val['text'] : undefined
+}
+
+function estimateEnvelopeTextTokens(result: unknown): number | undefined {
+    if (!isRecord(result)) return undefined
+    const contents = result['contents']
+    if (Array.isArray(contents)) {
+        let total = 0
+        for (const item of contents) {
+            const itemVal: unknown = item
+            const text = extractRecordText(itemVal)
+            if (text === undefined) return undefined
+            total += estimateTokens(text, 'json')
+        }
+        return total
+    }
+    const messages = result['messages']
+    if (Array.isArray(messages)) {
+        let total = 0
+        for (const msg of messages) {
+            const msgVal: unknown = msg
+            const content = isRecord(msgVal) ? msgVal['content'] : undefined
+            const text = extractRecordText(content)
+            if (text === undefined) return undefined
+            total += estimateTokens(text, 'prose')
+        }
+        return total
+    }
+    return undefined
+}
+
+/** Estimate token count for resource/prompt operation audit records, avoiding full JSON stringification on envelopes. */
+export function estimateOperationResultTokens(result: unknown, name: string): number | undefined {
+    if (typeof result === 'object' && result !== null) {
+        const fastTokens = estimateEnvelopeTextTokens(result)
+        if (fastTokens !== undefined) return fastTokens
+        try {
+            return estimateTokens(safeJsonStringify(result), 'json')
+        } catch (serializeError) {
+            logger.debug('Token estimate skipped: result is not serializable', {
+                module: 'Audit',
+                tool: name,
+                error: serializeError instanceof Error ? serializeError.message : String(serializeError),
+            })
+            return undefined
+        }
+    }
+    return typeof result === 'string' ? estimateTokens(result, 'prose') : undefined
 }

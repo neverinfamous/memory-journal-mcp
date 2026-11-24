@@ -294,12 +294,22 @@ export function getImportanceScoresByIds(
 
     for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
-            .prepare(
+            .prepare<
+                unknown[],
+                {
+                    id: number
+                    significanceType: string | null
+                    impactScore: number | null
+                    trustScore: number | null
+                    validationStatus: string | null
+                    timestamp: string
+                }
+            >(
                 `SELECT id, significance_type as significanceType, impact_score as impactScore, trust_score as trustScore, validation_status as validationStatus, timestamp
                  FROM memory_journal
                  WHERE deleted_at IS NULL${wsClause} AND id IN (${placeholders})`
             )
-            .all(...wsParams, ...params) as typeof scalarRows
+            .all(...wsParams, ...params)
         for (const r of rows) scalarRows.push(r)
     }
     if (scalarRows.length === 0) return result

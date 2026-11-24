@@ -15,9 +15,10 @@ export const Migration022AddAutoContextIndex: Migration = {
             .get()
         if (exists === undefined) return
         const cols = new Set(
-            (db.prepare(`PRAGMA table_info(memory_journal)`).all() as { name: string }[]).map((r) =>
-                r.name.toLowerCase()
-            )
+            db
+                .prepare<unknown[], { name: string }>(`PRAGMA table_info(memory_journal)`)
+                .all()
+                .map((r) => r.name.toLowerCase())
         )
         if (!cols.has('workspace_id') || !cols.has('auto_context') || !cols.has('deleted_at')) {
             return

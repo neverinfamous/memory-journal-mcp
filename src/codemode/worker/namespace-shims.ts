@@ -3,25 +3,24 @@
  * delegating tool wrappers, and `context` proxy fallbacks.
  */
 
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { wrapResult } from '../worker-result-proxy.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from '../api/schema-help.js'
 import {
     deepFreezeContextClone,
     IMMUTABLE_PROXY_TRAPS,
+    isCallable,
     READONLY_MUTATION_TRAPS,
 } from './result-proxy-aliases.js'
 
-export const DB_TO_JOURNAL: Record<string, [string, string]> = Object.assign(
-    Object.create(null) as Record<string, [string, string]>,
-    {
-        count: ['analytics', 'getStatistics'],
-        analyze: ['analytics', 'getStatistics'],
-        exists: ['core', 'getEntryById'],
-        upsert: ['core', 'createEntry'],
-        batchInsert: ['core', 'createEntry'],
-        readQuery: ['core', 'readQuery'],
-    }
-)
+export const DB_TO_JOURNAL: Record<string, [string, string]> = createNullProtoRecord<[string, string]>({
+    count: ['analytics', 'getStatistics'],
+    analyze: ['analytics', 'getStatistics'],
+    exists: ['core', 'getEntryById'],
+    upsert: ['core', 'createEntry'],
+    batchInsert: ['core', 'createEntry'],
+    readQuery: ['core', 'readQuery'],
+})
 
 const DB_MAINTENANCE_CALLS = new Set(['vacuum', 'integrityCheck'])
 const SCHEMA_OPS_NOT_RUN = new Set(['listTables', 'describeTable'])
@@ -119,15 +118,15 @@ export function createUpdateMemoryFn(
                 (isTargetLike(coreGroup)
                     ? (Reflect.get(coreGroup, 'updateEntry') as unknown)
                     : undefined)
-            if (typeof fn === 'function') {
-                return (fn as (...a: unknown[]) => unknown)(...args)
+            if (isCallable(fn)) {
+                return fn(...args)
             }
         }
         const coreGroup = shimMj['core']
         if (isTargetLike(coreGroup)) {
             const createFn = Reflect.get(coreGroup, 'createEntry') as unknown
-            if (typeof createFn === 'function') {
-                return (createFn as (...a: unknown[]) => unknown)(...args)
+            if (isCallable(createFn)) {
+                return createFn(...args)
             }
         }
         return undefined
@@ -154,8 +153,8 @@ export function createUpdateMemoryFn(
                 const createEntry = Reflect.get(coreGroup, 'createEntry') as unknown
                 if (isTargetLike(createEntry) && 'schema' in createEntry) {
                     const schemaFn: unknown = Reflect.get(createEntry, 'schema')
-                    if (typeof schemaFn === 'function') {
-                        return (schemaFn as () => Promise<unknown>)()
+                    if (isCallable(schemaFn)) {
+                        return Promise.resolve(schemaFn())
                     }
                 }
             }
@@ -220,8 +219,8 @@ export function createSchemaShim(shimMj: Record<string, unknown>): object {
                     const createEntry = Reflect.get(coreGroup, 'createEntry') as unknown
                     if (isTargetLike(createEntry) && 'schema' in createEntry) {
                         const schemaFn: unknown = Reflect.get(createEntry, 'schema')
-                        if (typeof schemaFn === 'function') {
-                            return (schemaFn as () => Promise<unknown>)()
+                        if (isCallable(schemaFn)) {
+                            return schemaFn()
                         }
                     }
                 }
@@ -394,7 +393,7 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
 export function createContextProxy(contextObj?: Record<string, unknown>): Record<string, unknown> {
     const target =
         contextObj !== undefined
-            ? (deepFreezeContextClone(contextObj) as Record<string, unknown>)
+            ? deepFreezeContextClone(contextObj)
             : Object.freeze({})
     return new Proxy(target, {
         get: (t, prop): unknown => resolveContextProxyProp(t, prop),

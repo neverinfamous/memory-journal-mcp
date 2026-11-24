@@ -23,8 +23,15 @@ export const ALWAYS_ENABLED_TOOLS = ['update_configuration', 'mj_execute_code'] 
 
 const ALL_TOOL_NAMES: readonly string[] = Object.values(TOOL_GROUPS).flat()
 const TOOL_TO_GROUP = new Map<string, ToolGroup>()
-for (const [group, tools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
-    for (const t of tools) {
+
+/** Type guard checking if `name` is a canonical `ToolGroup` key. */
+export function isToolGroup(name: string): name is ToolGroup {
+    return Object.hasOwn(TOOL_GROUPS, name)
+}
+
+for (const group of Object.keys(TOOL_GROUPS)) {
+    if (!isToolGroup(group)) continue
+    for (const t of TOOL_GROUPS[group]) {
         TOOL_TO_GROUP.set(t, group)
     }
 }
@@ -49,8 +56,9 @@ export function getToolGroup(toolName: string): ToolGroup | undefined {
  */
 export function getEnabledGroups(enabledTools: Set<string>): Set<ToolGroup> {
     const groups = new Set<ToolGroup>()
-    for (const [group, tools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
-        if (tools.some((t) => enabledTools.has(t))) {
+    for (const group of Object.keys(TOOL_GROUPS)) {
+        if (!isToolGroup(group)) continue
+        if (TOOL_GROUPS[group].some((t) => enabledTools.has(t))) {
             groups.add(group)
         }
     }
@@ -64,10 +72,11 @@ export function getEnabledGroups(enabledTools: Set<string>): Set<ToolGroup> {
 const GROUP_ALIASES: Record<string, ToolGroup> = { export: 'io' }
 
 /**
- * Resolve a group name, applying legacy aliases.
+ * Resolve a group name, applying legacy aliases, or return `undefined` if unknown.
  */
-function resolveGroupAlias(name: string): string {
-    return Object.hasOwn(GROUP_ALIASES, name) ? (GROUP_ALIASES[name] ?? name) : name
+function resolveToolGroup(name: string): ToolGroup | undefined {
+    const aliased = Object.hasOwn(GROUP_ALIASES, name) ? (GROUP_ALIASES[name] ?? name) : name
+    return isToolGroup(aliased) ? aliased : undefined
 }
 
 /**
@@ -78,7 +87,7 @@ function resolveGroupAlias(name: string): string {
  * themselves members of the ToolGroup union, making a type predicate unsound.
  */
 function isGroup(name: string): boolean {
-    return Object.hasOwn(TOOL_GROUPS, resolveGroupAlias(name))
+    return resolveToolGroup(name) !== undefined
 }
 
 /**
@@ -111,9 +120,9 @@ function applyInclude(enabledTools: Set<string>, name: string): Set<string> {
         }
         return expanded
     }
-    if (isGroup(name)) {
-        const resolved = resolveGroupAlias(name) as ToolGroup
-        return new Set([...enabledTools, ...TOOL_GROUPS[resolved]])
+    const resolvedGroup = resolveToolGroup(name)
+    if (resolvedGroup !== undefined) {
+        return new Set([...enabledTools, ...TOOL_GROUPS[resolvedGroup]])
     }
     if (!getAllToolNames().includes(name)) {
         logger.warning(`Tool filter references unknown tool or group '${name}'`, {
@@ -137,13 +146,15 @@ function applyExclude(enabledTools: Set<string>, name: string): void {
                 enabledTools.delete(tool)
             }
         }
-    } else if (isGroup(name)) {
-        const resolved = resolveGroupAlias(name) as ToolGroup
-        for (const tool of TOOL_GROUPS[resolved]) {
-            enabledTools.delete(tool)
-        }
     } else {
-        enabledTools.delete(name)
+        const resolvedGroup = resolveToolGroup(name)
+        if (resolvedGroup !== undefined) {
+            for (const tool of TOOL_GROUPS[resolvedGroup]) {
+                enabledTools.delete(tool)
+            }
+        } else {
+            enabledTools.delete(name)
+        }
     }
 }
 

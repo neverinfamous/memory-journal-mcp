@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import {
     ENTRY_TYPES,
     SOURCE_FORMATS,
@@ -11,27 +12,51 @@ import {
     StrictProjectNumberSchema,
 } from '../schemas.js'
 
+const DIR_ALIAS_KEYS = ['path', 'filepath', 'target_dir', 'dir'] as const
+
+function preprocessExportEntries(val: unknown): unknown {
+    if (!isRecord(val)) return val
+    if (val['type'] !== undefined && val['format'] === undefined) {
+        const obj: Record<string, unknown> = { ...val, format: val['type'] }
+        delete obj['type']
+        return obj
+    }
+    return val
+}
+
+function preprocessDirAlias(
+    val: unknown,
+    dirKey: 'output_dir' | 'source_dir',
+    remapSourceFormat = false
+): unknown {
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
+    let modified = false
+    if (obj[dirKey] === undefined) {
+        for (const key of DIR_ALIAS_KEYS) {
+            if (obj[key] !== undefined) {
+                obj[dirKey] = obj[key]
+                Reflect.deleteProperty(obj, key)
+                modified = true
+                break
+            }
+        }
+    }
+    if (remapSourceFormat && obj['source'] !== undefined && obj['source_format'] === undefined) {
+        obj['source_format'] = obj['source']
+        delete obj['source']
+        modified = true
+    }
+    return modified ? obj : val
+}
+
 // ============================================================================
 // Export Entries Schemas
 // ============================================================================
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const ExportEntriesSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['type'] !== undefined && obj['format'] === undefined) {
-                obj['format'] = obj['type'];
-                delete obj['type'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    preprocessExportEntries,
     z.object({
 
     format: z.enum(['json', 'markdown']).optional().default('json'),
@@ -51,21 +76,7 @@ export const ExportEntriesSchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 export const ExportEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['type'] !== undefined && obj['format'] === undefined) {
-                obj['format'] = obj['type'];
-                delete obj['type'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    preprocessExportEntries,
     z.object({
 
     format: z.string().optional().default('json').describe('Export format (json or markdown). Anti-Hallucination Hint: Do NOT use type, use format.'),
@@ -103,26 +114,7 @@ export const ExportEntriesOutputSchema = z
 
 /** Strict schema — handler validation */
 export const ExportMarkdownSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['output_dir'] === undefined) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (obj[key] !== undefined) {
-                        obj['output_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'output_dir'),
     z.object({
 
     output_dir: z.string().min(1),
@@ -138,26 +130,7 @@ export const ExportMarkdownSchema = z.preprocess(
 
 /** Relaxed schema — MCP registration */
 export const ExportMarkdownSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['output_dir'] === undefined) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (obj[key] !== undefined) {
-                        obj['output_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'output_dir'),
     z.object({
 
     output_dir: z.string().optional().describe('Target directory for .md files. Anti-Hallucination Hint: Do NOT use path or filepath, use output_dir.'),
@@ -190,26 +163,7 @@ export const ExportMarkdownOutputSchema = z
 
 /** Strict schema — handler validation */
 export const ImportMarkdownSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['source_dir'] === undefined) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (obj[key] !== undefined) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir'),
     z.object({
 
     source_dir: z.string().min(1),
@@ -222,26 +176,7 @@ export const ImportMarkdownSchema = z.preprocess(
 
 /** Relaxed schema — MCP registration */
 export const ImportMarkdownSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['source_dir'] === undefined) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (obj[key] !== undefined) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir'),
     z.object({
 
     source_dir: z.string().optional().describe('Directory containing .md files to import. Anti-Hallucination Hint: Do NOT use path or filepath, use source_dir.'),
@@ -285,31 +220,7 @@ export const ImportMarkdownOutputSchema = z
 
 /** Strict schema — handler validation */
 export const ImportExternalSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['source_dir'] === undefined) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (obj[key] !== undefined) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-            if (obj['source'] !== undefined && obj['source_format'] === undefined) {
-                obj['source_format'] = obj['source'];
-                delete obj['source'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir', true),
     z.object({
 
     source_dir: z.string().min(1),
@@ -324,31 +235,7 @@ export const ImportExternalSchema = z.preprocess(
 
 /** Relaxed schema — MCP registration */
 export const ImportExternalSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (obj['source_dir'] === undefined) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (obj[key] !== undefined) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-            if (obj['source'] !== undefined && obj['source_format'] === undefined) {
-                obj['source_format'] = obj['source'];
-                delete obj['source'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir', true),
     z.object({
 
     source_dir: z.string().optional().describe('Directory containing files to import. Anti-Hallucination Hint: Do NOT use path or filepath, use source_dir.'),

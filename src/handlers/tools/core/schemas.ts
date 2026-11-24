@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { healSortByField, healIncludeArchivedField } from '../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
@@ -105,8 +106,8 @@ export const CreateEntrySchema = z.preprocess(
         }
         if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
             try {
-                const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
-                const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
+                const ac: unknown = JSON.parse(data.auto_context || '{}');
+                const commits = isRecord(ac) ? ac['commits'] : undefined;
                 if (!Array.isArray(commits) || commits.length === 0) {
                     ctx.addIssue({
                         code: "custom",
@@ -223,8 +224,8 @@ export const CreateEntryOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 function preprocessGetEntryById(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = { ...(val as Record<string, unknown>) }
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
     let modified = false
     if (typeof obj['source'] === 'string') {
         const normalizedSource = obj['source'].trim().toLowerCase()
@@ -279,8 +280,8 @@ export const EntryByIdOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 function preprocessSortByOnly(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = { ...(val as Record<string, unknown>) }
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
     let modified = false
     if (healSortByField(obj)) modified = true
     if (healIncludeArchivedField(obj)) modified = true

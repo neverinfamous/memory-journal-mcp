@@ -73,22 +73,31 @@ async function fetchCommitsBatched(
         // One or more hashes may be missing; fall back to bounded per-commit lookups
     }
     const fetched: RawGitCommit[] = []
+    const chunks: string[][] = []
     for (let i = 0; i < validHashes.length; i += ENRICH_CONCURRENCY) {
-        const chunk = validHashes.slice(i, i + ENRICH_CONCURRENCY)
-        const settled = await Promise.allSettled(chunk.map((hash) => git.log(['-1', hash, '--'])))
-        for (let j = 0; j < settled.length; j++) {
-            const outcome = settled[j]
-            if (outcome?.status === 'fulfilled' && outcome.value.latest) {
-                fetched.push(outcome.value.latest)
-            } else if (outcome?.status === 'rejected') {
-                logger.warning('Skipping commit enrichment for a single commit', {
-                    module: 'CommitEnricher',
-                    hash: chunk[j],
-                    error: String(outcome.reason),
-                })
-            }
-        }
+        chunks.push(validHashes.slice(i, i + ENRICH_CONCURRENCY))
     }
+    await chunks.reduce<Promise<void>>(
+        (chain, chunk) =>
+            chain.then(async () => {
+                const settled = await Promise.allSettled(
+                    chunk.map((hash) => git.log(['-1', hash, '--']))
+                )
+                for (let j = 0; j < settled.length; j++) {
+                    const outcome = settled[j]
+                    if (outcome?.status === 'fulfilled' && outcome.value.latest) {
+                        fetched.push(outcome.value.latest)
+                    } else if (outcome?.status === 'rejected') {
+                        logger.warning('Skipping commit enrichment for a single commit', {
+                            module: 'CommitEnricher',
+                            hash: chunk[j],
+                            error: String(outcome.reason),
+                        })
+                    }
+                }
+            }),
+        Promise.resolve()
+    )
     return fetched
 }
 
@@ -123,13 +132,22 @@ export async function enrichCommits(
     const validHashes = commitHashes.filter((hash) => /^[0-9a-fA-F]{7,40}$/.test(hash))
     const rawCommits = await fetchCommitsBatched(validHashes, git)
     const refCache = new Map<string, Promise<ResolvedReference[]>>()
+    const commitChunks: RawGitCommit[][] = []
     for (let i = 0; i < rawCommits.length; i += ENRICH_CONCURRENCY) {
-        const chunk = rawCommits.slice(i, i + ENRICH_CONCURRENCY)
-        const outcomes = await Promise.all(
-            chunk.map((commit) => resolveCommitRefs(commit, github, defaultOwner, defaultRepo, refCache))
-        )
-        enriched.push(...outcomes)
+        commitChunks.push(rawCommits.slice(i, i + ENRICH_CONCURRENCY))
     }
+    await commitChunks.reduce<Promise<void>>(
+        (chain, chunk) =>
+            chain.then(async () => {
+                const outcomes = await Promise.all(
+                    chunk.map((commit) =>
+                        resolveCommitRefs(commit, github, defaultOwner, defaultRepo, refCache)
+                    )
+                )
+                enriched.push(...outcomes)
+            }),
+        Promise.resolve()
+    )
 
     return enriched
 }

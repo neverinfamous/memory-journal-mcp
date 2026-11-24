@@ -24,7 +24,7 @@ export interface Migration {
  * Helper to add a column idempotently.
  */
 export function addColumnIfNotExists(db: Database, table: string, columnDef: string, columnName: string): void {
-    const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    const tableInfo = db.prepare<unknown[], { name: string }>(`PRAGMA table_info(${table})`).all()
     if (!tableInfo.some((c) => c.name.toLowerCase() === columnName.toLowerCase())) {
         db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`)
     }

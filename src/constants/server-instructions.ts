@@ -7,7 +7,7 @@
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { getEnabledGroups } from '../filtering/tool-filter.js'
+import { getEnabledGroups, isToolGroup } from '../filtering/tool-filter.js'
 import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 import { sliceUntrustedInline } from '../handlers/resources/uri-and-fencing.js'
 import { extractPreview } from '../handlers/resources/core/briefing/preview-helpers.js'
@@ -52,15 +52,25 @@ export interface LatestEntrySnapshot {
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team", "codemode"];
+const HELP_GROUP_KEYS: readonly ToolGroup[] = [
+    'core',
+    'search',
+    'analytics',
+    'relationships',
+    'io',
+    'admin',
+    'github',
+    'git',
+    'backup',
+    'team',
+    'codemode',
+]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
  */
 function buildHelpPointers(groups: Set<ToolGroup>): string {
-    const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => {
-        return groups.has(k as ToolGroup)
-    })
+    const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => groups.has(k))
     if (enabledHelpGroups.length === 0) {
         return (
             '\n\nRead `memory://help/gotchas` for gotchas and critical usage patterns.\n' +
@@ -79,8 +89,9 @@ function buildHelpPointers(groups: Set<ToolGroup>): string {
 function buildActiveGroupsSummary(enabledTools: Set<string>): string {
     const activeGroups: { group: ToolGroup; tools: string[] }[] = []
 
-    for (const [group, allTools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
-        const enabledInGroup = allTools.filter((tool) => enabledTools.has(tool))
+    for (const group of Object.keys(TOOL_GROUPS)) {
+        if (!isToolGroup(group)) continue
+        const enabledInGroup = TOOL_GROUPS[group].filter((tool) => enabledTools.has(tool))
         if (enabledInGroup.length > 0) {
             activeGroups.push({ group, tools: enabledInGroup })
         }

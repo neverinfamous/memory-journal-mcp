@@ -72,10 +72,10 @@ export interface SafeFsShim {
 }
 
 export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsShim {
-    const hasContextContent =
-        contextObj !== undefined && typeof contextObj['content'] === 'string'
     const readContent = (): string =>
-        hasContextContent ? (contextObj['content'] as string) : ''
+        contextObj !== undefined && typeof contextObj['content'] === 'string'
+            ? contextObj['content']
+            : ''
     const buildStats = (): {
         size: number
         isFile: () => boolean

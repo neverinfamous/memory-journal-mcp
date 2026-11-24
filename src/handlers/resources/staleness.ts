@@ -14,6 +14,7 @@ import {
 } from './shared.js'
 import { extractPreview } from './core/briefing/preview-helpers.js'
 import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
@@ -244,9 +245,9 @@ function handleProjectStalenessResource(uri: string, context: ResourceContext): 
             projectNumber,
             workspaceId: resolvedWorkspace,
         })
-        const tagsBreakdown = Object.create(null) as Record<string, number>
+        const tagsBreakdown = createNullProtoRecord<number>()
         for (const tag of facets.tags) tagsBreakdown[fenceNonCanonicalRefOrKey(tag.name)] = tag.count
-        const typeBreakdown = Object.create(null) as Record<string, number>
+        const typeBreakdown = createNullProtoRecord<number>()
         for (const type of facets.entryTypes) {
             typeBreakdown[fenceNonCanonicalRefOrKey(type.name)] = type.count
         }

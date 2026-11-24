@@ -29,7 +29,7 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
     // Set log level early using the same parser as buildServerOptions so whitespace/blank
     // handling matches --dump-config (errors are recorded once by buildServerOptions).
     try {
-        const earlyLogLevel = parseLogLevelOption(resolver.resolve<unknown>('logLevel', 'LOG_LEVEL'))
+        const earlyLogLevel = parseLogLevelOption(resolver.resolve('logLevel', 'LOG_LEVEL'))
         if (options.dumpConfig !== true) {
             logger.setLevel(earlyLogLevel ?? 'info')
         }

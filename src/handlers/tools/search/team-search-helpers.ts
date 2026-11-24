@@ -5,7 +5,12 @@
  * without introducing circular value imports.
  */
 
-import type { JournalEntry, ToolHandlerConfig } from '../../../types/index.js'
+import { ENTRY_TYPES, type EntryType, type JournalEntry, type ToolHandlerConfig } from '../../../types/index.js'
+
+export function toEntryType(raw: string | undefined): EntryType | undefined {
+    if (raw === undefined) return undefined
+    return ENTRY_TYPES.find((t) => t === raw)
+}
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import { logger } from '../../../utils/logger.js'
@@ -245,6 +250,7 @@ function appendTeamFtsFallback(
     limit: number,
     pushEntry: (entry: JournalEntry, similarity?: number) => void
 ): void {
+    const entryType = toEntryType(options.entryType)
     const fts = teamDb.searchEntries(query, {
         limit,
         ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
@@ -254,9 +260,7 @@ function appendTeamFtsFallback(
         ...(options.workflowRunId !== undefined ? { workflowRunId: options.workflowRunId } : {}),
         ...(options.tags !== undefined ? { tags: options.tags } : {}),
         ...(options.excludeTags !== undefined ? { excludeTags: options.excludeTags } : {}),
-        ...(options.entryType !== undefined
-            ? { entryType: options.entryType as JournalEntry['entryType'] }
-            : {}),
+        ...(entryType !== undefined ? { entryType } : {}),
         ...(options.startDate !== undefined ? { startDate: options.startDate } : {}),
         ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),
         ...(options.includeArchived !== undefined ? { includeArchived: options.includeArchived } : {}),

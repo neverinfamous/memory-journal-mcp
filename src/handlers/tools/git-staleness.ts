@@ -248,6 +248,38 @@ async function runAnchorChunkSettled(
     )
 }
 
+async function runAnchorChunksSequentially(
+    db: IDatabaseAdapter,
+    anchorJobs: readonly { anchor: { id?: number; anchorPath: string; status: AnchorStatus }; entryTimestamp: string }[],
+    registryPath: string,
+    cachedCountCommits: (anchorPath: string, since: string) => Promise<number>,
+    wsId: string,
+    precomputedRealRoot: string,
+    pendingUpdates: { anchorId: number; status: AnchorStatus }[]
+): Promise<StalenessCheckRow[]> {
+    const STALENESS_CONCURRENCY = 8
+    const chunks: (typeof anchorJobs)[] = []
+    for (let i = 0; i < anchorJobs.length; i += STALENESS_CONCURRENCY) {
+        chunks.push(anchorJobs.slice(i, i + STALENESS_CONCURRENCY))
+    }
+    const rows: StalenessCheckRow[] = []
+    await chunks.reduce(async (prev, chunk) => {
+        await prev
+        rows.push(
+            ...(await runAnchorChunkSettled(
+                db,
+                chunk,
+                registryPath,
+                cachedCountCommits,
+                wsId,
+                precomputedRealRoot,
+                pendingUpdates
+            ))
+        )
+    }, Promise.resolve())
+    return rows
+}
+
 /** Evaluate all anchors in a single workspace and report whether it was skipped for missing a path. */
 export async function evaluateWorkspaceAnchors(options: {
     db: IDatabaseAdapter
@@ -307,12 +339,16 @@ export async function evaluateWorkspaceAnchors(options: {
         }
         return pending
     }
-    const rows: StalenessCheckRow[] = []
     const pendingUpdates: { anchorId: number; status: AnchorStatus }[] = []
-    const STALENESS_CONCURRENCY = 8
-    for (let i = 0; i < anchorJobs.length; i += STALENESS_CONCURRENCY) {
-        rows.push(...(await runAnchorChunkSettled(db, anchorJobs.slice(i, i + STALENESS_CONCURRENCY), registryPath, cachedCountCommits, wsId, precomputedRealRoot, pendingUpdates)))
-    }
+    const rows = await runAnchorChunksSequentially(
+        db,
+        anchorJobs,
+        registryPath,
+        cachedCountCommits,
+        wsId,
+        precomputedRealRoot,
+        pendingUpdates
+    )
     if (pendingUpdates.length > 0) {
         const flushUpdates = (): void => {
             for (const u of pendingUpdates) db.updateAnchorStatus(u.anchorId, u.status, wsId)

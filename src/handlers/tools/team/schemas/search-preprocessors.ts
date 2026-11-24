@@ -7,6 +7,7 @@
 import { healSortByField, healIncludeArchivedField } from '../../schemas/hallucination-healer-fields.js'
 import { healSearchPayload } from '../../schemas.js'
 import { parseCanonicalPositiveInt } from '../../../../utils/safe-positive-int.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 
 const TEAM_SEARCH_QUERY_ALIASES = ['q', 'text', 'message', 'description', 'content'] as const
 const TEAM_SEMANTIC_QUERY_ALIASES = ['q', 'text', 'message', 'description'] as const
@@ -103,8 +104,8 @@ function coerceLinkEndpointId(val: unknown): unknown {
 
 /** Preprocessor for TeamLinkEntriesSchema & TeamLinkEntriesSchemaMcp: normalizes aliases while preserving unknown keys for .strict(). */
 export function preprocessTeamLinkEntries(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const normalized: Record<string, unknown> = { ...(val as Record<string, unknown>) }
+    if (!isRecord(val)) return val
+    const normalized: Record<string, unknown> = { ...val }
     const fromId =
         normalized['from_entry_id'] ??
         normalized['from_id'] ??
@@ -133,8 +134,8 @@ export function preprocessTeamLinkEntries(val: unknown): unknown {
 
 /** Preprocessor for TeamVisualizeRelationshipsSchema: coerces and clamps `limit` (1-500) while preserving unknown keys for `.strict()`. */
 export function preprocessTeamVisualizeRelationships(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = val as Record<string, unknown>
+    if (!isRecord(val)) return val
+    const obj = val
     const rawLimit = obj['limit']
     if (rawLimit === undefined) return val
 

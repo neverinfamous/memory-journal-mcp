@@ -2,6 +2,8 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { JournalEntry } from '../../types/index.js'
 import type { SemanticSearchResult } from './types.js'
 import { logger } from '../../utils/logger.js'
+import { isRecord } from '../../utils/type-guards.js'
+import { asNumberArrayLike, isCallable } from './model-cache.js'
 
 export interface VectorCandidate {
     entryId: number
@@ -61,6 +63,37 @@ async function embedSingleSettled(
     }
 }
 
+export async function embedTextsSequentiallySettled(
+    texts: readonly string[],
+    startIndex: number,
+    fallbackSingle: (text: string) => Promise<Float32Array>,
+    results: PromiseSettledResult<Float32Array>[] = []
+): Promise<PromiseSettledResult<Float32Array>[]> {
+    if (startIndex >= texts.length) return results
+    const text = texts[startIndex]
+    if (text !== undefined) {
+        results.push(await embedSingleSettled(text, fallbackSingle))
+    }
+    return embedTextsSequentiallySettled(texts, startIndex + 1, fallbackSingle, results)
+}
+
+function extractBatchTensorOutput(rawOut: unknown): {
+    data?: ArrayLike<number>
+    dims?: number[]
+} {
+    if (!isRecord(rawOut)) return {}
+    const data = asNumberArrayLike(rawOut['data'])
+    const rawDims = rawOut['dims']
+    const dims =
+        Array.isArray(rawDims) && rawDims.every((d): d is number => typeof d === 'number')
+            ? rawDims
+            : undefined
+    return {
+        ...(data !== undefined ? { data } : {}),
+        ...(dims !== undefined ? { dims } : {}),
+    }
+}
+
 /** Batch-extract per-entry settled embeddings from a pipeline function using 2D [N, D] tensor batching when available. */
 export async function runPipelineBatchEmbeddingsSettled(
     pipeline: unknown,
@@ -69,15 +102,14 @@ export async function runPipelineBatchEmbeddingsSettled(
     fallbackSingle: (text: string) => Promise<Float32Array>
 ): Promise<PromiseSettledResult<Float32Array>[]> {
     if (texts.length === 0) return []
-    if (texts.length > 1 && typeof pipeline === 'function') {
-        const pipeFn = pipeline as (
-            inputs: string[],
-            options: unknown
-        ) => Promise<{ data?: ArrayLike<number>; dims?: number[] }>
+    if (texts.length > 1 && isCallable(pipeline)) {
         const results: PromiseSettledResult<Float32Array>[] = []
         let startIndex = 0
         try {
-            const batchOut = await pipeFn([...texts], { pooling: 'mean', normalize: true })
+            const rawOut: unknown = await Promise.resolve(
+                pipeline([...texts], { pooling: 'mean', normalize: true })
+            )
+            const batchOut = extractBatchTensorOutput(rawOut)
             const vectors = sliceBatchTensor(batchOut, texts.length, dimensions)
             if (vectors !== undefined) {
                 return vectors.map((value) => ({ status: 'fulfilled', value }))
@@ -92,17 +124,9 @@ export async function runPipelineBatchEmbeddingsSettled(
                 error: reason instanceof Error ? reason.message : String(reason),
             })
         }
-        for (let i = startIndex; i < texts.length; i++) {
-            const text = texts[i]
-            if (text !== undefined) results.push(await embedSingleSettled(text, fallbackSingle))
-        }
-        return results
+        return embedTextsSequentiallySettled(texts, startIndex, fallbackSingle, results)
     }
-    const results: PromiseSettledResult<Float32Array>[] = []
-    for (const text of texts) {
-        results.push(await embedSingleSettled(text, fallbackSingle))
-    }
-    return results
+    return embedTextsSequentiallySettled(texts, 0, fallbackSingle)
 }
 
 /**

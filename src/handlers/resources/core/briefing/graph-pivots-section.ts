@@ -15,6 +15,7 @@
 import { isoDaysAgo } from '../../../../database/sqlite-adapter/graph-pivots.js'
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { logger } from '../../../../utils/logger.js'
+import { createNullProtoRecord } from '../../../../utils/type-guards.js'
 import { sliceUntrustedInline } from '../../fencing-helpers.js'
 import type { ResourceContext } from '../../shared.js'
 import { extractPreview } from './preview-helpers.js'
@@ -98,16 +99,16 @@ function safeLoadDegrees(
     ws: string
 ): { degrees: Record<number, number>; ok: boolean } {
     if (typeof db.getRelationshipDegrees !== 'function') {
-        return { degrees: Object.create(null) as Record<number, number>, ok: false }
+        return { degrees: createNullProtoRecord<number>(), ok: false }
     }
     try {
         const degreeMap = db.getRelationshipDegrees(entryIds, ws)
-        const degrees = Object.create(null) as Record<number, number>
+        const degrees = createNullProtoRecord<number>()
         for (const [id, degree] of degreeMap) degrees[id] = degree
         return { degrees, ok: true }
     } catch (error) {
         logPivotSubqueryError('graph-pivots-degrees', error)
-        return { degrees: Object.create(null) as Record<number, number>, ok: false }
+        return { degrees: createNullProtoRecord<number>(), ok: false }
     }
 }
 
@@ -116,7 +117,7 @@ function safeLoadCommitRefs(
     commitHashes: readonly string[],
     ws: string
 ): Record<string, number> {
-    const commitRefs = Object.create(null) as Record<string, number>
+    const commitRefs = createNullProtoRecord<number>()
     if (commitHashes.length === 0 || typeof db.getEntryIdsByCommitShas !== 'function') {
         return commitRefs
     }

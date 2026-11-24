@@ -192,9 +192,10 @@ export async function readMarkdownFilesParallel<T>(
     let skipped = 0
     const errors: { file: string; error: string }[] = []
     const CONCURRENCY = 16
-    for (let i = 0; i < filenames.length; i += CONCURRENCY) {
-        beforeChunk?.(i)
-        const chunk = filenames.slice(i, i + CONCURRENCY)
+    const readChunkAt = async (index: number): Promise<void> => {
+        if (index >= filenames.length) return
+        beforeChunk?.(index)
+        const chunk = filenames.slice(index, index + CONCURRENCY)
         const outcomes = await Promise.all(
             chunk.map(async (filename) => {
                 try {
@@ -207,7 +208,7 @@ export async function readMarkdownFilesParallel<T>(
                 }
             })
         )
-        afterChunk?.(i)
+        afterChunk?.(index)
         for (const item of outcomes) {
             if ('error' in item && item.error !== undefined) {
                 errors.push({ file: item.filename, error: item.error })
@@ -217,7 +218,9 @@ export async function readMarkdownFilesParallel<T>(
                 parsedFiles.push(item.outcome.parsed)
             }
         }
+        return readChunkAt(index + CONCURRENCY)
     }
+    await readChunkAt(0)
     return { parsedFiles, skipped, errors }
 }
 
@@ -275,48 +278,55 @@ export async function indexImportedEntries(
     }
 
     let hasVectorErrors = false
-    for (const { item, entry } of resolvedEntries) {
-        try {
-            if (entry) {
-                await vectorManager.addEntry(entry)
-                result.vectorsIndexed++
-            }
-        } catch (err) {
-            hasVectorErrors = true
-            result.errors.push({
-                file: item.filename,
-                error: err instanceof Error ? err.message : String(err),
-            })
-        }
-    }
+    await resolvedEntries.reduce<Promise<void>>(
+        (chain, { item, entry }) =>
+            chain.then(async () => {
+                if (!entry) return
+                try {
+                    await vectorManager.addEntry(entry)
+                    result.vectorsIndexed++
+                } catch (err) {
+                    hasVectorErrors = true
+                    result.errors.push({
+                        file: item.filename,
+                        error: err instanceof Error ? err.message : String(err),
+                    })
+                }
+            }),
+        Promise.resolve()
+    )
     if (hasVectorErrors) {
         result.success = false
     }
 }
 
-const VALID_ENTRY_TYPES = new Set<string>(ENTRY_TYPES)
-const VALID_SIGNIFICANCE_TYPES = new Set<string>(SIGNIFICANCE_TYPES)
+const ENTRY_TYPE_MAP = new Map<string, EntryType>(ENTRY_TYPES.map((t) => [t, t]))
+const SIGNIFICANCE_TYPE_MAP = new Map<string, NonNullable<SignificanceType>>(
+    SIGNIFICANCE_TYPES.map((t) => [t, t])
+)
 
 function toEntryType(value: string | undefined): EntryType | undefined {
     if (value === undefined) return undefined
-    if (!VALID_ENTRY_TYPES.has(value)) {
+    const matched = ENTRY_TYPE_MAP.get(value)
+    if (matched === undefined) {
         throw new ValidationError(
-            `Invalid entry type: ${value}. Must be one of: ${Array.from(VALID_ENTRY_TYPES).join(', ')}`
+            `Invalid entry type: ${value}. Must be one of: ${ENTRY_TYPES.join(', ')}`
         )
     }
-    return value as EntryType
+    return matched
 }
 
 function toSignificanceType(value: string | undefined): SignificanceType | undefined {
     if (value === undefined) return undefined
     const normalized = normalizeSignificanceValue(value)
     if (normalized === undefined) return undefined
-    if (!VALID_SIGNIFICANCE_TYPES.has(normalized)) {
+    const matched = SIGNIFICANCE_TYPE_MAP.get(normalized)
+    if (matched === undefined) {
         throw new ValidationError(
-            `Invalid significance type: ${value}. Must be one of: ${Array.from(VALID_SIGNIFICANCE_TYPES).join(', ')}`
+            `Invalid significance type: ${value}. Must be one of: ${SIGNIFICANCE_TYPES.join(', ')}`
         )
     }
-    return normalized as SignificanceType
+    return matched
 }
 
 function validateImportTimestamp(timestamp: string | undefined): void {

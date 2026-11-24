@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import { coerceIntString, relaxedNumber } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 
 function preprocessSearchAuditLog(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
-    const obj = { ...(val as Record<string, unknown>) }
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
     if (
         obj['date_range'] === undefined &&
         (obj['start_date'] !== undefined || obj['end_date'] !== undefined)

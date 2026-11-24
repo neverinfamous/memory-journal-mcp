@@ -85,10 +85,14 @@ export async function collectExternalMarkdownFiles(
 
     const parsedFiles: ParsedFile[] = []
     const errors: { file: string; error: string }[] = []
-
+    const batches: string[][] = []
     for (let i = 0; i < mdFiles.length; i += READ_CONCURRENCY) {
+        batches.push(mdFiles.slice(i, i + READ_CONCURRENCY))
+    }
+
+    await batches.reduce<Promise<void>>(async (prev, batch) => {
+        await prev
         assertSafeDirectoryPath(realpathSync.native(pinnedDir), allowedRoots)
-        const batch = mdFiles.slice(i, i + READ_CONCURRENCY)
         const settled = await Promise.all(
             batch.map((filename) => readSingleExternalFile(pinnedDir, filename, format, allowedRoots))
         )
@@ -102,6 +106,6 @@ export async function collectExternalMarkdownFiles(
                 parsedFiles.push(outcome.file)
             }
         }
-    }
+    }, Promise.resolve())
     return { parsedFiles, errors }
 }

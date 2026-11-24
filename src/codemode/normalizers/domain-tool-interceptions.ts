@@ -101,8 +101,7 @@ export function applyDomainToolInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
-    const hasSingleRecord = args.length === 1 && isRecord(args[0])
-    const singleObj = hasSingleRecord ? (args[0] as Record<string, unknown>) : undefined
+    const singleObj = args.length === 1 && isRecord(args[0]) ? args[0] : undefined
 
     if (singleObj !== undefined && ['update_configuration', 'updateConfiguration', 'config', 'configure'].includes(methodName)) {
         const configRes = applyConfigInterceptions(singleObj)

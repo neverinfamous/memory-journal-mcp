@@ -9,9 +9,11 @@ import * as https from 'node:https'
 import type { IncomingMessage } from 'node:http'
 import {
     assertSafeJwksUri,
+    createPinnedDnsLookup,
     resolveSafePublicDnsAddresses,
     type ResolvedPublicAddress,
 } from './jwks-ssrf-guard.js'
+import { isRecord } from '../utils/type-guards.js'
 
 const MAX_JWKS_RESPONSE_BYTES = 1024 * 1024
 const JWKS_TIMEOUT_MS = 10_000
@@ -60,25 +62,32 @@ function readHttpsJwksBody(
     })
 }
 
-async function readLimitedJwksStream(body: NonNullable<Response['body']>): Promise<Buffer> {
-    const reader = body.getReader()
-    const chunks: Uint8Array[] = []
-    let total = 0
-    for (;;) {
-        const step: unknown = await reader.read()
-        if (typeof step !== 'object' || step === null) break
-        if ('done' in step && step.done === true) break
-        const value: unknown = 'value' in step ? step.value : undefined
-        if (value instanceof Uint8Array) {
-            total += value.byteLength
-            if (total > MAX_JWKS_RESPONSE_BYTES) {
-                await reader.cancel().catch(() => undefined)
-                throw new Error('JWKS response exceeded 1MB limit')
-            }
-            chunks.push(value)
-        }
+type JwksStreamReader = ReadableStreamDefaultReader<Uint8Array>
+
+async function readNextJwksChunk(
+    reader: JwksStreamReader,
+    chunks: Uint8Array[],
+    total: number
+): Promise<Buffer> {
+    const step: unknown = await reader.read()
+    if (!isRecord(step) || step['done'] === true) {
+        return Buffer.concat(chunks)
     }
-    return Buffer.concat(chunks)
+    const value = step['value']
+    let nextTotal = total
+    if (value instanceof Uint8Array) {
+        nextTotal += value.byteLength
+        if (nextTotal > MAX_JWKS_RESPONSE_BYTES) {
+            await reader.cancel().catch(() => undefined)
+            throw new Error('JWKS response exceeded 1MB limit')
+        }
+        chunks.push(value)
+    }
+    return readNextJwksChunk(reader, chunks, nextTotal)
+}
+
+function readLimitedJwksStream(body: NonNullable<Response['body']>): Promise<Buffer> {
+    return readNextJwksChunk(body.getReader(), [], 0)
 }
 
 async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Response> {
@@ -111,28 +120,6 @@ async function fetchLoopbackJwks(urlStr: string, init?: RequestInit): Promise<Re
         status: response.status,
         headers: { 'content-type': contentType },
     })
-}
-
-function createPinnedDnsLookup(
-    primary: ResolvedPublicAddress,
-    resolvedRecords: readonly ResolvedPublicAddress[]
-): NonNullable<https.RequestOptions['lookup']> {
-    return (_hostname, options, callback) => {
-        const wantAll =
-            typeof options === 'object' &&
-            options !== null &&
-            'all' in options &&
-            options.all === true
-        if (wantAll) {
-            const cb = callback as unknown as (
-                err: NodeJS.ErrnoException | null,
-                addresses: ResolvedPublicAddress[]
-            ) => void
-            cb(null, [...resolvedRecords])
-            return
-        }
-        callback(null, primary.address, primary.family)
-    }
 }
 
 function attachJwksDeadlineAndAbort(

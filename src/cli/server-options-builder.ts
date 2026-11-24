@@ -39,9 +39,9 @@ function resolveDefaultProjectNumberOption(
     catchConfig: CatchConfig
 ): number | undefined {
     return catchConfig(() => {
-        const configVal = resolver.resolve<string | number>('defaultProjectNumber')
+        const configVal = resolver.resolveStringOrNumber('defaultProjectNumber')
         const raw =
-            resolver.resolve<string | number>('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
+            resolver.resolveStringOrNumber('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
         if (raw === undefined || raw === null) return undefined
         const str = String(raw).trim()
         if (str === '') return undefined
@@ -62,7 +62,7 @@ function resolveDefaultWorkspaceIdOption(
 ): string | undefined {
     return catchConfig(() => {
         if (allowWorkspaceAsDefault) {
-            const ws = resolver.resolve<unknown>('workspace')
+            const ws = resolver.resolve('workspace')
             if (ws !== undefined && ws !== null && typeof ws !== 'string') {
                 throw new Error(`Invalid workspace: expected string, got ${typeof ws}.`)
             }
@@ -75,7 +75,7 @@ function resolveDefaultWorkspaceIdOption(
             }
             if (trimmedWs !== undefined && trimmedWs !== '') return trimmedWs
         }
-        const defWs = resolver.resolve<unknown>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
+        const defWs = resolver.resolve('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
         if (defWs !== undefined && defWs !== null && typeof defWs !== 'string') {
             throw new Error(`Invalid defaultWorkspaceId: expected string, got ${typeof defWs}.`)
         }
@@ -103,7 +103,7 @@ function resolveOptionalPathOption(
     cliKey: string,
     envKey: string
 ): string | undefined {
-    const val = resolver.resolve<unknown>(cliKey, envKey)
+    const val = resolver.resolve(cliKey, envKey)
     if (val === undefined || val === null) return undefined
     if (typeof val !== 'string') {
         throw new Error(`Invalid ${cliKey}: expected string, got ${typeof val}`)
@@ -182,14 +182,14 @@ function buildBriefingConfigOptions(
         ),
         graphPivots: catchConfig(() => resolver.resolveBool('briefingGraph', 'BRIEFING_GRAPH') ?? true, true),
         insights: catchConfig(() => resolver.resolveBool('briefingInsights', 'BRIEFING_INSIGHTS') ?? true, true),
-        workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
+        workflowSummary: catchConfig(() => resolver.resolveString('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
         defaultProjectNumber,
         defaultWorkspaceId,
         projectRegistry,
         briefingImportanceThreshold: catchConfig(
             () =>
                 parseImportanceThresholdOption(
-                    resolver.resolve<unknown>(
+                    resolver.resolve(
                         'briefingImportanceThreshold',
                         'BRIEFING_IMPORTANCE_THRESHOLD'
                     ),
@@ -211,7 +211,7 @@ function resolveEnvironmentOverrides(
 } {
     const envUpdates: Record<string, string> = {}
     const codemodeMaxResultSize = catchConfig(() => {
-        const raw = resolver.resolve<string | number>(
+        const raw = resolver.resolveStringOrNumber(
             'codemodeMaxResultSize',
             'CODE_MODE_MAX_RESULT_SIZE'
         )
@@ -231,7 +231,7 @@ function resolveEnvironmentOverrides(
     }
 
     const metricsPort = catchConfig(
-        () => resolver.resolve<string | number>('metricsPort', 'MJ_METRICS_PORT'),
+        () => resolver.resolveStringOrNumber('metricsPort', 'MJ_METRICS_PORT'),
         undefined
     )
     if (metricsPort !== undefined && String(metricsPort).trim() !== '') {
@@ -239,7 +239,7 @@ function resolveEnvironmentOverrides(
     }
 
     const authScopes = catchConfig(() => {
-        const val = resolver.resolve<unknown>('authScopes', 'MCP_AUTH_SCOPES')
+        const val = resolver.resolve('authScopes', 'MCP_AUTH_SCOPES')
         if (val === undefined || val === null) return undefined
         if (typeof val !== 'string') {
             throw new Error(`Invalid authScopes: expected string, got ${typeof val}`)
@@ -251,7 +251,7 @@ function resolveEnvironmentOverrides(
     }
 
     const logLevel = catchConfig(
-        () => parseLogLevelOption(resolver.resolve<unknown>('logLevel', 'LOG_LEVEL')),
+        () => parseLogLevelOption(resolver.resolve('logLevel', 'LOG_LEVEL')),
         undefined
     )
     return { envUpdates, logLevel }
@@ -367,20 +367,20 @@ function assembleServerOptions(params: {
         teamDbPath: teamDb,
         testTeamDbPath: testTeamDb,
         teamDefaultRole: resolveTeamDefaultRoleOption(resolver, catchConfig),
-        teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
+        teamAdmin: catchConfig(() => resolver.resolveString('teamAdmin', 'TEAM_ADMIN'), undefined),
         toolFilter,
         defaultProjectNumber,
         defaultWorkspaceId,
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
         codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
         projectRegistry,
-        additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
-        allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
+        additionalTeamDbs: catchConfig(() => parseAdditionalTeamDbsOption(resolver.resolve('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS')), undefined),
+        allowedIoRoots: catchConfig(() => parseAllowedIoRootsOption(resolver.resolve('allowedIoRoots', 'ALLOWED_IO_ROOTS')), undefined),
         briefingConfig,
         ...(briefingOverrides !== undefined ? { briefingOverrides } : {}),
         cliEnvBaseline,
         auditConfig: buildAuditConfigOption(resolver, catchConfig),
-        embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
+        embeddingModel: catchConfig(() => resolver.resolveString('embeddingModel', 'EMBEDDING_MODEL'), undefined),
         ...(instructionLevel !== undefined ? { instructionLevel } : {}),
         configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
         maxToolInputElements: resolveMaxToolInputElementsOption(resolver, catchConfig),
@@ -411,18 +411,18 @@ export function buildServerOptions(
         }
     }
 
-    const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
+    const host = catchConfig(() => resolver.resolveString('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
     const transport = resolveTransportOption(resolver, catchConfig)
     const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
     const { envUpdates, logLevel } = resolveEnvironmentOverrides(resolver, catchConfig)
     const instructionLevel = resolveInstructionLevelOption(resolver, catchConfig)
     const projectRegistry = catchConfig(() => {
-        const reg = validateProjectRegistryObject(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY'))
+        const reg = validateProjectRegistryObject(resolver.resolve('projectRegistry', 'PROJECT_REGISTRY'))
         if (reg !== undefined) envUpdates['PROJECT_REGISTRY'] = JSON.stringify(reg)
         return reg
     }, undefined)
     const { defaultWorkspaceId, defaultProjectNumber } = resolveConfiguredDefaultScope(resolver, command, catchConfig, projectRegistry)
-    const toolFilter = catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined)
+    const toolFilter = catchConfig(() => resolver.resolveString('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined)
     const briefingConfig = buildBriefingConfigOptions(resolver, catchConfig, defaultProjectNumber, defaultWorkspaceId, projectRegistry)
     const briefingOverrides = collectCliEnvBriefingOverrides(resolver, briefingConfig)
     const cliEnvBaseline = collectCliEnvServerBaseline(resolver, command, {

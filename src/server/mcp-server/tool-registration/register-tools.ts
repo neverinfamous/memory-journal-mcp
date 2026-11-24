@@ -19,6 +19,7 @@ import { getSerializedPayloadJson } from '../../../observability/token-estimator
 import { VERSION } from '../../../version.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logger } from '../../../utils/logger.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 import { attachListToolsInterceptor, type RequestHandlerMap } from './list-interceptor.js'
 import { attachCallToolInterceptor } from './call-interceptor.js'
@@ -102,11 +103,30 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
     return toolOptions
 }
 
+function isRequestHandlerMap(value: unknown): value is RequestHandlerMap {
+    if (!(value instanceof Map)) return false
+    const entries: Iterable<[unknown, unknown]> = value.entries()
+    for (const [k, v] of entries) {
+        if (typeof k !== 'string' || typeof v !== 'function') return false
+    }
+    return true
+}
+
 function getRequestHandlers(rawServer: object): RequestHandlerMap | undefined {
-    if ('_requestHandlers' in rawServer && rawServer._requestHandlers instanceof Map) {
-        return rawServer._requestHandlers as RequestHandlerMap
+    if ('_requestHandlers' in rawServer && isRequestHandlerMap(rawServer._requestHandlers)) {
+        return rawServer._requestHandlers
     }
     return undefined
+}
+
+function extractProgressToken(extra: unknown): string | number | undefined {
+    if (!isRecord(extra)) return undefined
+    const mcpReq = extra['mcpReq']
+    if (!isRecord(mcpReq)) return undefined
+    const meta = mcpReq['_meta']
+    if (!isRecord(meta)) return undefined
+    const token = meta['progressToken']
+    return typeof token === 'string' || typeof token === 'number' ? token : undefined
 }
 
 function formatRegisteredToolResponse(
@@ -114,10 +134,7 @@ function formatRegisteredToolResponse(
     result: unknown,
     hasOutputSchema: boolean
 ): CallToolResult {
-    const isSuccess =
-        typeof result === 'object' &&
-        result !== null &&
-        (result as Record<string, unknown>)['success'] === true
+    const isSuccess = isRecord(result) && result['success'] === true
 
     if (isSuccess) {
         // [INTENT] Any tool that declares `readOnlyHint: false` (merge, link,
@@ -133,10 +150,7 @@ function formatRegisteredToolResponse(
     }
 
     const textContent = typeof result === 'string' ? result : getSerializedPayloadJson(result)
-    const failed =
-        typeof result === 'object' &&
-        result !== null &&
-        (result as Record<string, unknown>)['success'] === false
+    const failed = isRecord(result) && result['success'] === false
 
     if (hasOutputSchema) {
         return {
@@ -172,10 +186,7 @@ async function executeRegisteredTool(
         allowedIoRoots,
     } = context
     try {
-        const extraMeta = extra as
-            | { mcpReq?: { _meta?: { progressToken?: string | number } } }
-            | undefined
-        const progressToken = extraMeta?.mcpReq?._meta?.progressToken
+        const progressToken = extractProgressToken(extra)
         const progressContext =
             progressToken !== undefined ? { server: server.server, progressToken } : undefined
 
@@ -186,8 +197,7 @@ async function executeRegisteredTool(
         )
         syncLiveHandlerConfig(customToolHandlerConfig, currentConfig, options, nextBriefing)
 
-        const toolArgs =
-            typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
+        const toolArgs = isRecord(args) ? args : {}
 
         const result = await callTool(
             tool.name,

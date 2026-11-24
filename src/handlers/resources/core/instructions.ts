@@ -13,6 +13,7 @@ import type { ToolGroup } from '../../../types/index.js'
 import { getPrompts } from '../../prompts/index.js'
 import { ICON_BRIEFING } from '../../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 
 async function filterReadonlyTools(
@@ -44,25 +45,17 @@ async function filterReadonlyTools(
     return { enabledTools: filtered, readOnlyHints }
 }
 
+function hasGetConfigMethod(val: unknown): val is { getConfig: () => unknown } {
+    return isRecord(val) && typeof val['getConfig'] === 'function'
+}
+
 export function hasCodemodeFullAccess(context: ResourceContext): boolean {
     const rawMgr = context.runtime?.configManager
-    if (
-        rawMgr === null ||
-        rawMgr === undefined ||
-        typeof rawMgr !== 'object' ||
-        !('getConfig' in rawMgr) ||
-        typeof rawMgr.getConfig !== 'function'
-    ) {
+    if (!hasGetConfigMethod(rawMgr)) {
         return false
     }
-    const currentConfig: unknown = (rawMgr as { getConfig: () => unknown }).getConfig()
-    return (
-        currentConfig !== null &&
-        currentConfig !== undefined &&
-        typeof currentConfig === 'object' &&
-        'codemodeInternalFullAccess' in currentConfig &&
-        currentConfig.codemodeInternalFullAccess === true
-    )
+    const currentConfig: unknown = rawMgr.getConfig()
+    return isRecord(currentConfig) && currentConfig['codemodeInternalFullAccess'] === true
 }
 
 function resolveSandboxEnabledGroups(

@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { assertSafeConfigWriteTargetSync, readSafeRegularConfigTextSync } from './config-file-safety.js'
 import { invalidateRegistryFileCache, RegistryConfigError } from './registry-config-file.js'
+import { isRecord } from './type-guards.js'
 import {
     BRIEFING_CONFIG_KEY_MAP,
     type BriefingConfigurableKey,
@@ -81,10 +82,10 @@ export function parseRawConfigObjectFromFile(
         const raw: unknown = isYaml
             ? (parseYaml as (text: string) => unknown)(content)
             : JSON.parse(content)
-        if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        if (!isRecord(raw)) {
             return null
         }
-        return raw as Record<string, unknown>
+        return raw
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         throw new RegistryConfigError(`Configuration file could not be parsed: ${message}`)
@@ -130,10 +131,10 @@ export function persistDynamicConfigToFile(
     const rawParsed: unknown = isYaml
         ? (parseYaml as (text: string) => unknown)(loaded.content)
         : JSON.parse(loaded.content)
-    if (typeof rawParsed !== 'object' || rawParsed === null || Array.isArray(rawParsed)) {
+    if (!isRecord(rawParsed)) {
         throw new Error('Configuration file root must be a JSON/YAML object')
     }
-    const parsed = rawParsed as Record<string, unknown>
+    const parsed = rawParsed
     applyPersistableConfigKeys(parsed, config, provenance)
     if (isYaml) onYamlCommentWarning()
     const serialized = serializeConfigObject(parsed, isYaml)

@@ -7,9 +7,8 @@
  */
 
 import { TOOL_GROUPS } from '../filtering/tool-constants.js'
-import { SCOPES, TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
+import { isToolGroup, SCOPES, TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
-import type { ToolGroup } from '../types/index.js'
 import { hasMethodToken } from '../codemode/method-tokens.js'
 import {
     DUMMY_HEALING_TOOL_NAMES,
@@ -37,11 +36,10 @@ const toolScopeMap = new Map<string, StandardScope>()
 
 // Build the reverse map at module load
 for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
-    const scope = TOOL_GROUP_SCOPES[group as ToolGroup]
-    if (scope) {
-        for (const toolName of tools) {
-            toolScopeMap.set(toolName, scope)
-        }
+    if (!isToolGroup(group)) continue
+    const scope = TOOL_GROUP_SCOPES[group]
+    for (const toolName of tools) {
+        toolScopeMap.set(toolName, scope)
     }
 }
 

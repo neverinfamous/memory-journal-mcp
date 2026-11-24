@@ -20,6 +20,11 @@ import { getLoadBriefingPromptDefinitions } from './load-briefing.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
 import type { AuditLogger } from '../../audit/index.js'
+import { isRecord } from '../../utils/type-guards.js'
+
+function isAuditLoggerLike(val: unknown): val is AuditLogger {
+    return isRecord(val) && typeof val['logDenial'] === 'function'
+}
 
 /**
  * Message format for MCP prompts
@@ -105,13 +110,8 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    const auditLogger =
-        runtime !== null &&
-        runtime !== undefined &&
-        'auditLogger' in runtime &&
-        runtime.auditLogger !== undefined
-            ? (runtime.auditLogger as AuditLogger | null)
-            : undefined
+    const rawAuditLogger = isRecord(runtime) ? runtime['auditLogger'] : undefined
+    const auditLogger = isAuditLoggerLike(rawAuditLogger) ? rawAuditLogger : undefined
     enforceAccessBoundary(name, 'prompt', prompt.capabilities, auditLogger)
 
     return Promise.resolve().then(() =>

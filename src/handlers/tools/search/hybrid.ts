@@ -16,9 +16,11 @@ import {
     passMetadataFilters,
     canAccessTeamSilently,
     isTeamDbReady,
+    toEntryType,
     type ISearchFilters,
     type EntryWithSource,
 } from './helpers.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import { collapseTeamMirrors } from '../../../utils/team-mirror.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { logger } from '../../../utils/logger.js'
@@ -111,6 +113,7 @@ async function queryStoreHybrid(
     semanticDegraded: boolean
 }> {
     let semanticDegraded = false
+    const entryType: EntryType | undefined = toEntryType(options.entryType)
     const [ftsResults, semanticResults] = await Promise.all([
         Promise.resolve(
             store.searchEntries(query, {
@@ -123,7 +126,7 @@ async function queryStoreHybrid(
                 workflowRunId: options.workflowRunId,
                 tags: options.tags,
                 excludeTags: options.excludeTags,
-                entryType: options.entryType as EntryType,
+                entryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
                 includeArchived: options.includeArchived,
@@ -212,7 +215,8 @@ function hydrateQualifiedStoreCandidates(
     for (const id of ids) {
         const entry = hydratedById.get(id)
         if (!entry || !passMetadataFilters(entry, options, store)) continue
-        const rawAuthor = (entry as { author?: unknown }).author
+        const entryRecord: unknown = entry
+        const rawAuthor = isRecord(entryRecord) ? entryRecord['author'] : undefined
         candidates.push({
             ...entry,
             ...(source === 'team' && typeof rawAuthor === 'string'

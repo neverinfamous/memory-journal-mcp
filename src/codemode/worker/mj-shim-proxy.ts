@@ -4,6 +4,7 @@
  */
 
 import { type SafeFsShim, pathShim, consoleShim, createPreparedStatementShim } from './node-shims.js'
+import { isCallable } from './result-proxy-aliases.js'
 import { createDisabledSpawnShim } from './sandbox-process-shims.js'
 import {
     DB_TO_JOURNAL,
@@ -150,25 +151,15 @@ function resolveNodeAndSqlShims(
     if (prop === 'query' || prop === 'raw') {
         return {
             matched: true,
-            value: (sql?: string, ...args: unknown[]) => {
-                const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-                const allFn = stmt['all']
-                return typeof allFn === 'function'
-                    ? (allFn as (...a: unknown[]) => unknown)(...args)
-                    : undefined
-            },
+            value: (sql?: string, ...args: unknown[]) =>
+                createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj).all(...args),
         }
     }
     if (prop === 'exec') {
         return {
             matched: true,
-            value: (sql?: string, ...args: unknown[]) => {
-                const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-                const runFn = stmt['run']
-                return typeof runFn === 'function'
-                    ? (runFn as (...a: unknown[]) => unknown)(...args)
-                    : undefined
-            },
+            value: (sql?: string, ...args: unknown[]) =>
+                createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj).run(...args),
         }
     }
     if (typeof prop === 'string' && LIFECYCLE_PROPS.has(prop)) {
@@ -230,11 +221,11 @@ function resolveCoreAndMetaShimProp(
 
     if (typeof prop === 'string' && BRIEFING_PROPS.has(prop) && 'core' in target) {
         const fn = getGroupProp(target, 'core', 'getRecentEntries') ?? getGroupProp(target, 'core', 'get_recent_entries')
-        if (typeof fn === 'function') {
+        if (isCallable(fn)) {
             return {
                 matched: true,
                 value: (args?: Record<string, unknown>) =>
-                    (fn as (a: unknown) => unknown)({ limit: 10, sort_by: 'importance', ...args }),
+                    fn({ limit: 10, sort_by: 'importance', ...args }),
             }
         }
     }

@@ -7,6 +7,7 @@
 
 import { sliceUntrustedInline, type BriefingConfig, type ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import { activeProjectRegistry } from '../../../../utils/write-scope.js'
 import { canAccessTeamSilently, isTeamFilterAllowed } from '../../../tools/search/helpers.js'
 import type { JournalEntry } from '../../../../types/index.js'
@@ -210,6 +211,27 @@ export interface GraphSummary {
     degraded?: boolean | undefined
 }
 
+function parseRelationshipComplexity(
+    val: unknown
+): { totalRelationships: number; avgPerEntry: number } | undefined {
+    if (!isRecord(val)) return undefined
+    const total = val['totalRelationships']
+    const avg = val['avgPerEntry']
+    if (typeof total !== 'number' || typeof avg !== 'number') return undefined
+    return { totalRelationships: total, avgPerEntry: avg }
+}
+
+function parseCausalMetrics(val: unknown): Record<string, number> | undefined {
+    if (!isRecord(val)) return undefined
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(val)) {
+        if (typeof v === 'number') {
+            out[k] = v
+        }
+    }
+    return out
+}
+
 export function buildGraphContext(
     context: ResourceContext,
     workspaceId?: string,
@@ -219,10 +241,8 @@ export function buildGraphContext(
     try {
         const targetWs = workspaceId ?? 'default'
         const stats = context.db.getStatistics('week', undefined, undefined, false, targetWs)
-        const comp = stats['relationshipComplexity'] as
-            | { totalRelationships: number; avgPerEntry: number }
-            | undefined
-        const causal = stats['causalMetrics'] as Record<string, number> | undefined
+        const comp = parseRelationshipComplexity(stats['relationshipComplexity'])
+        const causal = parseCausalMetrics(stats['causalMetrics'])
 
         if (!comp || !causal) return undefined
 

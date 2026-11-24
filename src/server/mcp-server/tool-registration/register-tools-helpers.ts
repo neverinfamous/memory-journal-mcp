@@ -54,14 +54,15 @@ export function formatToolFailure(
     toolName: string,
     args: unknown
 ): Record<string, unknown> {
-    const errorResult: Record<string, unknown> = { ...formatHandlerError(error) }
+    const formatted = formatHandlerError(error)
+    const errorResult: Record<string, unknown> = { ...formatted }
 
     logAgentIssue(
         {
             source: 'MCP',
             action: toolName,
             input: args,
-            error: (errorResult['error'] as string) ?? 'Unknown error',
+            error: formatted.error,
         },
         error
     )
