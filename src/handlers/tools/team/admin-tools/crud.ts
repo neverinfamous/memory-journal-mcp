@@ -202,7 +202,14 @@ async function executeTeamUpdateEntry(
     }
 }
 
-function cleanupDeletedTeamVector(teamDb: TeamDbInstance, entryId: number): string | undefined {
+function cleanupDeletedTeamVector(
+    teamDb: TeamDbInstance,
+    entryId: number,
+    teamVectorManager?: ToolContext['teamVectorManager']
+): string | undefined {
+    if (typeof teamVectorManager?.markRemoved === 'function') {
+        teamVectorManager.markRemoved(entryId)
+    }
     try {
         teamDb.deleteVector(entryId)
         return undefined
@@ -279,7 +286,7 @@ function executeTeamDeleteEntry(
             recoverable: true,
         }
     }
-    const deleteWarning = cleanupDeletedTeamVector(teamDb, entry_id)
+    const deleteWarning = cleanupDeletedTeamVector(teamDb, entry_id, context.teamVectorManager)
     const warning = [deleted.warning, deleteWarning]
         .filter((item): item is string => item !== undefined)
         .join('; ')

@@ -218,7 +218,7 @@ function applyIoInterceptions(
         'teamImportExternal',
     ].includes(methodName)
 
-    for (const key of ['path', 'file', 'filepath', 'dir', 'folder', 'target', 'source']) {
+    for (const key of ['path', 'file', 'filepath', 'dir', 'folder', 'target', 'target_dir', 'targetDir', 'source']) {
         if (obj[key] !== undefined) {
             let didMap = false
             if (isExportMd) {

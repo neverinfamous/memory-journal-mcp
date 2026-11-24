@@ -3,35 +3,29 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { JournalEntry } from '../../types/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
-import { DEFAULT_MODEL, REBUILD_BATCH_SIZE, type SemanticSearchResult } from './types.js'
+import { DEFAULT_MODEL, type SemanticSearchResult } from './types.js'
 import { rebuildIndex, verifyVecTableSchema } from './rebuild.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
+import type { TransformersPipelineModule } from './model-cache.js'
 import {
-    dbPathFromAdapter,
-    invokeSingleEmbeddingPipeline,
-    isModelCachedOnDisk,
-    loadTransformersModule,
-    resolveEmbeddingCacheDir,
-    type TransformersPipelineModule,
-} from './model-cache.js'
-import {
-    collectCandidates,
-    embedTextsSequentiallySettled,
-    formatEntryForEmbedding,
     resolveCandidates,
-    runPipelineBatchEmbeddingsSettled,
-    searchSimilarEntriesById,
-    upsertEntryChunksSequentially,
+    runEntryIdVectorLookup,
+    runVectorCandidateQuery,
     type VectorCandidate,
 } from './candidate-search.js'
 import {
-    getOrComputeCachedEmbedding,
-    QUERY_EMBEDDING_CACHE_MAX_CHARS,
-} from './embedding-cache.js'
-import {
+    DISPOSED_MANAGER_ERROR,
     disposePipelineHandle,
+    drainVectorPendingState,
+    filterLiveVectorsForUpsert,
     flushPendingVectorRemovals,
-    loadPipelineWithRetry,
+    generateValidatedBatchEmbeddingsSettled,
+    generateValidatedSingleEmbedding,
+    isEntryLiveForVectorUpsert,
+    loadDefaultEmbeddingSession,
+    runAddBatchVectorEntries,
+    runAddSingleVectorEntry,
+    trackVectorRead,
     withModelLoadLock,
 } from './lifecycle-helpers.js'
 
@@ -46,8 +40,11 @@ export class VectorSearchManager {
     private transformers: TransformersPipelineModule | null = null
     private initializationPromise: Promise<void> | null = null
     private writeTail: Promise<void> = Promise.resolve()
+    private pendingMutationCount = 0
     private rebuildActiveCount = 0
     private readonly pendingRemovedIds = new Set<number>()
+    private activeReads: Set<Promise<unknown>> | undefined = new Set()
+    private disposed = false
     private ready = false
 
     constructor(dbAdapter: IDatabaseAdapter, options?: { modelName?: string | undefined }) {
@@ -73,7 +70,34 @@ export class VectorSearchManager {
      * Check if the vector search manager is initialized
      */
     public isInitialized(): boolean {
-        return this.ready
+        return this.ready && !this.disposed
+    }
+
+    /** Check whether `dispose()` has been initiated on this manager. */
+    public isDisposed(): boolean {
+        return this.disposed
+    }
+
+    /** Record concurrent entry deletions so in-flight writes do not resurrect stale vectors. */
+    public markRemoved(entryIds: number | readonly number[]): void {
+        if (this.disposed || (this.pendingMutationCount === 0 && this.rebuildActiveCount === 0)) {
+            return
+        }
+        if (typeof entryIds === 'number') {
+            this.pendingRemovedIds.add(entryIds)
+            return
+        }
+        for (const id of entryIds) {
+            this.pendingRemovedIds.add(id)
+        }
+    }
+
+    /** Filter out tombstoned or SQLite-deleted entries immediately prior to batch vector upsert. */
+    public filterLiveVectors(
+        items: readonly { entryId: number; embedding: Float32Array }[]
+    ): { entryId: number; embedding: Float32Array }[] {
+        if (this.disposed) return []
+        return filterLiveVectorsForUpsert(this.dbAdapter, items, this.pendingRemovedIds)
     }
 
     /**
@@ -81,6 +105,9 @@ export class VectorSearchManager {
      * This loads the huggingface transformer model and creates the virtual table.
      */
     public async initialize(): Promise<void> {
+        if (this.disposed) {
+            throw new Error(DISPOSED_MANAGER_ERROR)
+        }
         // Defensive runtime guard: callers outside the type system (tests, plugins) may omit the adapter.
         if ((this.dbAdapter as unknown) == null) {
             throw new Error('Vector database not available')
@@ -99,26 +126,17 @@ export class VectorSearchManager {
 
     private async loadDefaultEmbeddingModel(): Promise<void> {
         return withModelLoadLock(async () => {
-            const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
-            this.transformers ??= await loadTransformersModule()
-            const transformersModule = this.transformers
-            const cachedLocally = isModelCachedOnDisk(cacheDir, this.modelName)
-            transformersModule.env['allowRemoteModels'] = !cachedLocally
-            transformersModule.env['cacheDir'] = cacheDir
-            transformersModule.env['localModelPath'] = cacheDir
-
-            logger.info(`Loading embedding model: ${this.modelName}`)
-            this.pipeline = await loadPipelineWithRetry(
-                transformersModule,
+            this.dimensions = await loadDefaultEmbeddingSession(
+                this.dbAdapter,
                 this.modelName,
-                cacheDir,
-                cachedLocally
+                this.transformers,
+                (mod) => {
+                    this.transformers = mod
+                },
+                (pipeline) => {
+                    this.pipeline = pipeline
+                }
             )
-            logger.info('Embedding model loaded')
-
-            const testVec = await invokeSingleEmbeddingPipeline(this.pipeline, 'test')
-            this.dimensions = testVec.length
-            logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
         })
     }
 
@@ -136,7 +154,13 @@ export class VectorSearchManager {
             } else {
                 await this.loadDefaultEmbeddingModel()
             }
+            if (this.disposed) {
+                throw new Error(DISPOSED_MANAGER_ERROR)
+            }
             this.verifyAndCreateVecTable()
+            if (this.disposed) {
+                throw new Error(DISPOSED_MANAGER_ERROR)
+            }
             this.ready = true
             logger.info('Vector search initialized successfully')
         } catch (error) {
@@ -152,10 +176,18 @@ export class VectorSearchManager {
         }
     }
 
-    /** Release native ONNX pipeline sessions and wait for pending initializations/mutations. */
+    /** Latch disposed state synchronously, drain pending init/mutations/reads, and dispose ONNX pipeline. */
     public async dispose(): Promise<void> {
-        await this.initializationPromise?.catch(() => undefined)
-        await this.writeTail
+        this.disposed = true
+        await drainVectorPendingState(() => ({
+            init: this.initializationPromise,
+            tail: this.writeTail,
+            reads: this.activeReads !== undefined ? [...this.activeReads] : [],
+            isUnchanged: (init, tail) =>
+                this.initializationPromise === init &&
+                this.writeTail === tail &&
+                (this.activeReads === undefined || this.activeReads.size === 0),
+        }))
         const pipelineToDispose = this.pipeline
         this.pipeline = null
         this.ready = false
@@ -165,13 +197,11 @@ export class VectorSearchManager {
         await disposePipelineHandle(pipelineToDispose)
     }
 
-    /** Verify the vec_journal_entries table exists and matches model dimensions. */
     private verifyAndCreateVecTable(): void {
-        const dimensions = this.dimensions
-        if (dimensions === null) {
+        if (this.dimensions === null) {
             throw new Error('Dimensions not detected. Cannot create vector table.')
         }
-        verifyVecTableSchema(this.dbAdapter, this.modelName, dimensions)
+        verifyVecTableSchema(this.dbAdapter, this.modelName, this.dimensions)
     }
 
     /** True when subclass/instance overrides `generateEmbedding` or lacks a pipeline function. */
@@ -183,58 +213,40 @@ export class VectorSearchManager {
     }
 
     /** Generate an embedding for text. */
-    public async generateEmbedding(
+    public generateEmbedding(
         text: string,
         options?: { bypassQueryCache?: boolean }
     ): Promise<Float32Array> {
-        await this.initialize()
-        const dims = this.getDimensions()
-        if (dims === null || dims <= 0) {
-            throw new Error('Vector search not initialized properly. Cannot rebuild index.')
-        }
-        const canCache =
-            options?.bypassQueryCache !== true &&
-            !this.hasCustomEmbeddingGenerator() &&
-            this.transformers !== null &&
-            text.length <= QUERY_EMBEDDING_CACHE_MAX_CHARS
-        const validateEmbedding = (candidate: Float32Array): Float32Array => {
-            if (candidate.length !== dims) {
-                throw new Error(
-                    `Embedding dimension mismatch: expected ${String(dims)}, got ${String(candidate.length)}`
-                )
-            }
-            for (const el of candidate) {
-                if (!Number.isFinite(el)) {
-                    throw new Error('Generated embedding contains non-finite value')
-                }
-            }
-            return candidate
-        }
-        return validateEmbedding(
-            await getOrComputeCachedEmbedding(this.modelName, text, canCache, async () =>
-                validateEmbedding(await invokeSingleEmbeddingPipeline(this.pipeline, text))
-            )
+        return this.trackRead(() =>
+            generateValidatedSingleEmbedding({
+                text,
+                modelName: this.modelName,
+                bypassQueryCache: options?.bypassQueryCache === true,
+                hasCustomGenerator: this.hasCustomEmbeddingGenerator(),
+                hasTransformers: this.transformers !== null,
+                initialize: () => this.initialize(),
+                getDimensions: () => this.getDimensions(),
+                getPipeline: () => this.pipeline,
+                isDisposed: () => this.disposed,
+            })
         )
     }
 
     /** Generate settled per-item embeddings for a batch of texts, using tensor batching on the HF pipeline. */
-    public async generateEmbeddingsSettled(
+    public generateEmbeddingsSettled(
         texts: readonly string[]
     ): Promise<PromiseSettledResult<Float32Array>[]> {
-        if (texts.length === 0) return []
-        await this.initialize()
-
-        const dims = this.getDimensions()
-        if (dims === null) {
-            throw new Error('Vector search not initialized properly. Cannot rebuild index.')
-        }
-        if (this.hasCustomEmbeddingGenerator()) {
-            return embedTextsSequentiallySettled(texts, 0, (text) =>
-                this.generateEmbedding(text, { bypassQueryCache: true })
-            )
-        }
-        return runPipelineBatchEmbeddingsSettled(this.pipeline, texts, dims, (text) =>
-            this.generateEmbedding(text, { bypassQueryCache: true })
+        if (texts.length === 0) return Promise.resolve([])
+        return this.trackRead(() =>
+            generateValidatedBatchEmbeddingsSettled({
+                texts,
+                hasCustomGenerator: this.hasCustomEmbeddingGenerator(),
+                initialize: () => this.initialize(),
+                getDimensions: () => this.getDimensions(),
+                getPipeline: () => this.pipeline,
+                isDisposed: () => this.disposed,
+                generateSingle: (text) => this.generateEmbedding(text, { bypassQueryCache: true }),
+            })
         )
     }
 
@@ -247,56 +259,48 @@ export class VectorSearchManager {
         })
     }
 
-    public async addEntry(entry: JournalEntry): Promise<void> {
-        return this.enqueueMutation(async () => {
-            this.pendingRemovedIds.delete(entry.id)
-            await this.initialize()
-
-            try {
-                const embedding = await this.generateEmbedding(formatEntryForEmbedding(entry), {
-                    bypassQueryCache: true,
-                })
-                this.dbAdapter.upsertVector(entry.id, embedding)
-            } catch (error) {
-                logger.error(`Failed to add entry ${entry.id} to vector index`, {
-                    error: error instanceof Error ? error.message : String(error),
-                })
-                throw error
-            }
-        })
+    public addEntry(entry: JournalEntry): Promise<void> {
+        if (this.disposed) return Promise.reject(new Error(DISPOSED_MANAGER_ERROR))
+        this.pendingRemovedIds.delete(entry.id)
+        return this.enqueueMutation(() =>
+            runAddSingleVectorEntry({
+                entry,
+                dbAdapter: this.dbAdapter,
+                pendingRemovedIds: this.pendingRemovedIds,
+                isDisposed: () => this.disposed,
+                initialize: () => this.initialize(),
+                generateEmbedding: (text) =>
+                    this.generateEmbedding(text, { bypassQueryCache: true }),
+            })
+        )
     }
 
     /** Batch-embed and upsert entries in bounded chunks to avoid single-tensor OOM spikes. */
-    public async addEntries(entries: readonly JournalEntry[]): Promise<void> {
-        if (entries.length === 0) return
+    public addEntries(entries: readonly JournalEntry[]): Promise<void> {
+        if (entries.length === 0) return Promise.resolve()
+        if (this.disposed) return Promise.reject(new Error(DISPOSED_MANAGER_ERROR))
         if (entries.length === 1 && entries[0] !== undefined) {
             return this.addEntry(entries[0])
         }
-        return this.enqueueMutation(async () => {
-            for (const entry of entries) {
-                this.pendingRemovedIds.delete(entry.id)
-            }
-            await this.initialize()
-            await upsertEntryChunksSequentially(
+        for (const entry of entries) {
+            this.pendingRemovedIds.delete(entry.id)
+        }
+        return this.enqueueMutation(() =>
+            runAddBatchVectorEntries({
                 entries,
-                REBUILD_BATCH_SIZE,
-                (texts) => this.generateEmbeddingsSettled(texts),
-                typeof this.dbAdapter.upsertVectors === 'function'
-                    ? (items) => {
-                          this.dbAdapter.upsertVectors(items)
-                      }
-                    : undefined,
-                (entryId, embedding) => {
-                    this.dbAdapter.upsertVector(entryId, embedding)
-                }
-            )
-        })
+                dbAdapter: this.dbAdapter,
+                pendingRemovedIds: this.pendingRemovedIds,
+                isDisposed: () => this.disposed,
+                initialize: () => this.initialize(),
+                generateEmbeddingsSettled: (texts) => this.generateEmbeddingsSettled(texts),
+            })
+        )
     }
 
     /** Remove an entry from the vector index. */
     public removeEntry(entryId: number): boolean {
-        if ((this.dbAdapter as unknown) == null) return false
-        if (this.rebuildActiveCount > 0) {
+        if (this.disposed || (this.dbAdapter as unknown) == null) return false
+        if (this.pendingMutationCount > 0 || this.rebuildActiveCount > 0) {
             this.pendingRemovedIds.add(entryId)
         }
 
@@ -308,83 +312,72 @@ export class VectorSearchManager {
         }
     }
 
+    private queryVectorCandidates(
+        query: string,
+        limit: number,
+        threshold: number,
+        targetWs: string,
+        projectNumber: number | undefined,
+        logLabel: string
+    ): Promise<VectorCandidate[] | undefined> {
+        return runVectorCandidateQuery({
+            dbAdapter: this.dbAdapter,
+            query,
+            limit,
+            threshold,
+            targetWs,
+            projectNumber,
+            logLabel,
+            initialize: () => this.initialize(),
+            generateEmbedding: (text) => this.generateEmbedding(text),
+            isDisposed: () => this.disposed,
+            disposedErrorMessage: DISPOSED_MANAGER_ERROR,
+        })
+    }
+
     /** Return raw vector candidates above `threshold` without hydrating full entries from SQLite. */
-    public async searchCandidates(
+    public searchCandidates(
         query: string,
         limit = 10,
         threshold = 0.0,
         workspaceId?: string,
         projectNumber?: number
     ): Promise<VectorCandidate[]> {
-        if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(threshold) || query.trim() === '') {
-            return []
-        }
-        const safeLimit = Math.min(limit, MAX_VECTOR_SEARCH_LIMIT)
-        await this.initialize()
-        if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
-            return []
-        }
-
-        try {
-            const queryEmbedding = await this.generateEmbedding(query)
+        return this.trackRead(async () => {
             const targetWs = effectiveWorkspace(workspaceId)
-            const results = this.dbAdapter.searchVectors(
-                queryEmbedding,
-                safeLimit,
-                targetWs,
-                projectNumber
+            const candidates = await this.queryVectorCandidates(
+                query, limit, threshold, targetWs, projectNumber, 'Semantic candidate search failed'
             )
-            return collectCandidates(results, threshold)
-        } catch (error) {
-            logger.error('Semantic candidate search failed', {
-                error: error instanceof Error ? error.message : String(error),
-                query
-            })
-            throw error
-        }
+            return candidates ?? []
+        })
     }
 
     /** Search for similar entries by text query. */
-    public async search(
+    public search(
         query: string,
         limit = 10,
         threshold = 0.0,
         workspaceId?: string,
         projectNumber?: number
     ): Promise<SemanticSearchResult[]> {
-        if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(threshold) || query.trim() === '') {
-            return []
-        }
-        const safeLimit = Math.min(limit, MAX_VECTOR_SEARCH_LIMIT)
-        await this.initialize()
-        if (typeof this.dbAdapter?.hasVectors === 'function' && !this.dbAdapter.hasVectors()) {
-            return []
-        }
-
-        try {
-            const queryEmbedding = await this.generateEmbedding(query)
+        return this.trackRead(async () => {
             const targetWs = effectiveWorkspace(workspaceId)
-            const results = this.dbAdapter.searchVectors(
-                queryEmbedding,
-                safeLimit,
+            const candidates = await this.queryVectorCandidates(
+                query, limit, threshold, targetWs, projectNumber, 'Semantic search failed'
+            )
+            if (candidates === undefined) return []
+            return resolveCandidates(
+                this.dbAdapter,
+                candidates,
+                Math.min(limit, MAX_VECTOR_SEARCH_LIMIT),
                 targetWs,
                 projectNumber
             )
-            const candidates = collectCandidates(results, threshold)
-            return resolveCandidates(this.dbAdapter, candidates, safeLimit, targetWs, projectNumber)
-        } catch (error) {
-            logger.error('Semantic search failed', {
-                error: error instanceof Error ? error.message : String(error),
-                query
-            })
-            throw error
-        }
+        })
     }
 
-    /**
-     * Search for similar entries using an existing entry as the query
-     */
-    public async searchByEntryId(
+    /** Search for similar entries using an existing entry as the query */
+    public searchByEntryId(
         entryId: number,
         limit = 10,
         threshold = 0.0,
@@ -392,34 +385,34 @@ export class VectorSearchManager {
         projectNumber?: number,
         prefetchedEntry?: JournalEntry
     ): Promise<SemanticSearchResult[]> {
-        if (!Number.isSafeInteger(entryId) || entryId <= 0) {
-            throw new Error(`Entry ${String(entryId)} not found`)
-        }
-        if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(threshold)) {
-            return []
-        }
-        const safeLimit = Math.min(limit, MAX_VECTOR_SEARCH_LIMIT)
-        await this.initialize()
-
-        try {
-            const targetWs = effectiveWorkspace(workspaceId)
-            return await searchSimilarEntriesById(
-                this.dbAdapter,
-                (text) => this.generateEmbedding(text, { bypassQueryCache: true }),
+        return this.trackRead(() =>
+            runEntryIdVectorLookup({
+                dbAdapter: this.dbAdapter,
                 entryId,
-                safeLimit,
+                limit,
                 threshold,
-                targetWs,
+                targetWs: effectiveWorkspace(workspaceId),
                 projectNumber,
                 prefetchedEntry,
-                this.dimensions ?? undefined
-            )
-        } catch (error) {
-            logger.error(`Semantic search by entry ID ${entryId} failed`, {
-                error: error instanceof Error ? error.message : String(error)
+                expectedDimensions: this.dimensions ?? undefined,
+                initialize: () => this.initialize(),
+                generateEmbedding: (text) =>
+                    this.generateEmbedding(text, { bypassQueryCache: true }),
+                isDisposed: () => this.disposed,
+                disposedErrorMessage: DISPOSED_MANAGER_ERROR,
+                persistVector: async (id, embedding) => {
+                    await this.enqueueMutation(() => {
+                        if (
+                            !this.disposed &&
+                            isEntryLiveForVectorUpsert(this.dbAdapter, id, this.pendingRemovedIds)
+                        ) {
+                            this.dbAdapter.upsertVector(id, embedding)
+                        }
+                        return Promise.resolve()
+                    })
+                },
             })
-            throw error
-        }
+        )
     }
 
     /**
@@ -444,30 +437,40 @@ export class VectorSearchManager {
         }
     }
 
+    private trackRead<T>(fn: () => Promise<T>): Promise<T> {
+        this.activeReads ??= new Set()
+        return trackVectorRead(this.activeReads, () => this.disposed, fn)
+    }
+
     private enqueueMutation<T>(fn: () => Promise<T>): Promise<T> {
-        const next = this.writeTail.then(fn, fn)
-        this.writeTail = next.then(
-            () => undefined,
-            () => undefined
-        )
+        if (this.disposed) return Promise.reject(new Error(DISPOSED_MANAGER_ERROR))
+        this.pendingMutationCount++
+        const run = async (): Promise<T> => {
+            try {
+                if (this.disposed) throw new Error(DISPOSED_MANAGER_ERROR)
+                return await fn()
+            } finally {
+                this.pendingMutationCount--
+                if (this.pendingMutationCount === 0 && this.rebuildActiveCount === 0 && !this.disposed) {
+                    flushPendingVectorRemovals(this.dbAdapter, this.pendingRemovedIds)
+                }
+            }
+        }
+        const next = this.writeTail.then(run, run)
+        this.writeTail = next.then(() => undefined, () => undefined)
         return next
     }
 
     public async rebuildIndex(
         progress?: ProgressContext,
-        options?: {
-            force?: boolean
-            batchSize?: number
-            pageSize?: number
-            projectNumber?: number
-            workspaceId?: string
-        }
+        options?: { force?: boolean; batchSize?: number; pageSize?: number; projectNumber?: number; workspaceId?: string }
     ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
         return this.enqueueMutation(async () => {
             this.rebuildActiveCount++
             try {
                 const wasReady = this.ready
                 await this.initialize()
+                if (this.disposed) throw new Error(DISPOSED_MANAGER_ERROR)
                 if (
                     wasReady &&
                     this.dimensions !== null &&
@@ -479,9 +482,6 @@ export class VectorSearchManager {
                 return await rebuildIndex(this, this.dbAdapter, progress, options)
             } finally {
                 this.rebuildActiveCount--
-                if (this.rebuildActiveCount === 0) {
-                    flushPendingVectorRemovals(this.dbAdapter, this.pendingRemovedIds)
-                }
             }
         })
     }

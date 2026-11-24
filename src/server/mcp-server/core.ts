@@ -109,15 +109,28 @@ async function cleanupFailedStartup(params: {
     closeDatabases: () => void
 }): Promise<void> {
     const { runtime, configManager, shutdownMetrics, closeDatabases } = params
-    runtime.stopBackgroundTasks?.()
-    configManager.close()
+    try {
+        runtime.stopBackgroundTasks?.()
+    } catch {
+        // best-effort timer teardown
+    }
+    try {
+        configManager.close()
+    } catch {
+        // best-effort config watcher teardown
+    }
     if (shutdownMetrics !== undefined) {
         await shutdownMetrics().catch(() => undefined)
     }
     await runtime.auditLogger?.close().catch(() => undefined)
     await flushAgentIssues().catch(() => undefined)
     await awaitPendingVectorInit(runtime)
-    closeDatabases()
+    await runtime.disposeVectorManagers?.().catch(() => undefined)
+    try {
+        closeDatabases()
+    } catch {
+        // best-effort database teardown
+    }
 }
 
 function loadAndValidateTools(

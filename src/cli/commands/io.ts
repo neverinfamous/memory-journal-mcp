@@ -296,10 +296,11 @@ export function resolveImportWriteScope(
 export async function importMarkdownAction(options: z.infer<typeof importMarkdownSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     let exitCode = 0
+    let vectorManager: VectorSearchManager | undefined
     try {
         const resolvedDir = await assertSafeCliDir(options.dir, 'markdown import')
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
-        const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+        vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         const result = await importMarkdownEntries(
             resolvedDir,
@@ -326,6 +327,7 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
         process.stderr.write(`Import markdown failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
+        await vectorManager?.dispose().catch(() => undefined)
         db.close()
     }
     if (exitCode !== 0) {
@@ -336,11 +338,12 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
 export async function importExternalAction(options: z.infer<typeof importExternalSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     let exitCode = 0
+    let vectorManager: VectorSearchManager | undefined
     try {
         if (!options.format) throw new Error('--format is required for external import')
         const resolvedDir = await assertSafeCliDir(options.dir, 'external import')
         const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
-        const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+        vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
         const { parsedFiles, errors } = await collectExternalMarkdownFiles(
             resolvedDir,
             options.format,
@@ -373,6 +376,7 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         process.stderr.write(`Import external failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
+        await vectorManager?.dispose().catch(() => undefined)
         db.close()
     }
     if (exitCode !== 0) {

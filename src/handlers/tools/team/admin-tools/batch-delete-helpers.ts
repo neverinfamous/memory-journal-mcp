@@ -243,6 +243,9 @@ export async function executeTeamBatchDelete(
         wsId
     )
     await sendProgress(context.progress, 1, 2, `Deleted ${String(deleted.length)} team entries...`)
+    if (typeof teamDb.deleteVectors === 'function' && deleted.length > 0 && typeof context.teamVectorManager?.markRemoved === 'function') {
+        context.teamVectorManager.markRemoved(deleted)
+    }
     const vectorWarnings =
         typeof teamDb.deleteVectors === 'function'
             ? (await sendProgress(context.progress, 2, 2, 'Team batch delete complete'),

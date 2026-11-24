@@ -10,6 +10,7 @@ import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases
 import { validateSandboxCode } from '../security.js'
 import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from '../security-stripper.js'
 import { parseStringContextPayload } from '../shared-context-parsers.js'
+import { runWithNestedRpcOverrides, type ScopedRpcOverrides } from './nested-exec-runner.js'
 import { getOrCompileVmScript } from './script-and-metadata-cache.js'
 import {
     dispatchSynthesizedNestedEntry,
@@ -327,6 +328,28 @@ interface ExecuteValidatedNestedParams {
     fastPathDepthStorage: AsyncLocalStorage<number>
 }
 
+function buildFastPathRpcOverrides(
+    p: ExecuteValidatedNestedParams,
+    narrowed: { workspaceId?: string; projectNumber?: number },
+    effectiveReadonly: boolean,
+    effectiveDryRun: boolean,
+    effectiveUseTestDb: boolean,
+    isolation: NestedExecIsolationOverrides | undefined
+): ScopedRpcOverrides | undefined {
+    const ws = p.pinnedWorkspace ?? narrowed.workspaceId
+    const proj = p.pinnedProjectNumber ?? narrowed.projectNumber
+    const raw: ScopedRpcOverrides = {
+        ...(effectiveReadonly ? { readonly: true } : {}),
+        ...(effectiveDryRun ? { dryRun: true } : {}),
+        ...(effectiveUseTestDb ? { useTestDb: true } : {}),
+        ...(ws !== undefined ? { workspaceId: ws } : {}),
+        ...(proj !== undefined ? { projectNumber: proj } : {}),
+        ...(isolation?.sessionId !== undefined ? { sessionId: isolation.sessionId } : {}),
+        ...(isolation?.autoVersion !== undefined ? { autoVersion: isolation.autoVersion } : {}),
+    }
+    return Object.keys(raw).length > 0 ? raw : undefined
+}
+
 async function runValidatedNestedCall(p: ExecuteValidatedNestedParams): Promise<unknown> {
     const scopeErr = validateNestedExecScope(
         p.argRec, p.pinnedWorkspace, p.pinnedProjectNumber, p.projectRegistryRaw
@@ -341,17 +364,22 @@ async function runValidatedNestedCall(p: ExecuteValidatedNestedParams): Promise<
     }
     const narrowed = resolveNestedNarrowedScope(p.argRec, p.pinnedWorkspace, p.pinnedProjectNumber, p.projectRegistryRaw)
     const isolation = buildIsolationOverrides(p.argRec, p.timeoutMs, p.maxResultSize, narrowed)
+    const fastPathRpcOverrides = buildFastPathRpcOverrides(
+        p, narrowed, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation
+    )
     const shortcutTimeoutMs = isolation?.timeoutMs ?? p.timeoutMs
     const shortcutMaxResult = isolation?.maxResultSize ?? p.maxResultSize
-    const shortcut = await raceWithSandboxTimeout(
-        tryDispatchNestedShortcut({
-            arg: p.arg, argRec: p.argRec, rawNestedCode: p.rawNestedCode, narrowed,
-            pinnedWorkspace: p.pinnedWorkspace, pinnedProjectNumber: p.pinnedProjectNumber,
-            effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj: p.shimMj,
-            runIsolatedNestedCode: p.runIsolatedNestedCode, isolation, currentDepth: p.currentDepth,
-        }),
-        shortcutTimeoutMs,
-        p.activeTimers
+    const shortcut = await runWithNestedRpcOverrides(fastPathRpcOverrides, () =>
+        raceWithSandboxTimeout(
+            tryDispatchNestedShortcut({
+                arg: p.arg, argRec: p.argRec, rawNestedCode: p.rawNestedCode, narrowed,
+                pinnedWorkspace: p.pinnedWorkspace, pinnedProjectNumber: p.pinnedProjectNumber,
+                effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj: p.shimMj,
+                runIsolatedNestedCode: p.runIsolatedNestedCode, isolation, currentDepth: p.currentDepth,
+            }),
+            shortcutTimeoutMs,
+            p.activeTimers
+        )
     )
     if (shortcut.handled) return enforceNestedResultLimit(shortcut.value, shortcutMaxResult)
 
@@ -373,13 +401,15 @@ async function runValidatedNestedCall(p: ExecuteValidatedNestedParams): Promise<
             compiled.wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, escalatedOverrides
         )
     }
-    const rawResult: unknown = await p.fastPathDepthStorage.run(p.currentDepth + 1, () =>
-        raceWithSandboxTimeout<unknown>(
-            Promise.resolve(
-                getOrCompileVmScript(compiled.wrapped).runInContext(currentVmCtx, { timeout: p.timeoutMs })
-            ),
-            p.timeoutMs,
-            p.activeTimers
+    const rawResult: unknown = await runWithNestedRpcOverrides(fastPathRpcOverrides, () =>
+        p.fastPathDepthStorage.run(p.currentDepth + 1, () =>
+            raceWithSandboxTimeout<unknown>(
+                Promise.resolve(
+                    getOrCompileVmScript(compiled.wrapped).runInContext(currentVmCtx, { timeout: p.timeoutMs })
+                ),
+                p.timeoutMs,
+                p.activeTimers
+            )
         )
     )
     return enforceNestedResultLimit(rawResult, p.maxResultSize)

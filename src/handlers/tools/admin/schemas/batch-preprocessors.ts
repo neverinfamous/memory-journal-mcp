@@ -14,8 +14,8 @@ const PROJECT_ALIAS_KEYS = [
     'projectName',
     'project',
 ] as const
-const ROOT_NUMERIC_PROJECT_KEYS = ['projectNumber', 'project', 'project_id', 'projectId'] as const
-const ROOT_NAMED_PROJECT_KEYS = ['project_name', 'projectName'] as const
+const ROOT_NUMERIC_PROJECT_KEYS = ['projectNumber', 'project_id', 'projectId'] as const
+const ROOT_NAMED_PROJECT_KEYS = ['project_name', 'projectName', 'project'] as const
 
 function firstDefinedEntry(
     obj: Record<string, unknown>,
@@ -68,13 +68,20 @@ function normalizeRootBatchAliases(obj: Record<string, unknown>): void {
         const raw = obj[alias]
         if (typeof raw === 'number') {
             promoteProjectNumberAlias(obj, alias, raw)
-        } else if (typeof raw === 'string' && raw.trim() !== '') {
-            const parsedNum = parseCanonicalPositiveInt(raw.trim())
-            if (parsedNum !== undefined) {
-                promoteProjectNumberAlias(obj, alias, parsedNum)
-            } else {
-                promoteStringWorkspaceAlias(obj, alias)
-            }
+            continue
+        }
+        if (typeof raw !== 'string') continue
+        const trimmed = raw.trim()
+        if (trimmed === '' || trimmed === '*') continue
+        const parsedNum = /^p-?\d+$/i.test(trimmed)
+            ? parseCanonicalPositiveInt(trimmed.replace(/^p-?/i, ''))
+            : parseCanonicalPositiveInt(trimmed)
+        if (parsedNum !== undefined) {
+            promoteProjectNumberAlias(obj, alias, parsedNum)
+        } else if (/^[+-]?[0-9]/.test(trimmed) || /^p-?\d/i.test(trimmed)) {
+            promoteProjectNumberAlias(obj, alias, trimmed)
+        } else {
+            promoteStringWorkspaceAlias(obj, alias)
         }
     }
 }

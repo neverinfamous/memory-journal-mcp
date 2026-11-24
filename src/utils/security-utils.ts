@@ -151,6 +151,37 @@ export function isPlaceholderAuthToken(token: string | undefined | null): boolea
     return trimmed === DEFAULT_PLACEHOLDER_AUTH_TOKEN || /^CHANGEME_/i.test(trimmed)
 }
 
+const REMOTE_URL_USERINFO_RE = /^([a-z][a-z0-9+.-]*:\/\/)[^/\s]+@/i
+const SCP_URL_PASSWORD_RE = /^([^/\s:@]+):[^/\s@]+@/
+
+/**
+ * Strip embedded credentials or userinfo from a Git remote URL and redact residual tokens.
+ */
+export function sanitizeRemoteUrl(remoteUrl: string | null | undefined): string | null {
+    if (remoteUrl === null || remoteUrl === undefined) return null
+    const trimmed = remoteUrl.trim()
+    if (trimmed === '') return null
+
+    try {
+        const parsed = new URL(trimmed)
+        if (parsed.protocol === 'ssh:' || parsed.protocol === 'sftp:') {
+            parsed.password = ''
+            if (parsed.username !== 'git') {
+                parsed.username = ''
+            }
+        } else {
+            parsed.username = ''
+            parsed.password = ''
+        }
+        return sanitizeErrorForLogging(parsed.toString())
+    } catch {
+        const stripped = trimmed
+            .replace(REMOTE_URL_USERINFO_RE, '$1')
+            .replace(SCP_URL_PASSWORD_RE, '$1@')
+        return sanitizeErrorForLogging(stripped)
+    }
+}
+
 /**
  * Sanitizes an error message by replacing any detected tokens with '[REDACTED]'.
  * This is a defense-in-depth measure for error logging paths.

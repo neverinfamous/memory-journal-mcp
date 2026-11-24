@@ -116,18 +116,27 @@ async function runVectorMaintenanceJob(
     }
 }
 
+function isManagerDisposed(manager: VectorSearchManager): boolean {
+    return typeof manager.isDisposed === 'function' && manager.isDisposed()
+}
+
 async function initSecondaryManagerStep(
     manager: VectorSearchManager | undefined,
     phase: string,
     logLabel: string,
-    maintenanceManager: MaintenanceManager | undefined
+    maintenanceManager: MaintenanceManager | undefined,
+    isCancelled: () => boolean
 ): Promise<boolean> {
     if (manager === undefined) return true
+    if (isCancelled() || isManagerDisposed(manager)) return false
     try {
-        return await runVectorMaintenanceJob(maintenanceManager, phase, () => manager.initialize())
+        return await runVectorMaintenanceJob(maintenanceManager, phase, () => {
+            if (isCancelled() || isManagerDisposed(manager)) return Promise.resolve()
+            return manager.initialize()
+        })
     } catch (err: unknown) {
         logger.error(logLabel, { module: 'McpServer', error: err })
-        return true
+        return !isCancelled() && !isManagerDisposed(manager)
     }
 }
 
@@ -135,15 +144,18 @@ async function initSecondaryRebuildManagers(
     testVectorManager: VectorSearchManager | undefined,
     primaryTeamVectorManager: VectorSearchManager | undefined,
     testTeamVectorManager: VectorSearchManager | undefined,
-    maintenanceManager: MaintenanceManager | undefined
+    maintenanceManager: MaintenanceManager | undefined,
+    isCancelled: () => boolean
 ): Promise<void> {
+    if (isCancelled()) return
     const testOk = await initSecondaryManagerStep(
         testVectorManager,
         'test-init',
         'Background test vector init failed',
-        maintenanceManager
+        maintenanceManager,
+        isCancelled
     )
-    if (!testOk || primaryTeamVectorManager === undefined) return
+    if (!testOk || isCancelled() || primaryTeamVectorManager === undefined) return
     logger.info('Team vector search manager eager initialization started in background', {
         module: 'McpServer',
     })
@@ -151,14 +163,16 @@ async function initSecondaryRebuildManagers(
         primaryTeamVectorManager,
         'team-init',
         'Background team vector init failed',
-        maintenanceManager
+        maintenanceManager,
+        isCancelled
     )
-    if (!teamOk) return
+    if (!teamOk || isCancelled()) return
     await initSecondaryManagerStep(
         testTeamVectorManager,
         'test-team-init',
         'Background test team vector init failed',
-        maintenanceManager
+        maintenanceManager,
+        isCancelled
     )
 }
 
@@ -167,19 +181,23 @@ function scheduleAutoRebuildVectorInits(
     testVectorManager: VectorSearchManager | undefined,
     primaryTeamVectorManager: VectorSearchManager | undefined,
     testTeamVectorManager: VectorSearchManager | undefined,
-    maintenanceManager: MaintenanceManager | undefined
+    maintenanceManager: MaintenanceManager | undefined,
+    isCancelled: () => boolean
 ): Promise<void>[] {
     logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
     const chain = (async (): Promise<void> => {
         try {
-            const initOk = await runVectorMaintenanceJob(maintenanceManager, 'primary-init', () =>
-                primaryVectorManager.initialize()
-            )
-            if (!initOk) return
+            if (isCancelled() || isManagerDisposed(primaryVectorManager)) return
+            const initOk = await runVectorMaintenanceJob(maintenanceManager, 'primary-init', () => {
+                if (isCancelled() || isManagerDisposed(primaryVectorManager)) return Promise.resolve()
+                return primaryVectorManager.initialize()
+            })
+            if (!initOk || isCancelled() || isManagerDisposed(primaryVectorManager)) return
             const rebuildOk = await runVectorMaintenanceJob(
                 maintenanceManager,
                 'primary-rebuild',
                 async () => {
+                    if (isCancelled() || isManagerDisposed(primaryVectorManager)) return
                     const rebuilt = await primaryVectorManager.rebuildIndex()
                     const rebuildLog = {
                         module: 'McpServer',
@@ -195,15 +213,17 @@ function scheduleAutoRebuildVectorInits(
                     }
                 }
             )
-            if (!rebuildOk) return
+            if (!rebuildOk || isCancelled()) return
         } catch (err: unknown) {
             logger.error('Background vector init/rebuild failed', { module: 'McpServer', error: err })
+            if (isCancelled()) return
         }
         await initSecondaryRebuildManagers(
             testVectorManager,
             primaryTeamVectorManager,
             testTeamVectorManager,
-            maintenanceManager
+            maintenanceManager,
+            isCancelled
         )
     })()
 
@@ -215,7 +235,8 @@ function scheduleEagerVectorInits(
     testVectorManager: VectorSearchManager | undefined,
     primaryTeamVectorManager: VectorSearchManager | undefined,
     testTeamVectorManager: VectorSearchManager | undefined,
-    maintenanceManager: MaintenanceManager | undefined
+    maintenanceManager: MaintenanceManager | undefined,
+    isCancelled: () => boolean
 ): Promise<void>[] {
     // Eager-load the model in the background so the first request isn't blocked
     logger.info('Vector search manager eager initialization started in background', {
@@ -223,17 +244,22 @@ function scheduleEagerVectorInits(
     })
     const chain = (async (): Promise<void> => {
         try {
-            const p1 = await runVectorMaintenanceJob(maintenanceManager, 'primary-eager-init', () =>
-                primaryVectorManager.initialize()
-            )
-            if (!p1) return
+            if (isCancelled() || isManagerDisposed(primaryVectorManager)) return
+            const p1 = await runVectorMaintenanceJob(maintenanceManager, 'primary-eager-init', () => {
+                if (isCancelled() || isManagerDisposed(primaryVectorManager)) return Promise.resolve()
+                return primaryVectorManager.initialize()
+            })
+            if (!p1 || isCancelled()) return
             if (testVectorManager !== undefined) {
                 const p2 = await runVectorMaintenanceJob(
                     maintenanceManager,
                     'test-eager-init',
-                    () => testVectorManager.initialize()
+                    () => {
+                        if (isCancelled() || isManagerDisposed(testVectorManager)) return Promise.resolve()
+                        return testVectorManager.initialize()
+                    }
                 )
-                if (!p2) return
+                if (!p2 || isCancelled()) return
             }
             // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
             if (primaryTeamVectorManager !== undefined) {
@@ -244,12 +270,18 @@ function scheduleEagerVectorInits(
                 const t1 = await runVectorMaintenanceJob(
                     maintenanceManager,
                     'team-eager-init',
-                    () => primaryTeamVectorManager.initialize()
+                    () => {
+                        if (isCancelled() || isManagerDisposed(primaryTeamVectorManager)) {
+                            return Promise.resolve()
+                        }
+                        return primaryTeamVectorManager.initialize()
+                    }
                 )
-                if (!t1 || testTeamVectorManager === undefined) return
-                await runVectorMaintenanceJob(maintenanceManager, 'test-team-eager-init', () =>
-                    testTeamVectorManager.initialize()
-                )
+                if (!t1 || isCancelled() || testTeamVectorManager === undefined) return
+                await runVectorMaintenanceJob(maintenanceManager, 'test-team-eager-init', () => {
+                    if (isCancelled() || isManagerDisposed(testTeamVectorManager)) return Promise.resolve()
+                    return testTeamVectorManager.initialize()
+                })
             }
         } catch (err: unknown) {
             logger.error('Background vector init failed', { module: 'McpServer', error: err })
@@ -292,20 +324,24 @@ export function createVectorManagers(inputs: VectorManagerInputs): VectorManager
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
+    let cancelled = false
+    const isCancelled = (): boolean => cancelled
     const pendingInits = options.autoRebuildIndex
         ? scheduleAutoRebuildVectorInits(
               primaryVectorManager,
               testVectorManager,
               primaryTeamVectorManager,
               testTeamVectorManager,
-              maintenanceManager
+              maintenanceManager,
+              isCancelled
           )
         : scheduleEagerVectorInits(
               primaryVectorManager,
               testVectorManager,
               primaryTeamVectorManager,
               testTeamVectorManager,
-              maintenanceManager
+              maintenanceManager,
+              isCancelled
           )
 
     const allManagers = [
@@ -315,6 +351,7 @@ export function createVectorManagers(inputs: VectorManagerInputs): VectorManager
         testTeamVectorManager,
     ].filter((m): m is VectorSearchManager => m !== undefined)
     const disposeVectorManagers = async (): Promise<void> => {
+        cancelled = true
         await Promise.allSettled(allManagers.map((m) => m.dispose()))
     }
     const pendingVectorInit = Promise.allSettled(pendingInits).then(() => undefined)

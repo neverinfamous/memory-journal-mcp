@@ -221,7 +221,8 @@ export async function searchSimilarEntriesById(
     targetWs: string,
     projectNumber?: number,
     prefetchedEntry?: JournalEntry,
-    expectedDimensions?: number
+    expectedDimensions?: number,
+    persistVector?: (entryId: number, embedding: Float32Array) => Promise<void>
 ): Promise<SemanticSearchResult[]> {
     if (!Number.isSafeInteger(entryId) || entryId <= 0) {
         throw new Error(`Entry ${String(entryId)} not found`)
@@ -261,7 +262,11 @@ export async function searchSimilarEntriesById(
                 `Embedding dimension mismatch: expected ${String(expectedDimensions)}, got ${String(queryEmbedding.length)}`
             )
         }
-        dbAdapter.upsertVector(entryId, queryEmbedding)
+        if (persistVector !== undefined) {
+            await persistVector(entryId, queryEmbedding)
+        } else {
+            dbAdapter.upsertVector(entryId, queryEmbedding)
+        }
     }
 
     const results = dbAdapter.searchVectors(queryEmbedding, safeLimit + 1, targetWs, projectNumber)
@@ -275,15 +280,22 @@ export async function upsertEntryChunksSequentially(
     batchSize: number,
     embedSettled: (texts: readonly string[]) => Promise<PromiseSettledResult<Float32Array>[]>,
     upsertBatch: ((items: { entryId: number; embedding: Float32Array }[]) => void) | undefined,
-    upsertSingle: (entryId: number, embedding: Float32Array) => void
+    upsertSingle: (entryId: number, embedding: Float32Array) => void,
+    shouldAbort?: () => boolean
 ): Promise<void> {
     let firstRejection: unknown = undefined
     let hasRejection = false
 
     const processFrom = async (offset: number): Promise<void> => {
         if (offset >= entries.length) return
+        if (shouldAbort?.() === true) {
+            throw new Error('VectorSearchManager has been disposed')
+        }
         const chunk = entries.slice(offset, offset + batchSize)
         const settled = await embedSettled(chunk.map(formatEntryForEmbedding))
+        if (shouldAbort?.() === true) {
+            throw new Error('VectorSearchManager has been disposed')
+        }
         const items: { entryId: number; embedding: Float32Array }[] = []
         for (let i = 0; i < chunk.length; i++) {
             const entry = chunk[i]
@@ -308,4 +320,98 @@ export async function upsertEntryChunksSequentially(
 
     await processFrom(0)
     if (hasRejection) throw firstRejection
+}
+
+/** Execute a validated text vector search and return threshold-filtered candidates. */
+export async function runVectorCandidateQuery(opts: {
+    dbAdapter: IDatabaseAdapter
+    query: string
+    limit: number
+    threshold: number
+    targetWs: string
+    projectNumber: number | undefined
+    logLabel: string
+    initialize: () => Promise<void>
+    generateEmbedding: (text: string) => Promise<Float32Array>
+    isDisposed: () => boolean
+    disposedErrorMessage: string
+}): Promise<VectorCandidate[] | undefined> {
+    if (
+        !Number.isSafeInteger(opts.limit) ||
+        opts.limit <= 0 ||
+        !Number.isFinite(opts.threshold) ||
+        opts.query.trim() === ''
+    ) {
+        return undefined
+    }
+    const safeLimit = Math.min(opts.limit, 10_000)
+    await opts.initialize()
+    if (opts.isDisposed()) throw new Error(opts.disposedErrorMessage)
+    if (typeof opts.dbAdapter?.hasVectors === 'function' && !opts.dbAdapter.hasVectors()) {
+        return undefined
+    }
+    try {
+        const queryEmbedding = await opts.generateEmbedding(opts.query)
+        if (opts.isDisposed()) throw new Error(opts.disposedErrorMessage)
+        const results = opts.dbAdapter.searchVectors(
+            queryEmbedding,
+            safeLimit,
+            opts.targetWs,
+            opts.projectNumber
+        )
+        return collectCandidates(results, opts.threshold)
+    } catch (error) {
+        logger.error(opts.logLabel, {
+            error: error instanceof Error ? error.message : String(error),
+            query: opts.query,
+        })
+        throw error
+    }
+}
+
+/** Execute similarity lookup by entry ID with validation, init/disposal checks, and error logging. */
+export async function runEntryIdVectorLookup(opts: {
+    dbAdapter: IDatabaseAdapter
+    entryId: number
+    limit: number
+    threshold: number
+    targetWs: string
+    projectNumber: number | undefined
+    prefetchedEntry: JournalEntry | undefined
+    expectedDimensions: number | undefined
+    initialize: () => Promise<void>
+    generateEmbedding: (text: string) => Promise<Float32Array>
+    isDisposed: () => boolean
+    disposedErrorMessage: string
+    persistVector: (entryId: number, embedding: Float32Array) => Promise<void>
+}): Promise<SemanticSearchResult[]> {
+    if (!Number.isSafeInteger(opts.entryId) || opts.entryId <= 0) {
+        throw new Error(`Entry ${String(opts.entryId)} not found`)
+    }
+    if (!Number.isSafeInteger(opts.limit) || opts.limit <= 0 || !Number.isFinite(opts.threshold)) {
+        return []
+    }
+    const safeLimit = Math.min(opts.limit, 10_000)
+    await opts.initialize()
+    if (opts.isDisposed()) throw new Error(opts.disposedErrorMessage)
+
+    try {
+        return await searchSimilarEntriesById(
+            opts.dbAdapter,
+            opts.generateEmbedding,
+            opts.entryId,
+            safeLimit,
+            opts.threshold,
+            opts.targetWs,
+            opts.projectNumber,
+            opts.prefetchedEntry,
+            opts.expectedDimensions,
+            opts.persistVector
+        )
+    } catch (error) {
+        logger.error(`Semantic search by entry ID ${opts.entryId} failed`, {
+            error: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+    }
 }

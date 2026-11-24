@@ -59,7 +59,7 @@ function normalizeBatchCreateAndUpdateArgs(
 ): { error: Record<string, unknown> } | undefined {
     if (BATCH_CREATE_METHODS.has(methodName) && args.length === 1) {
         if (Array.isArray(args[0])) args[0] = { entries: args[0] }
-        else if (isRecord(args[0]) && !('entries' in args[0])) {
+        else if (isRecord(args[0]) && args[0]['entries'] === undefined) {
             if (!Array.isArray(args[0]['items'])) {
                 return batchValidationError(`${methodName} requires an 'entries' array.`, 'Provide { entries: [...] } as the argument')
             }
@@ -71,7 +71,7 @@ function normalizeBatchCreateAndUpdateArgs(
 
     if (BATCH_UPDATE_METHODS.has(methodName) && args.length === 1) {
         if (Array.isArray(args[0])) args[0] = { updates: args[0] }
-        else if (isRecord(args[0]) && !('updates' in args[0])) {
+        else if (isRecord(args[0]) && args[0]['updates'] === undefined) {
             const aliasKey = Array.isArray(args[0]['items'])
                 ? 'items'
                 : Array.isArray(args[0]['entries'])

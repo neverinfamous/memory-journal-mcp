@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
@@ -9,21 +10,23 @@ import { coerceIntString } from '../schemas/constants-and-primitives.js'
 import { EntriesListOutputSchema, MAX_QUERY_LIMIT, relaxedNumber } from '../schemas.js'
 
 function preprocessProjectNumber(val: unknown): unknown {
-    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) return undefined
+    if (val === undefined) return undefined
     const parsed = parsePositiveProjectNumber(val)
     return parsed ?? Number.NaN
 }
 
 const EmptyStrictSchema = z.object({}).strict()
 
-const ListDeletedEntriesMcpSchema = z.object({
-    limit: relaxedNumber().optional().default(50),
-    offset: relaxedNumber().optional().default(0),
-    workspace_id: z.string().optional().describe('Filter by workspace ID, or "*" for all workspaces'),
-    workspaceId: z.string().optional().describe('Workspace identifier alias'),
-    project_number: relaxedNumber().optional().describe('Filter by numeric project ID'),
-    projectNumber: relaxedNumber().optional().describe('Project number alias'),
-})
+const ListDeletedEntriesMcpSchema = z
+    .object({
+        limit: relaxedNumber().optional().default(50),
+        offset: relaxedNumber().optional().default(0),
+        workspace_id: z.string().optional().describe('Filter by workspace ID, or "*" for all workspaces'),
+        workspaceId: z.string().optional().describe('Workspace identifier alias'),
+        project_number: relaxedNumber().optional().describe('Filter by numeric project ID'),
+        projectNumber: relaxedNumber().optional().describe('Project number alias'),
+    })
+    .strict()
 
 const ListDeletedEntriesStrictSchema = z
     .object({
@@ -90,9 +93,23 @@ function executeGetVectorIndexStats(
 function executeListDeletedEntries(context: ToolContext, params: unknown): unknown {
     try {
         const parsed = ListDeletedEntriesStrictSchema.parse(params)
+        if (
+            parsed.workspace_id !== undefined &&
+            parsed.workspaceId !== undefined &&
+            parsed.workspace_id.trim().toLowerCase() !== parsed.workspaceId.trim().toLowerCase()
+        ) {
+            throw new ValidationError('Conflicting workspace_id and workspaceId values provided')
+        }
+        if (
+            parsed.project_number !== undefined &&
+            parsed.projectNumber !== undefined &&
+            parsed.project_number !== parsed.projectNumber
+        ) {
+            throw new ValidationError('Conflicting project_number and projectNumber values provided')
+        }
         const rawWs = parsed.workspace_id ?? parsed.workspaceId
         const rawProj = parsed.project_number ?? parsed.projectNumber
-        const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
+        const wsId = rawWs?.trim() === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
         const projectNumber = alignedProjectFilter(
             wsId,
             rawProj,

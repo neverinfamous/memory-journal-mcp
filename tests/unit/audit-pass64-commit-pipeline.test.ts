@@ -66,7 +66,7 @@ describe('Pass 64 Commit Pipeline Hardening & Prompts (P-L1, Q-M4, AP1–AP2)', 
     }, 30_000)
 
     it('AP1–AP2: bumps AUDIT_PROMPT_REVISION to pass64 and embeds Pass 64 performance and code-quality checks', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass88')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass89')
 
         const dbPath = path.join(
             os.tmpdir(),
@@ -80,7 +80,7 @@ describe('Pass 64 Commit Pipeline Hardening & Prompts (P-L1, Q-M4, AP1–AP2)', 
                 adapter
             )
             const perfText = perfRes.messages[0]?.content.text ?? ''
-            expect(perfText).toContain('Prompt revision: 2026-11-24-audit-pass88')
+            expect(perfText).toContain('Prompt revision: 2026-11-24-audit-pass89')
             expect(perfText).toContain('inside-loop Zod schema constructors')
             expect(perfText).toContain('redundant pre-filter `git ls-files` subprocesses')
             expect(perfText).toContain('explore')
@@ -92,7 +92,7 @@ describe('Pass 64 Commit Pipeline Hardening & Prompts (P-L1, Q-M4, AP1–AP2)', 
                 adapter
             )
             const cqText = cqRes.messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass88')
+            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass89')
             expect(cqText).toContain('case-sensitive scratch/private-path guards')
             expect(cqText).toContain('per-entry registry sanitization')
             expect(cqText).toContain('shorter short-flag prefix checks (`-m*`)')

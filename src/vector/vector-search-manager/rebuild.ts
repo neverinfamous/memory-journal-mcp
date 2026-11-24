@@ -234,24 +234,27 @@ async function processBatch(
         vectorsToUpsert.push(...vectors)
     }
 
-    // Upsert the batch into the database
-    if (vectorsToUpsert.length === 0) return true
+    // Upsert the batch into the database, skipping entries deleted while embedding
+    if (manager.isDisposed()) return false
+    const liveVectors = manager.filterLiveVectors(vectorsToUpsert)
+    if (liveVectors.length === 0) return true
     try {
-        dbAdapter.upsertVectors(vectorsToUpsert)
-        stats.indexed += vectorsToUpsert.length
+        dbAdapter.upsertVectors(liveVectors)
+        stats.indexed += liveVectors.length
     } catch (err) {
-        stats.errorsCount += vectorsToUpsert.length
+        stats.errorsCount += liveVectors.length
         const errorMessage = err instanceof Error ? err.message : String(err)
         stats.firstError ??= errorMessage
         logger.error('Failed to upsert vector batch', {
             error: errorMessage,
-            batchSize: vectorsToUpsert.length,
+            batchSize: liveVectors.length,
         })
     }
     return true
 }
 
 function cleanupStaleVectorsSafely(dbAdapter: IDatabaseAdapter): string | undefined {
+    if (typeof dbAdapter.cleanupStaleVectors !== 'function') return undefined
     try {
         dbAdapter.cleanupStaleVectors()
         return undefined
@@ -458,7 +461,7 @@ export async function rebuildIndex(
         stats
     )
 
-    const cleanupError = stats.errorsCount === 0 ? cleanupStaleVectorsSafely(dbAdapter) : undefined
+    const cleanupError = !manager.isDisposed() ? cleanupStaleVectorsSafely(dbAdapter) : undefined
 
     return {
         success: stats.errorsCount === 0 && cleanupError === undefined,

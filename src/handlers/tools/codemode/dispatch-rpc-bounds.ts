@@ -225,7 +225,7 @@ function checkToolSpecificRpcBounds(
         return checkDirectoryBoundsForScope(rec['absolute_path'], 'absolute_path', effectivePinnedWs, pinnedProj, registry, true)
     }
     if (IO_DIR_TOOL_NAMES.has(toolName)) {
-        for (const dirKey of ['output_dir', 'source_dir'] as const) {
+        for (const dirKey of ['output_dir', 'source_dir', 'target_dir', 'path', 'filepath', 'dir'] as const) {
             const dirErr = checkDirectoryBoundsForScope(rec[dirKey], dirKey, effectivePinnedWs, pinnedProj, registry, false)
             if (dirErr !== undefined) return dirErr
         }
@@ -351,6 +351,49 @@ export function resolveEffectiveRpcScope(
     }
 }
 
+function isUnknownArray(value: unknown): value is unknown[] {
+    return Array.isArray(value)
+}
+
+function promoteBatchAliasIfNeeded(
+    paramsObj: Record<string, unknown>,
+    canonicalKey: 'entries' | 'updates',
+    aliasKeys: readonly ('items' | 'entries')[],
+    promoteAlias: boolean
+): unknown[] | undefined {
+    const existing = paramsObj[canonicalKey]
+    if (isUnknownArray(existing)) return existing
+    if (existing !== undefined) return undefined
+    for (const aliasKey of aliasKeys) {
+        const candidate = paramsObj[aliasKey]
+        if (isUnknownArray(candidate)) {
+            if (promoteAlias) {
+                paramsObj[canonicalKey] = candidate
+                Reflect.deleteProperty(paramsObj, aliasKey)
+            }
+            return candidate
+        }
+    }
+    return undefined
+}
+
+/** Resolve batch array items (or canonical key with alias promotion when explicit canonical key is undefined). */
+export function resolveBatchItemsForBounds(
+    toolName: string,
+    paramsObj: Record<string, unknown>,
+    promoteAlias = false
+): { key: 'entries' | 'updates'; items: unknown[] } | undefined {
+    if (toolName === 'batch_create_entries' || toolName === 'team_batch_create_entries') {
+        const items = promoteBatchAliasIfNeeded(paramsObj, 'entries', ['items'], promoteAlias)
+        return items !== undefined ? { key: 'entries', items } : undefined
+    }
+    if (toolName === 'batch_update_entries' || toolName === 'team_batch_update_entries') {
+        const items = promoteBatchAliasIfNeeded(paramsObj, 'updates', ['items', 'entries'], promoteAlias)
+        return items !== undefined ? { key: 'updates', items } : undefined
+    }
+    return undefined
+}
+
 /**
  * Ensures nested `mj.executeCode` RPC overrides act as monotonic scope bounds that cannot be
  * widened by explicit tool or batch-item parameters.
@@ -375,23 +418,12 @@ export function validateRpcOverrideBounds(
     const topErr = checkRecordAgainstRpcBounds(normalizedParams, pinnedWs, pinnedProj, registry)
     if (topErr !== undefined) return topErr
 
-    const batchKey =
-        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
-        Array.isArray(normalizedParams['entries'])
-            ? 'entries'
-            : (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
-                Array.isArray(normalizedParams['updates'])
-              ? 'updates'
-              : undefined
-
-    if (batchKey !== undefined) {
-        const batchItems = normalizedParams[batchKey]
-        if (Array.isArray(batchItems)) {
-            for (const item of batchItems) {
-                if (!isRecord(item)) continue
-                const itemErr = checkRecordAgainstRpcBounds(item, pinnedWs, pinnedProj, registry)
-                if (itemErr !== undefined) return itemErr
-            }
+    const resolvedBatch = resolveBatchItemsForBounds(tool.name, normalizedParams)
+    if (resolvedBatch !== undefined) {
+        for (const item of resolvedBatch.items) {
+            if (!isRecord(item)) continue
+            const itemErr = checkRecordAgainstRpcBounds(item, pinnedWs, pinnedProj, registry)
+            if (itemErr !== undefined) return itemErr
         }
     }
     return undefined

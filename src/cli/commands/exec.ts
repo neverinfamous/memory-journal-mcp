@@ -1,8 +1,12 @@
 import type { Command } from 'commander'
 import { initializeDependencies } from '../../server/mcp-server/initialization.js'
+import { awaitPendingVectorInit, closeServerResources } from '../../server/mcp-server/core-helpers.js'
 import { resolveActiveBriefingConfig } from '../../server/mcp-server/tool-registration/register-tools-helpers.js'
 import { callTool } from '../../handlers/tools/index.js'
+import { disposeCodemodeResources } from '../../handlers/tools/codemode/singleton-state.js'
+import { closeCrossTeamAdapters } from '../../handlers/tools/search/cross-team.js'
 import { globalSubscriptionManager } from '../../server/subscription-manager.js'
+import { flushAgentIssues } from '../../utils/issue-logger.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import type { ServerContext } from '../../server/mcp-server/types.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
@@ -157,6 +161,51 @@ function buildExecToolConfig(
     return customToolHandlerConfig
 }
 
+async function cleanupExecResources(context: ServerContext): Promise<void> {
+    try {
+        context.runtime.stopBackgroundTasks?.()
+    } catch {
+        // best-effort timer teardown
+    }
+    try {
+        context.configManager.close()
+    } catch {
+        // best-effort config watcher teardown
+    }
+    if (context.runtime.auditLogger) {
+        try {
+            await context.runtime.auditLogger.close()
+        } catch {
+            // best-effort audit logger teardown
+        }
+    }
+    if (context.activeMetricsPath) {
+        try {
+            await context.runtime.metrics.saveToFile(context.activeMetricsPath)
+        } catch {
+            // best-effort metrics flush
+        }
+    }
+    await flushAgentIssues().catch(() => undefined)
+    try {
+        disposeCodemodeResources()
+    } catch {
+        // best-effort codemode worker teardown
+    }
+    await awaitPendingVectorInit(context.runtime)
+    await context.runtime.disposeVectorManagers?.().catch(() => undefined)
+    try {
+        closeServerResources([context.db, context.testDb, context.teamDb, context.testTeamDb])
+    } catch {
+        // best-effort db close
+    }
+    try {
+        closeCrossTeamAdapters()
+    } catch {
+        // best-effort cross-team db close
+    }
+}
+
 export async function execAction(scriptPath: string, options: ExecOptions, command: Command): Promise<void> {
     const { serverOptions, execWorkspaceId, explicitDefaultProject } = prepareExecServerOptions(
         options,
@@ -197,40 +246,7 @@ export async function execAction(scriptPath: string, options: ExecOptions, comma
         process.stderr.write(`Execution failed: ${formatCliError(error)}\n`)
         exitCode = 1
     } finally {
-        try {
-            context.runtime.stopBackgroundTasks?.()
-        } catch {
-            // best-effort timer teardown
-        }
-        try {
-            context.configManager.close()
-        } catch {
-            // best-effort config watcher teardown
-        }
-        if (context.runtime.auditLogger) {
-            try {
-                await context.runtime.auditLogger.close()
-            } catch {
-                // best-effort audit logger teardown
-            }
-        }
-        if (context.activeMetricsPath) {
-            try {
-                await context.runtime.metrics.saveToFile(context.activeMetricsPath)
-            } catch {
-                // best-effort metrics flush
-            }
-        }
-        try {
-            context.db.close()
-        } catch {
-            // best-effort db close
-        }
-        try {
-            context.teamDb?.close()
-        } catch {
-            // best-effort teamDb close
-        }
+        await cleanupExecResources(context)
     }
     process.exit(exitCode)
 }

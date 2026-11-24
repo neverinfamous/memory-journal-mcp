@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger.js'
 import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
+import { sanitizeRemoteUrl } from '../../utils/security-utils.js'
 import type { GitHubClient } from './client.js'
 import type { RepoInfo, LocalGitStatus } from './types.js'
 import type { GitHubWorkflowRun } from '../../types/index.js'
@@ -64,7 +65,7 @@ export class RepositoryManager {
             const remotes = remotesSettled.value
             const branch = branchResult.current || null
             const origin = remotes.find((r) => r.name === 'origin')
-            const remoteUrl = origin?.refs?.fetch || null
+            const remoteUrl = sanitizeRemoteUrl(origin?.refs?.fetch || null)
 
             const { owner, repo } = this.parseRemoteUrl(remoteUrl)
 
@@ -86,7 +87,7 @@ export class RepositoryManager {
     }
 
     setCachedRepoInfo(info: RepoInfo): void {
-        this.client.setCache('repoInfo', info)
+        this.client.setCache('repoInfo', { ...info, remoteUrl: sanitizeRemoteUrl(info.remoteUrl) })
     }
 
     private parseRemoteUrl(remoteUrl: string | null): {

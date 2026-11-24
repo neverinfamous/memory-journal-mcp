@@ -17,6 +17,9 @@ export function safeDeleteVectors(
     if (ids.length === 0) return []
     const warnings: string[] = []
     if (typeof db.deleteVectors === 'function') {
+        if (typeof vectorManager?.markRemoved === 'function') {
+            vectorManager.markRemoved(ids)
+        }
         try {
             db.deleteVectors(ids)
             return warnings
@@ -158,6 +161,13 @@ export function findWildcardProjectMismatches(
                     registry,
                     resolveEntry
                 )
+            }
+            if (rootWorkspaceId === '*' && rootProjectNumber !== undefined) {
+                if (u.project_number !== undefined && u.project_number !== rootProjectNumber) {
+                    return true
+                }
+                const entry = resolveEntry(u.entry_id)
+                return entry?.projectNumber !== rootProjectNumber
             }
             const ws = u.workspace_id ?? rootWorkspaceId
             const pn = inheritBatchProjectNumber(

@@ -3,6 +3,7 @@
  * Worker-thread safe (no host DB, config-file, or external npm imports).
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type * as vm from 'node:vm'
 import type { RpcRequest } from '../types.js'
 import type { NestedExecIsolationOverrides, RunIsolatedNestedFn } from './nested-exec-scope.js'
@@ -47,23 +48,73 @@ export interface VmExecutionContextOptions {
     nestedDepth?: number
 }
 
+const nestedRpcOverridesStorage = new AsyncLocalStorage<ScopedRpcOverrides>()
+
+function pickDefinedOverrides(raw: ScopedRpcOverrides): ScopedRpcOverrides | undefined {
+    const cleaned: ScopedRpcOverrides = {
+        ...(raw.readonly === true ? { readonly: true } : {}),
+        ...(raw.dryRun === true ? { dryRun: true } : {}),
+        ...(raw.useTestDb === true ? { useTestDb: true } : {}),
+        ...(raw.workspaceId !== undefined ? { workspaceId: raw.workspaceId } : {}),
+        ...(raw.projectNumber !== undefined ? { projectNumber: raw.projectNumber } : {}),
+        ...(raw.sessionId !== undefined ? { sessionId: raw.sessionId } : {}),
+        ...(raw.autoVersion !== undefined ? { autoVersion: raw.autoVersion } : {}),
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined
+}
+
+function mergeScopedRpcOverrides(
+    outer: ScopedRpcOverrides | undefined,
+    inner: ScopedRpcOverrides | undefined
+): ScopedRpcOverrides | undefined {
+    if (outer === undefined && inner === undefined) return undefined
+    if (outer === undefined) return inner !== undefined ? pickDefinedOverrides(inner) : undefined
+    if (inner === undefined) return pickDefinedOverrides(outer)
+    const nextWs = outer.workspaceId ?? inner.workspaceId
+    const nextProj = outer.projectNumber ?? inner.projectNumber
+    const nextSession = outer.sessionId ?? inner.sessionId
+    const nextAutoVersion =
+        outer.autoVersion === false ? false : (inner.autoVersion ?? outer.autoVersion)
+    return pickDefinedOverrides({
+        ...(outer.readonly === true || inner.readonly === true ? { readonly: true } : {}),
+        ...(outer.dryRun === true || inner.dryRun === true ? { dryRun: true } : {}),
+        ...(outer.useTestDb === true || inner.useTestDb === true ? { useTestDb: true } : {}),
+        ...(nextWs !== undefined ? { workspaceId: nextWs } : {}),
+        ...(nextProj !== undefined ? { projectNumber: nextProj } : {}),
+        ...(nextSession !== undefined ? { sessionId: nextSession } : {}),
+        ...(nextAutoVersion !== undefined ? { autoVersion: nextAutoVersion } : {}),
+    })
+}
+
+/** Run `fn` with active nested RPC override bounds propagated to fast-path RPC calls. */
+export function runWithNestedRpcOverrides<T>(
+    overrides: ScopedRpcOverrides | undefined,
+    fn: () => T
+): T {
+    const merged = mergeScopedRpcOverrides(nestedRpcOverridesStorage.getStore(), overrides)
+    if (merged === undefined) return fn()
+    return nestedRpcOverridesStorage.run(merged, fn)
+}
+
 export function createScopedRpcCall(
     sendRpcRequest: SendRpcRequestFn,
     overrides?: ScopedRpcOverrides
 ): RpcCallFn {
-    return (group: string, method: string, args: unknown[]): Promise<unknown> =>
-        sendRpcRequest({
+    return (group: string, method: string, args: unknown[]): Promise<unknown> => {
+        const merged = mergeScopedRpcOverrides(overrides, nestedRpcOverridesStorage.getStore())
+        return sendRpcRequest({
             group,
             method,
             args,
-            ...(overrides?.readonly === true ? { readonly: true } : {}),
-            ...(overrides?.dryRun === true ? { dryRun: true } : {}),
-            ...(overrides?.useTestDb === true ? { useTestDb: true } : {}),
-            ...(overrides?.workspaceId !== undefined ? { workspaceId: overrides.workspaceId } : {}),
-            ...(overrides?.projectNumber !== undefined ? { projectNumber: overrides.projectNumber } : {}),
-            ...(overrides?.sessionId !== undefined ? { sessionId: overrides.sessionId } : {}),
-            ...(overrides?.autoVersion !== undefined ? { autoVersion: overrides.autoVersion } : {}),
+            ...(merged?.readonly === true ? { readonly: true } : {}),
+            ...(merged?.dryRun === true ? { dryRun: true } : {}),
+            ...(merged?.useTestDb === true ? { useTestDb: true } : {}),
+            ...(merged?.workspaceId !== undefined ? { workspaceId: merged.workspaceId } : {}),
+            ...(merged?.projectNumber !== undefined ? { projectNumber: merged.projectNumber } : {}),
+            ...(merged?.sessionId !== undefined ? { sessionId: merged.sessionId } : {}),
+            ...(merged?.autoVersion !== undefined ? { autoVersion: merged.autoVersion } : {}),
         })
+    }
 }
 
 export function mergeNestedExecutionContext(

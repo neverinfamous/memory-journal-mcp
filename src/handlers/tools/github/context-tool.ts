@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { fenceNonCanonicalRefOrKey } from '../../../utils/security-utils.js'
+import { fenceNonCanonicalRefOrKey, sanitizeRemoteUrl } from '../../../utils/security-utils.js'
 import { GitHubContextOutputSchema } from './schemas.js'
 import {
     fenceIssueMilestone,
@@ -59,6 +59,7 @@ async function executeGitHubContext(
     }
 
     const ctx = await targetGithub.getRepoContext(undefined, target)
+    const sanitizedRemoteUrl = sanitizeRemoteUrl(ctx.remoteUrl)
     return {
         repoName:
             ctx.repoName !== undefined && ctx.repoName !== null
@@ -70,9 +71,11 @@ async function executeGitHubContext(
                 : ctx.branch,
         commit: ctx.commit,
         remoteUrl:
-            ctx.remoteUrl !== undefined && ctx.remoteUrl !== null
-                ? ensureInlineFenced(ctx.remoteUrl)
-                : ctx.remoteUrl,
+            sanitizedRemoteUrl !== null
+                ? ensureInlineFenced(sanitizedRemoteUrl)
+                : ctx.remoteUrl === null
+                  ? null
+                  : undefined,
         issues: ctx.issues.map((i) => ({
             ...fenceIssueMilestone(i),
             title: ensureInlineFenced(i.title),

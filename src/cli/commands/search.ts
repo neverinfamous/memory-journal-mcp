@@ -25,6 +25,7 @@ export async function searchAction(query: string | undefined, options: z.infer<t
 
     const { db, serverOptions } = await getDb(options, command)
     let failed = false
+    let vectorManager: { dispose: () => Promise<void> } | undefined
 
     try {
         const mode = options.mode || 'auto'
@@ -36,15 +37,17 @@ export async function searchAction(query: string | undefined, options: z.infer<t
 
         if (mode === 'semantic') {
             const { VectorSearchManager } = await import('../../vector/vector-search-manager/index.js')
-            const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-            result = await vectorManager.search(finalQuery, limit, 0.25, workspaceId, projectNumber)
+            const manager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+            vectorManager = manager
+            result = await manager.search(finalQuery, limit, 0.25, workspaceId, projectNumber)
         } else if (mode === 'hybrid') {
             const [{ VectorSearchManager }, { hybridSearch }] = await Promise.all([
                 import('../../vector/vector-search-manager/index.js'),
                 import('../../handlers/tools/search/hybrid.js'),
             ])
-            const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-            result = await hybridSearch(finalQuery, db, vectorManager, { limit, ...workspaceFilter, ...projectFilter })
+            const manager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+            vectorManager = manager
+            result = await hybridSearch(finalQuery, db, manager, { limit, ...workspaceFilter, ...projectFilter })
         } else {
             result = db.searchEntries(finalQuery, {
                 limit,
@@ -60,6 +63,7 @@ export async function searchAction(query: string | undefined, options: z.infer<t
         failed = true
         process.stderr.write(`Search failed: ${formatCliError(e)}\n`)
     } finally {
+        await vectorManager?.dispose().catch(() => undefined)
         db.close()
     }
     if (failed) {

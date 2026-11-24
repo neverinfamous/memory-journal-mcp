@@ -7,6 +7,7 @@ import { ValidationError } from '../../../types/errors.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
 import { pairStoredScope } from '../../../utils/write-scope.js'
+import { resolveBatchItemsForBounds } from './dispatch-rpc-bounds.js'
 import { lookupRegistryEntry } from './session-context.js'
 export {
     buildPostRbacSideEffects,
@@ -410,25 +411,6 @@ export function normalizeBatchDispatchItems(
     return undefined
 }
 
-function detectBatchArrayKey(
-    toolName: string,
-    paramsObj: Record<string, unknown>
-): 'entries' | 'updates' | undefined {
-    if (
-        (toolName === 'batch_create_entries' || toolName === 'team_batch_create_entries') &&
-        Array.isArray(paramsObj['entries'])
-    ) {
-        return 'entries'
-    }
-    if (
-        (toolName === 'batch_update_entries' || toolName === 'team_batch_update_entries') &&
-        Array.isArray(paramsObj['updates'])
-    ) {
-        return 'updates'
-    }
-    return undefined
-}
-
 export function prepareBatchDispatch(
     tool: ToolDefinition,
     paramsObj: Record<string, unknown>,
@@ -439,7 +421,7 @@ export function prepareBatchDispatch(
 ):
     | { batchArrayKey?: 'entries' | 'updates'; batchCtx?: BatchScopeHelpersContext }
     | { errorResult: Record<string, unknown> } {
-    const batchArrayKey = detectBatchArrayKey(tool.name, paramsObj)
+    const batchArrayKey = resolveBatchItemsForBounds(tool.name, paramsObj, true)?.key
     if (batchArrayKey === undefined) return {}
     if (
         batchArrayKey === 'updates' &&

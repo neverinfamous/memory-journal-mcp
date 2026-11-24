@@ -54,7 +54,7 @@ export function resolveWorkspaceId(
     content?: string,
     tags?: string[]
 ): string {
-    if (explicitWorkspaceId === '*') {
+    if (explicitWorkspaceId?.trim() === '*') {
         return '*'
     }
     const res = resolveProjectContext(
