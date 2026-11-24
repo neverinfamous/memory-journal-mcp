@@ -86,7 +86,9 @@ export class VectorSearchManager {
     private async loadDefaultEmbeddingModel(): Promise<void> {
         const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
         if (this.transformers === null) {
-            this.transformers = await import('@huggingface/transformers')
+            // [PERF]: Keep dynamic specifier non-literal so tsc/eslint skip 429 @huggingface/transformers .d.ts files
+            const transformersModuleName = '@huggingface/transformers'
+            this.transformers = (await import(transformersModuleName)) as unknown
         }
         const transformersModule = this.transformers as {
             pipeline: (task: string, model: string, options: unknown) => Promise<unknown>

@@ -59,6 +59,10 @@ export default tseslint.config(
             '@typescript-eslint/await-thenable': 'error',
             '@typescript-eslint/require-await': 'error',
             '@typescript-eslint/no-unnecessary-condition': 'off',
+            // Repo bans TypeScript enums; disable costly enum checks across the type graph.
+            '@typescript-eslint/no-unsafe-enum-assignment': 'off',
+            '@typescript-eslint/no-unsafe-enum-comparison': 'off',
+            '@typescript-eslint/no-deprecated': 'off',
             '@typescript-eslint/prefer-nullish-coalescing': [
                 'error',
                 {

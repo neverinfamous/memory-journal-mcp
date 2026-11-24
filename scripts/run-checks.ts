@@ -166,7 +166,17 @@ function runChecksMain(): void {
     if (!target || target === 'lint') {
         console.log('Running lint...')
         const lintDirs = ['src/', 'tests/', 'scripts/', ...(hasLintableSkillFiles() ? ['skills/'] : [])]
-        const passed = runNodeBin(['node_modules', 'eslint', 'bin', 'eslint.js'], lintDirs)
+        const passed = runNodeBin(
+            ['node_modules', 'eslint', 'bin', 'eslint.js'],
+            [
+                '--concurrency',
+                'auto',
+                '--cache',
+                '--cache-location',
+                'node_modules/.cache/eslintcache',
+                ...lintDirs,
+            ]
+        )
         console.log('Checking file lengths (<= 500 lines)...')
         const lengthsPassed = checkFileLengths()
         lintOk = passed && lengthsPassed
@@ -176,9 +186,12 @@ function runChecksMain(): void {
     if (!target || target === 'typecheck') {
         console.log('Running typecheck...')
         const passed =
-            runNodeBin(['node_modules', 'typescript', 'bin', 'tsc'], ['--noEmit']) &&
             runNodeBin(
-                ['node_modules', 'typescript', 'bin', 'tsc'],
+                ['node_modules', '@typescript', 'native-preview', 'lib', 'tsgo.js'],
+                ['--noEmit']
+            ) &&
+            runNodeBin(
+                ['node_modules', '@typescript', 'native-preview', 'lib', 'tsgo.js'],
                 ['-p', 'tsconfig.scripts.json', '--noEmit']
             )
         typecheckOk = passed

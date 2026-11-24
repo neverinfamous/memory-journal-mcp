@@ -1,5 +1,5 @@
-import { Octokit } from '@octokit/rest'
-import { graphql } from '@octokit/graphql'
+import { Octokit, graphql } from './octokit-runtime.js'
+import type { OctokitClient, OctokitGraphqlFn } from './octokit-types.js'
 import * as simpleGitImport from 'simple-git'
 import { logger } from '../../utils/logger.js'
 import type { RateLimitSnapshot } from './types.js'
@@ -17,8 +17,8 @@ type SimpleGitType = typeof simpleGitImport.simpleGit
 const simpleGit: SimpleGitType = simpleGitImport.simpleGit
 
 export class GitHubClient {
-    public octokit: Octokit | null = null
-    public graphqlWithAuth: typeof graphql | null = null
+    public octokit: OctokitClient | null = null
+    public graphqlWithAuth: OctokitGraphqlFn | null = null
     public git: simpleGitImport.SimpleGit
     public latestRateLimit: RateLimitSnapshot | null = null
 

@@ -17,7 +17,7 @@
   "scripts": {
     "build": "pnpm run build:js && pnpm run build:types",
     "build:js": "tsup",
-    "build:types": "tsc --project tsconfig.build.json --emitDeclarationOnly",
+    "build:types": "tsgo --project tsconfig.build.json --emitDeclarationOnly",
     "cli": "tsx src/cli/index.ts",
     "commit": "tsx scripts/commit.ts",
     "dev": "tsc --watch",
@@ -102,6 +102,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "^5.1.0",
     "dotenv": "^18.0.10",
     "esbuild": "0.28.2",

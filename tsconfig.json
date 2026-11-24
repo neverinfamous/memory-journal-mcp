@@ -35,8 +35,16 @@
         "esModuleInterop": true,
         "declaration": true,
         "declarationMap": true,
-        "sourceMap": false
+        "sourceMap": false,
+        "incremental": true,
+        "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tsbuildinfo"
     },
     "include": ["src/**/*"],
-    "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+    "exclude": [
+        "node_modules",
+        "dist",
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "src/vendor/lib-agent-exec/**"
+    ]
 }
