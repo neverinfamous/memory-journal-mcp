@@ -55,8 +55,6 @@ export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
         'better_sqlite3',
         'db-mcp',
         'db_mcp',
-        'lib-db',
-        'db-mcp-wasm',
         'sqlite_create_view',
         'sqlite_query',
         'sqlite_exec',

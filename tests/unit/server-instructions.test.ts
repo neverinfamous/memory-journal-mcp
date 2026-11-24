@@ -98,4 +98,20 @@ describe('server-instructions generation', () => {
         expect(text).not.toContain('/home/alice')
         expect(text).toContain('~/repo/src/app.ts')
     })
+
+    it('preserves trailing Unicode ellipsis on clipped Latest entry previews without re-truncating', () => {
+        const longToken = 'x'.repeat(140)
+        const text = generateStandardInstructions(new Set(['create_entry']), [], {
+            id: 43,
+            timestamp: '2026-11-23T12:00:00Z',
+            entryType: 'technical_note',
+            content: longToken,
+        })
+        const latestSection = text.slice(
+            text.indexOf('**Latest**: #43'),
+            text.indexOf('## Available Help')
+        )
+        expect(latestSection).toContain(`${'x'.repeat(120)}…`)
+        expect(latestSection).not.toContain('...')
+    })
 })

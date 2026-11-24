@@ -16,7 +16,7 @@
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-commander` (`triage` workflow) on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
-- _"Commit the changes and record a structured journal entry with the \`commit\` prompt or \`create_entry\`."_ (Automated lifecycles)
+- _"Commit the changes and record a structured journal entry with the `commit` prompt or `create_entry`."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
@@ -87,7 +87,7 @@ Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_F
 | `full`               | All tools (default)      |
 | `starter`            | Core + search + codemode |
 | `essential`          | Minimal footprint        |
-| `codemode`           | Code Mode sandbox only (\`mj_execute_code\`, \`update_configuration\`) |
+| `codemode`           | Code Mode sandbox only (`mj_execute_code`, `update_configuration`) |
 | `readonly`           | Exposes those groups, then drops tools whose `readOnlyHint` is not `true`. `update_configuration` and `mj_execute_code` stay registered. |
 | `-github`            | Exclude a group          |
 | `-github,-analytics` | Exclude multiple groups  |
@@ -283,7 +283,7 @@ For all environment variables and routing docs, see the **[Configuration Wiki](h
 
 ### 🌐 Scale with HTTP/SSE Transport
 
-For remote access, web-based clients, or HTTP-compatible MCP hosts. The server supports both stateful (SSE) and stateless (serverless) modes.
+For remote access, web-based clients, or HTTP-compatible MCP hosts. The server supports both stateful (SSE) and stateless (no-session HTTP) modes.
 
 > [!IMPORTANT]
 > In HTTP transport mode (`--transport http`), the server enforces three fail-closed startup guards: (1) explicit `ALLOWED_IO_ROOTS` / `--allowed-io-roots` is always required, (2) explicit authentication (`MCP_AUTH_TOKEN` / `--auth-token` or `--oauth-enabled`) is required when binding to a non-loopback address (`0.0.0.0`), and (3) explicit `PUBLIC_ORIGIN` / `--public-origin` is required when `--oauth-enabled` is bound to a non-loopback address.
@@ -305,13 +305,13 @@ docker run --rm -p 3000:3000 \
 
 #### Maintenance & Scheduled Automation
 
-Schedule nightly **[Agentic CMS Automations →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** (`CMS-02` / `CMS-04`) in your MCP client, or run zero-token one-shot maintenance CLI commands (`memory-journal-mcp admin backup`, `admin vacuum`, `admin prune`, `admin rebuild-index`) from container cron / Kubernetes `CronJob` / host schedulers. See the **[CLI Reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/CLI#admin-commands)** for flags.
+Schedule nightly **[Agentic CMS Automations →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** (`CMS-02` / `CMS-04`) in your MCP client, or run zero-token one-shot maintenance CLI commands (`memory-journal-mcp admin backup`, `admin vacuum`, `admin prune`, `admin rebuild-index`) from container cron / Kubernetes `CronJob` / host schedulers. See the **[CLI Reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/CLI#admin)** for flags.
 
 ## 🔐 OAuth 2.1 Authentication
 
 For production deployments, enable full OAuth 2.1 support on the HTTP transport (opt-in via `--oauth-enabled`). Features include RFC 9728/8414 discovery, JWKS token validation, and granular scopes.
 
-**[See the OAuth 2.1 Setup Guide in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport#oauth-21-authentication)**
+**[See the OAuth 2.1 Setup Guide in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport#configuration-reference)**
 
 ## 📄 License
 

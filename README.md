@@ -36,7 +36,7 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-commander` (`triage` workflow) on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
-- _"Commit the changes and record a structured journal entry with the \`commit\` prompt or \`create_entry\`."_ (Automated lifecycles)
+- _"Commit the changes and record a structured journal entry with the `commit` prompt or `create_entry`."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
 **Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://skills`, `memory://health`, `memory://help`, `memory://staleness`, `memory://graph`, GitHub status/milestones, team stats, and metrics/latency). Dynamic repo variants also support cross-repo targeting (like `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://graph/{+repo}`, or `memory://kanban/{+repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
@@ -453,18 +453,18 @@ curl -X POST http://localhost:3000/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
-#### Stateless Mode (Serverless)
+#### Stateless Mode (No-Session HTTP)
 
-For serverless deployments (Lambda, Workers, Vercel), use stateless mode:
+For container or load-balanced Node deployments without sticky sessions (requires a Node process with a local SQLite file; edge/serverless runtimes are not supported), use stateless mode:
 
 ```bash
 memory-journal-mcp --transport http --port 3000 --stateless --allowed-io-roots /path/to/projects
 ```
 
-| Mode                      | Progress Notifications | Legacy SSE | Serverless |
-| ------------------------- | ---------------------- | ---------- | ---------- |
-| Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Complex |
-| Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Native  |
+| Mode                      | Progress Notifications | Legacy SSE | Horizontal Scaling |
+| ------------------------- | ---------------------- | ---------- | ------------------ |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Sticky sessions |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Any instance    |
 
 #### Maintenance, Auto-Prune & Scheduled Jobs
 

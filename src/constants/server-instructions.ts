@@ -138,7 +138,7 @@ export function generateStandardInstructions(
 
     // Add latest entry snapshot for immediate context (compact format)
     if (level !== 'essential' && latestEntry) {
-        const fencedPreview = sliceUntrustedInline(extractPreview(latestEntry.content, 120), 120, '...')
+        const fencedPreview = sliceUntrustedInline(extractPreview(latestEntry.content, 120), 121)
         instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${fencedPreview}\n`
     }
 
