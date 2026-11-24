@@ -17,6 +17,12 @@ const TEST_GIT_ENV: NodeJS.ProcessEnv = {
     GIT_AUTHOR_EMAIL: 'test@example.com',
     GIT_COMMITTER_NAME: 'Test',
     GIT_COMMITTER_EMAIL: 'test@example.com',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'commit.gpgsign',
+    GIT_CONFIG_VALUE_0: 'false',
 }
 
 describe('Pass 61 Commit Pipeline Prompts & NUL-Delimited Anchor Extraction', () => {
@@ -38,11 +44,7 @@ describe('Pass 61 Commit Pipeline Prompts & NUL-Delimited Anchor Extraction', ()
     it('AP1–AP2: bumps AUDIT_PROMPT_REVISION to pass61 and includes POSIX --, --root/-z, and trailer newline checks', async () => {
         expect(AUDIT_PROMPT_REVISION).toBe('2026-11-23-audit-pass78')
 
-        const dbPath = path.join(
-            os.tmpdir(),
-            `mj-pass61-prompts-${String(process.pid)}-${String(Date.now())}.db`
-        )
-        const adapter = new DatabaseAdapter(dbPath, { projectRegistry: {} })
+        const adapter = new DatabaseAdapter(':memory:', { projectRegistry: {} })
         try {
             await adapter.initialize()
             const cqRes = await getCodeQualityAuditPromptDefinition().handler(
@@ -60,27 +62,25 @@ describe('Pass 61 Commit Pipeline Prompts & NUL-Delimited Anchor Extraction', ()
             expect(cqText).not.toMatch(/[A-Z]:\\Users\\/i)
         } finally {
             adapter.close()
-            if (fs.existsSync(dbPath)) fs.rmSync(dbPath, { force: true })
         }
     })
 
     it('P-L2: resolveEntryAnchors and prefetchBatchCommitFiles preserve non-ASCII filenames via git show -z', async () => {
         const tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-anchors-utf8-'))
-        const dbPath = path.join(tmpRepo, 'anchors.db')
-        const adapter = new DatabaseAdapter(dbPath, {
+        const adapter = new DatabaseAdapter(':memory:', {
             projectRegistry: { 'utf8-repo': { path: tmpRepo, project_number: 77 } },
         })
         try {
             await adapter.initialize()
-            execFileSync('git', ['init'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
+            execFileSync('git', ['init', '--quiet'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
             fs.writeFileSync(path.join(tmpRepo, 'initial.ts'), 'export const a = 1;\n', 'utf-8')
             execFileSync('git', ['add', 'initial.ts'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
-            execFileSync('git', ['commit', '-m', 'chore: root'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
+            execFileSync('git', ['commit', '--quiet', '--no-verify', '-m', 'chore: root'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
             const sha1 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: tmpRepo, encoding: 'utf-8', windowsHide: true, env: TEST_GIT_ENV }).trim()
 
             fs.writeFileSync(path.join(tmpRepo, 'café.ts'), 'export const c = 2;\n', 'utf-8')
             execFileSync('git', ['add', 'café.ts'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
-            execFileSync('git', ['commit', '-m', 'feat: add non-ascii file'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
+            execFileSync('git', ['commit', '--quiet', '--no-verify', '-m', 'feat: add non-ascii file'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
             const sha2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: tmpRepo, encoding: 'utf-8', windowsHide: true, env: TEST_GIT_ENV }).trim()
 
             const context = {
@@ -109,5 +109,5 @@ describe('Pass 61 Commit Pipeline Prompts & NUL-Delimited Anchor Extraction', ()
             adapter.close()
             fs.rmSync(tmpRepo, { recursive: true, force: true })
         }
-    })
+    }, 30_000)
 })
