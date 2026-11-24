@@ -93,7 +93,7 @@ ${SCAN_METHOD_2}
 3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**).
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. Whenever a planned fix touches a watch-list file already \`>= 470\` lines, include extracting a cohesive helper module in the fix plan so no edit pushes a file over 500 lines. Diagnostic scans in step 2, and read-only lint or typecheck when the target defines them, are part of the audit. **CRITICAL**: Do not edit project files, apply fixes, or commit until the user explicitly approves the implementation plan. Present the plan as markdown in the chat. Do not add an audit plan file to the repository. The plan must be readable in Cursor and in Antigravity.
-6. After approval, fix critical issues first, then run the target's lint and typecheck and the tests that cover the change.
+6. After approval, fix critical issues first, then run the target's lint and typecheck and the tests that cover the change. In multi-pass audits, run only targeted tests covering changed code between passes, and defer full unit/E2E test suites until after two consecutive clean passes.
 7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.
 
