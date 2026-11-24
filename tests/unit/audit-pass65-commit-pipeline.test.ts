@@ -16,6 +16,9 @@ const TEST_GIT_ENV: NodeJS.ProcessEnv = {
     GIT_AUTHOR_EMAIL: 'test@example.com',
     GIT_COMMITTER_NAME: 'Test',
     GIT_COMMITTER_EMAIL: 'test@example.com',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+    GIT_TERMINAL_PROMPT: '0',
 }
 
 describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–AP2)', () => {
@@ -63,8 +66,7 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
 
     it('Q-M6: resolveEntryAnchors preserves anchors for valid SHAs when a multi-SHA auto_context includes an unresolvable SHA', async () => {
         const tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-anchors-partial-'))
-        const dbPath = path.join(tmpRepo, 'anchors.db')
-        const adapter = new DatabaseAdapter(dbPath, {
+        const adapter = new DatabaseAdapter(':memory:', {
             projectRegistry: { 'partial-repo': { path: tmpRepo, project_number: 88 } },
         })
         try {
@@ -72,7 +74,7 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
             execFileSync('git', ['init'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
             fs.writeFileSync(path.join(tmpRepo, 'kept.ts'), 'export const kept = true;\n', 'utf-8')
             execFileSync('git', ['add', 'kept.ts'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
-            execFileSync('git', ['commit', '-m', 'feat: add kept'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
+            execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'feat: add kept'], { cwd: tmpRepo, stdio: 'ignore', windowsHide: true, env: TEST_GIT_ENV })
             const validSha = execFileSync('git', ['rev-parse', 'HEAD'], {
                 cwd: tmpRepo,
                 encoding: 'utf-8',
@@ -94,7 +96,7 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
             adapter.close()
             fs.rmSync(tmpRepo, { recursive: true, force: true })
         }
-    })
+    }, 30_000)
 
     it('Q-L3: createEntryFromFileInProcess fails fast on blank file paths without waiting for stdin', async () => {
         const t0 = performance.now()
@@ -107,11 +109,7 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
     it('AP1–AP2: bumps AUDIT_PROMPT_REVISION to pass65 and embeds Pass 65 performance and code-quality checks', async () => {
         expect(AUDIT_PROMPT_REVISION).toBe('2026-11-23-audit-pass78')
 
-        const dbPath = path.join(
-            os.tmpdir(),
-            `mj-pass65-prompts-${String(process.pid)}-${String(Date.now())}.db`
-        )
-        const adapter = new DatabaseAdapter(dbPath, { projectRegistry: {} })
+        const adapter = new DatabaseAdapter(':memory:', { projectRegistry: {} })
         try {
             await adapter.initialize()
             const perfRes = await getPerformanceAuditPromptDefinition().handler(
@@ -142,10 +140,6 @@ describe('Pass 65 Commit Pipeline Hardening & Prompts (Q-M5, Q-M6, Q-L3, AP1–A
             expect(cqText).not.toMatch(/[A-Z]:\\Users\\/i)
         } finally {
             adapter.close()
-            for (const suffix of ['', '-wal', '-shm']) {
-                const f = `${dbPath}${suffix}`
-                if (fs.existsSync(f)) fs.rmSync(f, { force: true })
-            }
         }
     })
 })
