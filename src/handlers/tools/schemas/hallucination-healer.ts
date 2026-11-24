@@ -54,12 +54,12 @@ function appendHealedTag(obj: Record<string, unknown>, tag: string): void {
     }
 }
 
-function toStr(v: unknown): string {
+function toStr(v: unknown, pretty = false): string {
     if (typeof v === 'string') return v
     if (typeof v === 'number' || typeof v === 'boolean') return String(v)
     if (v !== null && v !== undefined) {
         try {
-            return JSON.stringify(v)
+            return pretty ? JSON.stringify(v, null, 2) : JSON.stringify(v)
         } catch {
             return ''
         }
@@ -86,7 +86,7 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
         if (!(field in obj)) continue
         const val =
             field === 'context' && typeof obj[field] === 'object' && obj[field] !== null
-                ? JSON.stringify(obj[field], null, 2)
+                ? toStr(obj[field], true)
                 : toStr(obj[field])
         const existingContent = toStr(obj['content'])
         // [INVARIANT] H8: never synthesize a full-overwrite body on update payloads.
@@ -101,7 +101,7 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
     if ('artifacts' in obj) {
         if (Array.isArray(obj['artifacts']) && obj['artifacts'].length > 0) {
             const artStr = obj['artifacts']
-                .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
+                .map((a) => toStr(a))
                 .join(', ')
             const existingContent = toStr(obj['content'])
             if (existingContent !== '' || !isUpdatePayload(obj)) {

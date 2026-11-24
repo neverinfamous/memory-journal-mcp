@@ -83,6 +83,12 @@ function mapPrimitiveArg(methodName: string, arg: string | number | boolean): un
     return arg
 }
 
+function assignDefined(target: Record<string, unknown>, source: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(source)) {
+        if (value !== undefined) target[key] = value
+    }
+}
+
 /**
  * Normalize parameters to support positional arguments.
  * Handles both single positional args and multiple positional args.
@@ -119,7 +125,7 @@ export function normalizeParams(methodName: string, args: unknown[]): unknown {
         if (args.length > 1) {
             const lastArg = args[args.length - 1]
             if (isRecord(lastArg)) {
-                Object.assign(result, convertKeysToSnakeCase(lastArg, methodName))
+                assignDefined(result, convertKeysToSnakeCase(lastArg, methodName))
             }
         }
         return result
@@ -139,7 +145,7 @@ export function normalizeParams(methodName: string, args: unknown[]): unknown {
     if (args.length > paramMapping.length) {
         const lastArg = args[args.length - 1]
         if (isRecord(lastArg)) {
-            Object.assign(result, convertKeysToSnakeCase(lastArg, methodName))
+            assignDefined(result, convertKeysToSnakeCase(lastArg, methodName))
         }
     }
 

@@ -255,10 +255,9 @@ function resolveProjectNumberFromHint(
 
     const { canonicalKey, entry } = resolveRegistryCandidate(strVal, registry)
     const rawWorkspace = toolArgs['workspace_id']
-    const workspaceMissing =
-        rawWorkspace === undefined || (typeof rawWorkspace === 'string' && rawWorkspace.trim() === '')
+    const workspaceMissing = rawWorkspace === undefined
     const existingWorkspace =
-        typeof rawWorkspace === 'string' && !workspaceMissing
+        typeof rawWorkspace === 'string' && rawWorkspace.trim() !== ''
             ? (findCanonicalRegistryKey(rawWorkspace, registry) ?? rawWorkspace.trim())
             : undefined
     const sameWorkspace = existingWorkspace?.toLowerCase() === canonicalKey.toLowerCase()

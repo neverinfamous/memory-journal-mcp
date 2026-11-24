@@ -29,9 +29,14 @@ function normalizeConfigProjectNumber(obj: Record<string, unknown>): void {
 function preprocessUpdateConfig(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {
         let obj = { ...(val as Record<string, unknown>) }
-        if (typeof obj['config'] === 'object' && obj['config'] !== null) {
-            obj = { ...obj, ...(obj['config'] as Record<string, unknown>) }
+        if (typeof obj['config'] === 'object' && obj['config'] !== null && !Array.isArray(obj['config'])) {
+            const nested = obj['config'] as Record<string, unknown>
             delete obj['config']
+            const merged: Record<string, unknown> = { ...nested }
+            for (const [k, v] of Object.entries(obj)) {
+                if (v !== undefined) merged[k] = v
+            }
+            obj = merged
         }
 
         if ('filter' in obj) {

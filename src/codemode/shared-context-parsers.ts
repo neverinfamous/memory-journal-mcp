@@ -62,7 +62,32 @@ const OPTIONAL_QUERY_SEARCH_FIELDS = [
     'is_personal',
     'offset',
     'use_semantic',
+    'cursor',
+    'include_team',
+    'include_archived',
+    'fuzzy_match',
+    'auto_correct',
+    'min_importance',
+    'session_id',
 ] as const
+
+const QUERY_SEARCH_CAMEL_ALIASES: readonly (readonly [string, string])[] = [
+    ['excludeTags', 'exclude_tags'],
+    ['entryType', 'entry_type'],
+    ['significanceType', 'significance_type'],
+    ['startDate', 'start_date'],
+    ['endDate', 'end_date'],
+    ['sortBy', 'sort_by'],
+    ['sortOrder', 'sort_order'],
+    ['isPersonal', 'is_personal'],
+    ['useSemantic', 'use_semantic'],
+    ['includeTeam', 'include_team'],
+    ['includeArchived', 'include_archived'],
+    ['fuzzyMatch', 'fuzzy_match'],
+    ['autoCorrect', 'auto_correct'],
+    ['minImportance', 'min_importance'],
+    ['sessionId', 'session_id'],
+]
 
 /** Forwards supported `searchEntries` filters and explicit `limit` onto a synthesized query payload. */
 export function appendOptionalQuerySearchFields(
@@ -77,6 +102,11 @@ export function appendOptionalQuerySearchFields(
     for (const key of OPTIONAL_QUERY_SEARCH_FIELDS) {
         if (source[key] !== undefined && searchPayload[key] === undefined) {
             searchPayload[key] = source[key]
+        }
+    }
+    for (const [camelKey, snakeKey] of QUERY_SEARCH_CAMEL_ALIASES) {
+        if (source[snakeKey] === undefined && source[camelKey] !== undefined && searchPayload[snakeKey] === undefined) {
+            searchPayload[snakeKey] = source[camelKey]
         }
     }
 }

@@ -47,7 +47,7 @@ export class ConfigResolver {
             }
             if (loaded === undefined) continue
 
-            const content = loaded.content
+            const content = loaded.content.replace(/^\uFEFF/, '')
             for (const line of content.split('\n')) {
                 const trimmed = line.trim()
                 if (!trimmed || trimmed.startsWith('#')) continue

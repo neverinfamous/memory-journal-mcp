@@ -42,6 +42,9 @@ function createSafeTimerHelpers(
         ms: number,
         ...args: unknown[]
     ): number => {
+        if (typeof cb !== 'function') {
+            throw new TypeError('setTimeout callback must be a function')
+        }
         if (executionLifecycle?.ended === true) {
             executionLifecycle.postCloseActivity = true
             return 0

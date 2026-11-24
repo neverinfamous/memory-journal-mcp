@@ -297,7 +297,8 @@ export async function handleServerInfo(
             if (typeof res.data === 'object' && res.data !== null) {
                 healthData = res.data as Record<string, unknown>
             }
-        } catch {
+        } catch (err: unknown) {
+            if (err instanceof PermissionError || err instanceof AuthorizationError) throw err
             healthReadFailed = true
         }
     }

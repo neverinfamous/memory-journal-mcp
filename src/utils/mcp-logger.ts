@@ -263,32 +263,32 @@ export class McpLogger {
     // Convenience methods
     debug(loggerName: string, message: string, context?: Record<string, unknown>): void {
         if (!this.shouldLog('debug')) return
-        this.log('debug', loggerName, { message, ...context })
+        this.log('debug', loggerName, { ...context, message })
     }
 
     info(loggerName: string, message: string, context?: Record<string, unknown>): void {
         if (!this.shouldLog('info')) return
-        this.log('info', loggerName, { message, ...context })
+        this.log('info', loggerName, { ...context, message })
     }
 
     notice(loggerName: string, message: string, context?: Record<string, unknown>): void {
         if (!this.shouldLog('notice')) return
-        this.log('notice', loggerName, { message, ...context })
+        this.log('notice', loggerName, { ...context, message })
     }
 
     warning(loggerName: string, message: string, context?: Record<string, unknown>): void {
         if (!this.shouldLog('warning')) return
-        this.log('warning', loggerName, { message, ...context })
+        this.log('warning', loggerName, { ...context, message })
     }
 
     error(loggerName: string, message: string, context?: Record<string, unknown>): void {
         if (!this.shouldLog('error')) return
-        this.log('error', loggerName, { message, ...context })
+        this.log('error', loggerName, { ...context, message })
     }
 
     critical(loggerName: string, message: string, context?: Record<string, unknown>): void {
         if (!this.shouldLog('critical')) return
-        this.log('critical', loggerName, { message, ...context })
+        this.log('critical', loggerName, { ...context, message })
     }
 }
 

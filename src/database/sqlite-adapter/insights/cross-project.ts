@@ -161,7 +161,7 @@ function attachTopTags(
             JOIN tags t ON et.tag_id = t.id
             WHERE mj.deleted_at IS NULL AND mj.project_number IN (${placeholders})${mjWsFilter}${dateFilter}
             GROUP BY mj.project_number, t.name
-            ORDER BY count DESC
+            ORDER BY count DESC, t.name ASC
             `
             )
             .all(...params, ...wsOnly, ...dateParams) as {

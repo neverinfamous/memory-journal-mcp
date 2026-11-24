@@ -24,7 +24,7 @@ import { runImmediateWriteTx } from './row-helpers.js'
  * Hoisted to module scope to avoid recompilation on every exec() call.
  */
 const IS_MUTATION_RE =
-    /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|foreign_key_check|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check|quick_check|table_list|wal_checkpoint))./i
+    /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA\s+(?!\s|table_info|foreign_key_list|foreign_key_check|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check|quick_check|table_list|wal_checkpoint))./i
 
 const ALLOWED_PRAGMAS_RE =
     /^\s*(?:wal_checkpoint(?:\s*\(\s*(?:PASSIVE|FULL|RESTART|TRUNCATE)\s*\))?|integrity_check|quick_check|foreign_key_check|foreign_keys(?:\s*=\s*(?:ON|OFF|1|0))?|journal_mode(?:\s*=\s*(?:WAL|DELETE|TRUNCATE|PERSIST|MEMORY|OFF))?|synchronous(?:\s*=\s*(?:OFF|NORMAL|FULL|EXTRA|0|1|2|3))?|temp_store(?:\s*=\s*(?:DEFAULT|FILE|MEMORY|0|1|2))?|busy_timeout(?:\s*=\s*\d+)?|optimize|table_info\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|index_list\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|index_info\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)|foreign_key_list\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\))\s*$/i

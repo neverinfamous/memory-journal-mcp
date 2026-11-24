@@ -280,7 +280,10 @@ function loadExportAnchors(
     return result
 }
 
-async function prepareSafeExportDir(outputDir: string, allowedRoots: string[]): Promise<string> {
+async function prepareSafeExportDir(
+    outputDir: string,
+    allowedRoots: string[]
+): Promise<{ resolvedOutputDir: string; pinnedRealDir: string }> {
     assertSafeDirectoryPath(outputDir, allowedRoots)
 
     const resolvedOutputDir = resolve(outputDir)
@@ -329,7 +332,7 @@ async function prepareSafeExportDir(outputDir: string, allowedRoots: string[]): 
     if (isInsideTmp(postMkdirReal)) {
         throw new Error('Refusing to export markdown files into the OS temporary directory')
     }
-    return resolvedOutputDir
+    return { resolvedOutputDir, pinnedRealDir: postMkdirReal }
 }
 
 /**
@@ -351,7 +354,7 @@ export async function exportEntriesToMarkdown(
     db: IDatabaseAdapter,
     allowedRoots: string[]
 ): Promise<ExportResult> {
-    const resolvedOutputDir = await prepareSafeExportDir(outputDir, allowedRoots)
+    const { resolvedOutputDir, pinnedRealDir } = await prepareSafeExportDir(outputDir, allowedRoots)
 
     const files: string[] = []
     const errors: { file: string; error: string }[] = []
@@ -367,6 +370,11 @@ export async function exportEntriesToMarkdown(
     for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
         const chunk = validEntries.slice(i, i + CHUNK_SIZE)
         const preChunkRealpath = realpathSync.native(resolvedOutputDir)
+        if (preChunkRealpath !== pinnedRealDir) {
+            throw new Error(
+                'Directory swapped during export operation! Aborting to prevent path traversal.'
+            )
+        }
         assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
 
         await Promise.all(

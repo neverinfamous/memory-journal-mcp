@@ -333,7 +333,36 @@ const APPEND_META_FIELDS = [
     'projectName',
     'anchors',
     'relationships',
+    'use_test_db',
+    'useTestDb',
+    'workspace',
+    'workspaceId',
+    'repo',
+    'repo_name',
+    'repoName',
+    'repository',
+    'share_with_team',
+    'shareWithTeam',
+    'auto_link',
+    'autoLink',
 ] as const
+
+function firstNonBlankString(record: Record<string, unknown>, keys: readonly string[]): string | undefined {
+    for (const key of keys) {
+        const val = record[key]
+        if (typeof val === 'string' && val.trim() !== '') return val
+    }
+    return undefined
+}
+
+function firstValidProjectNumber(record: Record<string, unknown>): number | string | undefined {
+    for (const key of ['project_number', 'projectNumber', 'project']) {
+        const val = record[key]
+        if (typeof val === 'number' && !Number.isNaN(val)) return val
+        if (typeof val === 'string' && val.trim() !== '') return val
+    }
+    return undefined
+}
 
 export function createAppendInterceptor(
     target: Record<string, unknown>
@@ -357,19 +386,15 @@ export function createAppendInterceptor(
         const type = typeof typeVal === 'string' && typeVal !== '' ? typeVal : 'test_entry'
         const payload: Record<string, unknown> = { type, tags, content }
         if (metadata !== undefined) {
-            const wsId = metadata['workspace_id'] ?? metadata['workspaceId']
-            if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
-            const projNum = metadata['project_number'] ?? metadata['projectNumber'] ?? metadata['project']
-            if (
-                (typeof projNum === 'number' && !Number.isNaN(projNum)) ||
-                (typeof projNum === 'string' && projNum.trim() !== '')
-            ) {
-                payload['project_number'] = projNum
-            }
+            const wsId = firstNonBlankString(metadata, ['workspace_id', 'workspaceId', 'workspace'])
+            if (wsId !== undefined) payload['workspace_id'] = wsId
+            const projNum = firstValidProjectNumber(metadata)
+            if (projNum !== undefined) payload['project_number'] = projNum
             for (const field of APPEND_META_FIELDS) {
-                if (metadata[field] !== undefined && payload[field] === undefined) {
-                    payload[field] = metadata[field]
-                }
+                const val = metadata[field]
+                if (val === undefined || payload[field] !== undefined) continue
+                if ((field === 'workspace' || field === 'workspaceId') && typeof val === 'string' && val.trim() === '') continue
+                payload[field] = val
             }
         }
 

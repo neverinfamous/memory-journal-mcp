@@ -44,7 +44,7 @@ const NON_CODE_PARAM_KEYS = new Set([
     'is_personal', 'isPersonal', 'share_with_team', 'shareWithTeam', 'learned_context',
     'learnedContext', 'lesson', 'learning', 'insight', 'knowledge', 'rule', 'takeaway',
     'finding', 'discovery', 'search', 'q', 'term', 'keyword', 'category', 'topic', 'mode',
-    'limit', 'offset',
+    'limit', 'offset', 'operation', 'op', 'action', 'task', 'tool', 'method', 'function',
 ])
 
 function extractInitialExecutionCode(
@@ -70,7 +70,12 @@ function readCandidateRecord(input: ExecuteCodeInput, params: unknown): Record<s
         (pObj['action'] !== undefined ||
             pObj['task'] !== undefined ||
             pObj['notes'] !== undefined ||
-            pObj['changes'] !== undefined)
+            pObj['changes'] !== undefined ||
+            pObj['operation'] !== undefined ||
+            pObj['op'] !== undefined ||
+            pObj['tool'] !== undefined ||
+            pObj['method'] !== undefined ||
+            pObj['function'] !== undefined)
     if (isRecord(input.payload)) return input.payload
     if (isRecord(input.entry)) return input.entry
     if (isRecord(input.input)) return input.input
@@ -78,6 +83,30 @@ function readCandidateRecord(input: ExecuteCodeInput, params: unknown): Record<s
     if (isRecord(pObj?.['entry'])) return pObj['entry']
     if (isRecord(pObj?.['input'])) return pObj['input']
     return pHasAction ? pObj : undefined
+}
+
+function appendEntryTelemetryFields(
+    payload: Record<string, unknown>,
+    primary: Record<string, unknown>,
+    secondary: Record<string, unknown>
+): void {
+    const sessVal = getNonEmptyString(primary, secondary, ['session_id', 'sessionId'])
+    if (sessVal !== undefined) payload['session_id'] = sessVal
+    const impactVal =
+        primary['impact_score'] ?? primary['impactScore'] ?? primary['impact'] ??
+        secondary['impact_score'] ?? secondary['impactScore'] ?? secondary['impact']
+    if (typeof impactVal === 'number' && Number.isFinite(impactVal)) payload['impact_score'] = impactVal
+    const trustVal =
+        primary['trust_score'] ?? primary['trustScore'] ?? primary['trust'] ??
+        secondary['trust_score'] ?? secondary['trustScore'] ?? secondary['trust']
+    if (typeof trustVal === 'number' && Number.isFinite(trustVal)) payload['trust_score'] = trustVal
+    const valStatus = getNonEmptyString(primary, secondary, ['validation_status', 'validationStatus', 'validation'])
+    if (valStatus !== undefined) payload['validation_status'] = valStatus
+    const autoCtx =
+        primary['auto_context'] ?? primary['autoContext'] ??
+        secondary['auto_context'] ?? secondary['autoContext']
+    if (autoCtx !== undefined) payload['auto_context'] = autoCtx
+    appendSharedEntryFlags(payload, primary, secondary)
 }
 
 function recoverCodeFromParamsRecord(
@@ -132,15 +161,7 @@ function recoverCodeFromParamsRecord(
         const { projVal, wsVal } = resolveCompatibleInheritedScope(entryObj, params)
         if (projVal !== undefined) payload['project_number'] = projVal
         if (wsVal !== undefined) payload['workspace_id'] = wsVal
-        const sessVal = getNonEmptyString(entryObj, params, ['session_id', 'sessionId'])
-        if (sessVal !== undefined) payload['session_id'] = sessVal
-        const impactVal = entryObj['impact_score'] ?? entryObj['impactScore'] ?? entryObj['impact'] ?? params['impact_score'] ?? params['impactScore'] ?? params['impact']
-        if (typeof impactVal === 'number') payload['impact_score'] = impactVal
-        const trustVal = entryObj['trust_score'] ?? entryObj['trustScore'] ?? entryObj['trust'] ?? params['trust_score'] ?? params['trustScore'] ?? params['trust']
-        if (typeof trustVal === 'number') payload['trust_score'] = trustVal
-        const valStatus = getNonEmptyString(entryObj, params, ['validation_status', 'validationStatus', 'validation'])
-        if (valStatus !== undefined) payload['validation_status'] = valStatus
-        appendSharedEntryFlags(payload, entryObj, params)
+        appendEntryTelemetryFields(payload, entryObj, params)
         const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
         return { code: `return await ${fnName}(${JSON.stringify(payload)});`, synthesized: true }
     }
@@ -219,6 +240,17 @@ const DANGEROUS_QUERY_TOKEN_RE =
 const RAW_SQL_QUERY_RE =
     /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i
 
+const STRUCTURED_DISCRIMINATOR_KEYS = ['action', 'operation', 'op', 'tool', 'method', 'function'] as const
+const UNRECOVERABLE_PAYLOAD_MSG =
+    'Could not recover executable code from the supplied payload/entry. Pass JavaScript in `code` (e.g. `return await mj.core.createEntry({...})`).'
+
+function isUnrecoverableStructuredJsonObject(trimmedCode: string): boolean {
+    try {
+        const parsed: unknown = JSON.parse(trimmedCode)
+        return isRecord(parsed) && STRUCTURED_DISCRIMINATOR_KEYS.some((k) => parsed[k] !== undefined)
+    } catch { return false }
+}
+
 function transformInitialExecutionCode(
     executionCode: string,
     sourceKey: string | undefined,
@@ -252,6 +284,8 @@ function transformInitialExecutionCode(
         if (recoveredJson !== null) {
             healed = recoveredJson
             jsonRecovered = true
+        } else if (isUnrecoverableStructuredJsonObject(trimmedCode)) {
+            return validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
         }
     }
     // [C4] Recovered JS is final; never re-synthesize it into an entry mutation.
@@ -287,15 +321,8 @@ export function resolveExecutionPayload(
     }
 
     // [H7] A non-empty payload/entry that cannot be recovered must fail, not report sandbox status.
-    if (
-        healingEnabled &&
-        (executionCode === undefined || executionCode === '') &&
-        candidate !== undefined &&
-        Object.keys(candidate).length > 0
-    ) {
-        return validationFailure(
-            'Could not recover executable code from the supplied payload/entry. Pass JavaScript in `code` (e.g. `return await mj.core.createEntry({...})`).'
-        )
+    if (healingEnabled && (executionCode === undefined || executionCode === '') && candidate !== undefined && Object.keys(candidate).length > 0) {
+        return validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
     }
 
     if (healingEnabled && executionCode !== undefined && executionCode !== '' && !recoveredJs) {
@@ -358,7 +385,7 @@ function synthesizeContextEntryCall(
     if (numericEntryId !== undefined) entryPayload['entry_id'] = numericEntryId
     if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
     if (projVal !== undefined) entryPayload['project_number'] = projVal
-    appendSharedEntryFlags(entryPayload, ctxVal, outerFallback)
+    appendEntryTelemetryFields(entryPayload, ctxVal, outerFallback)
     const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
     const synthesized = `return await ${fnName}(${JSON.stringify(entryPayload)});`
     return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES

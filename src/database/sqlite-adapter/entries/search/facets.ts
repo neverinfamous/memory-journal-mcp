@@ -191,7 +191,7 @@ function executeMaterializedFtsFacetQuery(
             JOIN entry_tags et ON b.id = et.entry_id
             JOIN tags t ON et.tag_id = t.id
             ${tagFilterSql}
-            GROUP BY t.name ORDER BY cnt DESC LIMIT 20
+            GROUP BY t.name ORDER BY cnt DESC, t.name ASC LIMIT 20
         ),
         type_facets AS (
             SELECT 'type' AS kind, b.entry_type AS name, COUNT(*) AS cnt
@@ -280,7 +280,7 @@ function executeFacetCountQueries(
                 JOIN entry_tags et ON e.id = et.entry_id
                 JOIN tags t ON et.tag_id = t.id
                 ${whereClause}
-                GROUP BY t.name ORDER BY cnt DESC LIMIT 20
+                GROUP BY t.name ORDER BY cnt DESC, t.name ASC LIMIT 20
             `
             const entryTypesSql = `
                 SELECT e.entry_type AS name, COUNT(*) AS cnt

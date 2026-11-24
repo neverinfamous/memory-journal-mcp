@@ -151,6 +151,7 @@ export function normalizePromptAliasForScope(name: string): string {
     return name
         .trim()
         .replace(/^mj[_-]/i, '')
+        .replace(/([a-z])([A-Z])/g, '$1-$2')
         .replace(/_/g, '-')
         .toLowerCase()
 }

@@ -202,7 +202,8 @@ export function applyActiveSessionScopeFallback(
             ...(scope.projectNumber !== undefined ? { projectNumber: scope.projectNumber } : {}),
         }
     }
-    const sessionProj = reqCtx?.ephemeralSessionProject ?? getActiveSessionProject(runtime)
+    const sessionProj =
+        runtime === null ? {} : (reqCtx?.ephemeralSessionProject ?? getActiveSessionProject(runtime))
     const canFallbackWorkspace =
         !suppressSessionFallback &&
         (scope.projectNumber === undefined || scope.projectNumber === sessionProj.projectNumber)

@@ -121,7 +121,8 @@ export function convertLogseq(
     let hasTasks = false
     let hasDoneTasks = false
 
-    const normalizedBody = body.replace(/\r\n?/g, '\n')
+    const cleanBody = body.charCodeAt(0) === 0xfeff ? body.slice(1) : body
+    const normalizedBody = cleanBody.replace(/\r\n?/g, '\n')
     let openFence: { marker: string; minLen: number } | undefined
     for (const rawLine of normalizedBody.split('\n')) {
         const line = rawLine ?? ''

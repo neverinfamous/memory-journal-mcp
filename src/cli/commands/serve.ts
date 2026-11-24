@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import { logger } from '../../utils/logger.js'
 import { isPlaceholderAuthToken } from '../../utils/security-utils.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
+import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { type z } from 'zod'
 import { serverOptionsSchema } from '../schemas.js'
@@ -69,7 +70,7 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
 
     if (configErrors.length > 0) {
         process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        configErrors.forEach((err) => process.stderr.write(` - ${sanitizeErrorForLogging(err)}\n`))
         process.exit(1)
     }
 

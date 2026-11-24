@@ -148,6 +148,22 @@ function collectUnmergedAliasWorkspaces(
     }
 }
 
+function appendArrayItemWorkspaces(
+    items: readonly unknown[],
+    config: ToolContext['config'],
+    addCandidate: (ws: string | undefined) => void
+): void {
+    for (const item of items) {
+        if (!isPlainRecord(item)) continue
+        const itemContainers = collectScopeContainers(item, config)
+        addCandidate(resolveWorkspaceFromContainers(itemContainers, config))
+        for (const nestedItem of itemContainers.slice(1)) {
+            addCandidate(resolveWorkspaceFromContainers([nestedItem], config))
+        }
+        collectUnmergedAliasWorkspaces(itemContainers, config, addCandidate)
+    }
+}
+
 /**
  * Extracts the primary target workspace ID for RBAC evaluation across shallow-cloned
  * and project-normalized root and nested containers (`filters`, `filter`, `entry`, `metadata`, `context`).
@@ -175,15 +191,7 @@ function appendExtraWorkspaces(
     for (const listKey of BATCH_LIST_KEYS) {
         const list = params[listKey]
         if (!Array.isArray(list)) continue
-        for (const item of list) {
-            if (!isPlainRecord(item)) continue
-            const itemContainers = collectScopeContainers(item, config)
-            addCandidate(resolveWorkspaceFromContainers(itemContainers, config))
-            for (const nestedItem of itemContainers.slice(1)) {
-                addCandidate(resolveWorkspaceFromContainers([nestedItem], config))
-            }
-            collectUnmergedAliasWorkspaces(itemContainers, config, addCandidate)
-        }
+        appendArrayItemWorkspaces(list, config, addCandidate)
     }
 }
 
@@ -197,9 +205,20 @@ export function collectAllTargetWorkspaces(
 ): (string | undefined)[] {
     const rootContainers = collectScopeContainers(params, config)
     const primaryWs = resolveWorkspaceFromContainers(rootContainers, config)
-    if (!isPlainRecord(params)) return [primaryWs]
     const seen = new Set<string>(primaryWs !== undefined && primaryWs !== '' ? [primaryWs.toLowerCase()] : [])
     const workspaces: (string | undefined)[] = [primaryWs]
+    if (Array.isArray(params)) {
+        appendArrayItemWorkspaces(params, config, (ws) => {
+            if (ws === undefined || ws === '') return
+            const lower = ws.toLowerCase()
+            if (!seen.has(lower)) {
+                seen.add(lower)
+                workspaces.push(ws)
+            }
+        })
+        return workspaces
+    }
+    if (!isPlainRecord(params)) return workspaces
     appendExtraWorkspaces(params, rootContainers, seen, workspaces, config)
     return workspaces
 }
@@ -225,10 +244,21 @@ export function collectExtraTargetWorkspaces(
     primaryWs: string | undefined,
     config: ToolContext['config']
 ): string[] {
-    if (!isPlainRecord(params)) return []
-    const rootContainers = collectScopeContainers(params, config)
     const seen = new Set<string>(primaryWs !== undefined ? [primaryWs.toLowerCase()] : [])
     const collected: (string | undefined)[] = []
+    if (Array.isArray(params)) {
+        appendArrayItemWorkspaces(params, config, (ws) => {
+            if (ws === undefined || ws === '') return
+            const lower = ws.toLowerCase()
+            if (!seen.has(lower)) {
+                seen.add(lower)
+                collected.push(ws)
+            }
+        })
+        return collected.filter((ws): ws is string => ws !== undefined)
+    }
+    if (!isPlainRecord(params)) return []
+    const rootContainers = collectScopeContainers(params, config)
     appendExtraWorkspaces(params, rootContainers, seen, collected, config)
     return collected.filter((ws): ws is string => ws !== undefined)
 }

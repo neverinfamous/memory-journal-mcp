@@ -138,7 +138,7 @@ export function isValidProjectPath(p: string, allowedRoots?: string[]): boolean 
     }
     if (decoded !== p) {
         if (
-            decoded.includes('\0') ||
+            /[\0\r\n\t]/.test(decoded) ||
             /^[\\/]{2}/.test(decoded.trimStart()) ||
             hasUnsafeAdsColon(decoded) ||
             hasWinReservedDeviceSegment(decoded) ||

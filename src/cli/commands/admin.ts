@@ -275,7 +275,7 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
         const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
         if (configErrors.length > 0) {
             process.stderr.write('Startup Configuration Errors:\n')
-            configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+            configErrors.forEach((err) => process.stderr.write(` - ${formatCliError(err)}\n`))
             process.exit(1)
         }
         if (options.dumpConfig === true) {

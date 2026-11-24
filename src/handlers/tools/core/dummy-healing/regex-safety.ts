@@ -230,10 +230,15 @@ function stepClosingParenGroup(pattern: string, i: number, state: QuantScannerSt
         return { nextIdx: groupQuant.end, unsafe: false }
     }
     if (groupQuant?.repeating === true) {
+        if (popped.entryPrev !== null) {
+            return { nextIdx: pattern.length, unsafe: true }
+        }
         state.repeatingCount++
         if (state.repeatingCount > MAX_UNBOUNDED_QUANTIFIERS) {
             return { nextIdx: pattern.length, unsafe: true }
         }
+        state.prevQuantAtom = '.'
+        return { nextIdx: groupQuant.end, unsafe: false }
     }
     if (popped.hasAlternation) {
         popped.branchEnds.push(state.prevQuantAtom)

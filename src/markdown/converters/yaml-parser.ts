@@ -131,12 +131,13 @@ function parseYamlFrontmatterLines(fmLines: string[]): FrontmatterData {
 }
 
 export function parseYamlFrontmatter(content: string): YamlParseResult {
-    if (content.length > MAX_FRONTMATTER_CONTENT_LENGTH) {
-        return { metadata: Object.create(null) as FrontmatterData, body: content }
+    const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+    if (clean.length > MAX_FRONTMATTER_CONTENT_LENGTH) {
+        return { metadata: Object.create(null) as FrontmatterData, body: clean }
     }
-    const extracted = extractFrontmatterHeaderBounds(content)
+    const extracted = extractFrontmatterHeaderBounds(clean)
     if (extracted === null) {
-        return { metadata: Object.create(null) as FrontmatterData, body: content }
+        return { metadata: Object.create(null) as FrontmatterData, body: clean }
     }
     return {
         metadata: parseYamlFrontmatterLines(extracted.fmLines),

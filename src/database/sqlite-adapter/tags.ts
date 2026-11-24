@@ -167,7 +167,7 @@ export class TagsManager {
                  WHERE ${filters.join(' AND ')}
                  GROUP BY t.id, t.name
                  HAVING COUNT(et.entry_id) > 0
-                 ORDER BY usage_count DESC`
+                 ORDER BY usage_count DESC, t.name ASC`
             )
             .all(...params) as { id: number; name: string; usage_count: number }[]
 

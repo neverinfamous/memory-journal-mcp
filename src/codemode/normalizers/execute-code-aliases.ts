@@ -102,6 +102,13 @@ const NON_CODE_METADATA_KEYS = new Set([
     'takeaway',
     'finding',
     'discovery',
+    'operation',
+    'op',
+    'action',
+    'task',
+    'tool',
+    'method',
+    'function',
 ])
 
 const ENTRY_CONTENT_ALIAS_KEYS = [

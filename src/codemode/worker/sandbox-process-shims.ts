@@ -415,7 +415,16 @@ export function buildMemoryAndFactoryShims(
     const directCreateFn = (...args: unknown[]): unknown =>
         getGroupMethod(shimMj, 'core', 'createEntry')?.(...args)
     for (const name of DIRECT_CREATE_ENTRY_SHIMS) {
-        aliases[name] = directCreateFn
+        if (name === 'append') {
+            aliases[name] = (...args: unknown[]): unknown => {
+                const appendFn = shimMj['append']
+                return typeof appendFn === 'function'
+                    ? (appendFn as (...a: unknown[]) => unknown)(...args)
+                    : directCreateFn(...args)
+            }
+        } else {
+            aliases[name] = directCreateFn
+        }
     }
 
     return aliases

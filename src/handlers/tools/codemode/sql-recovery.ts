@@ -215,7 +215,7 @@ function recoverEntrySelect(
         /'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"/g,
         "''"
     )
-    if (/\bCOUNT\s*\(/i.test(selectHead)) return null
+    if (/\b(?:COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(selectHead)) return null
     if (idVal !== undefined) {
         if (Object.keys(scopeFields).length === 0) {
             return `return await mj.core.getEntryById({ entry_id: ${String(idVal)} });`

@@ -337,14 +337,21 @@ export function validateOAuthTransportConfig(
     if (config.oauthEnabled !== true) {
         return null
     }
-    if (config.oauthIssuer === undefined || config.oauthAudience === undefined) {
+    const trimmedIssuer = config.oauthIssuer?.trim()
+    const trimmedAudience = config.oauthAudience?.trim()
+    if (
+        trimmedIssuer === undefined ||
+        trimmedAudience === undefined ||
+        trimmedIssuer === '' ||
+        trimmedAudience === ''
+    ) {
         const errorMsg = `FATAL: OAuth is enabled but 'oauthIssuer' and/or 'oauthAudience' is missing. Refusing to start without a complete OAuth configuration, because the server would otherwise run without authentication.`
         logError(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
         throw new Error(errorMsg)
     }
 
     const allowPlaintext = config.allowPlaintextLoopbackOAuth === true
-    validateOAuthEndpointUrl(config.oauthIssuer, 'issuer', allowPlaintext, logError)
+    validateOAuthEndpointUrl(trimmedIssuer, 'issuer', allowPlaintext, logError)
     if (config.oauthJwksUri !== undefined && config.oauthJwksUri !== '') {
         validateOAuthEndpointUrl(config.oauthJwksUri, 'jwksUri', allowPlaintext, logError)
     }
@@ -363,7 +370,7 @@ export function validateOAuthTransportConfig(
         throw new Error(errorMsg)
     }
 
-    return { oauthIssuer: config.oauthIssuer, oauthAudience: config.oauthAudience }
+    return { oauthIssuer: trimmedIssuer, oauthAudience: trimmedAudience }
 }
 
 /**

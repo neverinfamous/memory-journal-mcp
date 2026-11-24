@@ -235,7 +235,7 @@ export class RelationshipsManager {
                  JOIN memory_journal m ON counts.entry_id = m.id
                  WHERE m.deleted_at IS NULL${wsFilter}
                  GROUP BY counts.entry_id
-                 ORDER BY total_links DESC
+                 ORDER BY total_links DESC, counts.entry_id DESC
                  LIMIT ?`
             )
             .all(...params) as { entry_id: number; total_links: number; content: string }[]

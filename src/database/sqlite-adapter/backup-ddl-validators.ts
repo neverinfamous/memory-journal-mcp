@@ -98,8 +98,8 @@ function splitTopLevelSqlArgs(inner: string): string[] | null {
             i = scanSqlQuotedSpan(inner, i, ch)
             continue
         }
-        if (ch === '(' || ch === '[') depth++
-        else if (ch === ')' || ch === ']') {
+        if (ch === '(') depth++
+        else if (ch === ')') {
             depth--
             if (depth < 0) return null
         } else if (ch === ',' && depth === 0) {

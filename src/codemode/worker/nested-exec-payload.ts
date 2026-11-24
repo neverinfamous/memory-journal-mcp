@@ -400,7 +400,9 @@ export function hasExplicitNestedEntryId(payload: unknown): boolean {
 
 const NESTED_OPT_CONFLICT_GROUPS: readonly (readonly string[])[] = [
     ['workspace_id', 'workspaceId', 'workspace', 'project_name', 'projectName'],
-    ['project_number', 'projectNumber', 'project_id', 'projectId'],
+    ['project_number', 'projectNumber', 'project_id', 'projectId', 'project'],
+    ['repo', 'repo_name', 'repoName', 'repository'],
+    ['target_workspace_id', 'targetWorkspaceId'],
     ['readonly', 'read_only', 'readOnly'],
     ['dry_run', 'dryRun'],
     ['use_test_db', 'useTestDb'],

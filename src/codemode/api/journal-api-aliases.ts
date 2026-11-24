@@ -226,6 +226,7 @@ function normalizeAutoRouteArg(
         const extra = isRecord(args[1]) ? args[1] : undefined
         const entryId = firstArg
         const workspaceExtra = extra?.['workspace_id'] ?? extra?.['workspaceId'] ?? extra?.['workspace']
+        const sessionExtra = extra?.['session_id'] ?? extra?.['sessionId']
         return {
             ...(extra ?? {}),
             entry_id: entryId,
@@ -239,6 +240,9 @@ function normalizeAutoRouteArg(
             extra['include_relationships'] === undefined
                 ? { include_relationships: extra['includeRelationships'] }
                 : {}),
+            ...(sessionExtra !== undefined && extra?.['session_id'] === undefined
+                ? { session_id: sessionExtra }
+                : {}),
         }
     }
     if (!isRecord(firstArg)) return null
@@ -247,6 +251,7 @@ function normalizeAutoRouteArg(
     const projectNumber = firstArg['project_number'] ?? firstArg['projectNumber']
     const includeRelationships =
         firstArg['include_relationships'] ?? firstArg['includeRelationships']
+    const sessionId = firstArg['session_id'] ?? firstArg['sessionId']
     return {
         ...firstArg,
         ...(entryId !== undefined ? { entry_id: entryId } : {}),
@@ -255,6 +260,7 @@ function normalizeAutoRouteArg(
         ...(includeRelationships !== undefined
             ? { include_relationships: includeRelationships }
             : {}),
+        ...(sessionId !== undefined ? { session_id: sessionId } : {}),
     }
 }
 

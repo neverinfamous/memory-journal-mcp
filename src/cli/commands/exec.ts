@@ -79,7 +79,7 @@ function prepareExecServerOptions(options: ExecOptions, command: Command): Prepa
     )
     if (configErrors.length > 0) {
         process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        configErrors.forEach((err) => process.stderr.write(` - ${formatCliError(err)}\n`))
         process.exit(1)
     }
     if (options.dumpConfig === true) {

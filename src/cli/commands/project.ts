@@ -27,25 +27,32 @@ import {
     withIsolatedProjectConfigEnv,
 } from './project-config-helper.js'
 
+function isJsonOutput(options: Record<string, unknown>, command: Command): boolean {
+    if (options['json'] === true) return true
+    const globals = command.optsWithGlobals<Record<string, unknown>>()
+    return globals['json'] === true
+}
+
 function handleProjectDumpConfig(options: Record<string, unknown>, command: Command): void {
     if (options['dumpConfig'] !== true) return
-    withIsolatedProjectConfigEnv(options, (cliConfigPath) => {
+    const { serverOptions, configErrors } = withIsolatedProjectConfigEnv(options, (cliConfigPath) => {
         let resolver: ConfigResolver
-        const configErrors: string[] = []
+        const errors: string[] = []
         try {
             resolver = new ConfigResolver(command, options, cliConfigPath)
         } catch (err) {
-            configErrors.push(err instanceof Error ? err.message : String(err))
+            errors.push(err instanceof Error ? err.message : String(err))
             resolver = new ConfigResolver(command, {}, undefined)
         }
-        const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-        if (configErrors.length > 0) {
-            process.stderr.write('Startup Configuration Errors:\n')
-            configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-            process.exit(1)
-        }
-        dumpConfigAndExit(serverOptions)
+        const { serverOptions: built } = buildServerOptions(resolver, options, command, errors)
+        return { serverOptions: built, configErrors: errors }
     })
+    if (configErrors.length > 0) {
+        process.stderr.write('Startup Configuration Errors:\n')
+        configErrors.forEach((err) => process.stderr.write(` - ${formatCliError(err)}\n`))
+        process.exit(1)
+    }
+    dumpConfigAndExit(serverOptions)
 }
 
 function loadConfig(options?: Record<string, unknown>): Record<string, unknown> {
@@ -70,7 +77,7 @@ export function projectListAction(options: Record<string, unknown>, command: Com
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
     
-    if (options['json'] === true) {
+    if (isJsonOutput(options, command)) {
         process.stdout.write(JSON.stringify(registry, null, 2) + '\n')
         return
     }
@@ -114,7 +121,7 @@ function buildValidatedProjectServerOptions(
         if (configErrors.length > 0) {
             // [INVARIANT] Never persist or initialize a database from a configuration that failed validation (H13/H16).
             process.stderr.write('\nInvalid configuration, refusing to register project:\n')
-            configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+            configErrors.forEach((err) => process.stderr.write(` - ${formatCliError(err)}\n`))
             process.exitCode = 1
             return undefined
         }
@@ -245,7 +252,7 @@ export async function projectCreateAction(
     if (!registered) return
 
     const { absPath, serverOptions, effectiveProjNum } = registered
-    const isJson = options['json'] === true
+    const isJson = isJsonOutput(options, command)
     if (!isJson) {
         process.stdout.write(`Project '${name}' successfully registered at ${absPath}.\n`)
     }
@@ -353,7 +360,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     const project = { ...existing }
     const { targetName, modified } = applyProjectUpdateFields(name, options, registry, project)
     if (!modified) {
-        if (options['json'] === true) {
+        if (isJsonOutput(options, command)) {
             process.stdout.write(
                 JSON.stringify({
                     status: 'unchanged',
@@ -384,7 +391,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     }
     saveConfig(config, options)
 
-    if (options['json'] === true) {
+    if (isJsonOutput(options, command)) {
         process.stdout.write(
             JSON.stringify({
                 status: 'success',
@@ -423,7 +430,7 @@ export function projectDeleteAction(name: string, options: Record<string, unknow
     syncCliTopLevelDefaults(config, name, undefined, prevProjNum)
     saveConfig(config, options)
 
-    if (options['json'] === true) {
+    if (isJsonOutput(options, command)) {
         process.stdout.write(JSON.stringify({ status: 'success', action: 'delete', name }) + '\n')
     } else {
         process.stdout.write(`Project '${name}' successfully deleted.\n`)
