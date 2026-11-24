@@ -234,19 +234,19 @@ export function parseLogLevelOption(
 }
 
 /**
- * Clear an inherited (non-CLI) project number when a CLI workspace override selects `'default'`,
+ * Clear a lower-precedence project number when a higher-precedence workspace override selects `'default'`,
  * a workspace mapped to another project number, or a workspace differing from another project's ID.
  */
 export function resolveUnconflictedDefaultProject(
     defaultWorkspaceId: string | undefined,
     defaultProjectNumber: number | undefined,
     projectRegistry: Record<string, ProjectRegistryEntry> | undefined,
-    workspaceFromCli: boolean,
-    projectFromCli: boolean
+    workspaceOverridesProject: boolean,
+    projectOverridesWorkspace: boolean
 ): number | undefined {
     if (
-        !workspaceFromCli ||
-        projectFromCli ||
+        !workspaceOverridesProject ||
+        projectOverridesWorkspace ||
         defaultWorkspaceId === undefined ||
         defaultProjectNumber === undefined
     ) {
@@ -267,19 +267,19 @@ export function resolveUnconflictedDefaultProject(
 }
 
 /**
- * Clear an inherited (non-CLI) workspace ID when a CLI `--default-project` override selects
+ * Clear a lower-precedence workspace ID when a higher-precedence project override selects
  * a project registered to another workspace or conflicting with a workspace's registered number.
  */
 export function resolveUnconflictedDefaultWorkspace(
     defaultWorkspaceId: string | undefined,
     defaultProjectNumber: number | undefined,
     projectRegistry: Record<string, ProjectRegistryEntry> | undefined,
-    workspaceFromCli: boolean,
-    projectFromCli: boolean
+    workspaceOverridesProject: boolean,
+    projectOverridesWorkspace: boolean
 ): string | undefined {
     if (
-        !projectFromCli ||
-        workspaceFromCli ||
+        !projectOverridesWorkspace ||
+        workspaceOverridesProject ||
         defaultWorkspaceId === undefined ||
         defaultProjectNumber === undefined
     ) {

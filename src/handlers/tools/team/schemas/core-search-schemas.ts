@@ -12,8 +12,8 @@ import {
     coerceFiniteNumberString,
     coerceIntString,
     relaxedNumber,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     StrictProjectNumberSchema,
     healAgentHallucinations,
     preprocessRelationshipItem,
@@ -378,8 +378,8 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
     preprocessDateRange,
     z
         .object({
-            start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
-            end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+            start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE),
+            end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE),
             cursor: z.string().optional().describe('Cursor for pagination'),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             tags: z.array(z.string()).optional(),

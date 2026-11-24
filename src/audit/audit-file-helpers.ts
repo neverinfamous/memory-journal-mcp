@@ -10,10 +10,10 @@ import type { getRequestContext } from '../utils/request-context.js'
 import { getErrnoCode, isRecord } from '../utils/type-guards.js'
 import type { AuditEntry, AuditSearchFilters } from './types.js'
 import {
-    AUDIT_URI_KEYS,
     applyActiveSessionScopeFallback,
     extractAuditScopeFromArgs,
     extractAuditScopeFromUriDetails,
+    iterAuditUriEntries,
     matchesAuditFilters,
     parseAuditLine,
     type AuditScopeMetadata,
@@ -341,8 +341,7 @@ function canonicalizeMemorySchemeUri(raw: string, allowBareBriefing = false): st
 
 function findMemoryUriInArgs(args: unknown, allowBareBriefing = false): string | undefined {
     if (!isRecord(args)) return undefined
-    for (const key of AUDIT_URI_KEYS) {
-        const val = args[key]
+    for (const { val } of iterAuditUriEntries(args)) {
         if (typeof val !== 'string') continue
         const normalized = canonicalizeMemorySchemeUri(val, allowBareBriefing)
         if (normalized !== undefined) return normalized

@@ -4,8 +4,8 @@ import { isRecord } from '../../../utils/type-guards.js'
 import {
     ENTRY_TYPES,
     SOURCE_FORMATS,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     EntryOutputSchema,
     coerceIntString,
     relaxedNumber,
@@ -60,8 +60,8 @@ export const ExportEntriesSchema = z.preprocess(
     z.object({
 
     format: z.enum(['json', 'markdown']).optional().default('json'),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
     tags: z.array(z.string()).optional(),
     limit: z
@@ -118,8 +118,8 @@ export const ExportMarkdownSchema = z.preprocess(
     z.object({
 
     output_dir: z.string().min(1),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
     tags: z.array(z.string()).optional(),
     limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),

@@ -70,6 +70,7 @@ export async function executeGracefulShutdown(params: GracefulShutdownParams): P
         params.detachSignals?.()
         await flushAgentIssues().catch(() => undefined)
         await awaitPendingVectorInit(runtime)
+        await runtime.disposeVectorManagers?.().catch(() => undefined)
         closeDatabases()
         // [INTENT] Preserve any non-zero exit code set earlier instead of forcing 0 (L6).
         const code = typeof process.exitCode === 'number' ? process.exitCode : 0

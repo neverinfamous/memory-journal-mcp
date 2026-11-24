@@ -232,6 +232,20 @@ function buildAuditConfigOption(resolver: ConfigResolver, catchConfig: CatchConf
     }
 }
 
+function resolveRawWithWhitespaceEnvGuard(
+    resolver: ConfigResolver,
+    key: string,
+    envKey: string
+): unknown {
+    if (!resolver.isCliProvided(key)) {
+        const rawEnv = process.env[envKey]
+        if (rawEnv !== undefined && rawEnv !== '' && rawEnv.trim() === '') {
+            return rawEnv
+        }
+    }
+    return resolver.resolve(key, envKey)
+}
+
 function hasExplicitCliOrConfigWithoutEnv(
     resolver: ConfigResolver,
     key: string,
@@ -241,6 +255,53 @@ function hasExplicitCliOrConfigWithoutEnv(
     const rawEnv = process.env[envKey]
     if (rawEnv !== undefined && rawEnv !== '') return true
     return resolver.hasConfigFileKey(key)
+}
+
+function buildPathListOptionsGroup(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): {
+    additionalTeamDbs: Record<string, string> | undefined
+    allowedIoRoots: string[] | undefined
+} {
+    return {
+        additionalTeamDbs: catchConfig(
+            () =>
+                parseAdditionalTeamDbsOption(
+                    resolveRawWithWhitespaceEnvGuard(
+                        resolver,
+                        'additionalTeamDbs',
+                        'ADDITIONAL_TEAM_DBS'
+                    ),
+                    {
+                        rejectBlank: hasExplicitCliOrConfigWithoutEnv(
+                            resolver,
+                            'additionalTeamDbs',
+                            'ADDITIONAL_TEAM_DBS'
+                        ),
+                    }
+                ),
+            undefined
+        ),
+        allowedIoRoots: catchConfig(
+            () =>
+                parseAllowedIoRootsOption(
+                    resolveRawWithWhitespaceEnvGuard(
+                        resolver,
+                        'allowedIoRoots',
+                        'ALLOWED_IO_ROOTS'
+                    ),
+                    {
+                        rejectBlank: hasExplicitCliOrConfigWithoutEnv(
+                            resolver,
+                            'allowedIoRoots',
+                            'ALLOWED_IO_ROOTS'
+                        ),
+                    }
+                ),
+            undefined
+        ),
+    }
 }
 
 function assembleServerOptions(params: {
@@ -283,31 +344,7 @@ function assembleServerOptions(params: {
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
         codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
         projectRegistry,
-        additionalTeamDbs: catchConfig(
-            () =>
-                parseAdditionalTeamDbsOption(
-                    resolver.resolve('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS'),
-                    {
-                        rejectBlank: hasExplicitCliOrConfigWithoutEnv(
-                            resolver,
-                            'additionalTeamDbs',
-                            'ADDITIONAL_TEAM_DBS'
-                        ),
-                    }
-                ),
-            undefined
-        ),
-        allowedIoRoots: catchConfig(
-            () =>
-                parseAllowedIoRootsOption(resolver.resolve('allowedIoRoots', 'ALLOWED_IO_ROOTS'), {
-                    rejectBlank: hasExplicitCliOrConfigWithoutEnv(
-                        resolver,
-                        'allowedIoRoots',
-                        'ALLOWED_IO_ROOTS'
-                    ),
-                }),
-            undefined
-        ),
+        ...buildPathListOptionsGroup(resolver, catchConfig),
         briefingConfig,
         ...(briefingOverrides !== undefined ? { briefingOverrides } : {}),
         cliEnvBaseline,

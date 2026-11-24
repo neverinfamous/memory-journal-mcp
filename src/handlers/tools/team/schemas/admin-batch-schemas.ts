@@ -286,17 +286,19 @@ export const TeamBatchCreateEntriesSchema = z.preprocess(
 
 export const TeamBatchCreateEntriesSchemaMcp = z.preprocess(
     preprocessBatchCreateEntries,
-    z.object({
-        entries: z.array(TeamCreateEntrySchemaMcp).optional(),
-        auto_index: z.boolean().optional().default(true),
-        project_number: relaxedNumber().optional(),
-        workspace_id: z
-            .string()
-            .optional()
-            .describe(
-                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-            ),
-    })
+    z
+        .object({
+            entries: z.array(TeamCreateEntrySchemaMcp).optional(),
+            auto_index: z.boolean().optional().default(true),
+            project_number: relaxedNumber().optional(),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
 )
 
 export const TeamBatchUpdateEntriesSchema = z.preprocess(

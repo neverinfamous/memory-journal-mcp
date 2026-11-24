@@ -3,8 +3,10 @@
  */
 
 import { isRecord } from '../../../../utils/type-guards.js'
+import { parseCanonicalPositiveInt } from '../../../../utils/safe-positive-int.js'
 
 const WORKSPACE_ALIAS_KEYS = ['workspace_id', 'workspaceId', 'workspace', 'repo'] as const
+const ROOT_WORKSPACE_PROMOTE_KEYS = ['workspaceId', 'workspace', 'repo'] as const
 const PROJECT_ALIAS_KEYS = [
     'project_number',
     'projectNumber',
@@ -12,6 +14,8 @@ const PROJECT_ALIAS_KEYS = [
     'projectName',
     'project',
 ] as const
+const ROOT_NUMERIC_PROJECT_KEYS = ['projectNumber', 'project', 'project_id', 'projectId'] as const
+const ROOT_NAMED_PROJECT_KEYS = ['project_name', 'projectName'] as const
 
 function firstDefinedEntry(
     obj: Record<string, unknown>,
@@ -23,21 +27,53 @@ function firstDefinedEntry(
     return undefined
 }
 
-function normalizeRootBatchAliases(obj: Record<string, unknown>): void {
-    if (
-        obj['workspace_id'] === undefined &&
-        typeof obj['workspace'] === 'string' &&
-        obj['workspace'].trim() !== ''
-    ) {
-        obj['workspace_id'] = obj['workspace'].trim()
-        Reflect.deleteProperty(obj, 'workspace')
+function promoteStringWorkspaceAlias(obj: Record<string, unknown>, alias: string): void {
+    const raw = obj[alias]
+    if (typeof raw !== 'string') return
+    const trimmed = raw.trim()
+    if (trimmed === '') return
+    if (obj['workspace_id'] === undefined) {
+        obj['workspace_id'] = trimmed
+        Reflect.deleteProperty(obj, alias)
+        return
     }
+    if (
+        typeof obj['workspace_id'] === 'string' &&
+        obj['workspace_id'].trim().toLowerCase() === trimmed.toLowerCase()
+    ) {
+        Reflect.deleteProperty(obj, alias)
+    }
+}
+
+function promoteProjectNumberAlias(obj: Record<string, unknown>, alias: string, value: unknown): void {
+    if (value === undefined) return
     if (obj['project_number'] === undefined) {
-        for (const alias of ['project', 'project_id', 'projectId'] as const) {
-            if (obj[alias] !== undefined) {
-                obj['project_number'] = obj[alias]
-                Reflect.deleteProperty(obj, alias)
-                break
+        obj['project_number'] = value
+        Reflect.deleteProperty(obj, alias)
+        return
+    }
+    if (obj['project_number'] === value) {
+        Reflect.deleteProperty(obj, alias)
+    }
+}
+
+function normalizeRootBatchAliases(obj: Record<string, unknown>): void {
+    for (const alias of ROOT_WORKSPACE_PROMOTE_KEYS) {
+        promoteStringWorkspaceAlias(obj, alias)
+    }
+    for (const alias of ROOT_NUMERIC_PROJECT_KEYS) {
+        if (obj[alias] !== undefined) promoteProjectNumberAlias(obj, alias, obj[alias])
+    }
+    for (const alias of ROOT_NAMED_PROJECT_KEYS) {
+        const raw = obj[alias]
+        if (typeof raw === 'number') {
+            promoteProjectNumberAlias(obj, alias, raw)
+        } else if (typeof raw === 'string' && raw.trim() !== '') {
+            const parsedNum = parseCanonicalPositiveInt(raw.trim())
+            if (parsedNum !== undefined) {
+                promoteProjectNumberAlias(obj, alias, parsedNum)
+            } else {
+                promoteStringWorkspaceAlias(obj, alias)
             }
         }
     }

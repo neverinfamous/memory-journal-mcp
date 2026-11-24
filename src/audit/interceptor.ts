@@ -17,7 +17,7 @@ import { randomBytes } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import type { AuditLogger } from './audit-logger.js'
 import type { AuditCategory, AuditEntry } from './types.js'
-import { getRequiredScope } from '../auth/scope-map.js'
+import { DUMMY_FS_TOOL_SET, getRequiredScope } from '../auth/scope-map.js'
 import { getToolGroup } from '../filtering/tool-filter.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { getGrantedAuthScopes } from '../auth/validation.js'
@@ -184,9 +184,12 @@ function buildToolAuditEntry(params: {
         scopeMeta,
     } = params
     const isReadScope = scope === 'read'
+    const isMemorySensitiveTarget =
+        sensitiveTarget !== undefined && /^memory:\/\//i.test(sensitiveTarget)
     const readCategory =
         sensitiveTarget !== undefined ? resolveResourceAuditCategory(sensitiveTarget) : 'read'
-    const category = isReadScope ? readCategory : scopeToCategory(scope)
+    const category =
+        isReadScope || isMemorySensitiveTarget ? readCategory : scopeToCategory(scope)
     const effectiveScope =
         isReadScope && (readCategory === 'audit' || readCategory === 'team' || readCategory === 'admin')
             ? readCategory
@@ -226,11 +229,12 @@ async function executeAuditedTool<T>(
     const scope = getRequiredScope(toolName)
     const isReadScope = scope === 'read'
     const canTargetSensitiveResourceOrPrompt =
-        isReadScope &&
-        (/^memory:\/\//i.test(toolName) ||
-            toolName === 'read_resource' ||
-            toolName === 'get_prompt' ||
-            getToolGroup(toolName) === undefined)
+        DUMMY_FS_TOOL_SET.has(toolName) ||
+        (isReadScope &&
+            (/^memory:\/\//i.test(toolName) ||
+                toolName === 'read_resource' ||
+                toolName === 'get_prompt' ||
+                getToolGroup(toolName) === undefined))
     const sensitiveTarget = canTargetSensitiveResourceOrPrompt
         ? extractSensitiveTargetFromArgs(toolName, args)
         : undefined

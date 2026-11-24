@@ -12,8 +12,8 @@ import { formatHandlerError } from '../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../utils/write-scope.js'
 import {
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     TagOutputSchema,
     coerceIntString,
     relaxedNumber,
@@ -210,8 +210,8 @@ const CrossProjectInsightsOutputSchema = z
 /** Strict schema — used inside handler for structured Zod errors */
 const GetStatisticsSchema = z.object({
     group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     project_breakdown: z.boolean().optional().default(false),
     workspace_id: z.string().max(255).optional(),
     project_number: z.unknown().optional(), // Allow injected project_number
@@ -259,12 +259,12 @@ const GetStatisticsSchemaMcp = z.object({
 const CrossProjectInsightsInputSchema = z.object({
     start_date: z
         .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('Start date (YYYY-MM-DD)'),
     end_date: z
         .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z

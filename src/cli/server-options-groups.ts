@@ -10,7 +10,7 @@ import type { CliCommandLike, ConfigResolver } from '../utils/config-resolver.js
 import { isPlaceholderAuthToken } from '../utils/security-utils.js'
 import { defaultDbPath, defaultTeamDbPath } from './default-paths.js'
 import { parseImportanceThresholdOption } from './server-options-parsers.js'
-import { resolveOAuthJwksUriOption } from './server-options-scope.js'
+import { resolveCorsOriginsOption, resolveOAuthJwksUriOption } from './server-options-scope.js'
 
 export type CatchConfig = <T>(fn: () => T, fallback: T) => T
 
@@ -39,6 +39,7 @@ export const CANONICAL_SERVER_ENV_KEYS = [
     'MCP_AUTH_TOKEN',
     'MCP_AUTH_SCOPES',
     'CORS_ORIGIN',
+    'MCP_CORS_ORIGIN',
     'MCP_ENABLE_HSTS',
     'OAUTH_ENABLED',
     'OAUTH_ISSUER',
@@ -239,7 +240,7 @@ export function buildOAuthOptionsGroup(resolver: ConfigResolver, catchConfig: Ca
     publicOrigin: string | undefined
 } {
     return {
-        corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
+        corsOrigins: catchConfig(() => resolveCorsOriginsOption(resolver), undefined),
         enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
         authToken: catchConfig(() => resolveAuthTokenOption(resolver), undefined),
         oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),

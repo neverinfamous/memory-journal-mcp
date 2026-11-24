@@ -115,6 +115,7 @@ export class ServerRuntime {
     public stopBackgroundTasks: (() => void) | null = null
     public teamDefaultRole: 'admin' | 'member' | 'viewer' | 'denied' = 'denied'
     public pendingVectorInit: Promise<void> | null = null
+    public disposeVectorManagers: (() => Promise<void>) | null = null
 }
 
 // Legacy Fallbacks removed. Consumers MUST provide a valid ServerRuntime to use MaintenanceManager logic.

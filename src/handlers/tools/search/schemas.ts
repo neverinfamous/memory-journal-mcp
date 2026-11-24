@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import {
     ENTRY_TYPES,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     EntryOutputSchema,
     coerceFiniteNumberString,
     coerceIntString,
@@ -46,8 +46,8 @@ export const SearchEntriesSchema = z.preprocess(
         .optional()
         .describe('Exclude entries having any of these tags'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     sort_by: z
         .enum(['timestamp', 'importance', 'blended'])
         .optional()
@@ -135,7 +135,7 @@ export const SearchByDateRangeSchema = z.preprocess(
                     ? "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). Pass start_date: '1970-01-01' for open-ended queries, or use search_entries / get_recent_entries."
                     : undefined,
         })
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .describe('Start date (use `start_date`, not `start`)'),
     end_date: z
         .string({
@@ -144,7 +144,7 @@ export const SearchByDateRangeSchema = z.preprocess(
                     ? "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). Pass start_date: '1970-01-01' for open-ended queries, or use search_entries / get_recent_entries."
                     : undefined,
         })
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
@@ -250,12 +250,12 @@ export const SemanticSearchSchema = z.preprocess(
     entry_type: z.enum(ENTRY_TYPES).optional().describe('Filter results by entry type'),
     start_date: z
         .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('Filter results from this date (YYYY-MM-DD)'),
     end_date: z
         .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('Filter results until this date (YYYY-MM-DD)'),
     hint_on_empty: z

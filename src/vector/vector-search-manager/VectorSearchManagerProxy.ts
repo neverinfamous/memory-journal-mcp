@@ -13,6 +13,7 @@ const ASYNC_VECTOR_METHODS = new Set<PropertyKey>([
     'searchCandidates',
     'searchByEntryId',
     'rebuildIndex',
+    'dispose',
 ])
 
 const PASSTHROUGH_META_PROPS = new Set<PropertyKey>([

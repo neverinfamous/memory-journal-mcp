@@ -210,8 +210,15 @@ describe('Pass 66 Audit — Storage, Lock, Server, CLI, RBAC & Prompts', () => {
                 getLifecycleTools({ db, config: { defaultWorkspaceId: 'myrepo', defaultProjectNumber: 12 } }),
                 'run_auto_prune'
             )
-            const pruneRes = (await pruneTool.handler({
+            const blankPruneRes = (await pruneTool.handler({
                 workspace_id: '',
+                dry_run: true,
+                archive_older_than_days: 0,
+            })) as { success: boolean; code?: string }
+            expect(blankPruneRes.success).toBe(false)
+            expect(blankPruneRes.code).toBe('VALIDATION_ERROR')
+
+            const pruneRes = (await pruneTool.handler({
                 dry_run: true,
                 archive_older_than_days: 0,
             })) as { success: boolean }
@@ -418,11 +425,11 @@ describe('Pass 66 Audit — Storage, Lock, Server, CLI, RBAC & Prompts', () => {
             expect(authErr.success).toBe(false)
             expect(authErr.error).toMatch(/Access denied|permission|viewer/i)
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass87')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass88')
             const cqText =
                 getCodeQualityAuditPromptDefinition().handler({ target: 'src', copilot: 'false' }, db)
                     .messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass87')
+            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass88')
             expect(cqText).toContain('relaxedNumber()')
             expect(cqText).toContain('detaching `this.worker = null`')
             expect(cqText).toContain('`unwrapNestedExecuteCode`')

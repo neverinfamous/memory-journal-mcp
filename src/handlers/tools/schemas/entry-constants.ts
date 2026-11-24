@@ -123,6 +123,23 @@ export const DATE_MAX_SENTINEL = '2999-12-31'
 export const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
 export const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'
 
+const CALENDAR_DATE_PARTS_RE = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/** Validate `YYYY-MM-DD` format AND real UTC calendar month/day (including leap years). */
+export function isValidCalendarDate(val: string): boolean {
+    const match = CALENDAR_DATE_PARTS_RE.exec(val)
+    if (match === null) return false
+    const year = Number(match[1])
+    const month = Number(match[2])
+    const day = Number(match[3])
+    const utc = new Date(Date.UTC(year, month - 1, day))
+    return (
+        utc.getUTCFullYear() === year &&
+        utc.getUTCMonth() === month - 1 &&
+        utc.getUTCDate() === day
+    )
+}
+
 export const RELATIONSHIP_TARGET_KEYS = [
     'targetId',
     'target_id',
@@ -210,6 +227,7 @@ export const KEY_ALIAS_MAP: Record<string, string> = {
     id: 'entry_id',
     ids: 'entry_ids',
     entryId: 'entry_id',
+    targetWorkspaceId: 'target_workspace_id',
     project_id: 'project_number',
     projectId: 'project_number',
     projectNumber: 'project_number',

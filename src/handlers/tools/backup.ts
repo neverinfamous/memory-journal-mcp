@@ -110,7 +110,7 @@ async function runLockedRestore(
 async function rebuildVectorAfterRestore(vectorManager: ToolContext['vectorManager']): Promise<string> {
     if (vectorManager?.isInitialized() !== true) return ''
     try {
-        const rebuildRes = await vectorManager.rebuildIndex()
+        const rebuildRes = await vectorManager.rebuildIndex(undefined, { force: true })
         if (!rebuildRes.success || rebuildRes.failed > 0) {
             const detail =
                 rebuildRes.firstError ?? `${String(rebuildRes.failed)} entries failed embedding`

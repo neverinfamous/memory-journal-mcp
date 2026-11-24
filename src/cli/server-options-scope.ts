@@ -135,11 +135,27 @@ export function resolveConfiguredDefaultScope(
         resolver.isCliProvided('defaultWorkspaceId') ||
         (allowWorkspaceAsDefault && resolver.isCliProvided('workspace'))
     const projFromCli = resolver.isCliProvided('defaultProject')
+    const wsRank =
+        initialWs === undefined
+            ? 0
+            : wsFromCli
+              ? 3
+              : (process.env['DEFAULT_WORKSPACE_ID']?.trim() ?? '') !== ''
+                ? 2
+                : 1
+    const projRank =
+        initialProj === undefined
+            ? 0
+            : projFromCli
+              ? 3
+              : (process.env['DEFAULT_PROJECT_NUMBER']?.trim() ?? '') !== ''
+                ? 2
+                : 1
     const unconflictedWs = resolveUnconflictedDefaultWorkspace(
-        initialWs, initialProj, projectRegistry, wsFromCli, projFromCli
+        initialWs, initialProj, projectRegistry, wsRank > projRank, projRank > wsRank
     )
     const unconflictedProj = resolveUnconflictedDefaultProject(
-        unconflictedWs, initialProj, projectRegistry, wsFromCli, projFromCli
+        unconflictedWs, initialProj, projectRegistry, wsRank > projRank, projRank > wsRank
     )
     return pairConfiguredScope(catchConfig, unconflictedWs, unconflictedProj, projectRegistry)
 }
@@ -239,4 +255,63 @@ export function resolveOAuthJwksUriOption(resolver: ConfigResolver): string | un
     }
     const fallbackVal = resolver.resolveString('oauthJwksUri', 'OAUTH_JWKS_URI')
     return fallbackVal !== undefined && fallbackVal.trim() !== '' ? fallbackVal.trim() : undefined
+}
+
+function parseCorsOriginsValue(
+    raw: unknown,
+    label: string,
+    allowEmptyAsEmptyArray: boolean
+): string[] {
+    if (typeof raw === 'string') {
+        if (raw === '' && allowEmptyAsEmptyArray) return []
+        if (raw.trim() === '') {
+            throw new Error(`Invalid ${label}: value cannot be empty or whitespace.`)
+        }
+        const list = raw
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        if (list.length === 0) {
+            throw new Error(`Invalid ${label}: value cannot be empty or whitespace.`)
+        }
+        return list
+    }
+    if (Array.isArray(raw)) {
+        if (raw.length === 0 && allowEmptyAsEmptyArray) return []
+        const list = raw
+            .map((item) => {
+                if (typeof item !== 'string') {
+                    throw new Error(`Invalid ${label}: entries must be strings.`)
+                }
+                return item.trim()
+            })
+            .filter(Boolean)
+        if (list.length === 0) {
+            throw new Error(`Invalid ${label}: value cannot be empty or whitespace.`)
+        }
+        return list
+    }
+    throw new Error(`Invalid ${label}: expected string or string array.`)
+}
+
+export function resolveCorsOriginsOption(resolver: ConfigResolver): string[] | undefined {
+    if (resolver.isCliProvided('corsOrigin')) {
+        const cliVal = resolver.resolve('corsOrigin')
+        if (cliVal !== undefined) return parseCorsOriginsValue(cliVal, '--cors-origin', false)
+    }
+    const rawCorsEnv = process.env['CORS_ORIGIN']
+    if (rawCorsEnv !== undefined && rawCorsEnv !== '') {
+        return parseCorsOriginsValue(rawCorsEnv, 'CORS_ORIGIN', false)
+    }
+    if (typeof resolver.hasConfigFileKey === 'function' && resolver.hasConfigFileKey('corsOrigin')) {
+        const cfgVal = resolver.resolve('corsOrigin')
+        if (cfgVal !== undefined) {
+            return parseCorsOriginsValue(cfgVal, 'corsOrigin in configuration file', true)
+        }
+    }
+    const rawAmbientEnv = process.env['MCP_CORS_ORIGIN']
+    if (rawAmbientEnv !== undefined && rawAmbientEnv !== '') {
+        return parseCorsOriginsValue(rawAmbientEnv, 'MCP_CORS_ORIGIN', false)
+    }
+    return undefined
 }

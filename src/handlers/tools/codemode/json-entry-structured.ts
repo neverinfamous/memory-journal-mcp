@@ -272,6 +272,21 @@ function formatScopedMutationOp(
     return `return await ${fnPath}(${JSON.stringify(params)});`
 }
 
+const LEARNED_CONTEXT_ALIAS_KEYS = [
+    'learned_context', 'learnedContext', 'lesson', 'learning', 'insight',
+    'rule', 'takeaway', 'knowledge', 'finding', 'discovery',
+] as const
+
+function hasNonEmptyLearnedContextAlias(
+    target: Record<string, unknown>,
+    original: Record<string, unknown>
+): boolean {
+    return LEARNED_CONTEXT_ALIAS_KEYS.some((key) => {
+        const val = target[key] ?? (original !== target ? original[key] : undefined)
+        return typeof val === 'string' && val.trim() !== ''
+    })
+}
+
 function recoverEntryMutation(
     original: Record<string, unknown>,
     target: Record<string, unknown>,
@@ -305,6 +320,7 @@ function recoverEntryMutation(
         (op === '' || SUPPORTED_ENTRY_MUTATION_OPS.has(op)) &&
         hasEntryUpdateMetadata(signals, target, original)
     if (!hasJournalFields(signals) && !canUpdateMeta) {
+        if (op === '' && hasNonEmptyLearnedContextAlias(target, original)) return null
         if (explicitIdForMutation === undefined || explicitIdForMutation === '' || !SUPPORTED_READ_BY_ID_OPS.has(op)) return null
         const readFn = op === 'team_get_entry_by_id' ? 'mj.team.teamGetEntryById' : 'mj.core.getEntryById'
         return formatScopedMutationOp(readFn, explicitIdForMutation, target, original)

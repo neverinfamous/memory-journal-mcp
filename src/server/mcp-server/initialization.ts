@@ -235,6 +235,7 @@ async function safeCloseStartupResources(resources: {
         await resources.runtime.auditLogger.close().catch(() => undefined)
     }
     await awaitPendingVectorInit(resources.runtime)
+    await resources.runtime.disposeVectorManagers?.().catch(() => undefined)
     for (const adapter of [
         resources.testTeamDb,
         resources.primaryTeamDb,
@@ -326,14 +327,17 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         testTeamDb = teamResult.testTeamDb
         const { teamDb } = teamResult
 
-        const { vectorManager, teamVectorManager, pendingVectorInit } = createVectorManagers({
-            options,
-            primaryDb,
-            testDb,
-            primaryTeamDb,
-            testTeamDb,
-        })
+        const { vectorManager, teamVectorManager, pendingVectorInit, disposeVectorManagers } =
+            createVectorManagers({
+                options,
+                primaryDb,
+                testDb,
+                primaryTeamDb,
+                testTeamDb,
+                maintenanceManager: runtime.maintenanceManager,
+            })
         runtime.pendingVectorInit = pendingVectorInit
+        runtime.disposeVectorManagers = disposeVectorManagers
 
         const configAndJobs = await initConfigAndStartupJobs({ options, db, runtime })
         configManager = configAndJobs.configManager

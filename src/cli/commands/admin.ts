@@ -329,6 +329,7 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
 export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     let exitCode = 0
+    let vectorManager: { dispose(): Promise<void> } | undefined
     try {
         if (options.workspace?.trim() === '') {
             throw new Error("Invalid --workspace '': expected a non-empty workspace identifier.")
@@ -357,18 +358,21 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
             enforceCliTeamRbac(db, serverOptions, 'admin', rebuildScope.workspaceId)
         }
         const { VectorSearchManager } = await import('../../vector/vector-search-manager/index.js')
-        const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+        const createdVectorManager = new VectorSearchManager(db, {
+            modelName: serverOptions.embeddingModel,
+        })
+        vectorManager = createdVectorManager
 
         if (options.json !== true) {
             process.stderr.write('Rebuilding vector index...\n')
         }
-        const result = await vectorManager.rebuildIndex(undefined, {
+        const result = await createdVectorManager.rebuildIndex(undefined, {
             workspaceId: rebuildScope.workspaceId,
             ...(rebuildScope.projectNumber !== undefined
                 ? { projectNumber: rebuildScope.projectNumber }
                 : {}),
         })
-        const stats = vectorManager.getStats()
+        const stats = createdVectorManager.getStats()
 
         if (!result.success) {
             process.stderr.write(
@@ -391,6 +395,7 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
         process.stderr.write(`Rebuild index failed: ${formatCliError(e)}\n`)
         exitCode = 1
     } finally {
+        await vectorManager?.dispose().catch(() => undefined)
         db.close()
     }
     if (exitCode !== 0) {

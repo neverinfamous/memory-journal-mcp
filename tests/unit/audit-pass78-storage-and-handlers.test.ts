@@ -99,7 +99,9 @@ describe('Pass 78 Audit — Storage, Markdown, Briefing, Batch Update & CLI', ()
         await db.initialize()
         try {
             const e1 = db.createEntry({ content: 'Self-loop test', workspaceId: 'alpha', projectNumber: 5 })
-            db.linkEntries(e1.id, e1.id, 'caused', undefined, 'alpha')
+            expect(() => db.linkEntries(e1.id, e1.id, 'caused', undefined, 'alpha')).toThrow(
+                /self-referential/i
+            )
             expect(db.getRelationships(e1.id, 'alpha')).toEqual([])
             expect(db.getRelationshipsForEntries([e1.id], 'alpha').get(e1.id)).toEqual([])
 

@@ -27,9 +27,9 @@ import { MAX_IMPORT_FILE_BYTES } from '../io/tools.js'
 import {
     coerceIntString,
     DATE_FORMAT_MESSAGE,
-    DATE_FORMAT_REGEX,
     DATE_MAX_SENTINEL,
     DATE_MIN_SENTINEL,
+    isValidCalendarDate,
     StrictProjectNumberSchema,
 } from '../schemas.js'
 import { batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
@@ -37,8 +37,8 @@ import { batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
 export const TeamExportMarkdownSchema = z
     .object({
         output_dir: z.string().min(1),
-        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+        end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
         tags: z.array(z.string()).optional(),
         project_number: StrictProjectNumberSchema.optional(),
         limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),

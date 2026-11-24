@@ -3,8 +3,8 @@ import {
     ENTRY_TYPES,
     coerceIntString,
     relaxedNumber,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     StrictProjectNumberSchema,
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
@@ -13,8 +13,8 @@ import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 export const TeamExportEntriesSchema = z
     .object({
         format: z.enum(['json', 'markdown']).optional().default('json'),
-        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+        start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+        end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
         entry_type: z.enum(ENTRY_TYPES).optional(),
         tags: z.array(z.string()).optional(),
         limit: z.preprocess(coerceIntString, z.number().int().min(1).max(5000)).optional().default(100),

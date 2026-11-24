@@ -9,8 +9,8 @@ import { z } from 'zod'
 import { healSearchPayload } from '../schemas/hallucination-healer.js'
 import {
     ENTRY_TYPES,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     EntryOutputSchema,
     coerceIntString,
     relaxedNumber,
@@ -48,8 +48,8 @@ export const CrossTeamSearchSchema = z.preprocess(
     project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
     workspace_id: z.string().max(255).optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(20),
     sort_by: z
         .enum(['timestamp', 'importance'])

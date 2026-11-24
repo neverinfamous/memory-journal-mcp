@@ -10,6 +10,7 @@ import {
     SESSION_SUMMARY_TAG_ALIASES,
     TECHNICAL_NOTE_ALIASES,
     BUG_FIX_ALIASES,
+    isValidCalendarDate,
 } from './constants-and-primitives.js'
 
 export function healTagListField(obj: Record<string, unknown>, fieldKey: string): boolean {
@@ -195,8 +196,10 @@ const ISO_DATETIME_PREFIX_RE =
 function normalizeIsoDateField(obj: Record<string, unknown>, key: 'start_date' | 'end_date'): boolean {
     const raw = obj[key]
     if (typeof raw !== 'string') return false
-    const match = ISO_DATETIME_PREFIX_RE.exec(raw.trim())
+    const trimmed = raw.trim()
+    const match = ISO_DATETIME_PREFIX_RE.exec(trimmed)
     if (match?.[1] === undefined) return false
+    if (!isValidCalendarDate(match[1]) || !Number.isFinite(Date.parse(trimmed))) return false
     obj[key] = match[1]
     return true
 }

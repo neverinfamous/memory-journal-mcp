@@ -32,7 +32,26 @@ const SCHEMELESS_SENSITIVE_PATH_RE =
 export const AUDIT_URI_KEYS = [
     'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'url', 'Url', 'resource',
     'Resource', 'path', 'Path', 'target', 'Target', 'name', 'Name', 'ServerName', 'server_name',
+    'target_file', 'targetFile', 'absolute_path', 'AbsolutePath', 'file', 'File',
+    'filename', 'fileName',
 ] as const
+
+/** Yield `(rawKey, canonicalKey, value)` pairs for `AUDIT_URI_KEYS` and leading-underscore variants. */
+export function* iterAuditUriEntries(
+    rec: Record<string, unknown>
+): Generator<{ key: string; baseKey: string; val: unknown }> {
+    for (const baseKey of AUDIT_URI_KEYS) {
+        if (baseKey in rec) {
+            yield { key: baseKey, baseKey, val: rec[baseKey] }
+        }
+        if (!baseKey.startsWith('_')) {
+            const underscored = `_${baseKey}`
+            if (underscored in rec) {
+                yield { key: underscored, baseKey, val: rec[underscored] }
+            }
+        }
+    }
+}
 const PROMPT_TARGET_KEYS = ['name', 'prompt', 'prompt_name', 'Name', 'promptName'] as const
 
 function isNormalizedSensitiveUri(normalized: string): boolean {
@@ -121,14 +140,52 @@ export function parseAuditLine(line: string | undefined): AuditEntry | null {
     }
 }
 
+const AUDIT_DATE_ONLY_BOUND_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/** Parse a filter boundary (`YYYY-MM-DD` -> UTC day start/end, or ISO-8601) into epoch ms. */
+export function parseAuditBoundaryTimestampMs(raw: string, bound: 'start' | 'end'): number | null {
+    const trimmed = raw.trim()
+    if (AUDIT_DATE_ONLY_BOUND_RE.test(trimmed)) {
+        const ms = Date.parse(
+            bound === 'end' ? `${trimmed}T23:59:59.999Z` : `${trimmed}T00:00:00.000Z`
+        )
+        return Number.isFinite(ms) ? ms : null
+    }
+    const ms = Date.parse(trimmed)
+    return Number.isFinite(ms) ? ms : null
+}
+
+function matchesDateRange(entryTimestamp: string, filters: AuditSearchFilters): boolean {
+    const start = filters.date_range?.start
+    const end = filters.date_range?.end
+    if ((start === undefined || start === '') && (end === undefined || end === '')) return true
+    const entryMs = Date.parse(entryTimestamp)
+    if (start !== undefined && start !== '') {
+        const startMs = parseAuditBoundaryTimestampMs(start, 'start')
+        if (startMs !== null && Number.isFinite(entryMs)) {
+            if (entryMs < startMs) return false
+        } else if (entryTimestamp < start) {
+            return false
+        }
+    }
+    if (end !== undefined && end !== '') {
+        const endMs = parseAuditBoundaryTimestampMs(end, 'end')
+        if (endMs !== null && Number.isFinite(entryMs)) {
+            if (entryMs > endMs) return false
+        } else if (entryTimestamp > end) {
+            return false
+        }
+    }
+    return true
+}
+
 /** Whether an audit entry satisfies every provided search filter. */
 export function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilters): boolean {
     if (filters.tool_name && entry.tool !== filters.tool_name) return false
     if (filters.user && entry.user !== filters.user) return false
     if (filters.status !== undefined && entry.success !== filters.status) return false
     if (filters.category && entry.category !== filters.category) return false
-    if (filters.date_range?.start && entry.timestamp < filters.date_range.start) return false
-    if (filters.date_range?.end && entry.timestamp > filters.date_range.end) return false
+    if (!matchesDateRange(entry.timestamp, filters)) return false
     if (filters.workspace_id !== undefined && filters.workspace_id !== '*') {
         if (
             typeof entry.workspaceId !== 'string' ||
@@ -172,18 +229,17 @@ export function extractSensitiveTargetFromArgs(toolName: string, args: unknown):
     let trimmedName: string | undefined
     let trimmedCapName: string | undefined
 
-    for (const key of AUDIT_URI_KEYS) {
-        const val = args[key]
+    for (const { key, baseKey, val } of iterAuditUriEntries(args)) {
         if (typeof val !== 'string') continue
         const trimmed = val.trim()
         if (trimmed === '') continue
-        if (key === 'name' || key === 'Name') {
+        if (baseKey === 'name' || baseKey === 'Name') {
             if (key === 'name') trimmedName = trimmed
-            else trimmedCapName = trimmed
+            else if (key === 'Name') trimmedCapName = trimmed
             const decodedCandidate = trimmed.replace(/%(?:2f|5c)/gi, '/')
             if (!trimmed.includes('://') && !SCHEMELESS_SENSITIVE_PATH_RE.test(decodedCandidate)) continue
         } else if (
-            (key === 'ServerName' || key === 'server_name') &&
+            (baseKey === 'ServerName' || baseKey === 'server_name') &&
             (trimmed === 'memory-journal-mcp' || trimmed === 'memory-journal')
         ) {
             continue

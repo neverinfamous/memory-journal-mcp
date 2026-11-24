@@ -140,7 +140,11 @@ const AUDIT_DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 const AUDIT_ISO_DATETIME_RE =
     /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?$/i
 
-function parseAuditDateBoundaryMs(raw: string, fieldName: string): number {
+function parseAuditDateBoundaryMs(
+    raw: string,
+    fieldName: string,
+    bound: 'start' | 'end'
+): number {
     const trimmed = raw.trim()
     const dateMatch = AUDIT_DATE_ONLY_RE.exec(trimmed)
     const dtMatch = dateMatch ?? AUDIT_ISO_DATETIME_RE.exec(trimmed)
@@ -160,7 +164,13 @@ function parseAuditDateBoundaryMs(raw: string, fieldName: string): number {
     ) {
         throw new ValidationError(`Invalid ${fieldName} '${raw}': calendar date does not exist.`)
     }
-    const parsedMs = Date.parse(dateMatch !== null ? `${trimmed}T00:00:00.000Z` : trimmed)
+    const isoCandidate =
+        dateMatch !== null
+            ? bound === 'end'
+                ? `${trimmed}T23:59:59.999Z`
+                : `${trimmed}T00:00:00.000Z`
+            : trimmed
+    const parsedMs = Date.parse(isoCandidate)
     if (!Number.isFinite(parsedMs)) {
         throw new ValidationError(`Invalid ${fieldName} '${raw}'.`)
     }
@@ -170,16 +180,29 @@ function parseAuditDateBoundaryMs(raw: string, fieldName: string): number {
 function validateAuditSearchInput(
     input: ReturnType<typeof SearchAuditLogSchema.parse>,
     registry: NonNullable<ToolContext['config']>['projectRegistry'] | undefined
-): string | undefined {
+): {
+    validatedWs?: string | undefined
+    normalizedDateRange?: { start?: string; end?: string } | undefined
+} {
     const startRaw = input.date_range?.start
     const endRaw = input.date_range?.end
-    const startMs = startRaw !== undefined ? parseAuditDateBoundaryMs(startRaw, 'start_date') : undefined
-    const endMs = endRaw !== undefined ? parseAuditDateBoundaryMs(endRaw, 'end_date') : undefined
+    const startMs =
+        startRaw !== undefined ? parseAuditDateBoundaryMs(startRaw, 'start_date', 'start') : undefined
+    const endMs =
+        endRaw !== undefined ? parseAuditDateBoundaryMs(endRaw, 'end_date', 'end') : undefined
     if (startMs !== undefined && endMs !== undefined && startMs > endMs) {
         throw new ValidationError('Invalid date range: start_date cannot be after end_date.', {
             suggestion: 'Ensure start_date is before or equal to end_date.',
         })
     }
+    const normalizedDateRange =
+        startMs !== undefined || endMs !== undefined
+            ? {
+                  ...(startMs !== undefined ? { start: new Date(startMs).toISOString() } : {}),
+                  ...(endMs !== undefined ? { end: new Date(endMs).toISOString() } : {}),
+              }
+            : undefined
+    let validatedWs: string | undefined
     if (input.workspace_id !== undefined) {
         const trimmedWs = input.workspace_id.trim()
         if (trimmedWs === '') {
@@ -187,11 +210,12 @@ function validateAuditSearchInput(
         }
         if (trimmedWs !== '*' && input.project_number !== undefined) {
             const paired = pairStoredScope(trimmedWs, input.project_number, activeProjectRegistry(registry))
-            return paired.workspaceId ?? trimmedWs
+            validatedWs = paired.workspaceId ?? trimmedWs
+        } else {
+            validatedWs = trimmedWs
         }
-        return trimmedWs
     }
-    return undefined
+    return { validatedWs, normalizedDateRange }
 }
 
 async function executeSearchAuditLog(
@@ -200,7 +224,10 @@ async function executeSearchAuditLog(
 ): Promise<Record<string, unknown> | ErrorResponse> {
     try {
         const input = SearchAuditLogSchema.parse(params)
-        const validatedWs = validateAuditSearchInput(input, context.config?.projectRegistry)
+        const { validatedWs, normalizedDateRange } = validateAuditSearchInput(
+            input,
+            context.config?.projectRegistry
+        )
 
         if (!context.config?.runtime?.auditLogger) {
             return {
@@ -211,8 +238,11 @@ async function executeSearchAuditLog(
             }
         }
 
-        const effectiveFilters =
-            validatedWs !== undefined ? { ...input, workspace_id: validatedWs } : input
+        const effectiveFilters = {
+            ...input,
+            ...(validatedWs !== undefined ? { workspace_id: validatedWs } : {}),
+            ...(normalizedDateRange !== undefined ? { date_range: normalizedDateRange } : {}),
+        }
         // Map to the internal type AuditSearchFilters
         const results = (await context.config.runtime.auditLogger.search(effectiveFilters)).map(
             sanitizeAuditEntryForEgress

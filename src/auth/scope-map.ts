@@ -21,7 +21,7 @@ import {
 
 const DUMMY_SQL_EXEC_SET = new Set<string>(DUMMY_SQL_EXECUTION_TOOL_NAMES)
 const DUMMY_ENTRY_CREATE_SET = new Set<string>(DUMMY_ENTRY_CREATION_TOOL_NAMES)
-const DUMMY_FS_TOOL_SET = new Set<string>([
+export const DUMMY_FS_TOOL_SET = new Set<string>([
     ...DUMMY_FILE_VIEW_TOOL_NAMES,
     ...DUMMY_DIR_LIST_TOOL_NAMES,
     ...DUMMY_GREP_SEARCH_TOOL_NAMES,

@@ -268,6 +268,11 @@ function checkRecordAgainstRpcBounds(
         const wsProjErr = checkRecordWorkspaceAgainstPinnedProj(rec, pinnedProj, registry)
         if (wsProjErr !== undefined) return wsProjErr
         const rawProj = rec['project_number']
+        if (rawProj === null) {
+            return validationErrResult(
+                `project_number cannot be cleared (null) inside nested executeCode pinned to project_number ${String(pinnedProj)}.`
+            )
+        }
         if (typeof rawProj === 'number' && Number.isFinite(rawProj) && rawProj !== pinnedProj) {
             return validationErrResult(
                 `project_number ${String(rawProj)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`

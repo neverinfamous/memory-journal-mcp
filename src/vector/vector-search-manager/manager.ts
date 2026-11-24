@@ -10,9 +10,7 @@ import {
     dbPathFromAdapter,
     invokeSingleEmbeddingPipeline,
     isModelCachedOnDisk,
-    isTransientFileLockError,
     loadTransformersModule,
-    MODEL_LOAD_RETRY_DELAY_MS,
     resolveEmbeddingCacheDir,
     type TransformersPipelineModule,
 } from './model-cache.js'
@@ -30,18 +28,14 @@ import {
     getOrComputeCachedEmbedding,
     QUERY_EMBEDDING_CACHE_MAX_CHARS,
 } from './embedding-cache.js'
+import {
+    disposePipelineHandle,
+    flushPendingVectorRemovals,
+    loadPipelineWithRetry,
+    withModelLoadLock,
+} from './lifecycle-helpers.js'
 
 const MAX_VECTOR_SEARCH_LIMIT = 10_000
-let modelLoadMutex: Promise<void> = Promise.resolve()
-
-function withModelLoadLock<T>(fn: () => Promise<T>): Promise<T> {
-    const next = modelLoadMutex.then(fn, fn)
-    modelLoadMutex = next.then(
-        () => undefined,
-        () => undefined
-    )
-    return next
-}
 
 export class VectorSearchManager {
     private dbAdapter: IDatabaseAdapter
@@ -51,7 +45,9 @@ export class VectorSearchManager {
     private pipeline: unknown = null
     private transformers: TransformersPipelineModule | null = null
     private initializationPromise: Promise<void> | null = null
-    private rebuildTail: Promise<void> = Promise.resolve()
+    private writeTail: Promise<void> = Promise.resolve()
+    private rebuildActiveCount = 0
+    private readonly pendingRemovedIds = new Set<number>()
     private ready = false
 
     constructor(dbAdapter: IDatabaseAdapter, options?: { modelName?: string | undefined }) {
@@ -112,43 +108,18 @@ export class VectorSearchManager {
             transformersModule.env['localModelPath'] = cacheDir
 
             logger.info(`Loading embedding model: ${this.modelName}`)
-            this.pipeline = await this.loadPipelineWithRetry(transformersModule, cacheDir, cachedLocally)
+            this.pipeline = await loadPipelineWithRetry(
+                transformersModule,
+                this.modelName,
+                cacheDir,
+                cachedLocally
+            )
             logger.info('Embedding model loaded')
 
             const testVec = await invokeSingleEmbeddingPipeline(this.pipeline, 'test')
             this.dimensions = testVec.length
             logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
         })
-    }
-
-    private async loadPipelineWithRetry(
-        transformersModule: TransformersPipelineModule,
-        cacheDir: string,
-        cachedLocally: boolean,
-        attempt = 1,
-        maxAttempts = 5
-    ): Promise<unknown> {
-        try {
-            if (attempt > 1 && (cachedLocally || isModelCachedOnDisk(cacheDir, this.modelName))) {
-                transformersModule.env['allowRemoteModels'] = false
-            }
-            return await transformersModule.pipeline('feature-extraction', this.modelName, {
-                dtype: 'fp32',
-            })
-        } catch (pipelineErr) {
-            if (attempt < maxAttempts && isTransientFileLockError(pipelineErr)) {
-                transformersModule.env['allowRemoteModels'] = true
-                await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt))
-                return this.loadPipelineWithRetry(
-                    transformersModule,
-                    cacheDir,
-                    cachedLocally,
-                    attempt + 1,
-                    maxAttempts
-                )
-            }
-            throw pipelineErr
-        }
     }
 
     private async _initialize(): Promise<void> {
@@ -169,14 +140,29 @@ export class VectorSearchManager {
             this.ready = true
             logger.info('Vector search initialized successfully')
         } catch (error) {
+            const failedPipeline = this.pipeline
             this.ready = false
             this.pipeline = null
             this.dimensions = null
+            await disposePipelineHandle(failedPipeline)
             logger.error('Failed to initialize vector search', {
                 error: error instanceof Error ? error.message : String(error),
             })
             throw error
         }
+    }
+
+    /** Release native ONNX pipeline sessions and wait for pending initializations/mutations. */
+    public async dispose(): Promise<void> {
+        await this.initializationPromise?.catch(() => undefined)
+        await this.writeTail
+        const pipelineToDispose = this.pipeline
+        this.pipeline = null
+        this.ready = false
+        this.dimensions = null
+        this.initializationPromise = null
+        this.pendingRemovedIds.clear()
+        await disposePipelineHandle(pipelineToDispose)
     }
 
     /** Verify the vec_journal_entries table exists and matches model dimensions. */
@@ -262,47 +248,57 @@ export class VectorSearchManager {
     }
 
     public async addEntry(entry: JournalEntry): Promise<void> {
-        await this.initialize()
+        return this.enqueueMutation(async () => {
+            this.pendingRemovedIds.delete(entry.id)
+            await this.initialize()
 
-        try {
-            const embedding = await this.generateEmbedding(formatEntryForEmbedding(entry), {
-                bypassQueryCache: true,
-            })
-            this.dbAdapter.upsertVector(entry.id, embedding)
-        } catch (error) {
-            logger.error(`Failed to add entry ${entry.id} to vector index`, {
-                error: error instanceof Error ? error.message : String(error)
-            })
-            throw error
-        }
+            try {
+                const embedding = await this.generateEmbedding(formatEntryForEmbedding(entry), {
+                    bypassQueryCache: true,
+                })
+                this.dbAdapter.upsertVector(entry.id, embedding)
+            } catch (error) {
+                logger.error(`Failed to add entry ${entry.id} to vector index`, {
+                    error: error instanceof Error ? error.message : String(error),
+                })
+                throw error
+            }
+        })
     }
 
     /** Batch-embed and upsert entries in bounded chunks to avoid single-tensor OOM spikes. */
     public async addEntries(entries: readonly JournalEntry[]): Promise<void> {
         if (entries.length === 0) return
         if (entries.length === 1 && entries[0] !== undefined) {
-            await this.addEntry(entries[0])
-            return
+            return this.addEntry(entries[0])
         }
-        await this.initialize()
-        await upsertEntryChunksSequentially(
-            entries,
-            REBUILD_BATCH_SIZE,
-            (texts) => this.generateEmbeddingsSettled(texts),
-            typeof this.dbAdapter.upsertVectors === 'function'
-                ? (items) => {
-                      this.dbAdapter.upsertVectors(items)
-                  }
-                : undefined,
-            (entryId, embedding) => {
-                this.dbAdapter.upsertVector(entryId, embedding)
+        return this.enqueueMutation(async () => {
+            for (const entry of entries) {
+                this.pendingRemovedIds.delete(entry.id)
             }
-        )
+            await this.initialize()
+            await upsertEntryChunksSequentially(
+                entries,
+                REBUILD_BATCH_SIZE,
+                (texts) => this.generateEmbeddingsSettled(texts),
+                typeof this.dbAdapter.upsertVectors === 'function'
+                    ? (items) => {
+                          this.dbAdapter.upsertVectors(items)
+                      }
+                    : undefined,
+                (entryId, embedding) => {
+                    this.dbAdapter.upsertVector(entryId, embedding)
+                }
+            )
+        })
     }
 
     /** Remove an entry from the vector index. */
     public removeEntry(entryId: number): boolean {
         if ((this.dbAdapter as unknown) == null) return false
+        if (this.rebuildActiveCount > 0) {
+            this.pendingRemovedIds.add(entryId)
+        }
 
         try {
             return this.dbAdapter.deleteVector(entryId)
@@ -448,9 +444,9 @@ export class VectorSearchManager {
         }
     }
 
-    private enqueueRebuild<T>(fn: () => Promise<T>): Promise<T> {
-        const next = this.rebuildTail.then(fn, fn)
-        this.rebuildTail = next.then(
+    private enqueueMutation<T>(fn: () => Promise<T>): Promise<T> {
+        const next = this.writeTail.then(fn, fn)
+        this.writeTail = next.then(
             () => undefined,
             () => undefined
         )
@@ -467,18 +463,26 @@ export class VectorSearchManager {
             workspaceId?: string
         }
     ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
-        return this.enqueueRebuild(async () => {
-            const wasReady = this.ready
-            await this.initialize()
-            if (
-                wasReady &&
-                this.dimensions !== null &&
-                typeof this.dbAdapter.getVectorMetadata === 'function' &&
-                typeof this.dbAdapter.createVecTable === 'function'
-            ) {
-                this.verifyAndCreateVecTable()
+        return this.enqueueMutation(async () => {
+            this.rebuildActiveCount++
+            try {
+                const wasReady = this.ready
+                await this.initialize()
+                if (
+                    wasReady &&
+                    this.dimensions !== null &&
+                    typeof this.dbAdapter.getVectorMetadata === 'function' &&
+                    typeof this.dbAdapter.createVecTable === 'function'
+                ) {
+                    this.verifyAndCreateVecTable()
+                }
+                return await rebuildIndex(this, this.dbAdapter, progress, options)
+            } finally {
+                this.rebuildActiveCount--
+                if (this.rebuildActiveCount === 0) {
+                    flushPendingVectorRemovals(this.dbAdapter, this.pendingRemovedIds)
+                }
             }
-            return rebuildIndex(this, this.dbAdapter, progress, options)
         })
     }
 }

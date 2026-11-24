@@ -18,17 +18,23 @@ import {
 } from './constants-and-primitives.js'
 
 function normalizeWorkspaceAliasKeys(obj: Record<string, unknown>): boolean {
-    if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
-        obj['workspace_id'] = obj['workspaceId']
-        delete obj['workspaceId']
-        return true
+    let modified = false
+    for (const alias of ['workspaceId', 'workspace'] as const) {
+        const raw = obj[alias]
+        if (typeof raw !== 'string') continue
+        if (obj['workspace_id'] === undefined) {
+            obj['workspace_id'] = raw
+            Reflect.deleteProperty(obj, alias)
+            modified = true
+        } else if (
+            typeof obj['workspace_id'] === 'string' &&
+            obj['workspace_id'].trim().toLowerCase() === raw.trim().toLowerCase()
+        ) {
+            Reflect.deleteProperty(obj, alias)
+            modified = true
+        }
     }
-    if (obj['workspace_id'] === undefined && typeof obj['workspace'] === 'string') {
-        obj['workspace_id'] = obj['workspace']
-        delete obj['workspace']
-        return true
-    }
-    return false
+    return modified
 }
 
 function resolveNamedProjectTarget(

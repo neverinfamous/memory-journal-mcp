@@ -54,7 +54,7 @@ export function buildBaseToolConfig(
 export function buildHttpTransportConfig(options: ServerOptions): HttpTransportConfig {
     const corsRaw = process.env['MCP_CORS_ORIGIN']
     const corsOrigins =
-        options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()) : [])
+        options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()).filter(Boolean) : [])
     const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
 
     return {

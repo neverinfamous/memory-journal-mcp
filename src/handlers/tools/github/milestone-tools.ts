@@ -11,6 +11,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { milestoneCompletionPct, fenceUntrustedInline } from '../../resources/shared.js'
 import { markUntrustedContent } from '../../../utils/security-utils.js'
+import { isValidCalendarDate } from '../schemas.js'
 
 const MAX_MILESTONE_DESC_CHARS = 4000
 
@@ -78,9 +79,15 @@ const MilestoneCreateSchemaMcp = z.object({
     owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
     repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
 })
-const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
 const ISO_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
-const isValidDueOn = (val: string): boolean => val === '' || DATE_FORMAT_REGEX.test(val) || ISO_DATETIME_REGEX.test(val)
+const isValidDueOn = (val: string): boolean => {
+    if (val === '' || isValidCalendarDate(val)) return true
+    return (
+        ISO_DATETIME_REGEX.test(val) &&
+        isValidCalendarDate(val.slice(0, 10)) &&
+        Number.isFinite(Date.parse(val))
+    )
+}
 const DUE_ON_MESSAGE = 'due_on must be YYYY-MM-DD or an ISO-8601 timestamp'
 
 const MilestoneCreateSchema = z.object({

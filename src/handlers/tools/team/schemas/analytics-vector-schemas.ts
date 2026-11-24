@@ -5,8 +5,8 @@ import {
     relaxedNumber,
     coerceFiniteNumberString,
     coerceIntString,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     StrictProjectNumberSchema,
     relationshipTypeEnumError,
 } from '../../schemas.js'
@@ -216,8 +216,8 @@ export const TeamSemanticSearchSchema = z.preprocess(
             tags: z.array(z.string()).optional(),
             exclude_tags: z.array(z.string()).optional(),
             entry_type: z.enum(ENTRY_TYPES).optional(),
-            start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-            end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+            start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+            end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
             hint_on_empty: z
                 .boolean()
                 .optional()
@@ -353,12 +353,12 @@ export const TeamCrossProjectInsightsSchema = z
     .object({
         start_date: z
             .string()
-            .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+            .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
             .optional()
             .describe('Start date (YYYY-MM-DD)'),
         end_date: z
             .string()
-            .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+            .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
             .optional()
             .describe('End date (YYYY-MM-DD)'),
         min_entries: z

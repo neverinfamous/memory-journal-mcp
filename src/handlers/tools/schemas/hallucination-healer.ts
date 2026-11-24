@@ -325,7 +325,10 @@ function remapAgentKeyAliases(obj: Record<string, unknown>): boolean {
     for (const [badKey, goodKey] of Object.entries(KEY_ALIAS_MAP)) {
         if (badKey in obj) {
             const isScopeAlias =
-                badKey === 'project_id' || badKey === 'projectId' || badKey === 'projectNumber'
+                badKey === 'project_id' ||
+                badKey === 'projectId' ||
+                badKey === 'projectNumber' ||
+                badKey === 'targetWorkspaceId'
             if (
                 isScopeAlias &&
                 goodKey in obj &&
