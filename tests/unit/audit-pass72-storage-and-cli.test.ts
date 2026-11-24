@@ -279,7 +279,7 @@ describe('Pass 72 Audit — Audit, DB, Converters, Team Tools, CLI & Prompt Pari
                 'node', 'mj', 'search', '--query', '--foo_bar',
             ])
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass85')
             const cq = await getCodeQualityAuditPromptDefinition().handler({}, db)
             const cqText = cq.messages[0]?.content.type === 'text' ? cq.messages[0].content.text : ''
             for (const tok of ['explore', 'generalPurpose', 'code-quality-audit', 'param-normalizer.ts', 'SCAN_OK scanned=', 'Present the plan as markdown in the chat.', 'Do not add an audit plan file to the repository.']) {

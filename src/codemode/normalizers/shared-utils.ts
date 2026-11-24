@@ -262,3 +262,25 @@ export function healAutoContext(result: Record<string, unknown>): void {
         }
     }
 }
+
+const DB_SOURCE_SELECTOR_RE = /^(?:personal|team)$/i
+const DB_SOURCE_DISCRIMINATOR_KEYS = ['action', 'operation', 'op', 'tool', 'method', 'function'] as const
+
+/** True when `source` specifies a store (`'personal'` | `'team'`) alongside an entry ID or discriminator. */
+export function isDbSourceSelector(
+    obj: Record<string, unknown>,
+    hasDiscriminator?: boolean
+): boolean {
+    if (typeof obj['source'] !== 'string' || !DB_SOURCE_SELECTOR_RE.test(obj['source'].trim())) {
+        return false
+    }
+    if (
+        obj['entry_id'] !== undefined ||
+        obj['entryId'] !== undefined ||
+        obj['id'] !== undefined
+    ) {
+        return true
+    }
+    if (hasDiscriminator !== undefined) return hasDiscriminator
+    return DB_SOURCE_DISCRIMINATOR_KEYS.some((k) => obj[k] !== undefined)
+}

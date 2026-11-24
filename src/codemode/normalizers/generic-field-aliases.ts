@@ -342,7 +342,10 @@ function normalizeValidationStatusAlias(obj: Record<string, unknown>): void {
             obj['validation_status'] = 'passed'
         } else if (vs === false || (typeof vs === 'string' && ['fail', 'failed', 'error', 'failing', 'false', '0'].includes(vs))) {
             obj['validation_status'] = 'failed'
-        } else if (typeof vs === 'string' && !['passed', 'none', 'failed'].includes(vs)) {
+        } else if (
+            typeof vs === 'string' &&
+            ['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'].includes(vs)
+        ) {
             obj['validation_status'] = 'none'
         }
     }

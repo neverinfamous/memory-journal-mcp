@@ -223,14 +223,21 @@ describe('Pass 84 Audit — High & Moderate Security/Correctness Regressions', (
 
         const readOps = resolveExecutionPayload(
             {} as never,
-            { operation: 'get_entry_by_id', entry_id: 9, include_relationships: false, session_id: 's-1' },
+            {
+                operation: 'get_entry_by_id',
+                entry_id: 9,
+                include_relationships: false,
+                source: 'team',
+                session_id: 's-1',
+            },
             true,
             0
         )
         expect('executionCode' in readOps).toBe(true)
         if ('executionCode' in readOps) {
             expect(readOps.executionCode).toContain('"include_relationships":false')
-            expect(readOps.executionCode).toContain('"session_id":"s-1"')
+            expect(readOps.executionCode).toContain('"source":"team"')
+            expect(readOps.executionCode).not.toContain('"session_id"')
         }
 
         const archiveUpdate = resolveExecutionPayload({} as never, { entry_id: 9, is_archived: true }, true, 0)
@@ -340,8 +347,8 @@ describe('Pass 84 Audit — High & Moderate Security/Correctness Regressions', (
             expect(spySearch).not.toHaveBeenCalled()
             expect(initSpy).not.toHaveBeenCalled()
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
-            expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass85')
+            expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass85')
             const def = getCodeQualityAuditPromptDefinition()
             const msg = await def.handler({}, memDb)
             expect(msg.messages[0]?.content.text).toContain(

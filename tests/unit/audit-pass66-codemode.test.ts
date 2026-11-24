@@ -279,8 +279,12 @@ describe('Pass 66 Audit — Code Mode Sandbox, Worker, Healers & Normalizers', (
         const rec = extractAndRecoverEntryCode(
             'createEntry({ content: "kept", auto_context: { workspace_id: "other", project_number: 99 } })'
         )
-        expect(rec).not.toContain('other')
-        expect(rec).not.toContain('99')
+        const recMatch = /^return await mj\.createEntry\(([\s\S]*)\);$/.exec(rec ?? '')
+        expect(recMatch).not.toBeNull()
+        const recPayload = JSON.parse(recMatch?.[1] ?? '{}') as Record<string, unknown>
+        expect(recPayload['workspace_id']).toBeUndefined()
+        expect(recPayload['project_number']).toBeUndefined()
+        expect(recPayload['auto_context']).toEqual({ workspace_id: 'other', project_number: 99 })
 
         // O14
         const sandbox = new WorkerSandbox()

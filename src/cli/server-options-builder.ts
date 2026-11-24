@@ -390,6 +390,30 @@ function assembleServerOptions(params: {
     }
 }
 
+function resolveServerHostOption(resolver: ConfigResolver, catchConfig: CatchConfig): string | undefined {
+    return catchConfig(() => {
+        if (resolver.isCliProvided('serverHost') || resolver.hasConfigFileKey('serverHost')) {
+            const explicitHost = resolver.resolveString('serverHost')
+            if (explicitHost !== undefined) {
+                const trimmed = explicitHost.trim()
+                if (trimmed === '') {
+                    throw new Error('Invalid blank --server-host.')
+                }
+                return trimmed
+            }
+        }
+        const envOrFallback = resolver.resolveString('serverHost', 'MCP_HOST')
+        if (envOrFallback !== undefined && envOrFallback.trim() !== '') {
+            return envOrFallback.trim()
+        }
+        const rawHostEnv = process.env['HOST']
+        if (rawHostEnv !== undefined && rawHostEnv.trim() !== '') {
+            return rawHostEnv.trim()
+        }
+        return undefined
+    }, undefined)
+}
+
 export function buildServerOptions(
     resolver: ConfigResolver,
     options: Record<string, unknown> & { team?: boolean | undefined },
@@ -411,7 +435,7 @@ export function buildServerOptions(
         }
     }
 
-    const host = catchConfig(() => resolver.resolveString('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined)
+    const host = resolveServerHostOption(resolver, catchConfig)
     const transport = resolveTransportOption(resolver, catchConfig)
     const { db, testDb, teamDb, testTeamDb } = resolveDatabasePaths(resolver, catchConfig)
     const { envUpdates, logLevel } = resolveEnvironmentOverrides(resolver, catchConfig)

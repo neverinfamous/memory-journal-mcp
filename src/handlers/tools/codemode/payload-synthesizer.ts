@@ -5,7 +5,7 @@
  */
 
 import { appendOptionalQuerySearchFields } from '../../../codemode/shared-context-parsers.js'
-import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { isDbSourceSelector, isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { healCodeModeScript } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverRecordCode } from './json-entry-recovery.js'
 import { hasUseTestDbFlag } from './json-entry-scope.js'
@@ -53,10 +53,15 @@ const NON_CODE_PARAM_KEYS = new Set([
 
 function extractInitialExecutionCode(
     input: ExecuteCodeInput,
-    healingEnabled: boolean
+    healingEnabled: boolean,
+    params: unknown
 ): { code: string | undefined; sourceKey: string | undefined } {
     if (!healingEnabled) return { code: input.code, sourceKey: 'code' }
+    const paramsRec = isRecord(params) ? params : undefined
+    const sourceIsSelector =
+        isDbSourceSelector(input) || (paramsRec !== undefined && isDbSourceSelector(paramsRec))
     for (const k of CODE_ALIAS_KEYS) {
+        if (k === 'source' && sourceIsSelector) continue
         const val = input[k]
         if (typeof val === 'string' && val.length > 0) return { code: val, sourceKey: k }
     }
@@ -78,7 +83,15 @@ function readCandidateRecord(input: ExecuteCodeInput, params: unknown): Record<s
         isRecord(pObj?.['entry']) ||
         isRecord(pObj?.['input'])
     if (hasNestedContainer) return targetObj
-    if (pObj !== undefined && (hasStructuredDiscriminator(pObj) || pObj['notes'] !== undefined || pObj['changes'] !== undefined)) {
+    if (
+        pObj !== undefined &&
+        (hasStructuredDiscriminator(pObj) ||
+            pObj['entry_id'] !== undefined ||
+            pObj['entryId'] !== undefined ||
+            pObj['id'] !== undefined ||
+            pObj['notes'] !== undefined ||
+            pObj['changes'] !== undefined)
+    ) {
         return pObj
     }
     return undefined
@@ -117,7 +130,7 @@ function recoverCodeFromParamsRecord(
         'rule', 'takeaway', 'knowledge', 'finding', 'discovery',
     ])
     const contentVal =
-        getNonEmptyString(entryObj, params, ['content', 'instructions']) ?? learnedVal
+        getNonEmptyString(entryObj, params, ['content', 'instructions', 'description', 'summary']) ?? learnedVal
     const hasEntryMeta = ['title', 'type', 'entry_type', 'group_name', 'groupName'].some(
         (k) => typeof entryObj[k] === 'string'
     )
@@ -296,7 +309,7 @@ export function resolveExecutionPayload(
     healingEnabled: boolean,
     start: number
 ): { executionCode: string } | { earlyReturn: Record<string, unknown> } {
-    const initial = extractInitialExecutionCode(input, healingEnabled)
+    const initial = extractInitialExecutionCode(input, healingEnabled, params)
     let executionCode = initial.code
     let recoveredJs = false
 

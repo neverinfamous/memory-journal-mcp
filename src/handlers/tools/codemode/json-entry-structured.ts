@@ -109,6 +109,12 @@ const NAMED_TOOL_OMIT_KEYS = new Set([
     'auto_version', 'autoVersion', 'context', 'use_test_db', 'useTestDb',
 ])
 
+/** Outer wrapper scope keys excluded when copying `original` onto nested `params`/`args` named calls. */
+const OUTER_SCOPE_OMIT_KEYS = new Set([
+    'project_number', 'projectNumber', 'project_id', 'projectId', 'project_name', 'projectName',
+    'project', 'workspace_id', 'workspaceId', 'workspace',
+])
+
 function recoverNamedToolCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
     const toolName = resolveNamedToolIdentifier(target, original)
     if (toolName === undefined || !SAFE_TOOL_IDENTIFIER.test(toolName)) return null
@@ -118,19 +124,25 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
           ? target['args']
           : undefined
     const toolParams: Record<string, unknown> = {}
-    const copyDefined = (src: Record<string, unknown>): void => {
+    const copyDefined = (src: Record<string, unknown>, omitOuterScope: boolean): void => {
         for (const [k, v] of Object.entries(src)) {
-            if (!NAMED_TOOL_OMIT_KEYS.has(k) && v !== undefined) toolParams[k] = v
+            if (NAMED_TOOL_OMIT_KEYS.has(k) || (omitOuterScope && OUTER_SCOPE_OMIT_KEYS.has(k))) continue
+            if (v !== undefined) toolParams[k] = v
         }
     }
-    if (original !== target) copyDefined(original)
-    copyDefined(target)
+    if (original !== target) copyDefined(original, true)
+    copyDefined(target, explicitParams !== undefined)
     if (explicitParams !== undefined) {
         for (const [k, v] of Object.entries(explicitParams)) {
             if (v !== undefined) toolParams[k] = v
         }
     }
-    assignMissingScope(toolParams, target, original)
+    const innerTarget = explicitParams ?? target
+    const outerWrapper =
+        explicitParams !== undefined && original !== target
+            ? { ...original, ...target }
+            : original
+    assignMissingScope(toolParams, innerTarget, outerWrapper)
     if (hasUseTestDbFlag(target, original)) toolParams['use_test_db'] = true
     const cleanTool = toolName.replace(/^mj[._]/, '')
     return `return await (mj.${cleanTool} || mj.core.${cleanTool})(${JSON.stringify(toolParams)});`

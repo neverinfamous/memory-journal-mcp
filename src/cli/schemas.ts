@@ -57,8 +57,9 @@ export const safeCoerceValidationStatus = z.preprocess((val) => {
         if (['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'].includes(lower)) {
             return 'none'
         }
+        return val.trim()
     }
-    return 'none'
+    return val
 }, z.enum(['passed', 'failed', 'none']).optional())
 
 export const coreOptionsSchema = z.object({

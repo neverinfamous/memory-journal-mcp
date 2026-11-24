@@ -3,6 +3,7 @@
  * Worker-thread safe (no host DB or config-file imports).
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type * as vm from 'node:vm'
 import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
@@ -46,6 +47,7 @@ export interface NestedExecIsolationOverrides {
     sessionId?: string
     autoVersion?: boolean
     maxResultSize?: number
+    nestedDepth?: number
 }
 
 export type RunIsolatedNestedFn = (
@@ -166,6 +168,7 @@ interface ShortcutDispatchInput {
     shimMj: Record<string, unknown>
     runIsolatedNestedCode: RunIsolatedNestedFn
     isolation: NestedExecIsolationOverrides | undefined
+    currentDepth: number
 }
 
 const MAX_NESTED_FASTPATH_DEPTH = 4
@@ -180,6 +183,7 @@ function dispatchNestedEntryPayload(
         | 'effectiveReadonly'
         | 'effectiveDryRun'
         | 'effectiveUseTestDb'
+        | 'currentDepth'
     >
 ): unknown {
     const isUpdate = hasExplicitNestedEntryId(payload)
@@ -191,6 +195,7 @@ function dispatchNestedEntryPayload(
             opts.effectiveUseTestDb,
             {
                 ...opts.isolation,
+                nestedDepth: opts.currentDepth,
                 contextObj: {
                     ...(opts.isolation.contextObj ?? {}),
                     synthPayload: payload,
@@ -313,7 +318,7 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
         nestedDepth,
     } = options
     const baseDepth = nestedDepth ?? 0
-    let activeFastPathDepth = 0
+    const fastPathDepthStorage = new AsyncLocalStorage<number>()
     const pinnedWorkspace =
         typeof pinnedWorkspaceRaw === 'string' && pinnedWorkspaceRaw.trim() !== '' && pinnedWorkspaceRaw.trim() !== '*'
             ? pinnedWorkspaceRaw.trim()
@@ -324,7 +329,8 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
             : undefined
 
     return async (...rawArgs: unknown[]): Promise<unknown> => {
-        if (baseDepth + activeFastPathDepth >= MAX_NESTED_FASTPATH_DEPTH) {
+        const currentDepth = fastPathDepthStorage.getStore() ?? baseDepth
+        if (currentDepth >= MAX_NESTED_FASTPATH_DEPTH) {
             throw new Error(
                 `Nested executeCode exceeded maximum recursion depth of ${String(MAX_NESTED_FASTPATH_DEPTH)}`
             )
@@ -350,7 +356,7 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
             tryDispatchNestedShortcut({
                 arg, argRec, rawNestedCode, narrowed, pinnedWorkspace, pinnedProjectNumber,
                 effectiveReadonly, effectiveDryRun, effectiveUseTestDb, shimMj,
-                runIsolatedNestedCode, isolation,
+                runIsolatedNestedCode, isolation, currentDepth,
             }),
             shortcutTimeoutMs,
             activeTimers
@@ -359,27 +365,31 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
 
         const compiled = validateAndWrapNestedCode(shortcut.codeToExec, shortcut.isQueryOnlyArg)
         if (!compiled.ok) return compiled.errorResult
-        if (vmContextRef.current === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+        const currentVmCtx = vmContextRef.current
+        if (currentVmCtx === undefined) return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
 
         const escalates =
             (effectiveReadonly && readonlyMode !== true) ||
             (effectiveDryRun && dryRunMode !== true) ||
             (effectiveUseTestDb && useTestDbMode !== true)
         if (escalates || isolation !== undefined) {
-            return runIsolatedNestedCode(compiled.wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, isolation)
+            const escalatedOverrides: NestedExecIsolationOverrides | undefined =
+                currentDepth > 0 || isolation !== undefined
+                    ? { ...(isolation ?? {}), nestedDepth: currentDepth }
+                    : undefined
+            return runIsolatedNestedCode(
+                compiled.wrapped, effectiveReadonly, effectiveDryRun, effectiveUseTestDb, escalatedOverrides
+            )
         }
-        activeFastPathDepth++
-        try {
-            const rawResult: unknown = await raceWithSandboxTimeout<unknown>(
+        const rawResult: unknown = await fastPathDepthStorage.run(currentDepth + 1, () =>
+            raceWithSandboxTimeout<unknown>(
                 Promise.resolve(
-                    getOrCompileVmScript(compiled.wrapped).runInContext(vmContextRef.current, { timeout: timeoutMs })
+                    getOrCompileVmScript(compiled.wrapped).runInContext(currentVmCtx, { timeout: timeoutMs })
                 ),
                 timeoutMs,
                 activeTimers
             )
-            return enforceNestedResultLimit(rawResult, maxResultSize)
-        } finally {
-            activeFastPathDepth--
-        }
+        )
+        return enforceNestedResultLimit(rawResult, maxResultSize)
     }
 }

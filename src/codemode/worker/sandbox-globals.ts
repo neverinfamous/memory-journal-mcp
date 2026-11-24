@@ -16,6 +16,7 @@ import {
 export interface ExecutionLifecycleState {
     ended: boolean
     postCloseActivity: boolean
+    childCleanups?: Set<() => void>
 }
 
 export interface BuildSandboxGlobalsOptions {

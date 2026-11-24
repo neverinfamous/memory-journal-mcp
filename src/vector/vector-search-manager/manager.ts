@@ -209,18 +209,24 @@ export class VectorSearchManager {
             !this.hasCustomEmbeddingGenerator() &&
             this.transformers !== null &&
             text.length <= QUERY_EMBEDDING_CACHE_MAX_CHARS
-        const vec = await getOrComputeCachedEmbedding(this.modelName, text, canCache, () =>
-            invokeSingleEmbeddingPipeline(this.pipeline, text)
-        )
-        if (vec.length !== dims) {
-            throw new Error(`Embedding dimension mismatch: expected ${String(dims)}, got ${String(vec.length)}`)
-        }
-        for (const el of vec) {
-            if (!Number.isFinite(el)) {
-                throw new Error('Generated embedding contains non-finite value')
+        const validateEmbedding = (candidate: Float32Array): Float32Array => {
+            if (candidate.length !== dims) {
+                throw new Error(
+                    `Embedding dimension mismatch: expected ${String(dims)}, got ${String(candidate.length)}`
+                )
             }
+            for (const el of candidate) {
+                if (!Number.isFinite(el)) {
+                    throw new Error('Generated embedding contains non-finite value')
+                }
+            }
+            return candidate
         }
-        return vec
+        return validateEmbedding(
+            await getOrComputeCachedEmbedding(this.modelName, text, canCache, async () =>
+                validateEmbedding(await invokeSingleEmbeddingPipeline(this.pipeline, text))
+            )
+        )
     }
 
     /** Generate settled per-item embeddings for a batch of texts, using tensor batching on the HF pipeline. */

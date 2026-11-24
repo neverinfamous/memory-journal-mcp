@@ -1,4 +1,4 @@
-import { isRecord } from './shared-utils.js'
+import { isDbSourceSelector, isRecord } from './shared-utils.js'
 
 const EXPLICIT_CODE_ALIAS_KEYS = [
     'script',
@@ -155,9 +155,10 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
     if (obj['code'] !== undefined) return
 
     const hasDiscriminator = DISCRIMINATOR_KEYS.some((k) => obj[k] !== undefined)
+    const sourceIsSelector = isDbSourceSelector(obj, hasDiscriminator)
     if (!hasDiscriminator && typeof obj['query'] === 'string' && obj['query'].trim().length > 0) {
         const hasExplicitCodeAlias = EXPLICIT_CODE_ALIAS_KEYS.some(
-            (key) => typeof obj[key] === 'string'
+            (key) => (key !== 'source' || !sourceIsSelector) && typeof obj[key] === 'string'
         )
         if (!hasExplicitCodeAlias) {
             return
@@ -165,9 +166,11 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
     }
 
     if (hasDiscriminator) {
-        const explicitCodeAlias = EXPLICIT_CODE_ALIAS_KEYS.map((key) => obj[key]).find(
-            (val): val is string => typeof val === 'string' && val.length > 0
+        const explicitCodeAlias = EXPLICIT_CODE_ALIAS_KEYS.filter(
+            (key) => key !== 'source' || !sourceIsSelector
         )
+            .map((key) => obj[key])
+            .find((val): val is string => typeof val === 'string' && val.length > 0)
         if (explicitCodeAlias !== undefined) {
             obj['code'] = explicitCodeAlias
             return
@@ -179,9 +182,10 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         return
     }
 
+    const rawSourceCodeAlias = sourceIsSelector ? undefined : obj['source']
     const codeAlias =
         obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['command'] ?? obj['executionCode'] ?? obj['content'] ??
-        obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ??
+        obj['eval'] ?? rawSourceCodeAlias ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ??
         obj['code_snippet'] ?? obj['raw_code'] ?? obj['statement'] ?? obj['statements'] ?? obj['codeBlock'] ??
         obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ??
         obj['instruction'] ?? obj['instructions'] ?? obj['input'] ?? obj['payload'] ?? obj['text']

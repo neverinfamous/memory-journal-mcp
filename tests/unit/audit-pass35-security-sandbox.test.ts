@@ -162,9 +162,10 @@ describe('Pass 35 Security Audit — Code Mode Sandbox, Lexical Scanner & Dispat
         const zeroReadRes = (await tool.handler({
             workspace_id: 'unreg-read-ws',
             code: 'return await mj.search.searchEntries({ query: "Seed", project_number: 0 })',
-        })) as { success: boolean; result?: { count?: number; entries?: unknown[] } }
+        })) as { success: boolean; result?: { success?: boolean; count?: number; entries?: unknown[] } }
         expect(zeroReadRes.success).toBe(true)
-        expect(zeroReadRes.result?.entries).toEqual([])
+        expect(zeroReadRes.result?.success).toBe(false)
+        expect(zeroReadRes.result?.entries).toBeUndefined()
 
         const disabledAdminRes = (await tool.handler({
             workspace_id: 'repo-a',

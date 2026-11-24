@@ -207,7 +207,7 @@ export function parseExpectedVersionValue(raw: unknown): unknown {
     return raw
 }
 
-/** Forward delete (`permanent`, `expected_version`) and read-by-id (`include_relationships`, `session_id`) flags. */
+/** Forward delete (`permanent`, `expected_version`) and read-by-id (`include_relationships`, `source`) flags. */
 export function assignScopedOpExtraFields(
     fnPath: string,
     params: Record<string, unknown>,
@@ -215,18 +215,30 @@ export function assignScopedOpExtraFields(
     original: Record<string, unknown>
 ): void {
     const fb = original !== target ? original : undefined
-    if (fnPath === 'mj.admin.deleteEntry' || fnPath === 'mj.team.teamDeleteEntry') {
+    if (fnPath === 'mj.admin.deleteEntry') {
         const permRaw = firstDefinedAlias(target, fb, ['permanent'])
         if (typeof permRaw === 'boolean') params['permanent'] = permRaw
         const verRaw = firstDefinedAlias(target, fb, ['expected_version', 'expectedVersion'])
         if (verRaw !== undefined) params['expected_version'] = parseExpectedVersionValue(verRaw)
         return
     }
-    if (fnPath === 'mj.core.getEntryById' || fnPath === 'mj.team.teamGetEntryById') {
+    if (fnPath === 'mj.team.teamDeleteEntry') {
+        const verRaw = firstDefinedAlias(target, fb, ['expected_version', 'expectedVersion'])
+        if (verRaw !== undefined) params['expected_version'] = parseExpectedVersionValue(verRaw)
+        return
+    }
+    if (fnPath === 'mj.core.getEntryById') {
         const incRelRaw = firstDefinedAlias(target, fb, ['include_relationships', 'includeRelationships'])
         if (typeof incRelRaw === 'boolean') params['include_relationships'] = incRelRaw
-        const sessRaw = firstDefinedAlias(target, fb, ['session_id', 'sessionId'])
-        if (typeof sessRaw === 'string' && sessRaw.trim() !== '') params['session_id'] = sessRaw.trim()
+        const sourceRaw = firstDefinedAlias(target, fb, ['source'])
+        if (typeof sourceRaw === 'string' && sourceRaw.trim() !== '') {
+            params['source'] = sourceRaw.trim().toLowerCase()
+        }
+        return
+    }
+    if (fnPath === 'mj.team.teamGetEntryById') {
+        const incRelRaw = firstDefinedAlias(target, fb, ['include_relationships', 'includeRelationships'])
+        if (typeof incRelRaw === 'boolean') params['include_relationships'] = incRelRaw
     }
 }
 

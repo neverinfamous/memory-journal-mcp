@@ -302,6 +302,7 @@ async function executeCode(
     } catch (err) {
         // [L2] Close lifecycle, timers, and RPC bridge BEFORE formatVmErrorResult invokes
         // untrusted [Symbol.toPrimitive]/toString() hooks on thrown sandbox values.
+        runChildCleanups(executionLifecycle)
         if (executionLifecycle !== undefined) {
             executionLifecycle.ended = true
         }
@@ -310,6 +311,7 @@ async function executeCode(
         bridge.closeBridge('Sandbox execution failed')
         return formatVmErrorResult(err, startTime, startCpu)
     } finally {
+        runChildCleanups(executionLifecycle)
         if (executionLifecycle !== undefined) {
             executionLifecycle.ended = true
         }
@@ -317,6 +319,32 @@ async function executeCode(
         for (const handle of activeTimers) clearTimeout(handle)
         activeTimers.clear()
     }
+}
+
+function runChildCleanups(lifecycle: ExecutionLifecycleState | undefined): void {
+    const cleanups = lifecycle?.childCleanups
+    if (cleanups === undefined || cleanups.size === 0) return
+    for (const fn of cleanups) {
+        try {
+            fn()
+        } catch {
+            // Best-effort cleanup of nested isolated child executions
+        }
+    }
+    cleanups.clear()
+}
+
+function teardownExecutionLifecycle(
+    executionLifecycle: ExecutionLifecycleState,
+    activeTimers: Set<NodeJS.Timeout>,
+    bridge: ExecutionRpcBridge,
+    reason: string
+): void {
+    executionLifecycle.ended = true
+    runChildCleanups(executionLifecycle)
+    for (const handle of activeTimers) clearTimeout(handle)
+    activeTimers.clear()
+    bridge.closeBridge(reason)
 }
 
 async function handleExecuteMessage(msg: ExecuteWorkerMessage): Promise<void> {
@@ -336,15 +364,13 @@ async function handleExecuteMessage(msg: ExecuteWorkerMessage): Promise<void> {
     const executionLifecycle: ExecutionLifecycleState = {
         ended: false,
         postCloseActivity: false,
+        childCleanups: new Set<() => void>(),
     }
     const bridge = createExecutionRpcBridge(newRpcPort, executionLifecycle)
     activeExecutionId = id
     resultSent = false
     activeAbortCleanup = (reason: string): void => {
-        executionLifecycle.ended = true
-        for (const handle of activeTimers) clearTimeout(handle)
-        activeTimers.clear()
-        bridge.closeBridge(reason)
+        teardownExecutionLifecycle(executionLifecycle, activeTimers, bridge, reason)
     }
 
     try {
@@ -364,10 +390,7 @@ async function handleExecuteMessage(msg: ExecuteWorkerMessage): Promise<void> {
         )
         // [M11] Close the RPC bridge strictly BEFORE serializeAndEnforceEgress invokes
         // untrusted toJSON()/getters so egress hooks cannot dispatch live Host RPCs.
-        executionLifecycle.ended = true
-        for (const handle of activeTimers) clearTimeout(handle)
-        activeTimers.clear()
-        bridge.closeBridge('Sandbox execution ended')
+        teardownExecutionLifecycle(executionLifecycle, activeTimers, bridge, 'Sandbox execution ended')
         // Serialize and run toJSON()/getters BEFORE draining V8 microtasks via hostSetImmediate
         // so post-execution callbacks cannot queue unawaited microtask spins or timers past the watchdog.
         serializeAndEnforceEgress(result, maxResultSize)
@@ -388,10 +411,12 @@ async function handleExecuteMessage(msg: ExecuteWorkerMessage): Promise<void> {
     } catch (err: unknown) {
         postExecutionFailure(err)
     } finally {
-        executionLifecycle.ended = true
-        for (const handle of activeTimers) clearTimeout(handle)
-        activeTimers.clear()
-        bridge.closeBridge('Sandbox execution ended before the call completed')
+        teardownExecutionLifecycle(
+            executionLifecycle,
+            activeTimers,
+            bridge,
+            'Sandbox execution ended before the call completed'
+        )
         if (activeExecutionId === id) {
             activeExecutionId = null
             activeAbortCleanup = null

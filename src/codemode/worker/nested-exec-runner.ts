@@ -176,6 +176,28 @@ function buildNestedVmContextOptions(
     }
 }
 
+function invokeChildCleanups(
+    childLifecycle: ExecutionLifecycleState,
+    childTimers: Set<NodeJS.Timeout>,
+    parentCleanupSet: Set<() => void> | undefined,
+    cleanupFn: () => void
+): void {
+    childLifecycle.ended = true
+    if (childLifecycle.childCleanups !== undefined) {
+        for (const fn of childLifecycle.childCleanups) {
+            try {
+                fn()
+            } catch {
+                // Best-effort cleanup of nested children
+            }
+        }
+        childLifecycle.childCleanups.clear()
+    }
+    for (const timer of childTimers) clearTimeout(timer)
+    childTimers.clear()
+    parentCleanupSet?.delete(cleanupFn)
+}
+
 export function createIsolatedNestedRunner(
     options: VmExecutionContextOptions,
     sendRpcRequest: SendRpcRequestFn,
@@ -201,14 +223,29 @@ export function createIsolatedNestedRunner(
         nestedUseTestDb: boolean,
         overrides?: NestedExecIsolationOverrides
     ): Promise<unknown> => {
-        const nextDepth = (options.nestedDepth ?? 0) + 1
+        const nextDepth = (overrides?.nestedDepth ?? options.nestedDepth ?? 0) + 1
         if (nextDepth > MAX_NESTED_EXEC_DEPTH) {
             throw new Error(
                 `Nested executeCode exceeded maximum recursion depth of ${String(MAX_NESTED_EXEC_DEPTH)}`
             )
         }
+        if (options.executionLifecycle?.ended === true) {
+            throw new Error('Nested sandbox execution has already ended')
+        }
         const childTimers = new Set<NodeJS.Timeout>()
-        const childLifecycle: ExecutionLifecycleState = { ended: false, postCloseActivity: false }
+        const childLifecycle: ExecutionLifecycleState = {
+            ended: false,
+            postCloseActivity: false,
+            childCleanups: new Set<() => void>(),
+        }
+        const parentCleanupSet =
+            options.executionLifecycle !== undefined
+                ? (options.executionLifecycle.childCleanups ??= new Set<() => void>())
+                : undefined
+        const cleanupChild = (): void => {
+            invokeChildCleanups(childLifecycle, childTimers, parentCleanupSet, cleanupChild)
+        }
+        parentCleanupSet?.add(cleanupChild)
         const childSendRpcRequest: SendRpcRequestFn = (payload) => {
             if (childLifecycle.ended || options.executionLifecycle?.ended === true) {
                 childLifecycle.postCloseActivity = true
@@ -232,11 +269,11 @@ export function createIsolatedNestedRunner(
                 nextTimeout,
                 childTimers
             )
+            // [M11] Teardown child lifecycle & timers BEFORE enforceNestedResultLimit runs untrusted toJSON()/getters.
+            cleanupChild()
             return enforceNestedResultLimit(rawResult, nextMaxResult)
         } finally {
-            childLifecycle.ended = true
-            for (const timer of childTimers) clearTimeout(timer)
-            childTimers.clear()
+            cleanupChild()
         }
     }
 }

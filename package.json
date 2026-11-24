@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "build": "pnpm run build:js && pnpm run build:types",
-    "build:js": "tsup",
+    "build:js": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })\" && tsup",
     "build:types": "tsgo --project tsconfig.build.json --emitDeclarationOnly",
     "cli": "tsx src/cli/index.ts",
     "commit": "tsx scripts/commit.ts",

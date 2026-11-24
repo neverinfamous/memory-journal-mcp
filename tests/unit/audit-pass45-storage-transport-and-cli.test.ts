@@ -169,6 +169,7 @@ describe('Pass 45 Storage, Transport, Filter & CLI Regressions', () => {
         const cliEmptyResolver = {
             isCliProvided: (k: string) => k === 'authToken',
             resolve: () => '',
+            resolveString: () => '',
         } as unknown as Parameters<typeof resolveAuthTokenOption>[0]
         expect(() => resolveAuthTokenOption(cliEmptyResolver)).toThrow(/cannot be empty/)
 
@@ -176,6 +177,7 @@ describe('Pass 45 Storage, Transport, Filter & CLI Regressions', () => {
         const envResolver = {
             isCliProvided: () => false,
             resolve: () => undefined,
+            resolveString: () => undefined,
         } as unknown as Parameters<typeof resolveAuthTokenOption>[0]
         expect(() => resolveAuthTokenOption(envResolver)).toThrow(/whitespace-only/)
 
@@ -308,12 +310,12 @@ describe('Pass 45 Storage, Transport, Filter & CLI Regressions', () => {
             expect(zeroProjRes.success).toBe(false)
             expect(zeroProjRes.code).toBe('VALIDATION_ERROR')
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass85')
             const secPrompt = await Promise.resolve(
                 getSecurityAuditPromptDefinition().handler({ target: 'memory-journal-mcp' }, db)
             )
             const text = secPrompt.messages[0]?.content.text ?? ''
-            expect(text).toContain('Prompt revision: 2026-11-24-audit-pass84')
+            expect(text).toContain('Prompt revision: 2026-11-24-audit-pass85')
             expect(text).toContain('setImmediate')
             expect(text).toContain('backups-team')
             expect(text).toContain('ISATAP')

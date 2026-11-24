@@ -81,7 +81,7 @@ async function fetchRepoCommitFilesBatch(
         const { stdout } = await execFileAsync(
             'git',
             ['show', '--name-only', '-z', `--pretty=format:${COMMIT_MARKER_PREFIX}%H%x00`, ...shas],
-            { cwd: repoPath, encoding: 'utf-8', timeout: 2500, windowsHide: true, maxBuffer: 1024 * 1024 }
+            { cwd: repoPath, encoding: 'utf-8', timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 }
         )
         return parseGitShowPerCommitFiles(stdout, shas)
     } catch {
@@ -98,7 +98,7 @@ async function fetchRepoCommitFilesBatch(
                     const { stdout } = await execFileAsync(
                         'git',
                         ['show', '--name-only', '-z', '--pretty=format:', sha],
-                        { cwd: repoPath, encoding: 'utf-8', timeout: 2500, windowsHide: true }
+                        { cwd: repoPath, encoding: 'utf-8', timeout: 5000, windowsHide: true }
                     )
                     return {
                         sha: sha.toLowerCase(),

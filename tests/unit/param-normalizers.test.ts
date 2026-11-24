@@ -128,7 +128,7 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
             const arg = vUnknown.args[0] as Record<string, unknown>
             expect(arg['project']).toBe('my-tag-proj')
             expect(arg['tags']).toBeUndefined()
-            expect(arg['validation_status']).toBe('none')
+            expect(arg['validation_status']).toBe('weird_status')
         }
     })
 
@@ -140,17 +140,17 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
 
         const ex2 = applyArgInterceptions('execute_code', [{ payload: { a: 1 } }])
         if ('args' in ex2) {
-            expect((ex2.args[0] as Record<string, unknown>)['code']).toBe('{"a":1}')
+            expect((ex2.args[0] as Record<string, unknown>)['code']).toBe('{"payload":{"a":1}}')
         }
 
         const ex3 = applyArgInterceptions('execute_code', [{ entry: { b: 2 } }])
         if ('args' in ex3) {
-            expect((ex3.args[0] as Record<string, unknown>)['code']).toBe('{"b":2}')
+            expect((ex3.args[0] as Record<string, unknown>)['code']).toBe('{"entry":{"b":2}}')
         }
 
         const ex4 = applyArgInterceptions('execute_code', [{ input: { c: 3 } }])
         if ('args' in ex4) {
-            expect((ex4.args[0] as Record<string, unknown>)['code']).toBe('{"c":3}')
+            expect((ex4.args[0] as Record<string, unknown>)['code']).toBe('{"input":{"c":3}}')
         }
 
         const ex5 = applyArgInterceptions('execute_code', [{ notes: 123 }])
@@ -468,11 +468,7 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
 
         const aliasQ = applyArgInterceptions('team_resolve_author', [{ q: 'bob' }])
         if ('args' in aliasQ) {
-            expect(aliasQ.args[0]).toEqual({
-                canonical_author: 'bob',
-                author: 'bob',
-                alias: 'bob',
-            })
+            expect(aliasQ.args[0]).toEqual({ author: 'bob' })
         }
     })
 

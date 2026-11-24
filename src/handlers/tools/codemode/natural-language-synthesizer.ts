@@ -4,7 +4,7 @@
  */
 
 import type { z } from 'zod'
-import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { isDbSourceSelector, isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import type { ExecuteCodeSchema } from './schemas.js'
 import { hasStructuredDiscriminator, resolveRepoWorkspace } from './json-entry-structured.js'
@@ -165,12 +165,22 @@ function normalizeUnitScore(raw: unknown): number | undefined {
     return num > 1 && num <= 10 ? num / 10 : Math.min(1, Math.max(0, num))
 }
 
-function normalizeValidation(raw: string | undefined): 'passed' | 'failed' | 'none' | undefined {
+const VALIDATION_PASSED_ALIASES = new Set([
+    'passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1',
+])
+const VALIDATION_FAILED_ALIASES = new Set(['failed', 'fail', 'error', 'failing', 'false', '0'])
+const VALIDATION_NONE_ALIASES = new Set([
+    'none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending',
+])
+
+function normalizeValidation(raw: string | undefined): string | undefined {
     if (raw === undefined) return undefined
-    const lower = raw.trim().toLowerCase()
-    if (['passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1'].includes(lower)) return 'passed'
-    if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) return 'failed'
-    return 'none'
+    const trimmed = raw.trim()
+    const lower = trimmed.toLowerCase()
+    if (VALIDATION_PASSED_ALIASES.has(lower)) return 'passed'
+    if (VALIDATION_FAILED_ALIASES.has(lower)) return 'failed'
+    if (VALIDATION_NONE_ALIASES.has(lower)) return 'none'
+    return trimmed
 }
 
 const ENTRY_KEYS = [
@@ -296,6 +306,14 @@ function buildSynthesizedEntryPayload(
         if (entryObj[k] !== undefined) extraContext[k] = entryObj[k]
         else if (rawObj[k] !== undefined) extraContext[k] = rawObj[k]
     }
+    const rawAutoContext =
+        entryObj['auto_context'] !== undefined
+            ? entryObj['auto_context']
+            : entryObj['autoContext'] !== undefined
+              ? entryObj['autoContext']
+              : rawObj['auto_context'] !== undefined
+                ? rawObj['auto_context']
+                : rawObj['autoContext']
 
     const payload: Record<string, unknown> = { content: rawContent }
     if (!isUpdate || explicitTitle !== undefined) payload['title'] = titleVal
@@ -313,11 +331,34 @@ function buildSynthesizedEntryPayload(
     if (trustVal !== undefined) payload['trust_score'] = trustVal
     if (impactVal !== undefined) payload['impact_score'] = impactVal
     if (valStatus !== undefined) payload['validation_status'] = valStatus
-    if (Object.keys(extraContext).length > 0) payload['auto_context'] = extraContext
+    assignMergedAutoContext(payload, rawAutoContext, extraContext, isUpdate)
 
     const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
     appendSharedEntryFlags(payload, entryObj, rawObj)
     return `return await ${fnName}(${JSON.stringify(payload)});`
+}
+
+function assignMergedAutoContext(
+    payload: Record<string, unknown>,
+    rawAutoContext: unknown,
+    extraContext: Record<string, unknown>,
+    isUpdate: boolean
+): void {
+    const hasExtra = Object.keys(extraContext).length > 0
+    if (rawAutoContext === null) {
+        if (isUpdate) payload['auto_context'] = null
+        else if (hasExtra) payload['auto_context'] = extraContext
+        return
+    }
+    if (isRecord(rawAutoContext)) {
+        payload['auto_context'] = hasExtra ? { ...extraContext, ...rawAutoContext } : rawAutoContext
+        return
+    }
+    if (typeof rawAutoContext === 'string' && rawAutoContext.trim() !== '') {
+        payload['auto_context'] = rawAutoContext
+        return
+    }
+    if (hasExtra) payload['auto_context'] = extraContext
 }
 
 const NESTED_ENTRY_KEYS: readonly string[] = [...ENTRY_KEYS, 'project_number', 'session_id']
@@ -332,7 +373,9 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
             ? rawObj['input']
             : rawObj
     const isFlatCall = entryObj === rawObj
+    const sourceIsSelector = isDbSourceSelector(rawObj) || isDbSourceSelector(input)
     const hasExplicitCode = JS_CODE_ALIAS_KEYS.some((key) => {
+        if (key === 'source' && sourceIsSelector) return false
         const val = input[key]
         return typeof val === 'string' && val.trim().length > 0
     })
@@ -373,8 +416,19 @@ export function appendSharedEntryFlags(
     entryObj: Record<string, unknown>,
     secondaryObj: Record<string, unknown>
 ): void {
-    const sigType = getNonEmptyString(entryObj, secondaryObj, ['significance_type', 'significanceType'])
-    if (sigType !== undefined) payload['significance_type'] = sigType
+    const rawSig =
+        entryObj['significance_type'] !== undefined
+            ? entryObj['significance_type']
+            : entryObj['significanceType'] !== undefined
+              ? entryObj['significanceType']
+              : secondaryObj['significance_type'] !== undefined
+                ? secondaryObj['significance_type']
+                : secondaryObj['significanceType']
+    if (rawSig === null && payload['entry_id'] !== undefined) {
+        payload['significance_type'] = null
+    } else if (typeof rawSig === 'string' && rawSig.trim().length > 0) {
+        payload['significance_type'] = rawSig
+    }
     const targetWs = getNonEmptyString(entryObj, secondaryObj, ['target_workspace_id', 'targetWorkspaceId'])
     if (targetWs !== undefined) payload['target_workspace_id'] = targetWs
     const isPersonal =

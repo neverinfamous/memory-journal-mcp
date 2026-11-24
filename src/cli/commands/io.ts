@@ -55,6 +55,9 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
     const { db, serverOptions } = await getDb(options, command)
     let exitCode = 0
     try {
+        if (options.workspace?.trim() === '') {
+            throw new Error('Workspace cannot be blank.')
+        }
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-file export.")
         }
@@ -98,6 +101,9 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
     let exitCode = 0
     try {
         const resolvedDir = await assertSafeCliDir(options.dir, 'markdown export')
+        if (options.workspace?.trim() === '') {
+            throw new Error('Workspace cannot be blank.')
+        }
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-directory export.")
         }
@@ -221,6 +227,9 @@ export function resolveImportWriteScope(
 ): { workspaceId: string | undefined; projectNumber: number | undefined } {
     if (options.dir === undefined || options.dir === '') {
         throw new Error('--dir is required')
+    }
+    if (options.workspace?.trim() === '') {
+        throw new Error('Workspace cannot be blank.')
     }
     if (options.workspace?.trim() === '*') {
         throw new Error("Workspace '*' cannot be used for import writes")

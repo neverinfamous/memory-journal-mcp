@@ -784,7 +784,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(safeCoerceValidationStatus.parse('error')).toBe('failed')
             expect(safeCoerceValidationStatus.parse(false)).toBe('failed')
             expect(safeCoerceValidationStatus.parse('none')).toBe('none')
-            expect(safeCoerceValidationStatus.parse('other_string')).toBe('none')
+            expect(safeCoerceValidationStatus.parse('skipped')).toBe('none')
+            expect(safeCoerceValidationStatus.safeParse('other_string').success).toBe(false)
 
             const schemaRes = baseEntryOptionsSchema.safeParse({
                 validationStatus: 'validated',

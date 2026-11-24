@@ -15,7 +15,10 @@ import { updateEntryOptionsSchema } from '../schemas.js'
 import { isRecord } from '../../utils/type-guards.js'
 import { CliExitError } from './db-core.js'
 import type { EntryPayload } from './entry-payload.js'
-import { extractLooseCliOptions } from './entry-payload-helpers.js'
+import {
+    assertNoInvalidCliValidationOption,
+    extractLooseCliOptions,
+} from './entry-payload-helpers.js'
 
 export type UpdateEntryCliOptions = z.infer<typeof updateEntryOptionsSchema> & {
     tag?: string | undefined
@@ -29,6 +32,7 @@ export function extractUpdateEntryCliOptions(raw: unknown): UpdateEntryCliOption
         if (typeof raw['tag'] === 'string') out.tag = raw['tag']
         if (typeof raw['contentFile'] === 'string') out.contentFile = raw['contentFile']
         if (typeof raw['body'] === 'string') out.body = raw['body']
+        assertNoInvalidCliValidationOption(raw, out)
     }
     return out
 }
@@ -57,6 +61,11 @@ export function validateCliUpdateArgsAndTarget(
         throw new CliExitError(1)
     }
 
+    for (const wsCandidate of [options.workspaceId, options.workspace, options.workspace_id]) {
+        if (typeof wsCandidate === 'string' && wsCandidate.trim() === '') {
+            throw new ValidationError('Workspace cannot be blank.')
+        }
+    }
     const rawWorkspaceOpt = options.workspaceId ?? options.workspace ?? options.workspace_id
     if (rawWorkspaceOpt?.trim() === '*') {
         throw new ValidationError(

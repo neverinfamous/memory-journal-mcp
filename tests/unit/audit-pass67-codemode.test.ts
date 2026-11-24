@@ -293,7 +293,9 @@ describe('Pass 67 Audit — Code Mode Recovery, SQL Binds, Proxies, Shims & Rege
 
         const getFn = createGetReadFindInterceptor(mjApi, shimMj)
         getFn(7, { include_relationships: true })
-        expect(getEntrySpy).toHaveBeenCalledWith({ entry_id: 7 }, { include_relationships: true })
+        expect(getEntrySpy).toHaveBeenCalledWith({ entry_id: 7, include_relationships: true })
+        getFn(7, 'extra1', 'extra2')
+        expect(getEntrySpy).toHaveBeenCalledWith({ entry_id: 7 }, 'extra1', 'extra2')
 
         const runIsolatedNested = vi.fn().mockResolvedValue({ success: true })
         const vmCtx = vm.createContext({})

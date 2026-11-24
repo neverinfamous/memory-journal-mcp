@@ -61,12 +61,27 @@ export function extractLooseCliOptions<T extends z.ZodRawShape>(
     return looseSchema.parse(cleaned)
 }
 
+/** Reject unrecognized CLI validation flags stripped during loose option extraction. */
+export function assertNoInvalidCliValidationOption(
+    raw: unknown,
+    extracted: Record<string, unknown>
+): void {
+    if (!isRecord(raw)) return
+    for (const k of ['validationStatus', 'validation_status', 'validation'] as const) {
+        const rawVal = raw[k]
+        if (rawVal !== undefined && rawVal !== null && rawVal !== '' && extracted[k] === undefined) {
+            normalizeValidationStatus(rawVal)
+        }
+    }
+}
+
 export function extractHealedEntryOptions(raw: unknown): HealedEntryOptions {
     const out: HealedEntryOptions = { ...extractLooseCliOptions(createEntryOptionsSchema, raw) }
     if (isRecord(raw)) {
         if (typeof raw['tag'] === 'string') out.tag = raw['tag']
         if (typeof raw['contentFile'] === 'string') out.contentFile = raw['contentFile']
         if (typeof raw['body'] === 'string') out.body = raw['body']
+        assertNoInvalidCliValidationOption(raw, out)
     }
     return out
 }
@@ -143,21 +158,33 @@ export function applyCliEntryFlagAliases(
 
 const PASSED_STATUSES = ['passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1']
 const FAILED_STATUSES = ['failed', 'fail', 'error', 'failing', 'false', '0']
+const NONE_STATUSES = ['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending']
 
-/** Normalise boolean/string/number validation inputs to passed | failed | none. */
+/** Normalise boolean/string/number validation inputs to passed | failed | none, failing closed on invalid values. */
 export function normalizeValidationStatus(
     valStatusRaw: unknown
 ): 'passed' | 'failed' | 'none' | undefined {
     if (valStatusRaw === undefined || valStatusRaw === null) return undefined
     if (typeof valStatusRaw === 'boolean') return valStatusRaw ? 'passed' : 'failed'
     if (typeof valStatusRaw === 'string') {
-        const lower = valStatusRaw.trim().toLowerCase()
+        const trimmed = valStatusRaw.trim()
+        if (trimmed === '') return undefined
+        const lower = trimmed.toLowerCase()
         if (PASSED_STATUSES.includes(lower)) return 'passed'
         if (FAILED_STATUSES.includes(lower)) return 'failed'
-        return 'none'
+        if (NONE_STATUSES.includes(lower)) return 'none'
+        throw new ValidationError(
+            `Invalid validation_status '${trimmed}'. Expected passed, failed, or none.`,
+            { validationStatus: valStatusRaw }
+        )
     }
     if (typeof valStatusRaw === 'number') {
-        return valStatusRaw === 1 ? 'passed' : valStatusRaw === 0 ? 'failed' : 'none'
+        if (valStatusRaw === 1) return 'passed'
+        if (valStatusRaw === 0) return 'failed'
+        throw new ValidationError(
+            `Invalid validation_status '${String(valStatusRaw)}'. Expected passed, failed, or none.`,
+            { validationStatus: valStatusRaw }
+        )
     }
     return undefined
 }
@@ -344,10 +371,14 @@ export function resolveExplicitProjectAndWorkspace(
     const explicitProjectNum = parseStrictPositiveProjectNumber(projectRaw)
 
     const optsRec = UNKNOWN_RECORD_SCHEMA.parse(options)
+    const cliWsCandidates = [optsRec['workspaceId'], optsRec['workspace_id'], optsRec['workspace']]
+    for (const candidate of cliWsCandidates) {
+        if (typeof candidate === 'string' && candidate.trim() === '') {
+            throw new ValidationError('Workspace cannot be blank.')
+        }
+    }
     const explicitWorkspaceId = firstNonBlankString(
-        optsRec['workspaceId'],
-        optsRec['workspace_id'],
-        optsRec['workspace'],
+        ...cliWsCandidates,
         metadata['workspace_id'],
         metadata['workspaceId'],
         metadata['workspace']

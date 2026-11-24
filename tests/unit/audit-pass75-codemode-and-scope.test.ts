@@ -50,8 +50,8 @@ function makeBaseContext(overrides: Partial<ToolContext> = {}): ToolContext {
 
 describe('Pass 75 Audit — Code Mode, Recovery, Normalizers & Prompts', () => {
     it('tracks AP1-AP4 prompt updates and revision 2026-11-22-audit-pass75', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass84')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass85')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass85')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = await def.handler(
             { target: 'memory-journal-mcp' },
@@ -327,7 +327,11 @@ describe('Pass 75 Audit — Code Mode, Recovery, Normalizers & Prompts', () => {
         const recoveredEntry = extractAndRecoverEntryCode(
             'mj.core.createEntry({ content: "broken trailing", autoContext: { tags: ["nested"], type: "decision" } '
         )
-        expect(recoveredEntry).toContain('"entry_type":"technical_note"')
-        expect(recoveredEntry).not.toContain('nested')
+        const entryMatch = /^return await mj\.createEntry\(([\s\S]*)\);$/.exec(recoveredEntry ?? '')
+        expect(entryMatch).not.toBeNull()
+        const entryPayload = JSON.parse(entryMatch?.[1] ?? '{}') as Record<string, unknown>
+        expect(entryPayload['entry_type']).toBe('technical_note')
+        expect(entryPayload['tags']).toBeUndefined()
+        expect(entryPayload['auto_context']).toEqual({ tags: ['nested'], type: 'decision' })
     })
 })

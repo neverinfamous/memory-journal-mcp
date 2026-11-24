@@ -39,8 +39,12 @@ function sliceBatchTensor(
     const isFloat32 = data instanceof Float32Array
     for (let i = 0; i < count; i++) {
         const start = i * dimensions
+        const end = start + dimensions
+        for (let j = start; j < end; j++) {
+            if (!Number.isFinite(data[j])) return undefined
+        }
         if (isFloat32) {
-            vectors.push(data.slice(start, start + dimensions))
+            vectors.push(data.slice(start, end))
             continue
         }
         const slice = new Float32Array(dimensions)
@@ -115,8 +119,11 @@ export async function runPipelineBatchEmbeddingsSettled(
                 return vectors.map((value) => ({ status: 'fulfilled', value }))
             }
             if (batchOut.data?.length === dimensions) {
-                results.push({ status: 'fulfilled', value: new Float32Array(batchOut.data) })
-                startIndex = 1
+                const slice = new Float32Array(batchOut.data)
+                if (slice.every((v) => Number.isFinite(v))) {
+                    results.push({ status: 'fulfilled', value: slice })
+                    startIndex = 1
+                }
             }
         } catch (reason) {
             logger.warning('Batch embedding failed; embedding each text separately', {

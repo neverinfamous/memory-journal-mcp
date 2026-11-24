@@ -30,7 +30,7 @@ export default defineConfig([
             'cli/commands/entry': 'src/cli/commands/entry.ts',
             'vendor/commit/commit': 'src/vendor/commit/commit.ts',
         },
-        clean: true,
+        clean: false,
         splitting: true,
         external: Object.keys(pkgJson.dependencies),
     },
