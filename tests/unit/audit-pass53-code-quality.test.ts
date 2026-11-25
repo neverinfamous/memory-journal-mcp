@@ -93,7 +93,12 @@ describe('Pass 53 Adversarial Code Quality Audit Regressions', () => {
         try {
             const a = db.createEntry({ content: 'Entry A', workspaceId: 'ws-a' })
             const b = db.createEntry({ content: 'Entry B', workspaceId: 'ws-a' })
-            db.linkEntries(a.id, a.id, 'references')
+            ;(
+                db as unknown as { connection: { run: (sql: string, params?: unknown[]) => void } }
+            ).connection.run(
+                'INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type) VALUES (?, ?, ?)',
+                [a.id, a.id, 'references']
+            )
             db.linkEntries(a.id, b.id, 'references')
 
             const graph = db.visualizeRelationships({

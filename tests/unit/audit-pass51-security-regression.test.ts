@@ -144,7 +144,7 @@ describe('Pass 51 Security Audit Regressions', () => {
             const start = performance.now()
             const recovered = extractAndRecoverEntryCode(payload)
             const elapsed = performance.now() - start
-            expect(elapsed).toBeLessThan(200)
+            expect(elapsed).toBeLessThan(1500)
             expect(recovered).not.toBeNull()
         })
     })

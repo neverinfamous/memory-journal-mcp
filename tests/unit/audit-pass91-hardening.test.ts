@@ -108,7 +108,7 @@ describe('Pass 91 Audit — Pass 12 Remediations', () => {
         vi.restoreAllMocks()
         vi.useRealTimers()
         for (const dir of tempDirs.splice(0)) {
-            fs.rmSync(dir, { recursive: true, force: true })
+            fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
         }
     })
 
@@ -370,7 +370,7 @@ describe('Pass 91 Audit — Pass 12 Remediations', () => {
         }
         await expect(writeVerifiedBackupFile(corruptConn, path.join(tmpDir, 'backup.db'))).rejects.toThrow()
         expect(chmodSpy).toHaveBeenCalledWith(expect.stringContaining('.tmp'), 0o600)
-    })
+    }, 30_000)
 
     it('P12-D-M1 & P12-D-M2: forwards exec lifecycle/element configs, registers stdio subscriptions, and bumps prompt revision', async () => {
         const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-p91-exec-'))

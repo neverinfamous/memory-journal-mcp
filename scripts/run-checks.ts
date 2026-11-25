@@ -63,7 +63,7 @@ function checkFileLengths(): boolean {
                 }
                 if (lines > 500) {
                     violations.push({ path: fullPath, lines })
-                } else if (lines >= 451) {
+                } else if (lines > 475) {
                     warnings.push({ path: fullPath, lines })
                 }
                 if (

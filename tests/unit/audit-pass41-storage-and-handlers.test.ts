@@ -65,7 +65,12 @@ describe('Pass 41 Audit — Storage, Path Containment, Resource Isolation & Prom
 
             const wsB1 = db.createEntry({ content: 'ws-b peer', workspaceId: 'ws-b' })
             db.linkEntries(wsA1.id, wsB1.id, 'references', undefined, '*')
-            db.linkEntries(wsA1.id, wsA1.id, 'references', undefined, 'ws-a')
+            ;(
+                db as unknown as { connection: { run: (sql: string, params?: unknown[]) => void } }
+            ).connection.run(
+                'INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type) VALUES (?, ?, ?)',
+                [wsA1.id, wsA1.id, 'references']
+            )
 
             const scopedScores = db.getImportanceScoresByIds([wsA1.id], 'ws-a')
             const wsAStats = scopedScores.get(wsA1.id)

@@ -385,9 +385,12 @@ describe('Pass 28 Security Regressions (H1-H6)', () => {
     it('H5: ignores SQL string literal decoys and rejects multi-row or unparseable INSERT payloads', () => {
         const decoySql = `SELECT * FROM memory_journal WHERE id = 42 AND content = "workspace_id = 'evil'"`
         expect(scopeFromSqlLiterals(decoySql)).toEqual({})
-        const recoveredDecoy = extractAndRecoverSqlCode(decoySql)
-        expect(recoveredDecoy).not.toBeNull()
-        expect(recoveredDecoy).not.toContain('evil')
+        expect(extractAndRecoverSqlCode(decoySql)).toBeNull()
+
+        const contentDecoySql = `SELECT * FROM memory_journal WHERE content = "workspace_id = 'evil'"`
+        const recoveredContentDecoy = extractAndRecoverSqlCode(contentDecoySql)
+        expect(recoveredContentDecoy).toContain('mj.search.searchEntries')
+        expect(recoveredContentDecoy).not.toContain('"workspace_id"')
 
         const validScopedSql = `SELECT * FROM memory_journal WHERE id = 42 AND workspace_id = 'memory-journal-mcp'`
         expect(scopeFromSqlLiterals(validScopedSql)).toEqual({ workspace_id: 'memory-journal-mcp' })

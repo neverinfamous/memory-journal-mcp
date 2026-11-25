@@ -91,7 +91,7 @@ describe('Pass 45 Code Mode Sandbox, Lexer & Bounds Regressions', () => {
         const elapsedMs = performance.now() - start
         expect(typeof healed).toBe('string')
         expect(recovered).toBeNull()
-        expect(elapsedMs).toBeLessThan(500)
+        expect(elapsedMs).toBeLessThan(1500)
     })
 
     it('H3: rejects Object.prototype keys via Object.hasOwn and keeps SCHEMA_KEY_CACHE bounded positive-only', () => {

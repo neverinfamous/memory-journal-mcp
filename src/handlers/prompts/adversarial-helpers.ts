@@ -128,15 +128,20 @@ const MAX_WORKSPACE_ID_LENGTH = 128
  */
 export function sanitizePromptTarget(target: string): string {
     let cleaned = ''
+    let prevWasControl = false
     for (const ch of target) {
         const cp = ch.codePointAt(0)
         if (
             cp !== undefined &&
             (cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0x2028 || cp === 0x2029)
         ) {
-            cleaned += ' '
+            if (!prevWasControl) {
+                cleaned += ' '
+                prevWasControl = true
+            }
         } else {
             cleaned += ch
+            prevWasControl = false
         }
     }
     return cleaned.replaceAll('`', "'").slice(0, MAX_PROMPT_TARGET_LENGTH)

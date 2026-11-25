@@ -154,7 +154,12 @@ describe('Pass 52 Adversarial Code-Quality Regressions', () => {
             db.applyTeamSchema()
             const e1 = db.createEntry({ content: 'self-loop test', workspaceId: 'ws-a', author: 'alice' })
             const e2 = db.createEntry({ content: 'peer entry', workspaceId: 'ws-a', author: 'bob' })
-            db.linkEntries(e1.id, e1.id, 'references')
+            ;(
+                db as unknown as { connection: { run: (sql: string, params?: unknown[]) => void } }
+            ).connection.run(
+                'INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type) VALUES (?, ?, ?)',
+                [e1.id, e1.id, 'references']
+            )
             db.linkEntries(e2.id, e1.id, 'references')
 
             const matrix = db.getTeamCollaborationMatrix({ workspaceId: 'ws-a', limit: 10 })

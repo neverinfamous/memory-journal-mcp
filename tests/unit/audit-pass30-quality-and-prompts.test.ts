@@ -66,7 +66,7 @@ describe('Pass 30 Quality, Prompts & Appendix B Regressions', () => {
 
     it('M2, M3 & M4: accepts max_count git alias, rejects FTS keyset cursor, and deduplicates cross-project rows', () => {
         const parsed = GitAnalyzePatternsOptionsSchema.parse({ max_count: 15 })
-        expect(parsed.max_count).toBe(15)
+        expect(parsed.maxCount).toBe(15)
 
         expect(() =>
             db.searchEntries('hello', {

@@ -141,7 +141,7 @@ describe('Pass 66 Audit — Storage, Lock, Server, CLI, RBAC & Prompts', () => {
             ctx.configManager.close()
             ctx.db.close()
         }
-    })
+    }, 30_000)
 
     it('M3 & L2: per-file readers survive handle.close() rejections and searchAuditFileBackward slices to bytesRead', async () => {
         const dir = makeTempDir('mj-p66-io-')

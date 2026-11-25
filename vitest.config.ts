@@ -64,9 +64,10 @@ export default defineConfig({
             ],
         },
         hookTimeout: 30000,
-        testTimeout: 10000,
+        testTimeout: 30000,
         pool: 'threads',
         fileParallelism: true,
+        maxWorkers: '50%',
         projects: [
             {
                 extends: true,

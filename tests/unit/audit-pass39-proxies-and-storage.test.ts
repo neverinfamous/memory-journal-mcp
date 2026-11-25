@@ -231,7 +231,12 @@ describe('pass 39 proxies and storage', () => {
             expect(insights.projects.length).toBeGreaterThanOrEqual(520)
 
             const selfId = createdIds[0] ?? 1
-            db.linkEntries(selfId, selfId, 'relates_to')
+            ;(
+                db as unknown as { connection: { run: (sql: string, params?: unknown[]) => void } }
+            ).connection.run(
+                'INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type) VALUES (?, ?, ?)',
+                [selfId, selfId, 'references']
+            )
             expect(db.getRelationshipHubs(10)).toEqual([])
             expect(db.calculateImportance(selfId)?.breakdown.relationships).toBe(0)
 

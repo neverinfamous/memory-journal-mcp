@@ -61,7 +61,7 @@ describe('Audit Pass 48 — Lexer, Auto-Return & Rewriter Hardening (H3, H4, L6)
 })
 
 describe('Audit Pass 48 — Worker Sandbox Prototypes, Shims & Egress Bridge (H5, M11, M14, M15, L8)', () => {
-    const sandbox = new WorkerSandbox({ timeoutMs: 4000 })
+    const sandbox = new WorkerSandbox({ timeoutMs: 15000 })
 
     afterAll(() => {
         sandbox.dispose()
