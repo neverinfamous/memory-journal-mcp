@@ -351,6 +351,10 @@ export function nonEmptyAuthClaim(value: unknown): string | undefined {
     return trimmed.length > 0 && trimmed.toLowerCase() !== 'unknown' ? trimmed : undefined
 }
 
+export function resolveExplicitTeamAuthor(): string | undefined {
+    return sanitizeValidAuthor(process.env['TEAM_AUTHOR']?.trim().replace(/"/g, ''))
+}
+
 export function resolveAuthenticatedAuthor(): string {
     const authCtx = getAuthContext()
     if (authCtx?.authenticated) {
@@ -370,7 +374,7 @@ export function resolveAuthenticatedAuthor(): string {
         return 'unknown'
     }
 
-    return resolveAuthor()
+    return resolveExplicitTeamAuthor() ?? 'unknown'
 }
 
 function sanitizeValidAuthor(raw: string | undefined): string | undefined {

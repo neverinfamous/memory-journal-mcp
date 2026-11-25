@@ -20,10 +20,10 @@ describe('enforceAccessBoundary', () => {
         process.env = originalEnv
     })
 
-    it('should throw if target is team and no auth or TEAM_AUTHOR is present', () => {
+    it('should throw if target is team and no auth or TEAM_AUTHOR is present even when USERNAME/USER exist', () => {
         delete process.env['TEAM_AUTHOR']
-        delete process.env['USERNAME']
-        delete process.env['USER']
+        process.env['USERNAME'] = 'ambient-win-user'
+        process.env['USER'] = 'ambient-posix-user'
         process.env['CODEMODE_INTERNAL_FULL_ACCESS'] = 'false'
         vi.mocked(authContext.getAuthContext).mockReturnValue(undefined)
 

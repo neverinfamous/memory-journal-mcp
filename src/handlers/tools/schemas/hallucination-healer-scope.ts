@@ -59,7 +59,7 @@ function resolveNamedProjectTarget(
         return false
     }
     if (strVal === '*') return true
-    if (strVal === '') return false
+    if (strVal === '') return true
 
     const canonicalKey = findCanonicalRegistryKey(strVal, registry)
     const matchedWs =

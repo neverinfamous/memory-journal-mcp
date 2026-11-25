@@ -152,7 +152,7 @@ export function applyProjectNameAlias(
     rawVal: unknown,
     obj: Record<string, unknown>
 ): ProjectNameAliasResult {
-    const existingProj = obj['project_number'] ?? obj['projectNumber']
+    const existingProj = obj['project_number'] ?? obj['projectNumber'] ?? obj['project_id'] ?? obj['projectId']
     const num = canonicalAliasProject(rawVal)
     const strVal = typeof rawVal === 'string' || typeof rawVal === 'number' ? String(rawVal) : ''
     if (num !== undefined && strVal.trim() !== '') {
@@ -219,6 +219,16 @@ export function normalizeProjectAliases(
     obj: Record<string, unknown>,
     allowProjectAlias = true
 ): { error: Record<string, unknown> } | undefined {
+    const nonBlankWs = new Set<string>()
+    for (const wsKey of ['workspace_id', 'workspaceId', 'workspace'] as const) {
+        const val = obj[wsKey]
+        if (typeof val === 'string' && val.trim() !== '') {
+            nonBlankWs.add(val.trim())
+        }
+    }
+    if (nonBlankWs.size > 1) {
+        return aliasValidationError("Conflicting values provided for 'workspace_id', 'workspaceId', or 'workspace'.")
+    }
     const rawWs = obj['workspace_id']
     if (rawWs === undefined || (typeof rawWs === 'string' && rawWs.trim() === '')) {
         const nonBlankAlias =
@@ -237,8 +247,10 @@ export function normalizeProjectAliases(
             }
         }
     }
-    Reflect.deleteProperty(obj, 'workspaceId')
-    if (obj['workspace_id'] !== undefined) {
+    if (typeof obj['workspaceId'] === 'string') {
+        Reflect.deleteProperty(obj, 'workspaceId')
+    }
+    if (obj['workspace_id'] !== undefined && typeof obj['workspace'] === 'string') {
         Reflect.deleteProperty(obj, 'workspace')
     }
     for (const projKey of ['projectNumber', 'project_id', 'projectId'] as const) {

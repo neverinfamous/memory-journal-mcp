@@ -193,8 +193,8 @@ export const RunAutoPruneOutputSchema = z
 
 export const RegisterProjectSchemaMcp = z
     .object({
-        name: z.string().describe('The key/name of the project in the registry.'),
-        absolute_path: z.string().describe('The absolute path to the local repository.'),
+        name: z.string().max(255).describe('The key/name of the project in the registry.'),
+        absolute_path: z.string().max(500).describe('The absolute path to the local repository.'),
         project_number: relaxedNumber()
             .optional()
             .describe('The GitHub Project number, if applicable.'),
@@ -203,10 +203,11 @@ export const RegisterProjectSchemaMcp = z
 
 export const UpdateProjectSchemaMcp = z
     .object({
-        name: z.string().describe('The current key/name of the project.'),
-        new_name: z.string().optional().describe('The new key/name for the project (if renaming).'),
+        name: z.string().max(255).describe('The current key/name of the project.'),
+        new_name: z.string().max(255).optional().describe('The new key/name for the project (if renaming).'),
         absolute_path: z
             .string()
+            .max(500)
             .optional()
             .describe('The new absolute path to the local repository.'),
         project_number: relaxedNumber().optional().describe('The new GitHub Project number.'),
@@ -215,7 +216,7 @@ export const UpdateProjectSchemaMcp = z
 
 export const DeleteProjectSchemaMcp = z
     .object({
-        name: z.string().describe('The key/name of the project to delete.'),
+        name: z.string().max(255).describe('The key/name of the project to delete.'),
     })
     .strict()
 

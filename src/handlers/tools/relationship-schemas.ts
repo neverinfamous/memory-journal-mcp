@@ -187,9 +187,9 @@ export const VisualizeInputSchemaMcp = z
             .describe('Specific entry ID to visualize (shows connected entries)'),
         id: relaxedNumber().optional(),
         tags: z.array(z.string().max(100)).max(100).optional().describe('Filter entries by tags'),
-        q: z.string().optional(),
-        text: z.string().optional(),
-        message: z.string().optional(),
+        q: z.string().max(500).optional(),
+        text: z.string().max(500).optional(),
+        message: z.string().max(500).optional(),
         description: z.string().max(2000).optional(),
         relationship_type: z
             .string()
@@ -244,7 +244,7 @@ export const VisualizeInputSchemaMcp = z
             ctx
         )
         const definedQueries = [data.q, data.text, data.message, data.description].filter(
-            (v): v is string => v !== undefined && v !== ''
+            (v): v is string => v !== undefined
         )
         addConflictIfDifferent(definedQueries, ['tags'], 'Conflicting tag filter query aliases.', ctx)
         if (
@@ -262,7 +262,9 @@ export const VisualizeInputSchemaMcp = z
     .transform(({ id, q, text, message, description, type, rel, path, keep, ...data }) => {
         let extractedTags = data.tags
         if (!extractedTags) {
-            const queryVal = q ?? text ?? message ?? description
+            const queryVal = [q, text, message, description].find(
+                (v): v is string => v !== undefined && v !== ''
+            )
             if (queryVal) extractedTags = [queryVal]
         }
         const rawLimit = data.limit ?? keep

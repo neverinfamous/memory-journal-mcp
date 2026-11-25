@@ -42,10 +42,13 @@ export function coerceAnchorStatusAlias(
 function normalizeAnchorContainer(obj: Record<string, unknown>): boolean {
     let modified = false
     for (const aliasKey of ['anchor', 'file_anchors', 'fileAnchors'] as const) {
-        if (aliasKey in obj) {
-            if (obj['anchors'] === undefined && obj[aliasKey] !== undefined) {
-                obj['anchors'] = obj[aliasKey]
-            }
+        if (!(aliasKey in obj)) continue
+        const aliasVal = obj[aliasKey]
+        if (obj['anchors'] === undefined && aliasVal !== undefined) {
+            obj['anchors'] = aliasVal
+            Reflect.deleteProperty(obj, aliasKey)
+            modified = true
+        } else if (aliasVal === undefined || Object.is(obj['anchors'], aliasVal)) {
             Reflect.deleteProperty(obj, aliasKey)
             modified = true
         }
@@ -128,15 +131,25 @@ function normalizeSingleAnchorItem(
         anchor_type: normalizedType,
         ...(mappedStatus !== undefined ? { status: mappedStatus } : {}),
     }
+    const pathAliasKeys = new Set([
+        'anchor_path', 'anchorPath', 'path', 'file', 'file_path', 'filepath', 'filePath',
+        'value', 'target', 'uri', 'location',
+    ])
+    const typeAliasKeys = new Set(['anchor_type', 'anchorType', 'type'])
     for (const [k, v] of Object.entries(itemObj)) {
-        if (
-            k === 'anchor_path' || k === 'anchorPath' || k === 'path' || k === 'file' ||
-            k === 'filepath' || k === 'filePath' || k === 'value' || k === 'target' ||
-            k === 'uri' || k === 'location' || k === 'anchor_type' || k === 'anchorType' ||
-            k === 'type' || k === 'status'
-        ) {
+        if (pathAliasKeys.has(k)) {
+            if (typeof v === 'string' ? v.trim().replace(/\\/g, '/') !== normalizedPath : v !== undefined) {
+                rebuilt[k] = v
+            }
             continue
         }
+        if (typeAliasKeys.has(k)) {
+            if (typeof v === 'string' && v.trim() !== '' ? v.trim() !== normalizedType : v !== undefined) {
+                rebuilt[k] = v
+            }
+            continue
+        }
+        if (k === 'status') continue
         rebuilt[k] = v
     }
     const changed =

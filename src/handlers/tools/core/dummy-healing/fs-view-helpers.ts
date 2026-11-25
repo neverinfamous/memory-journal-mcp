@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import { getErrnoCode } from '../../../../utils/type-guards.js'
 
 /** Maximum directory entries inspected by the `list_dir` dummy-healing fallback. */
 export const MAX_LIST_DIR_ENTRIES = 10_000
@@ -31,14 +32,15 @@ export function sliceViewedFileLines(content: string, rawArgs: Record<string, un
  */
 export async function openSafeReadHandle(
     resolved: string
-): Promise<fs.promises.FileHandle | undefined> {
+): Promise<{ handle: fs.promises.FileHandle } | { errorCode: string | undefined }> {
     try {
-        return await fs.promises.open(
+        const handle = await fs.promises.open(
             resolved,
             fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)
         )
-    } catch {
-        return undefined
+        return { handle }
+    } catch (err: unknown) {
+        return { errorCode: getErrnoCode(err) }
     }
 }
 
@@ -51,16 +53,26 @@ export async function readSafeViewFile(
     toolName: string,
     rawArgs: Record<string, unknown>
 ): Promise<unknown> {
-    const handle = await openSafeReadHandle(resolved)
-    if (handle === undefined) {
+    const opened = await openSafeReadHandle(resolved)
+    if (!('handle' in opened)) {
+        if (opened.errorCode === 'ENOENT') {
+            return {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: File not found at '${targetPath}'.`,
+                code: 'NOT_FOUND',
+                category: 'filesystem',
+                recoverable: true,
+            }
+        }
         return {
             success: false,
-            error: `🛠️ AUTONOMOUS HEALING: File not found at '${targetPath}'.`,
-            code: 'NOT_FOUND',
+            error: `Cannot safely open file at '${targetPath}'${opened.errorCode !== undefined ? ` (${opened.errorCode})` : ''}.`,
+            code: 'IO_ERROR',
             category: 'filesystem',
-            recoverable: true,
+            recoverable: false,
         }
     }
+    const { handle } = opened
     try {
         const stat = await handle.stat()
         if (!stat.isFile()) {

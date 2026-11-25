@@ -26,6 +26,8 @@ import { resolveExecutionPayload, buildSandboxUserContext, type ExecuteCodeInput
 import { firstNonBlankString } from './json-entry-scope.js'
 import { resolveCodeModeSessionContext } from './secure-dispatcher.js'
 import { validateRawPayloadSize } from './payload-byte-bounds.js'
+import { isFilterEffectivelyReadOnly } from '../../../filtering/tool-filter.js'
+import { isSynthesizedMutatingCode, validateReadonlyAliasConflicts } from './session-alias-conflicts.js'
 
 export {
     healCodeModeScript,
@@ -118,11 +120,12 @@ async function runSandboxWithAutonomousRecovery(opts: RecoveryRunOptions): Promi
             isValidJsScript(opts.executionCode)
                 ? healTemplateBackticksOnRuntimeError(opts.executionCode)
                 : extractAndRecoverSqlCode(originalInput) ??
-                  extractAndRecoverEntryCode(originalInput) ??
+                  (!opts.isSandboxReadonly ? extractAndRecoverEntryCode(originalInput) : null) ??
                   extractAndRecoverJsonCode(originalInput) ??
                   healTemplateBackticksOnRuntimeError(opts.executionCode)
         )
         if (recoveredCode === null || recoveredCode === opts.executionCode) return
+        if (opts.isSandboxReadonly && isSynthesizedMutatingCode(recoveredCode)) return
         // [BOUNDARY] Recovered code is re-validated before it ever runs.
         const retryValidation = opts.securityManager.validateCode(recoveredCode)
         if (!retryValidation.valid) {
@@ -222,10 +225,17 @@ async function executeCodeModeHandler(
         if (sizeErr !== null) return buildSecurityErrorResult(sizeErr)
 
         const input: ExecuteCodeInput = ExecuteCodeSchema.parse(params)
+        validateReadonlyAliasConflicts(input, params)
         const { sessionId, timeoutMs, readonlyRequested, isDryRun, useTestDb } = resolveCodeModeRunOptions(input)
+        const filterConfig = context.config?.filterConfig
+        const isGlobalReadonly =
+            filterConfig !== null && filterConfig !== undefined
+                ? isFilterEffectivelyReadOnly(filterConfig)
+                : false
+        const effectiveReadonly = readonlyRequested || isGlobalReadonly
         const healingEnabled = context.config?.agentHealing !== false
         const payloadRes = runWithScopedRegistry(context.config?.projectRegistry, () =>
-            resolveExecutionPayload(input, params, healingEnabled, start)
+            resolveExecutionPayload(input, params, healingEnabled, start, effectiveReadonly)
         )
         if ('earlyReturn' in payloadRes) return payloadRes.earlyReturn
         const executionCode = payloadRes.executionCode

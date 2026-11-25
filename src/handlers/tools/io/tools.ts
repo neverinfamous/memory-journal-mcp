@@ -3,6 +3,7 @@ import { AggregateMcpError, ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { logger } from '../../../utils/logger.js'
+import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
@@ -151,6 +152,7 @@ async function executeExportMarkdown(
         activeProjectRegistry(context.config?.projectRegistry)
     )
     const allowedRoots = context.config?.allowedIoRoots ?? []
+    assertSafeDirectoryPath(input.output_dir, allowedRoots)
 
     await sendProgress(progress, 0, 3, 'Fetching entries...')
     const entries = fetchEntriesForExport(db, input, wsId, projectNumber)

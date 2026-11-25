@@ -97,7 +97,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
         const dir = path.dirname(this.dbPath)
         if (dir && !fs.existsSync(dir)) {
-            await fs.promises.mkdir(dir, { recursive: true })
+            await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 })
         }
         if (this.initEpoch !== epoch) {
             throw new ConnectionError('Database closed during initialization.')

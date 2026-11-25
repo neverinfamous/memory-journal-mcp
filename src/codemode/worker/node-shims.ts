@@ -15,7 +15,7 @@ function disabledFsOperation(name: string): never {
     const err = new Error(
         `VALIDATION_ERROR: fs.${name} is disabled inside Code Mode. Persist data with mj.core.createEntry / mj.admin.updateEntry instead.`
     )
-    err.name = 'VALIDATION_ERROR'
+    Object.defineProperty(err, 'name', { value: 'VALIDATION_ERROR', configurable: true, enumerable: false, writable: true })
     throw err
 }
 

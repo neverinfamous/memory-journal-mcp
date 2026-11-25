@@ -347,8 +347,8 @@ describe('Pass 84 Audit — High & Moderate Security/Correctness Regressions', (
             expect(spySearch).not.toHaveBeenCalled()
             expect(initSpy).not.toHaveBeenCalled()
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
-            expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
+            expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
             const def = getCodeQualityAuditPromptDefinition()
             const msg = await def.handler({}, memDb)
             expect(msg.messages[0]?.content.text).toContain(

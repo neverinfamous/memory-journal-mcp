@@ -227,15 +227,20 @@ function isStatisticsArgRecord(params: unknown): params is Record<string, unknow
 function omitNonStrictStatisticsKeys(params: unknown): unknown {
     if (!isStatisticsArgRecord(params)) return params
     const copy: Record<string, unknown> = { ...params }
-    if (copy['group_by'] === undefined) {
-        for (const hintKey of STATISTICS_HINT_KEYS) {
-            const hintVal = copy[hintKey]
-            if (typeof hintVal === 'string') {
-                copy['group_by'] = hintVal
-                break
-            }
-        }
+    const definedHintVals: string[] = []
+    for (const hintKey of STATISTICS_HINT_KEYS) {
+        if (!(hintKey in copy) || copy[hintKey] === undefined) continue
+        const raw = copy[hintKey]
+        if (typeof raw !== 'string' || raw.trim() === '') return copy
+        definedHintVals.push(raw.trim())
     }
+    if (definedHintVals.length === 0) return copy
+    if (definedHintVals.some((v) => v !== definedHintVals[0])) return copy
+    if (typeof copy['group_by'] === 'string' && copy['group_by'].trim() !== definedHintVals[0]) {
+        return copy
+    }
+    if (copy['group_by'] !== undefined && typeof copy['group_by'] !== 'string') return copy
+    copy['group_by'] ??= definedHintVals[0]
     for (const hintKey of STATISTICS_HINT_KEYS) {
         Reflect.deleteProperty(copy, hintKey)
     }

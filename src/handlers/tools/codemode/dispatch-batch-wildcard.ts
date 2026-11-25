@@ -42,13 +42,7 @@ export function verifyWildcardUpdateSourceProject(
         return undefined
     }
     const sourceEntry = sessionContext.db.getEntryById(parsedEntryId, '*')
-    const sourceProject = sourceEntry?.projectNumber
-    if (
-        sourceProject !== null &&
-        sourceProject !== undefined &&
-        sourceProject > 0 &&
-        sourceProject !== projectId
-    ) {
+    if (sourceEntry !== null && sourceEntry !== undefined && sourceEntry.projectNumber !== projectId) {
         return {
             success: false,
             error: `Entry ${String(parsedEntryId)} not found`,

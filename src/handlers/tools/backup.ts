@@ -162,24 +162,24 @@ async function notifyRestoreProgressComplete(
 }
 
 const RestoreBackupSchema = z.object({
-    filename: z.string().min(1, 'filename cannot be empty'),
+    filename: z.string().min(1, 'filename cannot be empty').max(255),
     confirm: z.boolean().optional(),
 }).strict()
 const BackupJournalSchemaMcp = z.object({
-    name: z.string().optional().describe('Custom backup name (optional, defaults to timestamp). Anti-Hallucination Hint: You can use positional args like mj.backup.backupJournal("my_name").'),
+    name: z.string().max(255).optional().describe('Custom backup name (optional, defaults to timestamp). Anti-Hallucination Hint: You can use positional args like mj.backup.backupJournal("my_name").'),
     compress: z.boolean().optional().describe('Anti-Hallucination Hint: Compression is natively handled by the database engine. This parameter is safely ignored.'),
 }).strict()
-const BackupJournalSchema = z.object({ name: z.string().optional(), compress: z.boolean().optional() }).strict()
+const BackupJournalSchema = z.object({ name: z.string().max(255).optional(), compress: z.boolean().optional() }).strict()
 const ListBackupsSchemaMcp = z.object({}).strict()
 const RestoreBackupSchemaMcp = z.object({
-    filename: z.string().optional().describe('Backup filename to restore from (e.g., backup_2025-01-01.db). Anti-Hallucination Hint: Property is strictly `filename`, not `file`. You can pass positional args: mj.backup.restoreBackup("filename.db", true).'),
+    filename: z.string().max(255).optional().describe('Backup filename to restore from (e.g., backup_2025-01-01.db). Anti-Hallucination Hint: Property is strictly `filename`, not `file`. You can pass positional args: mj.backup.restoreBackup("filename.db", true).'),
     confirm: z.boolean().optional().describe('Must be set to true to confirm the restore operation'),
 }).strict()
 const CleanupBackupsSchemaMcp = z.object({
     keep_count: relaxedNumber().default(5).describe('Number of most recent backups to keep (default: 5). Anti-Hallucination Hint: You can pass a string or number, or use positional args: mj.backup.cleanupBackups(5).'),
 }).strict()
 const CleanupBackupsSchema = z
-    .object({ keep_count: z.preprocess(coerceIntString, z.number().int().positive()).default(5) })
+    .object({ keep_count: z.preprocess(coerceIntString, z.number().int().positive().max(1000)).default(5) })
     .strict()
 
 async function executeRestoreBackup(

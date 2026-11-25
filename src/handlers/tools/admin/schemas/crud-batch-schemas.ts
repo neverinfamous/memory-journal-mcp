@@ -77,21 +77,21 @@ export const UpdateEntrySchema = z.preprocess(
                 ),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             is_personal: z.boolean().optional(),
-            tags: z.array(z.string()).optional(),
+            tags: z.array(z.string().max(100)).max(100).optional(),
             significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
             project_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
-            project_owner: z.string().nullable().optional(),
+            project_owner: z.string().max(255).nullable().optional(),
             issue_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
-            issue_url: z.string().nullable().optional(),
+            issue_url: z.string().max(1000).nullable().optional(),
             pr_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
-            pr_url: z.string().nullable().optional(),
+            pr_url: z.string().max(1000).nullable().optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
             workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
-            workflow_name: z.string().nullable().optional(),
+            workflow_name: z.string().max(255).nullable().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
             is_archived: z.boolean().optional(),
             expected_version: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-            auto_context: z.string().nullable().optional(),
+            auto_context: z.string().max(100_000).nullable().optional(),
             workspace_id: z.string().max(255).optional(),
             target_workspace_id: z
                 .string()
@@ -101,7 +101,7 @@ export const UpdateEntrySchema = z.preprocess(
             impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
-            session_id: z.string().nullable().optional(),
+            session_id: z.string().max(255).nullable().optional(),
         })
         .strict()
         .refine(

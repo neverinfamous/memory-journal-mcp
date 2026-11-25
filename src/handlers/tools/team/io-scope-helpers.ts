@@ -36,10 +36,10 @@ import { batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
 
 export const TeamExportMarkdownSchema = z
     .object({
-        output_dir: z.string().min(1),
+        output_dir: z.string().min(1).max(500),
         start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
         end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
-        tags: z.array(z.string()).optional(),
+        tags: z.array(z.string().max(100)).max(100).optional(),
         project_number: StrictProjectNumberSchema.optional(),
         limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
         workspace_id: z.string().max(255).optional(),
@@ -114,6 +114,7 @@ export async function executeTeamExportMarkdown(
 
     const { progress } = context
     const allowedRoots = context.config?.allowedIoRoots ?? []
+    assertSafeDirectoryPath(input.output_dir, allowedRoots)
     await sendProgress(progress, 0, 3, 'Fetching team entries...')
 
     const entries =

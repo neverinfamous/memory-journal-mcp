@@ -62,8 +62,8 @@ export const ExportEntriesSchema = z.preprocess(
     format: z.enum(['json', 'markdown']).optional().default('json'),
     start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
-    entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
-    tags: z.array(z.string()).optional(),
+    entry_types: z.array(z.enum(ENTRY_TYPES)).max(50).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
     limit: z
         .preprocess(coerceIntString, z.number().int().min(1).max(5000))
         .optional()
@@ -117,11 +117,11 @@ export const ExportMarkdownSchema = z.preprocess(
     (val: unknown) => preprocessDirAlias(val, 'output_dir'),
     z.object({
 
-    output_dir: z.string().min(1),
+    output_dir: z.string().min(1).max(500),
     start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
-    entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
-    tags: z.array(z.string()).optional(),
+    entry_types: z.array(z.enum(ENTRY_TYPES)).max(50).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
     limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
     project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().max(255).optional(),
@@ -166,7 +166,7 @@ export const ImportMarkdownSchema = z.preprocess(
     (val: unknown) => preprocessDirAlias(val, 'source_dir'),
     z.object({
 
-    source_dir: z.string().min(1),
+    source_dir: z.string().min(1).max(500),
     dry_run: z.boolean().optional().default(false),
     limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
     project_number: StrictProjectNumberSchema.optional(),
@@ -223,7 +223,7 @@ export const ImportExternalSchema = z.preprocess(
     (val: unknown) => preprocessDirAlias(val, 'source_dir', true),
     z.object({
 
-    source_dir: z.string().min(1),
+    source_dir: z.string().min(1).max(500),
     source_format: z.enum(SOURCE_FORMATS),
     dry_run: z.boolean().optional().default(false),
     limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),

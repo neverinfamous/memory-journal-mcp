@@ -13,6 +13,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { AggregateMcpError } from '../../../types/errors.js'
 import { importMarkdownEntries, processImportBatch } from '../../../markdown/index.js'
+import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { triggerTeamNotifications } from './helpers.js'
 import {
@@ -61,7 +62,7 @@ const TeamExportMarkdownOutputSchema = z
 
 const TeamImportMarkdownSchema = z
     .object({
-        source_dir: z.string().min(1),
+        source_dir: z.string().min(1).max(500),
         dry_run: z.boolean().optional().default(false),
         project_number: StrictProjectNumberSchema.optional(),
         limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
@@ -103,7 +104,7 @@ const TeamImportMarkdownOutputSchema = z
 
 const TeamImportExternalSchema = z
     .object({
-        source_dir: z.string().min(1),
+        source_dir: z.string().min(1).max(500),
         source_format: z.enum(SOURCE_FORMATS),
         dry_run: z.boolean().optional().default(false),
         project_number: StrictProjectNumberSchema.optional(),
@@ -158,13 +159,13 @@ async function executeTeamImportMarkdown(
     }
 
     const allowedRoots = context.config?.allowedIoRoots ?? []
-    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
-    await sendProgress(context.progress, 1, 2, 'Importing team entries...')
-
     const authorCtx = resolveTeamImportContextAuthor(context, wsId)
     if ('errorResponse' in authorCtx) {
         return authorCtx.errorResponse
     }
+    assertSafeDirectoryPath(input.source_dir, allowedRoots)
+    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
+    await sendProgress(context.progress, 1, 2, 'Importing team entries...')
     const result = await importMarkdownEntries(
         input.source_dir,
         teamDb,
@@ -223,6 +224,7 @@ async function executeTeamImportExternal(
     }
 
     const allowedRoots = context.config?.allowedIoRoots ?? []
+    assertSafeDirectoryPath(input.source_dir, allowedRoots)
     const progress = context.progress
     await sendProgress(progress, 0, 3, 'Reading files...')
 

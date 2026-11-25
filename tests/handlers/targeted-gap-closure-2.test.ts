@@ -13,7 +13,7 @@
  * - utils/resource-annotations.ts: withPriority, withAutoRead, withSessionInit
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
@@ -299,6 +299,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team vector tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_semantic_search should return error', async () => {
             const result = (await callTool(
                 'team_semantic_search',
@@ -352,6 +355,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team backup tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_backup should return error', async () => {
             const result = (await callTool(
                 'team_backup',
@@ -382,6 +388,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team export tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_export_entries should return error', async () => {
             const result = (await callTool(
                 'team_export_entries',
@@ -403,6 +412,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team admin tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_update_entry should return error', async () => {
             const result = (await callTool(
                 'team_update_entry',

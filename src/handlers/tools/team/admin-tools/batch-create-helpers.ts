@@ -242,12 +242,12 @@ export async function executeTeamBatchCreate(
     teamDb: TeamDbInstance,
     input: TeamBatchCreateInput
 ): Promise<Record<string, unknown>> {
-    await sendProgress(context.progress, 0, 2, 'Creating team entries...')
     const validation = validateTeamBatchCreateEntries(input, teamDb, context.config)
     if ('errorResponse' in validation) return validation.errorResponse
     assertTeamBatchCreateLinksAllowed(context, input.entries)
 
     const inputs = await buildTeamBatchCreateInputs(validation.resolvedEntries, context)
+    await sendProgress(context.progress, 0, 2, 'Creating team entries...')
     const { created: results, errors } = teamDb.createEntries(inputs)
     const failedIndices = new Set(errors.map((err) => err.index))
     const createdSourceIndices = inputs.flatMap((_, idx) => (failedIndices.has(idx) ? [] : [idx]))

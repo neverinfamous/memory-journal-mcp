@@ -12,7 +12,7 @@ import { PermissionError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
 import type { AuditLogger } from '../audit/index.js'
 import type { AuditCategory } from '../audit/types.js'
-import { resolveAuthor } from '../utils/security-utils.js'
+import { resolveExplicitTeamAuthor } from '../utils/security-utils.js'
 
 interface AccessCapabilities {
     requiresTeamScope?: boolean
@@ -101,9 +101,9 @@ function assertTeamAccessBoundary(
     auth: ReturnType<typeof getAuthContext>,
     auditLogger?: AuditLogger | null
 ): void {
-    const author = resolveAuthor()
+    const explicitAuthor = resolveExplicitTeamAuthor()
     const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
-    if (author !== 'unknown' || hasAuthClaim) return
+    if (explicitAuthor !== undefined || hasAuthClaim) return
 
     const grantedScopes = getGrantedAuthScopes(auth)
     logger.warning(`Access to team ${targetType} denied: unauthenticated`, {

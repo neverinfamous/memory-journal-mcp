@@ -10,6 +10,20 @@ import { resolveWriteWorkspaceId } from '../write-workspace.js'
 
 export { prefetchBatchCommitFiles, resolveEntryAnchors } from './entry-anchors.js'
 
+function parsePositiveAnchorId(rawVal: unknown): number | undefined {
+    if (typeof rawVal === 'number') {
+        return Number.isSafeInteger(rawVal) && rawVal > 0 ? rawVal : undefined
+    }
+    if (typeof rawVal === 'string') {
+        const trimmed = rawVal.trim()
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            return Number.isSafeInteger(parsed) && String(parsed) === trimmed ? parsed : undefined
+        }
+    }
+    return undefined
+}
+
 function normalizeAnchorUpdateItem(rawItem: unknown): unknown {
     if (!isRecord(rawItem)) {
         return rawItem
@@ -17,18 +31,24 @@ function normalizeAnchorUpdateItem(rawItem: unknown): unknown {
     const item: Record<string, unknown> = { ...rawItem }
     // [INVARIANT] M2: only anchor-ID aliases map to entry_anchors.id. entry_id/entryId are
     // journal entry IDs and are left unmapped so the schema rejects them (missing `id`).
-    const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId']
-    if (typeof rawId === 'string') {
-        const trimmedId = rawId.trim()
-        const parsed = /^[1-9]\d*$/.test(trimmedId) ? Number(trimmedId) : Number.NaN
-        if (Number.isSafeInteger(parsed) && String(parsed) === trimmedId) {
-            item['id'] = parsed
+    const idKeys = ['id', 'anchor_id', 'anchorId'] as const
+    const definedKeys = idKeys.filter((k) => item[k] !== undefined)
+    const parsedNums = definedKeys.map((k) => ({ k, num: parsePositiveAnchorId(item[k]) }))
+    const allValid = parsedNums.length > 0 && parsedNums.every((p) => p.num !== undefined)
+    const noConflict =
+        allValid && parsedNums.every((p) => p.num === parsedNums[0]?.num)
+    if (noConflict && parsedNums[0]?.num !== undefined) {
+        item['id'] = parsedNums[0].num
+        delete item['anchor_id']
+        delete item['anchorId']
+    } else if (item['id'] === undefined && definedKeys.length === 1 && definedKeys[0] !== 'id') {
+        const onlyKey = definedKeys[0]
+        if (onlyKey !== undefined) {
+            item['id'] = item[onlyKey]
+            delete item['anchor_id']
+            delete item['anchorId']
         }
-    } else if (typeof rawId === 'number' && !Number.isNaN(rawId)) {
-        item['id'] = rawId
     }
-    delete item['anchor_id']
-    delete item['anchorId']
     const mappedStatus = coerceAnchorStatusAlias(item['status'])
     if (mappedStatus !== undefined) {
         item['status'] = mappedStatus
@@ -58,7 +78,7 @@ export const MarkAnchorsStaleSchema = z.preprocess(
                     z.object({
                         id: z.preprocess(coerceIntString, z.number().int().positive()),
                         status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
-                    })
+                    }).strict()
                 )
                 .min(1)
                 .max(MAX_QUERY_LIMIT),

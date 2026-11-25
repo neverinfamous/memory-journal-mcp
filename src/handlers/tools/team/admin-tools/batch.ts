@@ -66,7 +66,6 @@ async function executeTeamBatchUpdate(
     teamDb: TeamDbInstance,
     input: TeamBatchUpdateInput
 ): Promise<Record<string, unknown>> {
-    await sendProgress(context.progress, 0, 2, 'Updating team entries...')
     const currentUser = resolveAuthenticatedAuthor()
     const updateIds = input.updates.map((u) => u.entry_id)
     const preFetchedAuthors =
@@ -85,6 +84,7 @@ async function executeTeamBatchUpdate(
     )
     if ('errorResponse' in validated) return validated.errorResponse
     const { updates, notFound } = validated
+    await sendProgress(context.progress, 0, 2, 'Updating team entries...')
 
     const { updated, notFound: updateNotFound, errors } = teamDb.updateEntries(updates)
     const entries = updated.map((r) => ({

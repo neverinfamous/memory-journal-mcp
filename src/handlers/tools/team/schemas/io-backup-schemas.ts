@@ -16,7 +16,7 @@ export const TeamExportEntriesSchema = z
         start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
         end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
         entry_type: z.enum(ENTRY_TYPES).optional(),
-        tags: z.array(z.string()).optional(),
+        tags: z.array(z.string().max(100)).max(100).optional(),
         limit: z.preprocess(coerceIntString, z.number().int().min(1).max(5000)).optional().default(100),
         project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
@@ -50,7 +50,7 @@ export const TeamBackupSchemaMcp = z.object({
 /** team_backup — strict */
 export const TeamBackupSchema = z
     .object({
-        name: z.string().optional().describe('Optional custom backup filename stem'),
+        name: z.string().max(255).optional().describe('Optional custom backup filename stem'),
         project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
     })

@@ -1,3 +1,4 @@
+import { constants as fsConstants } from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
 import * as path from 'node:path'
 import type { IDatabaseAdapter, TeamRole } from '../../database/core/interfaces.js'
@@ -156,4 +157,31 @@ export async function assertSafeCliOutputFile(
     await assertNonSymlinkCliAncestors(destDir)
     assertSafeFilePath(resolvedPath, [destDir])
     return resolvedPath
+}
+
+/** Validate, safely open with `O_NOFOLLOW` + `0o600`, verify regular file, and write CLI text output. */
+export async function writeSafeCliOutputFile(
+    rawPath: string,
+    flagName: string,
+    content: string
+): Promise<string> {
+    const safePath = await assertSafeCliOutputFile(rawPath, flagName)
+    await fsPromises.mkdir(path.dirname(safePath), { recursive: true, mode: 0o700 })
+    const flags =
+        fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_TRUNC |
+        (fsConstants.O_NOFOLLOW ?? 0)
+    const handle = await fsPromises.open(safePath, flags, 0o600)
+    try {
+        const stat = await handle.stat()
+        if (!stat.isFile()) {
+            throw new Error(`Refusing to write non-regular file: ${safePath}`)
+        }
+        await handle.writeFile(content, 'utf-8')
+        await handle.chmod(0o600).catch(() => undefined)
+        return safePath
+    } finally {
+        await handle.close()
+    }
 }

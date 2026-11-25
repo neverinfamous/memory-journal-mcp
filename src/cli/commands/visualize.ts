@@ -1,13 +1,11 @@
-import * as fs from 'node:fs/promises'
-import * as path from 'node:path'
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { visualizeOptionsSchema } from '../schemas.js'
 import {
-    assertSafeCliOutputFile,
     getCliCommandDb as getDb,
     resolveCliReadScope,
+    writeSafeCliOutputFile,
 } from './db-helper.js'
 import { formatCliError } from './cli-output.js'
 
@@ -95,9 +93,7 @@ export async function visualizeAction(options: z.infer<typeof visualizeSchema>, 
         const mermaid = renderMermaid(graph)
 
         if (options.out !== undefined) {
-            const outPath = await assertSafeCliOutputFile(options.out, '--out')
-            await fs.mkdir(path.dirname(outPath), { recursive: true })
-            await fs.writeFile(outPath, mermaid, 'utf8')
+            const outPath = await writeSafeCliOutputFile(options.out, '--out', mermaid)
             if (options.json === true) {
                 process.stdout.write(
                     JSON.stringify(

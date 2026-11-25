@@ -146,9 +146,6 @@ async function executeTeamExportEntries(
     const { format, start_date, end_date, project_number, workspace_id } = input
     const { progress } = context
 
-    await sendProgress(progress, 0, 3, 'Preparing team export...')
-    await sendProgress(progress, 1, 3, 'Fetching team entries...')
-
     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
     const alignedProject =
         resolveTeamProjectNumber(context, wsId, project_number, workspace_id) ?? undefined
@@ -160,6 +157,9 @@ async function executeTeamExportEntries(
     if (start_date !== undefined && end_date !== undefined && start_date > end_date) {
         throw new ValidationError('start_date cannot be after end_date')
     }
+
+    await sendProgress(progress, 0, 3, 'Preparing team export...')
+    await sendProgress(progress, 1, 3, 'Fetching team entries...')
 
     const rawEntries = fetchTeamExportEntries(teamDb, input, wsId, alignedProject)
     // Enforce < 5MB payload ceiling (approximate based on content + overhead)

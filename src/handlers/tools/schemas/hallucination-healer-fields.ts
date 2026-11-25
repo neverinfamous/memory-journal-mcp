@@ -21,27 +21,29 @@ function isUnknownArray(val: unknown): val is unknown[] {
 
 /** Fold title/heading/subject/name aliases into the content as a markdown heading. */
 function healTitleField(obj: Record<string, unknown>): boolean {
-    if (!('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj)) {
-        return false
+    const titleKeys = ['title', 'heading', 'subject', 'name'] as const
+    const definedKeys = titleKeys.filter((k) => obj[k] !== undefined)
+    if (definedKeys.length === 0) return false
+    const validStrings: string[] = []
+    for (const k of definedKeys) {
+        const val = obj[k]
+        if (typeof val !== 'string' || val.trim() === '') return false
+        validStrings.push(val.trim())
     }
-    const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name']
-    const titleStr =
-        rawTitle !== undefined && rawTitle !== null ? safeString(rawTitle).trim() : ''
-    if (titleStr !== '') {
-        const cleanTitle = titleStr.replace(/^#+\s*/, '')
-        const currentContent = safeString(obj['content']).trim()
-        const hasNoContent =
-            !('content' in obj) ||
-            obj['content'] === undefined ||
-            obj['content'] === null ||
-            currentContent === ''
-        if (hasNoContent) {
-            // [INVARIANT] H8: update payloads (entry_id/id) fully overwrite content, so a
-            // bare title must never synthesize a replacement body.
-            if (!('query' in obj) && !isUpdatePayload(obj)) obj['content'] = `# ${cleanTitle}`
-        } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
-            obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
-        }
+    if (validStrings.some((v) => v !== validStrings[0])) return false
+    const cleanTitle = (validStrings[0] ?? '').replace(/^#+\s*/, '')
+    const currentContent = safeString(obj['content']).trim()
+    const hasNoContent =
+        !('content' in obj) ||
+        obj['content'] === undefined ||
+        obj['content'] === null ||
+        currentContent === ''
+    if (hasNoContent) {
+        // [INVARIANT] H8: update payloads (entry_id/id) fully overwrite content, so a
+        // bare title must never synthesize a replacement body.
+        if (!('query' in obj) && !isUpdatePayload(obj)) obj['content'] = `# ${cleanTitle}`
+    } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
+        obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
     }
     delete obj['title']
     delete obj['heading']
@@ -279,22 +281,41 @@ export function healRelationshipFields(obj: Record<string, unknown>): boolean {
     for (const [key, canonicalType] of Object.entries(RELATION_KEY_MAP)) {
         if (!(key in obj)) continue
         const val = obj[key]
-        Reflect.deleteProperty(obj, key)
-        modified = true
 
-        if (key === 'references' && typeof val === 'string' && !/^\d+$/.test(val.trim())) {
+        if (
+            key === 'references' &&
+            typeof val === 'string' &&
+            val.trim() !== '' &&
+            !/^-?\d+$/.test(val.trim())
+        ) {
+            Reflect.deleteProperty(obj, key)
             appendLabeledContent(obj, 'References', val)
+            modified = true
             continue
         }
 
         const items = Array.isArray(val) ? val : [val]
+        if (items.length === 0) continue
+        let hasInvalidItem = false
         for (const item of items) {
             const parsed = readRelationshipItem(item, canonicalType)
             if (parsed.targetId !== undefined) {
                 pushUniqueRelationship(obj, parsed.targetId, parsed.relType)
-            } else if (typeof item === 'string') {
+                modified = true
+            } else if (
+                typeof item === 'string' &&
+                item.trim() !== '' &&
+                !/^-?\d+$/.test(item.trim())
+            ) {
                 appendLabeledContent(obj, key, item)
+                modified = true
+            } else {
+                hasInvalidItem = true
             }
+        }
+        if (!hasInvalidItem) {
+            Reflect.deleteProperty(obj, key)
+            modified = true
         }
     }
 

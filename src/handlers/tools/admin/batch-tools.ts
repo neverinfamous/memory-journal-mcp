@@ -139,14 +139,13 @@ async function executeBatchCreateEntries(
     ) {
         assertCanonicalFallbackToolAllowed('link_entries', 'relationships', context, false)
     }
-    await sendProgress(progress, 0, 2, 'Creating entries...')
-
     const prepared = await prepareBatchCreateInputs(
         input.entries,
         input.project_number,
         context,
         input.workspace_id
     )
+    await sendProgress(progress, 0, 2, 'Creating entries...')
     const { created: results, errors } = db.createEntries(prepared.map((p) => p.input))
 
     const failedIndexes = new Set(errors.map((e) => e.index))

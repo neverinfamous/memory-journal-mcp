@@ -16,10 +16,23 @@ import {
     assertBackupHeaderAndCipherFormat,
     assertHasMemoryJournalTable,
     assertSafeBackupSchemaPreIntegrity,
+    copyRegularFileNoFollow,
 } from './backup-schema-guard.js'
 
 function hasErrorCode(err: unknown, code: string): boolean {
     return typeof err === 'object' && err !== null && 'code' in err && err.code === code
+}
+
+async function chmodOwnerOnlyBestEffort(targetPath: string): Promise<void> {
+    try {
+        await fs.promises.chmod(targetPath, 0o600)
+    } catch (chmodErr: unknown) {
+        logger.warning('Failed to apply 0o600 permissions to database artifact', {
+            module: 'BackupManager',
+            path: targetPath,
+            error: chmodErr instanceof Error ? chmodErr.message : String(chmodErr),
+        })
+    }
 }
 
 /** Unlink a file, ignoring a missing file (ENOENT) and logging any other failure at debug. */
@@ -128,7 +141,7 @@ async function stageAndVerifyBackup(
 ): Promise<void> {
     try {
         await stageFn()
-        await fs.promises.chmod(tempBackupPath, 0o600).catch(() => undefined)
+        await chmodOwnerOnlyBestEffort(tempBackupPath)
         await assertIncomingBackupIntact(tempBackupPath)
         await fs.promises.rename(tempBackupPath, backupPath)
         await unlinkBestEffort(`${tempBackupPath}-wal`)
@@ -159,7 +172,7 @@ export async function writeVerifiedBackupFile(
 
     assertWalCheckpointComplete(ctx)
     await stageAndVerifyBackup(tempBackupPath, backupPath, () =>
-        fs.promises.copyFile(ctx.getDbPath(), tempBackupPath)
+        copyRegularFileNoFollow(ctx.getDbPath(), tempBackupPath)
     )
 }
 
@@ -300,8 +313,8 @@ export async function preparePreRestoreSnapshot(
     try {
         // [INVARIANT] Complete pre-swap snapshot before any swap step; if snapshot creation fails,
         // the live DB is untouched so rollback must never copy a partial oldDbBackupPath over it.
-        await fs.promises.copyFile(ctx.getDbPath(), oldDbBackupPath)
-        await fs.promises.chmod(oldDbBackupPath, 0o600).catch(() => undefined)
+        await copyRegularFileNoFollow(ctx.getDbPath(), oldDbBackupPath)
+        await chmodOwnerOnlyBestEffort(oldDbBackupPath)
     } catch (prepErr) {
         await unlinkBestEffort(oldDbBackupPath)
         await unlinkBestEffort(tempDbPath)
@@ -334,7 +347,7 @@ export async function applySwappedDatabase(
             error: renameErr instanceof Error ? renameErr.message : String(renameErr),
         })
         await fs.promises.copyFile(tempDbPath, dbPath)
-        await fs.promises.chmod(dbPath, 0o600).catch(() => undefined)
+        await chmodOwnerOnlyBestEffort(dbPath)
         await unlinkBestEffort(tempDbPath)
     }
 
@@ -381,7 +394,7 @@ async function tryRollbackCopy(
     const dbPath = ctx.getDbPath()
     try {
         await fs.promises.copyFile(oldDbBackupPath, dbPath)
-        await fs.promises.chmod(dbPath, 0o600).catch(() => undefined)
+        await chmodOwnerOnlyBestEffort(dbPath)
         await unlinkBestEffort(`${dbPath}-wal`)
         await unlinkBestEffort(`${dbPath}-shm`)
         return true

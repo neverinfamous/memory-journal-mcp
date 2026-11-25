@@ -4,14 +4,17 @@
  * sandbox context construction lives in `sandbox-user-context.ts`.
  */
 
-import { appendOptionalQuerySearchFields } from '../../../codemode/shared-context-parsers.js'
 import { isDbSourceSelector, isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { appendOptionalQuerySearchFields } from '../../../codemode/shared-context-parsers.js'
 import { healCodeModeScript } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverRecordCode } from './json-entry-recovery.js'
-import { hasUseTestDbFlag } from './json-entry-scope.js'
 import { hasStructuredDiscriminator } from './json-entry-structured.js'
+import { appendEntryTelemetryFields, recoverFromContextField } from './context-payload-recovery.js'
 import {
-    appendSharedEntryFlags,
+    isSynthesizedMutatingCode,
+    readonlySynthesisBlockedResult,
+} from './session-alias-conflicts.js'
+import {
     getNonEmptyString,
     parsePositiveEntryId,
     parseProjectNumberField,
@@ -95,30 +98,6 @@ function readCandidateRecord(input: ExecuteCodeInput, params: unknown): Record<s
         return pObj
     }
     return undefined
-}
-
-function appendEntryTelemetryFields(
-    payload: Record<string, unknown>,
-    primary: Record<string, unknown>,
-    secondary: Record<string, unknown>
-): void {
-    const sessVal = getNonEmptyString(primary, secondary, ['session_id', 'sessionId'])
-    if (sessVal !== undefined) payload['session_id'] = sessVal
-    const impactVal =
-        primary['impact_score'] ?? primary['impactScore'] ?? primary['impact'] ??
-        secondary['impact_score'] ?? secondary['impactScore'] ?? secondary['impact']
-    if (typeof impactVal === 'number' && Number.isFinite(impactVal)) payload['impact_score'] = impactVal
-    const trustVal =
-        primary['trust_score'] ?? primary['trustScore'] ?? primary['trust'] ??
-        secondary['trust_score'] ?? secondary['trustScore'] ?? secondary['trust']
-    if (typeof trustVal === 'number' && Number.isFinite(trustVal)) payload['trust_score'] = trustVal
-    const valStatus = getNonEmptyString(primary, secondary, ['validation_status', 'validationStatus', 'validation'])
-    if (valStatus !== undefined) payload['validation_status'] = valStatus
-    const autoCtx =
-        primary['auto_context'] ?? primary['autoContext'] ??
-        secondary['auto_context'] ?? secondary['autoContext']
-    if (autoCtx !== undefined) payload['auto_context'] = autoCtx
-    appendSharedEntryFlags(payload, primary, secondary)
 }
 
 function recoverCodeFromParamsRecord(
@@ -256,7 +235,7 @@ function transformInitialExecutionCode(
     sourceKey: string | undefined,
     input: ExecuteCodeInput,
     params: unknown
-): { executionCode: string } | { earlyReturn: Record<string, unknown> } {
+): { executionCode: string; synthesized: boolean } | { earlyReturn: Record<string, unknown> } {
     const trimmedInitial = executionCode.trim()
     const hasExplicitContent =
         isRecord(params) &&
@@ -268,7 +247,7 @@ function transformInitialExecutionCode(
         if (isRecord(params) && hasStructuredDiscriminator(params)) {
             const recRecovered = extractAndRecoverRecordCode(params)
             return recRecovered !== null
-                ? { executionCode: recRecovered }
+                ? { executionCode: recRecovered, synthesized: true }
                 : validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
         }
         if (looksLikeSqlQuery) {
@@ -277,9 +256,9 @@ function transformInitialExecutionCode(
             )
         }
         if (trimmedInitial === '' || DANGEROUS_QUERY_TOKEN_RE.test(trimmedInitial)) {
-            return { executionCode }
+            return { executionCode, synthesized: false }
         }
-        return { executionCode: buildQuerySearch(executionCode, input, params) }
+        return { executionCode: buildQuerySearch(executionCode, input, params), synthesized: true }
     }
 
     let healed = healCodeModeScript(executionCode)
@@ -296,22 +275,32 @@ function transformInitialExecutionCode(
     }
     if (!jsonRecovered && sourceKey !== undefined && NON_JS_DISCRIMINATOR_FALLBACK_KEYS.has(sourceKey) && isRecord(params) && hasStructuredDiscriminator(params)) {
         const recRecovered = extractAndRecoverRecordCode(params)
-        return recRecovered !== null ? { executionCode: recRecovered } : validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
+        return recRecovered !== null
+            ? { executionCode: recRecovered, synthesized: true }
+            : validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
     }
     // [C4] Recovered JS is final; never re-synthesize it into an entry mutation.
+    const beforeNl = healed
     if (!jsonRecovered) healed = synthesizeNaturalLanguageOrEntryPayload(healed, input, params)
-    return { executionCode: healed }
+    return {
+        executionCode: healed,
+        synthesized: jsonRecovered || healed !== beforeNl || (sourceKey !== undefined && sourceKey !== 'code'),
+    }
 }
 
 export function resolveExecutionPayload(
     input: ExecuteCodeInput,
     params: unknown,
     healingEnabled: boolean,
-    start: number
+    start: number,
+    isReadonly = false
 ): { executionCode: string } | { earlyReturn: Record<string, unknown> } {
+    const readonlyMode =
+        isReadonly || input.readonly === true || input.read_only === true || input.readOnly === true
     const initial = extractInitialExecutionCode(input, healingEnabled, params)
     let executionCode = initial.code
     let recoveredJs = false
+    let synthesizedOrRecovered = initial.sourceKey !== undefined && initial.sourceKey !== 'code'
 
     const candidate = healingEnabled ? readCandidateRecord(input, params) : undefined
     if (healingEnabled && (executionCode === undefined || executionCode === '') && candidate !== undefined) {
@@ -319,6 +308,7 @@ export function resolveExecutionPayload(
         if (recovered !== null) {
             executionCode = recovered
             recoveredJs = true
+            synthesizedOrRecovered = true
         } else if (Object.keys(candidate).length > 0 && hasStructuredDiscriminator(candidate)) {
             return validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
         }
@@ -329,6 +319,7 @@ export function resolveExecutionPayload(
         if (recovered !== undefined) {
             executionCode = recovered.code
             if (recovered.synthesized) recoveredJs = true
+            synthesizedOrRecovered = true
         }
     }
 
@@ -342,6 +333,7 @@ export function resolveExecutionPayload(
         if (recovered !== null) {
             executionCode = recovered
             recoveredJs = true
+            synthesizedOrRecovered = true
         } else {
             return validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
         }
@@ -356,119 +348,26 @@ export function resolveExecutionPayload(
         const transformed = transformInitialExecutionCode(executionCode, initial.sourceKey, input, params)
         if ('earlyReturn' in transformed) return transformed
         executionCode = transformed.executionCode
+        if (transformed.synthesized) synthesizedOrRecovered = true
     }
 
     if (executionCode === undefined || executionCode.trim() === '') {
         if (!healingEnabled) return validationFailure('Missing required parameter: code')
         const recovered = recoverFromContextField(
             input.context ?? (isRecord(params) ? params['context'] : undefined),
-            isRecord(params) ? params : undefined
+            isRecord(params) ? params : undefined,
+            UNRECOVERABLE_PAYLOAD_MSG
         )
         if (typeof recovered === 'object') return recovered
         executionCode = recovered
         if (executionCode === undefined || executionCode.trim() === '') {
             return buildActiveSandboxStatusResponse(start)
         }
+        synthesizedOrRecovered = true
     }
 
+    if (synthesizedOrRecovered && readonlyMode && isSynthesizedMutatingCode(executionCode)) {
+        return readonlySynthesisBlockedResult()
+    }
     return { executionCode }
-}
-
-const MAX_RECOVERED_CONTEXT_CODE_BYTES = 50 * 1024
-
-function oversizedContextFailure(): { earlyReturn: Record<string, unknown> } {
-    return validationFailure(
-        `Recovered context code exceeds maximum length of ${String(MAX_RECOVERED_CONTEXT_CODE_BYTES)} bytes.`
-    )
-}
-
-function synthesizeContextEntryCall(
-    ctxVal: Record<string, unknown>,
-    outerFallback: Record<string, unknown>,
-    rawBody: string,
-    wsVal: string | undefined,
-    projVal: number | string | undefined
-): string | { earlyReturn: Record<string, unknown> } {
-    if (Buffer.byteLength(rawBody, 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
-        return oversizedContextFailure()
-    }
-    const numericEntryId = parsePositiveEntryId(ctxVal, outerFallback)
-    const isUpdate = numericEntryId !== undefined
-    const explicitTitle = getNonEmptyString(ctxVal, {}, ['title'])
-    const explicitType = getNonEmptyString(ctxVal, {}, ['type', 'entry_type', 'category'])
-    const entryPayload: Record<string, unknown> = { content: rawBody }
-    if (!isUpdate || explicitTitle !== undefined) {
-        entryPayload['title'] = explicitTitle ?? 'Journal Entry'
-    }
-    if (explicitType !== undefined) entryPayload['entry_type'] = explicitType
-    else if (!isUpdate) entryPayload['entry_type'] = 'technical_note'
-    const rawTagsVal = ctxVal['tags'] !== undefined ? ctxVal['tags'] : outerFallback['tags']
-    if (Array.isArray(rawTagsVal)) {
-        const cleanTags = rawTagsVal.filter((t): t is string => typeof t === 'string')
-        if (cleanTags.length > 0 || isUpdate || rawTagsVal === ctxVal['tags']) {
-            entryPayload['tags'] = cleanTags
-        }
-    }
-    if (numericEntryId !== undefined) entryPayload['entry_id'] = numericEntryId
-    if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
-    if (projVal !== undefined) entryPayload['project_number'] = projVal
-    appendEntryTelemetryFields(entryPayload, ctxVal, outerFallback)
-    const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
-    const synthesized = `return await ${fnName}(${JSON.stringify(entryPayload)});`
-    return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
-        ? synthesized
-        : oversizedContextFailure()
-}
-
-function recoverFromContextField(
-    ctxVal: unknown,
-    outerParams?: Record<string, unknown>
-): string | { earlyReturn: Record<string, unknown> } | undefined {
-    if (typeof ctxVal === 'string' && ctxVal.trim().length > 0) {
-        return Buffer.byteLength(ctxVal, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
-            ? ctxVal
-            : oversizedContextFailure()
-    }
-    if (isRecord(ctxVal)) {
-        if (typeof ctxVal['code'] === 'string' && ctxVal['code'].trim().length > 0) {
-            return Buffer.byteLength(ctxVal['code'], 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
-                ? ctxVal['code']
-                : oversizedContextFailure()
-        }
-        if (typeof ctxVal['script'] === 'string' && ctxVal['script'].trim().length > 0) {
-            return Buffer.byteLength(ctxVal['script'], 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
-                ? ctxVal['script']
-                : oversizedContextFailure()
-        }
-        const outerFallback = outerParams ?? {}
-        if (hasStructuredDiscriminator(ctxVal)) {
-            const recoveredCtx = extractAndRecoverRecordCode(ctxVal, outerParams)
-            return recoveredCtx ?? validationFailure(UNRECOVERABLE_PAYLOAD_MSG)
-        }
-        const { wsVal, projVal } = resolveCompatibleInheritedScope(ctxVal, outerFallback)
-        if (typeof ctxVal['query'] === 'string' && ctxVal['query'].trim().length > 0) {
-            if (Buffer.byteLength(ctxVal['query'], 'utf-8') > MAX_RECOVERED_CONTEXT_CODE_BYTES) {
-                return oversizedContextFailure()
-            }
-            const searchPayload: Record<string, unknown> = { query: ctxVal['query'] }
-            if (wsVal !== undefined) searchPayload['workspace_id'] = wsVal
-            if (projVal !== undefined) searchPayload['project_number'] = projVal
-            if (hasUseTestDbFlag(ctxVal, outerFallback)) searchPayload['use_test_db'] = true
-            appendOptionalQuerySearchFields(searchPayload, ctxVal, outerFallback['limit'])
-            const synthesized = `return await mj.searchEntries(${JSON.stringify(searchPayload)});`
-            return Buffer.byteLength(synthesized, 'utf-8') <= MAX_RECOVERED_CONTEXT_CODE_BYTES
-                ? synthesized
-                : oversizedContextFailure()
-        }
-        const rawBody =
-            typeof ctxVal['content'] === 'string'
-                ? ctxVal['content']
-                : typeof ctxVal['instructions'] === 'string'
-                  ? ctxVal['instructions']
-                  : undefined
-        if (rawBody !== undefined && rawBody.trim().length > 0) {
-            return synthesizeContextEntryCall(ctxVal, outerFallback, rawBody, wsVal, projVal)
-        }
-    }
-    return undefined
 }

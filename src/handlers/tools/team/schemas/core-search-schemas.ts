@@ -51,22 +51,22 @@ export const TeamCreateEntrySchema = z.preprocess(
         .object({
             content: z.string().min(1).max(MAX_CONTENT_LENGTH),
             entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-            tags: z.array(z.string()).optional().default([]),
+            tags: z.array(z.string().max(100)).max(100).optional().default([]),
             significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
             project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
-            project_owner: z.string().optional(),
+            project_owner: z.string().max(255).optional(),
             issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-            issue_url: z.string().optional(),
+            issue_url: z.string().max(1000).optional(),
             pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-            pr_url: z.string().optional(),
+            pr_url: z.string().max(1000).optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
             workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-            workflow_name: z.string().optional(),
+            workflow_name: z.string().max(255).optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
             author: z.string().max(100).optional(),
             auto_link: z.boolean().optional(),
-            auto_context: z.string().optional(),
+            auto_context: z.string().max(100_000).optional(),
             impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
@@ -96,9 +96,10 @@ export const TeamCreateEntrySchema = z.preprocess(
                                 .enum(TEAM_RELATION_TYPES, { error: relationshipTypeEnumError })
                                 .optional()
                                 .default('references'),
-                        })
+                        }).strict()
                     )
                 )
+                .max(100)
                 .optional(),
         })
         .strict()
@@ -276,7 +277,7 @@ export const TeamGetRecentSchema = z.preprocess(
     z
         .object({
             limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
-            cursor: z.string().optional().describe('Cursor for pagination'),
+            cursor: z.string().max(500).optional().describe('Cursor for pagination'),
             offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
             project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
@@ -315,9 +316,9 @@ export const TeamSearchSchema = z.preprocess(
     z
         .object({
             query: z.string().max(500).optional(),
-            cursor: z.string().optional().describe('Cursor for pagination'),
-            tags: z.array(z.string()).optional(),
-            exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
+            cursor: z.string().max(500).optional().describe('Cursor for pagination'),
+            tags: z.array(z.string().max(100)).max(100).optional(),
+            exclude_tags: z.array(z.string().max(100)).max(100).optional().describe('Exclude entries having any of these tags'),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),

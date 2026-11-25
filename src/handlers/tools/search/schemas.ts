@@ -24,7 +24,7 @@ export const SearchEntriesSchema = z.preprocess(
     preprocessSearchPayload,
     z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
-    cursor: z.string().optional().describe('Cursor for pagination'),
+    cursor: z.string().max(500).optional().describe('Cursor for pagination'),
     mode: z
         .enum(['auto', 'fts', 'semantic', 'hybrid'])
         .optional()
@@ -40,9 +40,10 @@ export const SearchEntriesSchema = z.preprocess(
     pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
     workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
     exclude_tags: z
-        .array(z.string())
+        .array(z.string().max(100))
+        .max(100)
         .optional()
         .describe('Exclude entries having any of these tags'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
@@ -97,9 +98,10 @@ export const SearchEntriesSchemaMcp = z.preprocess(
     pr_number: relaxedNumber().optional(),
     pr_status: z.string().optional(),
     workflow_run_id: relaxedNumber().optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
     exclude_tags: z
-        .array(z.string())
+        .array(z.string().max(100))
+        .max(100)
         .optional()
         .describe('Exclude entries having any of these tags'),
     entry_type: z.string().optional(),
@@ -148,9 +150,10 @@ export const SearchByDateRangeSchema = z.preprocess(
         .describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
     exclude_tags: z
-        .array(z.string())
+        .array(z.string().max(100))
+        .max(100)
         .optional()
         .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().max(255).optional(),
@@ -187,9 +190,10 @@ export const SearchByDateRangeSchemaMcp = z.preprocess(
     ).describe('[REQUIRED] End date (use `end_date`, not `end`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
     exclude_tags: z
-        .array(z.string())
+        .array(z.string().max(100))
+        .max(100)
         .optional()
         .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),

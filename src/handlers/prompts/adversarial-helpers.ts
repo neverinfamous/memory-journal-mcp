@@ -123,13 +123,23 @@ const MAX_WORKSPACE_ID_LENGTH = 128
 
 /**
  * Neutralize a user-supplied target/topic before it is echoed into prompt text:
- * collapse line breaks, defuse backticks, and cap the length.
+ * replace C0/C1 control characters and line separators with spaces, defuse backticks,
+ * and cap length cleanly without regex control-char lint suppression.
  */
 export function sanitizePromptTarget(target: string): string {
-    return target
-        .replace(/[\r\n\u2028\u2029]+/g, ' ')
-        .replaceAll('`', "'")
-        .slice(0, MAX_PROMPT_TARGET_LENGTH)
+    let cleaned = ''
+    for (const ch of target) {
+        const cp = ch.codePointAt(0)
+        if (
+            cp !== undefined &&
+            (cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0x2028 || cp === 0x2029)
+        ) {
+            cleaned += ' '
+        } else {
+            cleaned += ch
+        }
+    }
+    return cleaned.replaceAll('`', "'").slice(0, MAX_PROMPT_TARGET_LENGTH)
 }
 
 export function hasExplicitPromptTarget(

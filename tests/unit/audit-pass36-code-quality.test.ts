@@ -258,7 +258,7 @@ describe('pass 36 code quality', () => {
     })
 
     it('records the pass 36 prompt revision and restore rules', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
         const db = new DatabaseAdapter(':memory:')
         await db.initialize()
         try {

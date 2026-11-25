@@ -10,8 +10,8 @@ import {
 } from '../schemas.js'
 import {
     assertSafeCliDir,
-    assertSafeCliOutputFile,
     getCliCommandDb as getDb,
+    writeSafeCliOutputFile,
 } from './db-helper.js'
 import { formatCliError, writeCliResult } from './cli-output.js'
 import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch } from '../../markdown/index.js'
@@ -28,7 +28,6 @@ import {
     uniqueWorkspaceForProject,
 } from '../../utils/write-scope.js'
 import { collectExternalMarkdownFiles } from './io-external-helpers.js'
-import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
 export const exportJsonSchema = ioExportJsonOptionsSchema
@@ -72,11 +71,8 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
         const defaultName = `journal_export_${timestamp}.json`
         const rawDest =
             options.dest ?? path.resolve(path.dirname(serverOptions.dbPath), 'backups', defaultName)
-        const destPath = await assertSafeCliOutputFile(rawDest, '--dest')
-        const destDir = path.dirname(destPath)
-        await fs.mkdir(destDir, { recursive: true })
         const jsonPayload = JSON.stringify({ exportedAt: new Date().toISOString(), count: entries.length, entries }, null, 2)
-        await fs.writeFile(destPath, jsonPayload, 'utf-8')
+        const destPath = await writeSafeCliOutputFile(rawDest, '--dest', jsonPayload)
         const filename = path.basename(destPath)
         const sizeBytes = Buffer.byteLength(jsonPayload, 'utf-8')
 

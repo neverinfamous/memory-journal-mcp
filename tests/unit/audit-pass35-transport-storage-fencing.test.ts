@@ -312,7 +312,7 @@ describe('Pass 35 Security Audit — Transport, SSRF, Storage, RBAC & Fencing', 
             fs.rmSync(tmpDir, { recursive: true, force: true })
         }
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
         const secDef = getSecurityAuditPromptDefinition()
         const rendered = await Promise.resolve(secDef.handler({ target: 'memory-journal-mcp' }, db))
         const promptText = rendered.messages.map((m) => m.content.text).join('\n')

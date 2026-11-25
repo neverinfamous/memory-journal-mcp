@@ -40,11 +40,12 @@ export const CrossTeamSearchSchema = z.preprocess(
     z.object({
     query: z.string().min(1).max(250),
     team_dbs: z
-        .array(z.string())
+        .array(z.string().max(100))
+        .max(50)
         .optional()
         .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
-    tags: z.array(z.string()).optional(),
-    exclude_tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
+    exclude_tags: z.array(z.string().max(100)).max(100).optional(),
     project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
     workspace_id: z.string().max(255).optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),

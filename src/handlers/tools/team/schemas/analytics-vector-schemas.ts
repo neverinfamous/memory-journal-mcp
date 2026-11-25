@@ -31,7 +31,7 @@ export const TeamGetStatisticsSchema = z
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
-        session_id: z.string().optional(),
+        session_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -74,10 +74,10 @@ export const TeamLinkEntriesSchema = z.preprocess(
                     .optional()
                     .default('references')
             ),
-            description: z.string().optional(),
+            description: z.string().max(2000).optional(),
             project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
             workspace_id: z.string().max(255).optional(),
-            session_id: z.string().optional(),
+            session_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -117,7 +117,7 @@ export const TeamVisualizeRelationshipsSchema = z.preprocess(
     z
         .object({
             entry_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-            tag: z.string().optional(),
+            tag: z.string().max(100).optional(),
             depth: z.preprocess(coerceIntString, z.number().int().min(1).max(5)).optional().default(2),
             limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional(),
             project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
@@ -128,7 +128,7 @@ export const TeamVisualizeRelationshipsSchema = z.preprocess(
                 .describe(
                     'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
                 ),
-            session_id: z.string().optional(),
+            session_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -206,15 +206,15 @@ export const TeamSemanticSearchSchema = z.preprocess(
     preprocessSemanticSearchQuery,
     z
         .object({
-            query: z.string().optional(),
+            query: z.string().max(500).optional(),
             entry_id: z
                 .preprocess(coerceIntString, z.number().int().positive())
                 .optional()
                 .describe('Find entries related to this entry ID'),
             limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
             similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional().default(0.25),
-            tags: z.array(z.string()).optional(),
-            exclude_tags: z.array(z.string()).optional(),
+            tags: z.array(z.string().max(100)).max(100).optional(),
+            exclude_tags: z.array(z.string().max(100)).max(100).optional(),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
             end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),

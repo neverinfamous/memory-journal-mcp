@@ -175,7 +175,7 @@ function resolveNodeAndSqlShims(
                 const err = new Error(
                     `VALIDATION_ERROR: child_process.${prop} is disabled inside Code Mode.`
                 )
-                err.name = 'VALIDATION_ERROR'
+                Object.defineProperty(err, 'name', { value: 'VALIDATION_ERROR', configurable: true, enumerable: false, writable: true })
                 throw err
             },
         }

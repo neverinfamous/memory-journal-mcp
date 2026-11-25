@@ -32,19 +32,19 @@ export const CreateEntrySchema = z.preprocess(
     z.object({
         entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
         content: z.string().min(1).max(MAX_CONTENT_LENGTH),
-        tags: z.array(z.string()).optional(),
+        tags: z.array(z.string().max(100)).max(100).optional(),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
         workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
         project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
-        project_owner: z.string().optional(),
+        project_owner: z.string().max(255).optional(),
         issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-        issue_url: z.string().optional(),
+        issue_url: z.string().max(1000).optional(),
         pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-        pr_url: z.string().optional(),
+        pr_url: z.string().max(1000).optional(),
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
         workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
-        workflow_name: z.string().optional(),
+        workflow_name: z.string().max(255).optional(),
         workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
         impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
         trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
@@ -56,7 +56,7 @@ export const CreateEntrySchema = z.preprocess(
         }).strict()).max(100).optional(),
         share_with_team: z.boolean().optional().default(false),
         auto_link: z.boolean().optional(),
-        auto_context: z.string().optional(),
+        auto_context: z.string().max(100_000).optional(),
         session_id: z.string().max(255).optional(),
         relationships: z.array(
             z.preprocess(
@@ -82,9 +82,9 @@ export const CreateEntrySchema = z.preprocess(
                         )
                         .optional()
                         .default('references'),
-                })
+                }).strict()
             )
-        ).optional(),
+        ).max(100).optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content ?? '';
@@ -321,7 +321,7 @@ export const GetRecentEntriesSchema = z.preprocess(
             .optional()
             .default('timestamp')
             .describe('Sort results by timestamp (default) or importance score'),
-        cursor: z.string().optional(),
+        cursor: z.string().max(500).optional(),
         offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
         include_archived: z.boolean().optional().default(false),
     })
@@ -352,7 +352,7 @@ export const GetRecentEntriesSchemaMcp = z.preprocess(
             .optional()
             .default('timestamp')
             .describe('Sort results by timestamp (default) or importance score'),
-        cursor: z.string().optional(),
+        cursor: z.string().max(500).optional(),
         offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
         include_archived: z.boolean().optional().default(false),
     })

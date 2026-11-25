@@ -171,19 +171,7 @@ function resolveActiveBriefingLabel(
 }
 
 function sanitizeBriefingErrorToken(token: string): string {
-    let cleaned = ''
-    for (const ch of token) {
-        const cp = ch.codePointAt(0)
-        if (
-            cp !== undefined &&
-            (cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0x2028 || cp === 0x2029)
-        ) {
-            cleaned += ' '
-        } else {
-            cleaned += ch
-        }
-    }
-    return sanitizePromptTarget(cleaned).slice(0, 120)
+    return sanitizePromptTarget(token).slice(0, 120)
 }
 
 function buildBriefingLoadErrorResponse(

@@ -597,6 +597,6 @@ describe('Pass 89 Audit — Pass 10 Remediations', () => {
         expect(dbCloseSpy.mock.calls.length).toBeGreaterThanOrEqual(2)
         expect(exitCodes).toEqual([0])
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
     })
 })

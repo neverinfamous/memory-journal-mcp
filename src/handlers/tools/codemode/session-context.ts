@@ -10,7 +10,7 @@ import {
 import { parseCanonicalPositiveInt } from '../../../utils/safe-positive-int.js'
 import { sanitizeErrorForLogging } from '../../../utils/security-utils.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
-import { firstNonBlankString } from './json-entry-scope.js'
+import { resolveTopLevelScopeAliases, type TopLevelScopeAliases } from './session-alias-conflicts.js'
 import type { ExecuteCodeInput } from './payload-synthesizer.js'
 
 type ProjectRegistry = NonNullable<ToolContext['config']>['projectRegistry']
@@ -43,17 +43,17 @@ function githubInjectError(error: string): { errorResponse: Record<string, unkno
 
 function resolveSessionProjectId(
     context: ToolContext,
-    input: ExecuteCodeInput,
+    aliases: TopLevelScopeAliases,
     effectiveRegistry: ProjectRegistry
 ): number | string | undefined {
-    const rawWorkspace = firstNonBlankString(input.workspace_id, input.workspaceId)
-    const rawProjInput = input.project_number ?? input.projectNumber
+    const rawWorkspace = aliases.workspaceInput
+    const rawProjInput = aliases.projectInput
     let projectId: number | string | undefined = rawProjInput
     if ((projectId === undefined || projectId === null) && rawWorkspace !== undefined) {
         const wsEntry = lookupRegistryEntry(effectiveRegistry, rawWorkspace)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
     }
-    const rawRepo = firstNonBlankString(input.repo, input.repo_name, input.repoName, input.repository)
+    const rawRepo = aliases.repoInput
     if ((projectId === undefined || projectId === null) && rawRepo !== undefined) {
         const repoEntry = lookupRegistryEntry(effectiveRegistry, rawRepo)
         if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
@@ -222,11 +222,11 @@ interface ValidatedSessionInput {
 }
 
 function validateExplicitRepoAndWorkspaceInput(
-    input: ExecuteCodeInput,
+    aliases: TopLevelScopeAliases,
     effectiveRegistry: ProjectRegistry
 ): ValidatedSessionInput | { errorResponse: Record<string, unknown> } {
-    const rawWsTrimmed = firstNonBlankString(input.workspace_id, input.workspaceId)
-    const rawRepoTrimmed = firstNonBlankString(input.repo, input.repo_name, input.repoName, input.repository)
+    const rawWsTrimmed = aliases.workspaceInput
+    const rawRepoTrimmed = aliases.repoInput
     const hasExplicitRepo = rawRepoTrimmed !== undefined && rawRepoTrimmed !== ''
     const hasExplicitConcreteWs =
         rawWsTrimmed !== undefined && rawWsTrimmed !== '' && rawWsTrimmed !== '*'
@@ -349,19 +349,19 @@ function resolveConfiguredOrSessionFallback(
 
 function resolveSessionWorkspaceAndProjectPair(
     context: ToolContext,
-    input: ExecuteCodeInput,
+    aliases: TopLevelScopeAliases,
     effectiveRegistry: ProjectRegistry,
     validated: ValidatedSessionInput
 ):
     | { projectId: number | string | undefined; numericProjectId: number | undefined; workspaceId: string }
     | { errorResponse: Record<string, unknown> } {
-    const rawWorkspaceInput = firstNonBlankString(input.workspace_id, input.workspaceId)
-    const rawProjectInput = input.project_number ?? input.projectNumber
+    const rawWorkspaceInput = aliases.workspaceInput
+    const rawProjectInput = aliases.projectInput
     const explicitDefaultWithoutProject =
         validated.rawWsTrimmed?.toLowerCase() === 'default' && rawProjectInput === undefined
     let projectId = explicitDefaultWithoutProject
         ? undefined
-        : resolveSessionProjectId(context, input, effectiveRegistry)
+        : resolveSessionProjectId(context, aliases, effectiveRegistry)
     if (
         rawProjectInput !== undefined &&
         (typeof projectId !== 'number' || !Number.isSafeInteger(projectId) || projectId <= 0)
@@ -419,15 +419,17 @@ export async function resolveCodeModeSessionContext(
     | { errorResponse: Record<string, unknown> }
 > {
     const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const validated = validateExplicitRepoAndWorkspaceInput(input, effectiveRegistry)
+    const aliases = resolveTopLevelScopeAliases(input, effectiveRegistry)
+    if ('errorResponse' in aliases) return aliases
+    const validated = validateExplicitRepoAndWorkspaceInput(aliases, effectiveRegistry)
     if ('errorResponse' in validated) return validated
 
-    const scoped = resolveSessionWorkspaceAndProjectPair(context, input, effectiveRegistry, validated)
+    const scoped = resolveSessionWorkspaceAndProjectPair(context, aliases, effectiveRegistry, validated)
     if ('errorResponse' in scoped) return scoped
 
     const repoContext = await injectRepoGithub(
         context,
-        firstNonBlankString(input.repo, input.repo_name, input.repoName, input.repository),
+        aliases.repoInput,
         effectiveRegistry
     )
     if ('errorResponse' in repoContext) return repoContext

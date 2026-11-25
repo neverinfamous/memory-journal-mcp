@@ -215,10 +215,33 @@ export function preprocessRelationshipItem(item: unknown): unknown {
                 }
             }
         }
-        return {
+        const rawType = pickRecordField(relObj, RELATIONSHIP_TYPE_KEYS)
+        const rebuilt: Record<string, unknown> = {
             targetId,
-            relationType: pickRecordField(relObj, RELATIONSHIP_TYPE_KEYS) ?? 'references',
+            relationType: rawType ?? 'references',
         }
+        const targetKeySet = new Set<string>(RELATIONSHIP_TARGET_KEYS)
+        const typeKeySet = new Set<string>(RELATIONSHIP_TYPE_KEYS)
+        for (const [k, v] of Object.entries(relObj)) {
+            if (targetKeySet.has(k)) {
+                const sameTarget =
+                    (typeof v === 'string' && typeof targetId === 'number' && v.trim() === String(targetId)) ||
+                    (typeof v === 'string' && typeof targetId === 'string' && v.trim() === targetId.trim()) ||
+                    (typeof v === 'number' && typeof targetId === 'number' && Object.is(v, targetId))
+                if (v !== undefined && !Object.is(v, rawTarget) && !sameTarget) {
+                    rebuilt[k] = v
+                }
+                continue
+            }
+            if (typeKeySet.has(k)) {
+                if (v !== undefined && !Object.is(v, rawType)) {
+                    rebuilt[k] = v
+                }
+                continue
+            }
+            rebuilt[k] = v
+        }
+        return rebuilt
     }
     return item
 }

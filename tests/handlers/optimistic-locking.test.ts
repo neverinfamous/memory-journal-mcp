@@ -237,6 +237,7 @@ describe('Optimistic Locking Handlers', () => {
 
     describe('team_batch_update_entries', () => {
         it('should fail team batch update if any expected_version is stale', async () => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
             const c1 = (await callTool('team_create_entry', { workspace_id: 'default',  project_number: 1, content: 'tb1' }, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
             const c2 = (await callTool('team_create_entry', { workspace_id: 'default',  project_number: 1, content: 'tb2' }, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
 

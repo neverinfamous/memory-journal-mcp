@@ -133,25 +133,46 @@ function findFallbackCodeString(obj: Record<string, unknown>): string | undefine
     return undefined
 }
 
+function deleteRepoAlias(
+    obj: Record<string, unknown>,
+    key: 'repo_name' | 'repoName' | 'repository'
+): void {
+    if (key === 'repo_name') delete obj['repo_name']
+    else if (key === 'repoName') delete obj['repoName']
+    else delete obj['repository']
+}
+
+function deleteReadonlyAlias(obj: Record<string, unknown>, key: 'readOnly' | 'read_only'): void {
+    if (key === 'readOnly') delete obj['readOnly']
+    else delete obj['read_only']
+}
+
 /**
  * Normalizes alternative Code Mode execution payload aliases into `code` while
  * preserving read-only `query` calls and non-code metadata parameters.
  */
 export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void {
-    const repoAlias = obj['repo_name'] ?? obj['repository']
-    if (repoAlias !== undefined && obj['repo'] === undefined) {
-        obj['repo'] = repoAlias
-    }
-    delete obj['repo_name']
-    delete obj['repository']
-    if (obj['readonly'] === undefined) {
-        const readonlyAlias = obj['readOnly'] ?? obj['read_only']
-        if (readonlyAlias !== undefined) {
-            obj['readonly'] = readonlyAlias
+    for (const k of ['repo_name', 'repoName', 'repository'] as const) {
+        const val = obj[k]
+        if (val === undefined) continue
+        const cur = obj['repo']
+        if (cur === undefined || (typeof cur === 'string' && cur.trim() === '' && typeof val === 'string' && val.trim() !== '')) {
+            obj['repo'] = val
+            deleteRepoAlias(obj, k)
+        } else if (Object.is(cur, val) || (typeof cur === 'string' && typeof val === 'string' && cur.trim() === val.trim())) {
+            deleteRepoAlias(obj, k)
         }
     }
-    delete obj['readOnly']
-    delete obj['read_only']
+    for (const k of ['readOnly', 'read_only'] as const) {
+        const val = obj[k]
+        if (val === undefined) continue
+        if (obj['readonly'] === undefined) {
+            obj['readonly'] = val
+            deleteReadonlyAlias(obj, k)
+        } else if (Object.is(obj['readonly'], val)) {
+            deleteReadonlyAlias(obj, k)
+        }
+    }
     if (obj['code'] !== undefined) return
 
     const hasDiscriminator = DISCRIMINATOR_KEYS.some((k) => obj[k] !== undefined)
