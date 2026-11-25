@@ -232,11 +232,12 @@ const VALID_JS_MAX_LEN = 16 * 1024
 const VALID_JS_CACHE = new Map<string, boolean>()
 
 export function isValidJsScript(src: string): boolean {
-    if (src.length <= VALID_JS_MAX_LEN) {
-        const cached = VALID_JS_CACHE.get(src)
+    const cacheKey = src.trimEnd()
+    if (cacheKey.length <= VALID_JS_MAX_LEN) {
+        const cached = VALID_JS_CACHE.get(cacheKey)
         if (cached !== undefined) {
-            VALID_JS_CACHE.delete(src)
-            VALID_JS_CACHE.set(src, cached)
+            VALID_JS_CACHE.delete(cacheKey)
+            VALID_JS_CACHE.set(cacheKey, cached)
             return cached
         }
     }
@@ -247,12 +248,12 @@ export function isValidJsScript(src: string): boolean {
     } catch {
         valid = false
     }
-    if (src.length <= VALID_JS_MAX_LEN) {
+    if (cacheKey.length <= VALID_JS_MAX_LEN) {
         if (VALID_JS_CACHE.size >= VALID_JS_CACHE_MAX) {
             const firstKey = VALID_JS_CACHE.keys().next().value
             if (firstKey !== undefined) VALID_JS_CACHE.delete(firstKey)
         }
-        VALID_JS_CACHE.set(src, valid)
+        VALID_JS_CACHE.set(cacheKey, valid)
     }
     return valid
 }
@@ -359,8 +360,8 @@ function findMatchingBraceEnd(
     return -1
 }
 
-function rewriteDefaultExportFunction(src: string): string {
-    const spans = buildNonCodeSpans(src)
+function rewriteDefaultExportFunction(src: string, existingSpans?: readonly NonCodeSpan[]): string {
+    const spans = existingSpans ?? buildNonCodeSpans(src)
     const headerRe = /export\s+default\s+(?:async\s+)?function(?:\s+[\w$]+)?\s*\(([^()\n]{0,500})\)\s*\{/g
     let m: RegExpExecArray | null
     while ((m = headerRe.exec(src)) !== null) {
@@ -380,15 +381,17 @@ function rewriteDefaultExportFunction(src: string): string {
 /** Rewrite top-level ESM/CommonJS module statements outside string literals and comments into `mj` bindings. */
 export function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
-    const spans = buildNonCodeSpans(executionCode)
-    let exportDefaultCount = 0
-    for (const m of executionCode.matchAll(/\bexport\s+default\b/g)) {
-        if (!isOffsetInNonCodeSpan(spans, m.index)) exportDefaultCount++
+    if (executionCode.includes('export')) {
+        const spans = buildNonCodeSpans(executionCode)
+        let exportDefaultCount = 0
+        for (const m of executionCode.matchAll(/\bexport\s+default\b/g)) {
+            if (!isOffsetInNonCodeSpan(spans, m.index)) exportDefaultCount++
+        }
+        if (exportDefaultCount === 1 && executionCode.includes('{') && executionCode.includes('}')) {
+            executionCode = rewriteDefaultExportFunction(executionCode, spans)
+        }
+        executionCode = replaceOutsideNonCode(executionCode, /export\s+default\s+/g, () => '')
     }
-    if (exportDefaultCount === 1 && executionCode.includes('{') && executionCode.includes('}')) {
-        executionCode = rewriteDefaultExportFunction(executionCode)
-    }
-    executionCode = replaceOutsideNonCode(executionCode, /export\s+default\s+/g, () => '')
     executionCode = replaceOutsideNonCode(executionCode, /(?<![.\w$])tools\./g, () => 'mj.')
     executionCode = replaceOutsideNonCode(
         executionCode,

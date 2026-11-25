@@ -350,14 +350,14 @@ describe('pass 39 code quality', () => {
     })
 
     it('AP1-AP7: updates code-quality audit prompt to pass39 with portable guidance', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
         const def = getCodeQualityAuditPromptDefinition()
         const rendered = def.handler({ target: 'my-target' }, {
             searchByDateRange: () => [],
             getEntriesByIds: () => new Map(),
         } as never) as { messages: { content: { text: string } }[] }
         const text = rendered.messages[0]?.content.text ?? ''
-        expect(text).toContain('Prompt revision: 2026-11-24-audit-pass93')
+        expect(text).toContain('Prompt revision: 2026-11-25-audit-pass94')
         expect(text).toContain('generalPurpose')
         expect(text).toContain('PRAGMA foreign_key_check')
         expect(text).toContain('Promise.allSettled')

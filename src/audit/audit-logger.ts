@@ -23,11 +23,13 @@ import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 import { getRequestContext } from '../utils/request-context.js'
 import { getErrnoCode } from '../utils/type-guards.js'
+import { bigintReplacer } from '../observability/token-estimator.js'
 import {
     appendRegularFileNoFollow,
     rotateAuditLogFiles,
     searchAuditFileBackward,
 } from './audit-file-helpers.js'
+import { compileAuditSearchFilters } from './audit-filter-helpers.js'
 
 // ============================================================================
 // Constants
@@ -86,40 +88,44 @@ function capBoundedAuditEntry(entry: AuditEntry, lineBytes: number): AuditEntry 
     }
 }
 
-function serializeBoundedAuditEntry(entry: AuditEntry): string {
-    const serializeWithFallback = (target: AuditEntry): string => {
-        try {
-            return JSON.stringify(target, (_key: string, value: unknown) =>
-                typeof value === 'bigint' ? value.toString() : value
-            )
-        } catch {
-            return JSON.stringify({
-                timestamp: target.timestamp,
-                requestId: target.requestId,
-                ...(target.sessionId !== undefined ? { sessionId: target.sessionId } : {}),
-                tool: target.tool,
-                category: target.category,
-                scope: target.scope,
-                user: target.user,
-                scopes: target.scopes,
-                durationMs: target.durationMs,
-                tokenEstimate: target.tokenEstimate,
-                ...(target.workspaceId !== undefined ? { workspaceId: target.workspaceId } : {}),
-                ...(target.projectNumber !== undefined ? { projectNumber: target.projectNumber } : {}),
-                success: target.success,
-                ...(target.error !== undefined ? { error: target.error.slice(0, 4096) } : {}),
-                args: { _serializationError: 'Audit args could not be JSON serialized' },
-            })
-        }
+function serializeAuditEntryWithFallback(target: AuditEntry): string {
+    try {
+        const json = JSON.stringify(target)
+        if (typeof json === 'string') return json
+    } catch {
+        // Fall through to bigint-coercing / stripped fallback below
     }
+    try {
+        return JSON.stringify(target, bigintReplacer)
+    } catch {
+        return JSON.stringify({
+            timestamp: target.timestamp,
+            requestId: target.requestId,
+            ...(target.sessionId !== undefined ? { sessionId: target.sessionId } : {}),
+            tool: target.tool,
+            category: target.category,
+            scope: target.scope,
+            user: target.user,
+            scopes: target.scopes,
+            durationMs: target.durationMs,
+            tokenEstimate: target.tokenEstimate,
+            ...(target.workspaceId !== undefined ? { workspaceId: target.workspaceId } : {}),
+            ...(target.projectNumber !== undefined ? { projectNumber: target.projectNumber } : {}),
+            success: target.success,
+            ...(target.error !== undefined ? { error: target.error.slice(0, 4096) } : {}),
+            args: { _serializationError: 'Audit args could not be JSON serialized' },
+        })
+    }
+}
 
-    const serialized = serializeWithFallback(entry)
+function serializeBoundedAuditEntry(entry: AuditEntry): string {
+    const serialized = serializeAuditEntryWithFallback(entry)
     if (serialized.length * 3 <= MAX_AUDIT_LINE_BYTES) return serialized
     const lineBytes = Buffer.byteLength(serialized, 'utf8')
     if (lineBytes <= MAX_AUDIT_LINE_BYTES) return serialized
 
     // Keep the serialized JSONL line well below the 1 MB backward-reader skip ceiling across ALL fields
-    const bounded = serializeWithFallback(capBoundedAuditEntry(entry, lineBytes))
+    const bounded = serializeAuditEntryWithFallback(capBoundedAuditEntry(entry, lineBytes))
     if (Buffer.byteLength(bounded, 'utf8') <= MAX_AUDIT_LINE_BYTES) return bounded
 
     return JSON.stringify({
@@ -206,28 +212,15 @@ export class AuditLogger {
             this._droppedCount++
         }
 
-        // Eagerly flush when the buffer is full; otherwise arm a one-shot flush timer
-        if (this.buffer.length >= BUFFER_HIGH_WATER) {
-            void this.flush()
-        } else {
-            this.scheduleFlush()
-        }
+        if (this.buffer.length >= BUFFER_HIGH_WATER) void this.flush()
+        else this.scheduleFlush()
     }
 
-    /**
-     * Log a denied access attempt.
-     */
+    /** Log a denied access attempt. */
     logDenial(
         toolName: string,
         reason: string,
-        context?: {
-            user?: string | null
-            scopes?: string[]
-            category?: AuditEntry['category']
-            scope?: string
-            requestId?: string
-            sessionId?: string
-        }
+        context?: { user?: string | null; scopes?: string[]; category?: AuditEntry['category']; scope?: string; requestId?: string; sessionId?: string }
     ): void {
         this.log({
             timestamp: new Date().toISOString(),
@@ -380,7 +373,7 @@ export class AuditLogger {
         const limit = filters.limit ?? 100
         if (limit <= 0) return []
 
-        // Search current log first, then older rotated logs .1 through .5
+        const compiledFilters = compileAuditSearchFilters(filters)
         const files = [this.config.logPath]
         for (let i = 1; i <= MAX_ARCHIVES; i++) {
             files.push(`${this.config.logPath}.${String(i)}`)
@@ -392,7 +385,7 @@ export class AuditLogger {
             async (accPromise, file) => {
                 const acc = await accPromise
                 if (acc.limitReached) return acc
-                const res = await searchAuditFileBackward(file, filters, limit, results)
+                const res = await searchAuditFileBackward(file, compiledFilters, limit, results)
                 return {
                     skippedLines: acc.skippedLines + res.skippedLines,
                     limitReached: res.limitReached,
@@ -403,9 +396,7 @@ export class AuditLogger {
         if (limitReached) return results
 
         if (skippedLines > 0) {
-            logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s) during search`, {
-                module: 'Audit',
-            })
+            logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s) during search`, { module: 'Audit' })
         }
 
         return results

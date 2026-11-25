@@ -278,9 +278,17 @@ export function createPostHandler(
                     method: req.method,
                     path: req.path,
                 })
-                const currentCtx = { ...(getRequestContext() ?? {}) }
-                delete currentCtx.sessionId
-                requestContextStorage.run({ ...currentCtx, ephemeralSessionProject: {} }, () => {
+                const prevCtx = getRequestContext()
+                requestContextStorage.run(
+                    {
+                        ...(prevCtx?.ip !== undefined ? { ip: prevCtx.ip } : {}),
+                        ...(prevCtx?.useTestDb !== undefined ? { useTestDb: prevCtx.useTestDb } : {}),
+                        ...(prevCtx?.progress !== undefined ? { progress: prevCtx.progress } : {}),
+                        ...(prevCtx?.hasProjectRegistry !== undefined ? { hasProjectRegistry: prevCtx.hasProjectRegistry } : {}),
+                        ...(prevCtx?.projectRegistry !== undefined ? { projectRegistry: prevCtx.projectRegistry } : {}),
+                        ephemeralSessionProject: {},
+                    },
+                    () => {
                     statelessMcpHandler(req, res, req.body).catch((err: unknown) => {
                         next(err)
                     })

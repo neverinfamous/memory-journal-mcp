@@ -19,7 +19,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(20) // 1 to 6, plus 8 through 19, 21, and 22 (7 and 20 are team-only)
+        expect(applied.length).toBe(21) // 1 to 6, plus 8 through 19, 21, 22, and 23 (7 and 20 are team-only)
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
         expect(applied[12].version).toBe(14)
@@ -31,6 +31,8 @@ describe('Database Migration Framework', () => {
         expect(applied[16].name).toBe('018-add-project-and-prune-duplicate-indexes')
         expect(applied[17].name).toBe('019-normalize-legacy-commit-entries')
         expect(applied[18].name).toBe('021-add-entity-lookup-and-prune-alias-index')
+        expect(applied[19].name).toBe('022-add-autocontext-index')
+        expect(applied[20].name).toBe('023-add-project-recent-index')
 
         // Verify tables exist
         const tables = db
@@ -74,12 +76,13 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(22)
+        expect(applied.length).toBe(23)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
         expect(applied[19].name).toBe('020-add-team-origin-personal-id')
         expect(applied[20].name).toBe('021-add-entity-lookup-and-prune-alias-index')
         expect(applied[21].name).toBe('022-add-autocontext-index')
+        expect(applied[22].name).toBe('023-add-project-recent-index')
 
         // Verify memory_journal has author column
         const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
@@ -171,7 +174,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(20)
+        expect(applied.length).toBe(21)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
@@ -210,8 +213,8 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(20)
-        expect(count2).toBe(20)
+        expect(count1).toBe(21)
+        expect(count2).toBe(21)
 
         db.close()
     })

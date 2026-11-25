@@ -58,8 +58,22 @@ function parseEntryType(val: unknown): EntryType {
     return isCanonicalEntryType(raw) ? raw : canonicalizeStoredEntryType(raw, null).entryType
 }
 
+const SIGNIFICANCE_TYPE_MAP = new Map<string, SignificanceType>(
+    SIGNIFICANCE_TYPES.filter((t): t is Exclude<SignificanceType, null> => t !== null).map((t) => [t, t])
+)
+const NUM_ENTRY_KEYS = ['projectNumber', 'issueNumber', 'prNumber', 'workflowRunId'] as const
+const STR_ENTRY_KEYS = [
+    'projectOwner',
+    'issueUrl',
+    'prUrl',
+    'prStatus',
+    'workflowName',
+    'workflowStatus',
+    'sessionId',
+] as const
+
 function parseSignificanceType(val: unknown): SignificanceType {
-    return typeof val === 'string' ? (SIGNIFICANCE_TYPES.find((t) => t === val) ?? null) : null
+    return typeof val === 'string' ? (SIGNIFICANCE_TYPE_MAP.get(val) ?? null) : null
 }
 
 function parseValidationStatus(val: unknown): 'passed' | 'failed' | 'none' | undefined {
@@ -77,21 +91,11 @@ const optNum = (r: Record<string, unknown>, key: string): number | null | undefi
 }
 
 function attachOptionalEntryFields(entry: JournalEntry, r: Record<string, unknown>): void {
-    const numKeys = ['projectNumber', 'issueNumber', 'prNumber', 'workflowRunId'] as const
-    for (const k of numKeys) {
+    for (const k of NUM_ENTRY_KEYS) {
         const v = optNum(r, k)
         if (v !== undefined) entry[k] = v
     }
-    const strKeys = [
-        'projectOwner',
-        'issueUrl',
-        'prUrl',
-        'prStatus',
-        'workflowName',
-        'workflowStatus',
-        'sessionId',
-    ] as const
-    for (const k of strKeys) {
+    for (const k of STR_ENTRY_KEYS) {
         const v = optStr(r, k)
         if (v !== undefined) entry[k] = v
     }

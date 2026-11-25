@@ -445,15 +445,15 @@ describe('Pass 83 Audit — Code Mode Dispatch, Search, Insights & CLI Hardening
         const printSummarySrc = fs.readFileSync(path.resolve(process.cwd(), 'scripts', 'print-summary.ts'), 'utf-8')
         expect(printSummarySrc.indexOf('try {')).toBeLessThan(printSummarySrc.indexOf('await db.initialize()'))
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
         const cqDef = getCodeQualityAuditPromptDefinition()
         const cqRes = await cqDef.handler(
             { target: 'src', copilot: 'false' },
             { searchByDateRange: () => [] } as unknown as Parameters<typeof cqDef.handler>[1]
         )
         const cqText = (cqRes as { messages?: { content?: { text?: string } }[] }).messages?.[0]?.content?.text ?? ''
-        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass93')
+        expect(cqText).toContain('Prompt revision: 2026-11-25-audit-pass94')
         expect(cqText).toContain('recoverNamedToolCall')
         expect(cqText).toContain('isJsonOutput')
     })

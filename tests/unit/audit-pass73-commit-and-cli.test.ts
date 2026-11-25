@@ -94,7 +94,7 @@ describe('audit pass73 commit CLI, anchor batching, and prompt invariants', () =
     })
 
     it('exports pass73 revision and portable AP1-AP2 prompt guardrails', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
         const db = new DatabaseAdapter(':memory:')
         await db.initialize()
         try {
@@ -105,9 +105,9 @@ describe('audit pass73 commit CLI, anchor batching, and prompt invariants', () =
                 (await getCodeQualityAuditPromptDefinition().handler({ target: 'src', copilot: 'false' }, db))
                     .messages[0]?.content.text ?? ''
 
-            expect(perfText).toContain('Prompt revision: 2026-11-24-audit-pass93')
+            expect(perfText).toContain('Prompt revision: 2026-11-25-audit-pass94')
             expect(perfText).toContain('shas.length <= 1')
-            expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass93')
+            expect(cqText).toContain('Prompt revision: 2026-11-25-audit-pass94')
             expect(cqText).toContain('expectValue')
             expect(cqText).toContain('repoRoot')
             expect(cqText).toContain('UTF-8 BOM')

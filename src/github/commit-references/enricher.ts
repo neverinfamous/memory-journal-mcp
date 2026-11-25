@@ -69,7 +69,15 @@ async function fetchCommitsBatched(
     try {
         const log = await git.log(['--no-walk=unsorted', ...validHashes, '--'])
         if (log.all.length > 0) return [...log.all]
-    } catch {
+    } catch (err) {
+        if (validHashes.length <= 1) {
+            logger.warning('Skipping commit enrichment for a single commit', {
+                module: 'CommitEnricher',
+                hash: validHashes[0],
+                error: String(err),
+            })
+            return []
+        }
         // One or more hashes may be missing; fall back to bounded per-commit lookups
     }
     const fetched: RawGitCommit[] = []
@@ -113,24 +121,31 @@ export async function enrichCommits(
     const git = simpleGit(gitOptions)
     const enriched: EnrichedCommit[] = []
 
+    const validHashes = commitHashes.filter((hash) => /^[0-9a-fA-F]{7,40}$/.test(hash))
+    const cachedRepoInfo = github?.getCachedRepoInfo()
+    const repoInfoPromise =
+        github && cachedRepoInfo === undefined
+            ? github.getRepoInfo()
+            : Promise.resolve(cachedRepoInfo ?? null)
+
+    const [repoOutcome, commitsOutcome] = await Promise.allSettled([
+        repoInfoPromise,
+        fetchCommitsBatched(validHashes, git),
+    ])
+
     let defaultOwner: string | null = null
     let defaultRepo: string | null = null
-
-    if (github) {
-        try {
-            const repoInfo = github.getCachedRepoInfo() ?? (await github.getRepoInfo())
-            defaultOwner = repoInfo.owner
-            defaultRepo = repoInfo.repo
-        } catch (err) {
-            logger.warning('GitHub repo info unavailable; commit references stay unresolved', {
-                module: 'CommitEnricher',
-                error: String(err),
-            })
-        }
+    if (repoOutcome.status === 'fulfilled' && repoOutcome.value !== null) {
+        defaultOwner = repoOutcome.value.owner
+        defaultRepo = repoOutcome.value.repo
+    } else if (repoOutcome.status === 'rejected') {
+        logger.warning('GitHub repo info unavailable; commit references stay unresolved', {
+            module: 'CommitEnricher',
+            error: String(repoOutcome.reason),
+        })
     }
 
-    const validHashes = commitHashes.filter((hash) => /^[0-9a-fA-F]{7,40}$/.test(hash))
-    const rawCommits = await fetchCommitsBatched(validHashes, git)
+    const rawCommits = commitsOutcome.status === 'fulfilled' ? commitsOutcome.value : []
     const refCache = new Map<string, Promise<ResolvedReference[]>>()
     const commitChunks: RawGitCommit[][] = []
     for (let i = 0; i < rawCommits.length; i += ENRICH_CONCURRENCY) {

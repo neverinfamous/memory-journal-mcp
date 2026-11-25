@@ -1,19 +1,26 @@
 import { healIncludeArchivedField } from '../../handlers/tools/schemas/hallucination-healer-fields.js'
 import { isRecord } from './shared-utils.js'
 import { applyGithubAndBackupInterceptions } from './github-and-backup-interceptions.js'
-
-const IO_METHODS = [
-    'export_entries', 'exportEntries', 'team_export_entries', 'teamExportEntries',
-    'export_markdown', 'exportMarkdown', 'team_export_markdown', 'teamExportMarkdown',
-    'import_markdown', 'importMarkdown', 'team_import_markdown', 'teamImportMarkdown',
-    'import_external', 'importExternal', 'team_import_external', 'teamImportExternal',
-]
-
-const ANALYTICS_METHODS = [
-    'get_statistics', 'getStatistics', 'get_cross_project_insights', 'getCrossProjectInsights',
-    'team_get_statistics', 'teamGetStatistics', 'team_get_cross_project_insights', 'teamGetCrossProjectInsights',
-    'get_collaboration_matrix', 'getCollaborationMatrix', 'team_get_collaboration_matrix', 'teamGetCollaborationMatrix',
-]
+import {
+    ANALYTICS_METHODS,
+    CONFIG_METHODS,
+    EXPORT_ENTRY_METHODS,
+    EXPORT_MD_METHODS,
+    GET_ENTRY_BY_ID_METHODS,
+    IMPORT_EXTERNAL_METHODS,
+    IMPORT_MD_METHODS,
+    IO_METHODS,
+    LINK_METHODS,
+    LIST_DELETED_METHODS,
+    MERGE_TAG_METHODS,
+    REBUILD_METHODS,
+    RECENT_METHODS,
+    TAG_LIST_METHODS,
+    TEAM_ALIAS_METHODS,
+    TEAM_MEMBER_METHODS,
+    TEST_TOOL_METHODS,
+    VECTOR_STATS_METHODS,
+} from './domain-tool-method-sets.js'
 
 function validationErr(error: string, suggestion: string): { error: Record<string, unknown> } {
     return { error: { success: false, error, code: 'VALIDATION_ERROR', category: 'validation', suggestion, recoverable: true } }
@@ -103,22 +110,19 @@ export function applyDomainToolInterceptions(
 ): { args: unknown[] } | { error: Record<string, unknown> } {
     const singleObj = args.length === 1 && isRecord(args[0]) ? args[0] : undefined
 
-    if (singleObj !== undefined && ['update_configuration', 'updateConfiguration', 'config', 'configure'].includes(methodName)) {
+    if (singleObj !== undefined && CONFIG_METHODS.has(methodName)) {
         const configRes = applyConfigInterceptions(singleObj)
         if ('error' in configRes) return configRes
         args[0] = configRes.obj
     }
 
-    if (singleObj !== undefined && IO_METHODS.includes(methodName)) {
+    if (singleObj !== undefined && IO_METHODS.has(methodName)) {
         const ioRes = applyIoInterceptions(methodName, singleObj)
         if ('error' in ioRes) return ioRes
         args[0] = ioRes.obj
     }
 
-    if (
-        singleObj !== undefined &&
-        ['team_get_vector_index_stats', 'teamGetVectorIndexStats', 'get_vector_index_stats', 'getVectorIndexStats'].includes(methodName)
-    ) {
+    if (singleObj !== undefined && VECTOR_STATS_METHODS.has(methodName)) {
         const obj = { ...singleObj }
         args[0] = obj
         if (hasAnyKey(obj, ['q', 'query', 'search', 'text', 'message', 'description', 'path'])) {
@@ -127,7 +131,7 @@ export function applyDomainToolInterceptions(
     }
 
     if (
-        ['rebuild_vector_index', 'rebuildVectorIndex', 'team_rebuild_vector_index', 'teamRebuildVectorIndex'].includes(methodName) &&
+        REBUILD_METHODS.has(methodName) &&
         args.length === 1 &&
         (typeof args[0] === 'boolean' || typeof args[0] === 'string' || typeof args[0] === 'number')
     ) {
@@ -143,10 +147,7 @@ export function applyDomainToolInterceptions(
         args[0] = { project_number: args[0] }
     }
 
-    if (
-        singleObj !== undefined &&
-        ['list_deleted_entries', 'listDeletedEntries', 'team_list_deleted_entries', 'teamListDeletedEntries'].includes(methodName)
-    ) {
+    if (singleObj !== undefined && LIST_DELETED_METHODS.has(methodName)) {
         const obj = { ...singleObj }
         args[0] = obj
         if (hasAnyKey(obj, ['q', 'query', 'search', 'text', 'message', 'description', 'path', 'mode'])) {
@@ -159,7 +160,7 @@ export function applyDomainToolInterceptions(
         }
     }
 
-    if (singleObj !== undefined && ANALYTICS_METHODS.includes(methodName)) {
+    if (singleObj !== undefined && ANALYTICS_METHODS.has(methodName)) {
         const analyticsRes = applyAnalyticsInterceptions(methodName, singleObj)
         if ('error' in analyticsRes) return analyticsRes
         args[0] = analyticsRes.obj
@@ -190,7 +191,7 @@ function applyIoInterceptions(
         return validationErr(`${methodName} does not support the 'mode' parameter.`, 'Remove the mode parameter.')
     }
 
-    if (['export_entries', 'exportEntries', 'team_export_entries', 'teamExportEntries'].includes(methodName)) {
+    if (EXPORT_ENTRY_METHODS.has(methodName)) {
         if (hasAnyKey(obj, ['path', 'output_dir', 'file'])) {
             return validationErr(
                 'export_entries returns the exported data directly and does not write to disk.',
@@ -199,24 +200,9 @@ function applyIoInterceptions(
         }
     }
 
-    const isExportMd = [
-        'export_markdown',
-        'exportMarkdown',
-        'team_export_markdown',
-        'teamExportMarkdown',
-    ].includes(methodName)
-    const isImportMd = [
-        'import_markdown',
-        'importMarkdown',
-        'team_import_markdown',
-        'teamImportMarkdown',
-    ].includes(methodName)
-    const isExternal = [
-        'import_external',
-        'importExternal',
-        'team_import_external',
-        'teamImportExternal',
-    ].includes(methodName)
+    const isExportMd = EXPORT_MD_METHODS.has(methodName)
+    const isImportMd = IMPORT_MD_METHODS.has(methodName)
+    const isExternal = IMPORT_EXTERNAL_METHODS.has(methodName)
 
     for (const key of ['path', 'file', 'filepath', 'dir', 'folder', 'target', 'target_dir', 'targetDir', 'source']) {
         if (obj[key] !== undefined) {
@@ -271,14 +257,14 @@ function applyEntryLinkRecentTagInterceptions(
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
     if (args.length !== 1 || !isRecord(args[0])) return { args }
-    if (['link_entries', 'linkEntries', 'team_link_entries', 'teamLinkEntries'].includes(methodName)) {
+    if (LINK_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(obj, ['source', 'from', 'source_id', 'from_id'], 'from_entry_id')
         remapKeys(obj, ['target', 'to', 'target_id', 'to_id', 'dest'], 'to_entry_id')
         remapKeys(obj, ['type', 'rel'], 'relationship_type')
         remapKeys(obj, ['notes', 'message', 'text'], 'description')
-    } else if (['get_recent_entries', 'getRecentEntries', 'team_get_recent', 'teamGetRecent'].includes(methodName)) {
+    } else if (RECENT_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         healIncludeArchivedField(obj)
@@ -290,7 +276,7 @@ function applyEntryLinkRecentTagInterceptions(
             )
         }
         remapKeys(obj, ['keep'], 'limit')
-    } else if (['list_tags', 'listTags', 'team_list_tags', 'teamListTags'].includes(methodName)) {
+    } else if (TAG_LIST_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         if (hasAnyKey(obj, ['q', 'query', 'search', 'path', 'mode', 'keep'])) {
@@ -305,14 +291,14 @@ function applyAuditMergeTestGetByIdInterceptions(
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
     if (args.length !== 1 || !isRecord(args[0])) return { args }
-    if (['test_simple', 'testSimple', 'test_error_handling', 'testErrorHandling'].includes(methodName)) {
+    if (TEST_TOOL_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(obj, ['text', 'description'], 'message')
         if (methodName === 'test_error_handling' || methodName === 'testErrorHandling') {
             remapKeys(obj, ['type'], 'error_type')
         }
-    } else if (['merge_tags', 'mergeTags', 'team_merge_tags', 'teamMergeTags'].includes(methodName)) {
+    } else if (MERGE_TAG_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         if (obj['source_tags'] !== undefined && obj['source_tag'] === undefined) {
@@ -351,7 +337,7 @@ function applyAuditMergeTestGetByIdInterceptions(
                 if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) obj['limit'] = parsed
             }
         }
-    } else if (['get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById'].includes(methodName)) {
+    } else if (GET_ENTRY_BY_ID_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         if (obj['entry_id'] === undefined && obj['entryId'] === undefined && obj['id'] === undefined && typeof obj['uri'] === 'string') {
@@ -423,12 +409,7 @@ function applyTeamMemberAndAliasInterceptions(
     args: unknown[]
 ): { args: unknown[] } {
     if (args.length !== 1 || !isRecord(args[0])) return { args }
-    if (
-        [
-            'team_add_member', 'teamAddMember', 'team_update_member_role', 'teamUpdateMemberRole',
-            'team_remove_member', 'teamRemoveMember', 'team_get_member', 'teamGetMember',
-        ].includes(methodName)
-    ) {
+    if (TEAM_MEMBER_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(
@@ -437,13 +418,7 @@ function applyTeamMemberAndAliasInterceptions(
             'author'
         )
         remapKeys(obj, ['keep', 'mode', 'type', 'level', 'permission'], 'role')
-    } else if (
-        [
-            'team_add_author_alias', 'teamAddAuthorAlias', 'team_remove_author_alias', 'teamRemoveAuthorAlias',
-            'team_list_author_aliases', 'teamListAuthorAliases', 'team_resolve_author', 'teamResolveAuthor',
-            'team_consolidate_authors', 'teamConsolidateAuthors',
-        ].includes(methodName)
-    ) {
+    } else if (TEAM_ALIAS_METHODS.has(methodName)) {
         const obj = { ...args[0] }
         args[0] = obj
         applyAuthorAliasInterception(methodName, obj)

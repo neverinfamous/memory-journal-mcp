@@ -13,26 +13,9 @@ import { isValidJsScript } from './code-healer.js'
 export type ExecuteCodeInput = z.infer<typeof ExecuteCodeSchema>
 
 const JS_CODE_ALIAS_KEYS = [
-    'code',
-    'script',
-    'js',
-    'javascript',
-    'eval',
-    'source',
-    'expression',
-    'fn',
-    'exec',
-    'command',
-    'executionCode',
-    'code_snippet',
-    'raw_code',
-    'statement',
-    'statements',
-    'codeBlock',
-    'code_block',
-    'script_content',
-    'js_code',
-    'code_string',
+    'code', 'script', 'js', 'javascript', 'eval', 'source', 'expression', 'fn', 'exec', 'command',
+    'executionCode', 'code_snippet', 'raw_code', 'statement', 'statements', 'codeBlock', 'code_block',
+    'script_content', 'js_code', 'code_string',
 ] as const
 
 const NATURAL_VERB_PATTERN =
@@ -379,20 +362,17 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
         const val = input[key]
         return typeof val === 'string' && val.trim().length > 0
     })
-    const looksLikeJsStatement =
+    const looksLikeJsStatement = (): boolean =>
         (/\bmj\s*\./.test(executionCode) ||
-            /^\s*(?:return|const|let|var|await|async|for|while|if|try|function)\b/.test(
-                executionCode
-            )) &&
+            /^\s*(?:return|const|let|var|await|async|for|while|if|try|function)\b/.test(executionCode)) &&
         isValidJsScript(executionCode)
     const isExplicitJsCode =
-        (hasExplicitCode || looksLikeJsStatement) && !isNaturalLanguagePrompt(executionCode)
+        (hasExplicitCode || looksLikeJsStatement()) && !isNaturalLanguagePrompt(executionCode)
     const looksLikeSqlQuery =
         /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(
             executionCode.trim()
         )
-    const hasExplicitContent =
-        typeof rawObj['content'] === 'string' || typeof rawObj['body'] === 'string'
+    const hasExplicitContent = typeof rawObj['content'] === 'string' || typeof rawObj['body'] === 'string'
 
     const entryKeys = isFlatCall ? ENTRY_KEYS : NESTED_ENTRY_KEYS
     const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || (!isFlatCall && rawObj[k] !== undefined))
@@ -410,72 +390,44 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
     return buildSynthesizedEntryPayload(executionCode, entryObj, rawObj, isFlatCall, learnedVal)
 }
 
+function firstDefined(
+    entryObj: Record<string, unknown>,
+    secondaryObj: Record<string, unknown>,
+    snake: string,
+    camel: string
+): unknown {
+    if (entryObj[snake] !== undefined) return entryObj[snake]
+    if (entryObj[camel] !== undefined) return entryObj[camel]
+    if (secondaryObj[snake] !== undefined) return secondaryObj[snake]
+    return secondaryObj[camel]
+}
+
 /** Forward optional entry classification, scope flags, relationships, and anchors uniformly. */
 export function appendSharedEntryFlags(
     payload: Record<string, unknown>,
     entryObj: Record<string, unknown>,
     secondaryObj: Record<string, unknown>
 ): void {
-    const rawSig =
-        entryObj['significance_type'] !== undefined
-            ? entryObj['significance_type']
-            : entryObj['significanceType'] !== undefined
-              ? entryObj['significanceType']
-              : secondaryObj['significance_type'] !== undefined
-                ? secondaryObj['significance_type']
-                : secondaryObj['significanceType']
-    if (rawSig === null && payload['entry_id'] !== undefined) {
-        payload['significance_type'] = null
-    } else if (typeof rawSig === 'string' && rawSig.trim().length > 0) {
-        payload['significance_type'] = rawSig
-    }
+    const rawSig = firstDefined(entryObj, secondaryObj, 'significance_type', 'significanceType')
+    if (rawSig === null && payload['entry_id'] !== undefined) payload['significance_type'] = null
+    else if (typeof rawSig === 'string' && rawSig.trim().length > 0) payload['significance_type'] = rawSig
     const targetWs = getNonEmptyString(entryObj, secondaryObj, ['target_workspace_id', 'targetWorkspaceId'])
     if (targetWs !== undefined) payload['target_workspace_id'] = targetWs
-    const isPersonal =
-        entryObj['is_personal'] ?? entryObj['isPersonal'] ?? secondaryObj['is_personal'] ?? secondaryObj['isPersonal']
+    const isPersonal = firstDefined(entryObj, secondaryObj, 'is_personal', 'isPersonal')
     if (typeof isPersonal === 'boolean') payload['is_personal'] = isPersonal
-    const shareTeam =
-        entryObj['share_with_team'] ??
-        entryObj['shareWithTeam'] ??
-        secondaryObj['share_with_team'] ??
-        secondaryObj['shareWithTeam']
+    const shareTeam = firstDefined(entryObj, secondaryObj, 'share_with_team', 'shareWithTeam')
     if (typeof shareTeam === 'boolean') payload['share_with_team'] = shareTeam
-    if (
-        entryObj['use_test_db'] === true ||
-        entryObj['useTestDb'] === true ||
-        secondaryObj['use_test_db'] === true ||
-        secondaryObj['useTestDb'] === true
-    ) {
-        payload['use_test_db'] = true
-    }
-    const rels = Array.isArray(entryObj['relationships'])
-        ? entryObj['relationships']
-        : Array.isArray(secondaryObj['relationships'])
-          ? secondaryObj['relationships']
-          : undefined
+    if (firstDefined(entryObj, secondaryObj, 'use_test_db', 'useTestDb') === true) payload['use_test_db'] = true
+    const rels = Array.isArray(entryObj['relationships']) ? entryObj['relationships'] : Array.isArray(secondaryObj['relationships']) ? secondaryObj['relationships'] : undefined
     if (rels !== undefined) payload['relationships'] = rels
-    const anchors = Array.isArray(entryObj['anchors'])
-        ? entryObj['anchors']
-        : Array.isArray(secondaryObj['anchors'])
-          ? secondaryObj['anchors']
-          : undefined
+    const anchors = Array.isArray(entryObj['anchors']) ? entryObj['anchors'] : Array.isArray(secondaryObj['anchors']) ? secondaryObj['anchors'] : undefined
     if (anchors !== undefined) payload['anchors'] = anchors
-    let rawExpectedVer: unknown
-    for (const src of [entryObj, secondaryObj]) {
-        if (src['expected_version'] !== undefined) { rawExpectedVer = src['expected_version']; break }
-        if (src['expectedVersion'] !== undefined) { rawExpectedVer = src['expectedVersion']; break }
-    }
+    const rawExpectedVer = firstDefined(entryObj, secondaryObj, 'expected_version', 'expectedVersion')
     if (rawExpectedVer !== undefined) {
-        if (typeof rawExpectedVer === 'string') {
-            payload['expected_version'] = parseCanonicalPositiveInt(rawExpectedVer.trim()) ?? rawExpectedVer
-        } else {
-            payload['expected_version'] = rawExpectedVer
-        }
+        payload['expected_version'] = typeof rawExpectedVer === 'string' ? (parseCanonicalPositiveInt(rawExpectedVer.trim()) ?? rawExpectedVer) : rawExpectedVer
     }
-    const isArchived =
-        entryObj['is_archived'] ?? entryObj['isArchived'] ?? secondaryObj['is_archived'] ?? secondaryObj['isArchived']
+    const isArchived = firstDefined(entryObj, secondaryObj, 'is_archived', 'isArchived')
     if (typeof isArchived === 'boolean') payload['is_archived'] = isArchived
-    const autoLink =
-        entryObj['auto_link'] ?? entryObj['autoLink'] ?? secondaryObj['auto_link'] ?? secondaryObj['autoLink']
+    const autoLink = firstDefined(entryObj, secondaryObj, 'auto_link', 'autoLink')
     if (typeof autoLink === 'boolean') payload['auto_link'] = autoLink
 }

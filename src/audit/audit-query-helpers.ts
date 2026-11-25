@@ -17,7 +17,7 @@ import {
     normalizePromptAliasForScope,
     TEAM_PROMPT_NAMES,
 } from '../auth/scope-map.js'
-import type { AuditCategory, AuditEntry, AuditSearchFilters } from './types.js'
+import type { AuditCategory, AuditEntry } from './types.js'
 
 export interface AuditScopeMetadata {
     workspaceId?: string | undefined
@@ -140,65 +140,12 @@ export function parseAuditLine(line: string | undefined): AuditEntry | null {
     }
 }
 
-const AUDIT_DATE_ONLY_BOUND_RE = /^\d{4}-\d{2}-\d{2}$/
-
-/** Parse a filter boundary (`YYYY-MM-DD` -> UTC day start/end, or ISO-8601) into epoch ms. */
-export function parseAuditBoundaryTimestampMs(raw: string, bound: 'start' | 'end'): number | null {
-    const trimmed = raw.trim()
-    if (AUDIT_DATE_ONLY_BOUND_RE.test(trimmed)) {
-        const ms = Date.parse(
-            bound === 'end' ? `${trimmed}T23:59:59.999Z` : `${trimmed}T00:00:00.000Z`
-        )
-        return Number.isFinite(ms) ? ms : null
-    }
-    const ms = Date.parse(trimmed)
-    return Number.isFinite(ms) ? ms : null
-}
-
-function matchesDateRange(entryTimestamp: string, filters: AuditSearchFilters): boolean {
-    const start = filters.date_range?.start
-    const end = filters.date_range?.end
-    if ((start === undefined || start === '') && (end === undefined || end === '')) return true
-    const entryMs = Date.parse(entryTimestamp)
-    if (start !== undefined && start !== '') {
-        const startMs = parseAuditBoundaryTimestampMs(start, 'start')
-        if (startMs !== null && Number.isFinite(entryMs)) {
-            if (entryMs < startMs) return false
-        } else if (entryTimestamp < start) {
-            return false
-        }
-    }
-    if (end !== undefined && end !== '') {
-        const endMs = parseAuditBoundaryTimestampMs(end, 'end')
-        if (endMs !== null && Number.isFinite(entryMs)) {
-            if (entryMs > endMs) return false
-        } else if (entryTimestamp > end) {
-            return false
-        }
-    }
-    return true
-}
-
-/** Whether an audit entry satisfies every provided search filter. */
-export function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilters): boolean {
-    if (filters.tool_name && entry.tool !== filters.tool_name) return false
-    if (filters.user && entry.user !== filters.user) return false
-    if (filters.status !== undefined && entry.success !== filters.status) return false
-    if (filters.category && entry.category !== filters.category) return false
-    if (!matchesDateRange(entry.timestamp, filters)) return false
-    if (filters.workspace_id !== undefined && filters.workspace_id !== '*') {
-        if (
-            typeof entry.workspaceId !== 'string' ||
-            entry.workspaceId.toLowerCase() !== filters.workspace_id.toLowerCase()
-        ) {
-            return false
-        }
-    }
-    if (filters.project_number !== undefined && entry.projectNumber !== filters.project_number) {
-        return false
-    }
-    return true
-}
+export {
+    compileAuditSearchFilters,
+    matchesAuditFilters,
+    parseAuditBoundaryTimestampMs,
+    type CompiledAuditSearchFilters,
+} from './audit-filter-helpers.js'
 
 /** Normalize resource URI targets (stripping fragments, canonicalizing dot segments/percent encoding, and adding `memory://` for scheme-less paths). */
 export function normalizeAuditResourceUri(raw: string): string {

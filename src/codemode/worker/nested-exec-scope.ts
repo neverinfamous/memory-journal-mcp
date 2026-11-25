@@ -205,12 +205,7 @@ function dispatchNestedEntryPayload(
             }
         )
     }
-    return invokeShimGroupMethod(
-        opts.shimMj,
-        isUpdate ? 'admin' : 'core',
-        isUpdate ? 'updateEntry' : 'createEntry',
-        payload
-    )
+    return invokeShimGroupMethod(opts.shimMj, isUpdate ? 'admin' : 'core', isUpdate ? 'updateEntry' : 'createEntry', payload)
 }
 
 async function tryDispatchNestedShortcut(
@@ -226,12 +221,8 @@ async function tryDispatchNestedShortcut(
         const effProj = narrowed.projectNumber ?? pinnedProjectNumber
         const scopedSearch = {
             ...nestedQuerySearch,
-            ...(nestedQuerySearch.workspace_id === undefined && effWs !== undefined
-                ? { workspace_id: effWs }
-                : {}),
-            ...(nestedQuerySearch.project_number === undefined && effProj !== undefined
-                ? { project_number: effProj }
-                : {}),
+            ...(nestedQuerySearch.workspace_id === undefined && effWs !== undefined ? { workspace_id: effWs } : {}),
+            ...(nestedQuerySearch.project_number === undefined && effProj !== undefined ? { project_number: effProj } : {}),
             ...(effectiveUseTestDb ? { use_test_db: true } : {}),
         }
         return {
@@ -240,11 +231,8 @@ async function tryDispatchNestedShortcut(
         }
     }
     const isQueryOnlyArg =
-        argRec !== undefined &&
-        typeof argRec['code'] !== 'string' &&
-        typeof argRec['script'] !== 'string' &&
-        typeof argRec['query'] === 'string' &&
-        argRec['query'].trim() !== ''
+        argRec !== undefined && typeof argRec['code'] !== 'string' &&
+        typeof argRec['script'] !== 'string' && typeof argRec['query'] === 'string' && argRec['query'].trim() !== ''
     const codeToExec = rawNestedCode
     const dispatchEntry = (payload: unknown): unknown => dispatchNestedEntryPayload(payload, input)
     if (codeToExec === null) {
@@ -284,29 +272,18 @@ function validateAndWrapNestedCode(
         maxCodeLength: DEFAULT_SECURITY_CONFIG.maxCodeLength + 32,
     })
     if (!validation.valid) {
-        return {
-            ok: false,
-            errorResult: { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' },
-        }
+        return { ok: false, errorResult: { success: false, error: validation.errors.join('; '), code: 'SECURITY_VIOLATION' } }
     }
     if (hasUnbalancedClosingDelimiter(validation.strippedCode ?? stripCommentsAndStrings(transformedCode))) {
         return {
             ok: false,
-            errorResult: {
-                success: false,
-                error: 'Security validation failed: unbalanced closing delimiter',
-                code: 'SECURITY_VIOLATION',
-            },
+            errorResult: { success: false, error: 'Security validation failed: unbalanced closing delimiter', code: 'SECURITY_VIOLATION' },
         }
     }
     if (isQueryOnlyArg && !/^(?:return\s+|await\s+mj\.)/.test(codeToExec.trim())) {
         return {
             ok: false,
-            errorResult: {
-                success: false,
-                error: 'Nested executeCode query could not be executed as a read-only search.',
-                code: 'VALIDATION_ERROR',
-            },
+            errorResult: { success: false, error: 'Nested executeCode query could not be executed as a read-only search.', code: 'VALIDATION_ERROR' },
         }
     }
     return { ok: true, wrapped: `"use strict";\n(async () => {\n${transformedCode}\n})()` }
@@ -329,8 +306,9 @@ interface ExecuteValidatedNestedParams {
     vmContextRef: { current?: vm.Context }
     runIsolatedNestedCode: RunIsolatedNestedFn
     activeTimers: Set<NodeJS.Timeout> | undefined
-    fastPathDepthStorage: AsyncLocalStorage<number>
 }
+
+const fastPathDepthStorage = new AsyncLocalStorage<number>()
 
 function buildFastPathRpcOverrides(
     p: ExecuteValidatedNestedParams,
@@ -406,7 +384,7 @@ async function runValidatedNestedCall(p: ExecuteValidatedNestedParams): Promise<
         )
     }
     const rawResult: unknown = await runWithNestedRpcOverrides(fastPathRpcOverrides, () =>
-        p.fastPathDepthStorage.run(p.currentDepth + 1, () =>
+        fastPathDepthStorage.run(p.currentDepth + 1, () =>
             raceWithSandboxTimeout<unknown>(
                 Promise.resolve(
                     getOrCompileVmScript(compiled.wrapped).runInContext(currentVmCtx, { timeout: p.timeoutMs })
@@ -430,7 +408,6 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
         nestedDepth,
     } = options
     const baseDepth = nestedDepth ?? 0
-    const fastPathDepthStorage = new AsyncLocalStorage<number>()
     const pinnedWorkspace =
         typeof pinnedWorkspaceRaw === 'string' && pinnedWorkspaceRaw.trim() !== '' && pinnedWorkspaceRaw.trim() !== '*'
             ? pinnedWorkspaceRaw.trim()
@@ -450,23 +427,10 @@ export function createSandboxExecutor(options: SandboxExecutorOptions): (...args
         const snap = resolveSnapshottedNestedArgs(rawArgs)
         if ('error' in snap) return { success: false, error: snap.error, code: 'VALIDATION_ERROR' }
         return runValidatedNestedCall({
-            arg: snap.arg,
-            argRec: snap.argRec,
-            rawNestedCode: readExecutableCode(snap.arg),
-            currentDepth,
-            timeoutMs,
-            maxResultSize,
-            readonlyMode,
-            dryRunMode,
-            useTestDbMode,
-            pinnedWorkspace,
-            pinnedProjectNumber,
-            projectRegistryRaw,
-            shimMj,
-            vmContextRef,
-            runIsolatedNestedCode,
-            activeTimers,
-            fastPathDepthStorage,
+            arg: snap.arg, argRec: snap.argRec, rawNestedCode: readExecutableCode(snap.arg),
+            currentDepth, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
+            pinnedWorkspace, pinnedProjectNumber, projectRegistryRaw, shimMj, vmContextRef,
+            runIsolatedNestedCode, activeTimers,
         })
     }
 }

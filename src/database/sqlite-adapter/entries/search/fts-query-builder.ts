@@ -210,12 +210,13 @@ export function buildSearchQuery(
     offset: number,
     hasKeyset: boolean,
     keysetT: string,
-    keysetId: number
+    keysetId: number,
+    preSanitizedFts?: string
 ): { sql: string; params: unknown[] } {
     const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
     const targetWs = effectiveWorkspace(options?.workspaceId)
     const hasQuery = queryStr.length > 0
-    const sanitizedFts = useFts && hasQuery ? sanitizeFtsQuery(queryStr) : ''
+    const sanitizedFts = useFts && hasQuery ? (preSanitizedFts ?? sanitizeFtsQuery(queryStr)) : ''
     const useMaterializedFtsOuter = needsImportance && useFts && hasQuery
     let query = buildBaseSelect(options, useFts, targetWs, hasQuery, useMaterializedFtsOuter)
 

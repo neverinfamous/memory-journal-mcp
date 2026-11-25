@@ -355,18 +355,16 @@ async function executeTeamRestoreEntry(
 
     let indexStatus: string | undefined
     let warning: string | undefined
-    const restored = teamDb.getEntryById(entry_id, wsId)
-    if (
-        context.teamVectorManager !== undefined &&
-        restored !== null &&
-        restored !== undefined
-    ) {
-        try {
-            await context.teamVectorManager.addEntry(restored)
-            indexStatus = 'success'
-        } catch (vecErr) {
-            indexStatus = 'failed'
-            warning = `Team vector re-indexing failed: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+    if (context.teamVectorManager !== undefined) {
+        const restored = teamDb.getEntryById(entry_id, wsId)
+        if (restored !== null && restored !== undefined) {
+            try {
+                await context.teamVectorManager.addEntry(restored)
+                indexStatus = 'success'
+            } catch (vecErr) {
+                indexStatus = 'failed'
+                warning = `Team vector re-indexing failed: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+            }
         }
     }
 
@@ -396,12 +394,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
@@ -419,12 +412,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamDeleteEntrySchemaMcp,
             outputSchema: TeamDeleteOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: true,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
+            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
@@ -441,12 +429,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamRestoreEntrySchemaMcp,
             outputSchema: TeamRestoreOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }

@@ -4,16 +4,42 @@ import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { hasSqlCipherKey } from './sqlcipher-key.js'
 
+import { isMissingTableError } from './schema-errors.js'
+
 const DDL_RE = /\b(?:DROP|ALTER|CREATE)\b/i
+
+/** Detect whether the FTS5 content-sync index is empty or has ghost entries requiring rebuild. */
+export function detectFtsRebuildReason(db: Database): string | null {
+    let ftsCount = 0
+    let ftsCountKnown = false
+    try {
+        ftsCount =
+            db.prepare<unknown[], { c: number }>('SELECT COUNT(*) as c FROM fts_content_docsize').get()?.c ?? 0
+        ftsCountKnown = true
+    } catch (err) {
+        if (!isMissingTableError(err)) {
+            logger.warning('FTS docsize count failed; skipping rebuild', {
+                module: 'NativeConnectionManager',
+                error: err instanceof Error ? err.message : String(err),
+            })
+        }
+    }
+    const entryCount =
+        db.prepare<unknown[], { c: number }>('SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL').get()
+            ?.c ?? 0
+    if (ftsCountKnown && ftsCount === 0 && entryCount > 0) return 'fts5:populated'
+    if (ftsCount > entryCount) return 'fts5:rebuilt-ghost-cleanup'
+    return null
+}
 
 /** Apply standard SQLite safety and performance PRAGMAs to a native connection. */
 export function applyNativePragmas(db: Database): void {
+    db.pragma('busy_timeout = 5000')
     db.pragma('journal_mode = WAL')
     db.pragma('synchronous = NORMAL')
     db.pragma('foreign_keys = ON')
     db.pragma('trusted_schema = OFF')
     db.pragma('temp_store = MEMORY')
-    db.pragma('busy_timeout = 5000')
     db.pragma('cache_size = -64000')
     if (!hasSqlCipherKey()) {
         db.pragma('mmap_size = 268435456')

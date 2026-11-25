@@ -10,11 +10,15 @@ import type { getRequestContext } from '../utils/request-context.js'
 import { getErrnoCode, isRecord } from '../utils/type-guards.js'
 import type { AuditEntry, AuditSearchFilters } from './types.js'
 import {
+    compileAuditSearchFilters,
+    matchesAuditFilters,
+    type CompiledAuditSearchFilters,
+} from './audit-filter-helpers.js'
+import {
     applyActiveSessionScopeFallback,
     extractAuditScopeFromArgs,
     extractAuditScopeFromUriDetails,
     iterAuditUriEntries,
-    matchesAuditFilters,
     parseAuditLine,
     type AuditScopeMetadata,
 } from './audit-query-helpers.js'
@@ -71,7 +75,7 @@ function decodeReversedAuditChunk(
 
 function processDecodedAuditLines(
     chunkText: string,
-    filters: AuditSearchFilters,
+    compiledFilters: CompiledAuditSearchFilters,
     remainingLimit: number,
     results: AuditEntry[]
 ): { skippedLines: number; limitReached: boolean } {
@@ -85,7 +89,7 @@ function processDecodedAuditLines(
             skippedLines++
             continue
         }
-        if (!matchesAuditFilters(entry, filters)) continue
+        if (!matchesAuditFilters(entry, compiledFilters)) continue
         results.push(entry)
         if (results.length >= remainingLimit) {
             return { skippedLines, limitReached: true }
@@ -97,55 +101,48 @@ function processDecodedAuditLines(
 async function readAuditChunksBackward(
     fh: Awaited<ReturnType<typeof open>>,
     buf: Buffer,
-    pos: number,
-    trailingBytes: Buffer,
-    filters: AuditSearchFilters,
+    initialPos: number,
+    compiledFilters: CompiledAuditSearchFilters,
     remainingLimit: number,
-    results: AuditEntry[],
-    skippedLines: number
+    results: AuditEntry[]
 ): Promise<{ skippedLines: number; limitReached: boolean }> {
-    if (pos <= 0) return { skippedLines, limitReached: false }
-    const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
-    const startOffset = pos - readLen
-    const { bytesRead } = await fh.read(buf, 0, readLen, startOffset)
-    let nextTrailing = trailingBytes
-    let nextSkipped = skippedLines
-    if (bytesRead > 0) {
-        const decoded = decodeReversedAuditChunk(
-            buf.subarray(0, bytesRead),
-            trailingBytes,
-            startOffset
-        )
-        nextTrailing = decoded.trailingBytes
-        nextSkipped += decoded.overflowSkipped
-        if (decoded.chunkText !== undefined) {
-            const lineRes = processDecodedAuditLines(
-                decoded.chunkText,
-                filters,
-                remainingLimit,
-                results
+    let pos = initialPos
+    let trailingBytes: Buffer = Buffer.alloc(0)
+    let skippedLines = 0
+    while (pos > 0) {
+        const readLen = Math.min(AUDIT_SEARCH_CHUNK_BYTES, pos)
+        const startOffset = pos - readLen
+        // eslint-disable-next-line no-await-in-loop -- sequential backward chunk read with early limitReached exit
+        const { bytesRead } = await fh.read(buf, 0, readLen, startOffset)
+        if (bytesRead > 0) {
+            const decoded = decodeReversedAuditChunk(
+                buf.subarray(0, bytesRead),
+                trailingBytes,
+                startOffset
             )
-            nextSkipped += lineRes.skippedLines
-            if (lineRes.limitReached) {
-                return { skippedLines: nextSkipped, limitReached: true }
+            trailingBytes = decoded.trailingBytes
+            skippedLines += decoded.overflowSkipped
+            if (decoded.chunkText !== undefined) {
+                const lineRes = processDecodedAuditLines(
+                    decoded.chunkText,
+                    compiledFilters,
+                    remainingLimit,
+                    results
+                )
+                skippedLines += lineRes.skippedLines
+                if (lineRes.limitReached) {
+                    return { skippedLines, limitReached: true }
+                }
             }
         }
+        pos = startOffset
     }
-    return readAuditChunksBackward(
-        fh,
-        buf,
-        startOffset,
-        nextTrailing,
-        filters,
-        remainingLimit,
-        results,
-        nextSkipped
-    )
+    return { skippedLines, limitReached: false }
 }
 
 export async function searchAuditFileBackward(
     filePath: string,
-    filters: AuditSearchFilters,
+    filters: AuditSearchFilters | CompiledAuditSearchFilters,
     remainingLimit: number,
     results: AuditEntry[]
 ): Promise<{ skippedLines: number; limitReached: boolean }> {
@@ -170,17 +167,12 @@ export async function searchAuditFileBackward(
         const info = await fh.stat()
         if (info.size === 0 || !info.isFile()) return { skippedLines: 0, limitReached: false }
 
+        const compiled =
+            'filters' in filters && 'startRaw' in filters
+                ? filters
+                : compileAuditSearchFilters(filters)
         const buf = Buffer.alloc(Math.min(AUDIT_SEARCH_CHUNK_BYTES, info.size))
-        return await readAuditChunksBackward(
-            fh,
-            buf,
-            info.size,
-            Buffer.alloc(0),
-            filters,
-            remainingLimit,
-            results,
-            0
-        )
+        return await readAuditChunksBackward(fh, buf, info.size, compiled, remainingLimit, results)
     } finally {
         await Promise.resolve(fh.close()).catch(() => undefined)
     }

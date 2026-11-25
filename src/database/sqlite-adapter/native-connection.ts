@@ -4,14 +4,14 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { isRecord } from '../../utils/type-guards.js'
-import { isMissingTableError } from './schema-errors.js'
 import { applySqlCipherKey } from './sqlcipher-key.js'
 import { ConnectionError } from '../../types/errors.js'
-import { MigrationManager } from '../migrations/migration-manager.js'
+import { MigrationManager, getExpectedUserVersion } from '../migrations/migration-manager.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 import { scanSqlQuotedSpan, stripSqlComments } from './backup-ddl-validators.js'
 import {
     applyNativePragmas,
+    detectFtsRebuildReason,
     installStatementCache,
     loadVecExtensionOnDb,
     runOptimizeAfterMigrations,
@@ -121,104 +121,74 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 throw new ConnectionError('Database closed during initialization.')
             }
 
+            const expectedUserVersion = getExpectedUserVersion(this.teamSchemaApplied)
+            const isWarmCurrent =
+                expectedUserVersion > 0 &&
+                db.pragma('user_version', { simple: true }) === expectedUserVersion &&
+                db
+                    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory_journal'`)
+                    .get() !== undefined
+            const hasVectorMeta =
+                isWarmCurrent &&
+                db
+                    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vector_metadata'`)
+                    .get() !== undefined
+
             // Run schema migrations (creates memory_journal and other core tables versioned)
-            this.migrateSchema()
+            this.migrateSchema(isWarmCurrent)
 
-            // Create vector metadata table
-            db.exec(`
-                CREATE TABLE IF NOT EXISTS vector_metadata (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
-                )
-            `)
-
-            runOptimizeAfterMigrations(db)
+            if (!hasVectorMeta) {
+                db.exec('CREATE TABLE IF NOT EXISTS vector_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+            }
+            if (!isWarmCurrent) runOptimizeAfterMigrations(db)
 
             this.initialized = true
-            logger.info('Native database opened', {
-                module: 'NativeConnectionManager',
-                dbPath: this.dbPath,
-            })
+            logger.info('Native database opened', { module: 'NativeConnectionManager', dbPath: this.dbPath })
         } catch (error) {
-            if (this.ftsRebuildTimer !== null) {
-                clearTimeout(this.ftsRebuildTimer)
-                this.ftsRebuildTimer = null
-            }
-            if (initDb !== undefined && this.db === initDb) {
-                try {
-                    initDb.close()
-                } catch (closeErr: unknown) {
-                    logger.debug('Cleanup close after failed initialization logged error', {
-                        module: 'NativeConnectionManager',
-                        error: closeErr instanceof Error ? closeErr.message : String(closeErr),
-                    })
-                }
-                this.db = null
-                this.initialized = false
-            } else if (this.db === null) {
-                this.initialized = false
-            }
-            logger.error('Failed to initialize native database', {
-                module: 'NativeConnectionManager',
-                error: String(error),
-            })
+            this.cleanupFailedInit(initDb, error)
             throw new ConnectionError(`Native DB Initialization failed: ${String(error)}`)
         }
     }
 
-    private migrateSchema(): void {
+    private cleanupFailedInit(initDb: Database | undefined, error: unknown): void {
+        if (this.ftsRebuildTimer !== null) {
+            clearTimeout(this.ftsRebuildTimer)
+            this.ftsRebuildTimer = null
+        }
+        if (initDb !== undefined && this.db === initDb) {
+            try {
+                initDb.close()
+            } catch (closeErr: unknown) {
+                logger.debug('Cleanup close after failed initialization logged error', {
+                    module: 'NativeConnectionManager',
+                    error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                })
+            }
+            this.db = null
+            this.initialized = false
+        } else if (this.db === null) {
+            this.initialized = false
+        }
+        logger.error('Failed to initialize native database', { module: 'NativeConnectionManager', error: String(error) })
+    }
+
+    private migrateSchema(isWarmCurrent = false): void {
         const db = this.ensureDb()
 
-        // 1. Run versioned migrations (re-applying team schema when this connection is team DB)
+        // 1. Run versioned migrations (fast-path skips tx/DDL when user_version matches)
         MigrationManager.runMigrations(db, this.teamSchemaApplied)
 
-        // 2. Perform post-migration checks and updates
+        if (isWarmCurrent) {
+            const rebuildReason = detectFtsRebuildReason(db)
+            if (rebuildReason !== null) this.scheduleFtsRebuild(rebuildReason)
+            return
+        }
+
+        // 2. Perform post-migration checks and updates on cold/upgraded databases
         runImmediateWriteTx(db, () => {
             db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
-
-            // Populate FTS5 index for existing databases that were created before FTS5 was added.
-            // Uses FTS5's built-in 'rebuild' command for content-sync tables.
-            // We query the fts_content_docsize shadow table to get the true number of indexed documents
-            // because querying fts_content directly merely delegates to the content table (memory_journal).
-            let ftsCount = 0
-            let ftsCountKnown = false
-            try {
-                ftsCount =
-                    db
-                        .prepare<unknown[], { c: number }>('SELECT COUNT(*) as c FROM fts_content_docsize')
-                        .get()?.c ?? 0
-                ftsCountKnown = true
-            } catch (err) {
-                if (!isMissingTableError(err)) {
-                    logger.warning('FTS docsize count failed; skipping rebuild', {
-                        module: 'NativeConnectionManager',
-                        error: err instanceof Error ? err.message : String(err),
-                    })
-                }
-            }
-
-            const entryCount =
-                db
-                    .prepare<unknown[], { c: number }>(
-                        'SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL'
-                    )
-                    .get()?.c ?? 0
-            let needsRebuild = false
-            let rebuildReason = ''
-
-            if (ftsCountKnown && ftsCount === 0 && entryCount > 0) {
-                needsRebuild = true
-                rebuildReason = 'fts5:populated'
-            } else if (ftsCount > entryCount) {
-                // Ghost entries: FTS has more rows than the journal (hard deletes before the
-                // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
-                needsRebuild = true
-                rebuildReason = 'fts5:rebuilt-ghost-cleanup'
-            }
-
-            if (needsRebuild) {
-                this.scheduleFtsRebuild(rebuildReason)
-            }
+            const rebuildReason = detectFtsRebuildReason(db)
+            if (rebuildReason !== null) this.scheduleFtsRebuild(rebuildReason)
         })
     }
 

@@ -20,6 +20,7 @@ import { Migration019NormalizeLegacyCommitEntries } from './019-normalize-legacy
 import { Migration020AddTeamOriginPersonalId } from './020-add-team-origin-personal-id.js'
 import { Migration021AddEntityLookupAndPruneAliasIndex } from './021-add-entity-lookup-and-prune-alias-index.js'
 import { Migration022AddAutoContextIndex } from './022-add-autocontext-index.js'
+import { Migration023AddProjectRecentIndex } from './023-add-project-recent-index.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -45,4 +46,5 @@ export const MIGRATIONS: Migration[] = [
     Migration020AddTeamOriginPersonalId,
     Migration021AddEntityLookupAndPruneAliasIndex,
     Migration022AddAutoContextIndex,
+    Migration023AddProjectRecentIndex,
 ]

@@ -46,6 +46,32 @@ const RestoreEntryStrictSchema = z.preprocess(
         .strict()
 )
 
+const RestoreEntryInputSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (isRecord(val) && val['id'] !== undefined && val['entry_id'] === undefined) {
+            return { ...val, entry_id: val['id'] }
+        }
+        return val
+    },
+    z
+        .object({
+            entry_id: relaxedNumber().optional(),
+            project_number: relaxedNumber().optional(),
+            workspace_id: z.string().optional(),
+        })
+        .loose()
+)
+
+const RestoreEntryOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entryId: z.number().optional(),
+        indexStatus: z.string().optional(),
+        warning: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
 async function executeRestoreEntry(
     params: unknown,
     context: ToolContext
@@ -87,13 +113,16 @@ async function executeRestoreEntry(
             }
         }
         // [SIDE-EFFECT] M4: soft-delete removed the vector; re-index on restore.
-        const restored = db.getEntryById(entry_id, wsId)
-        const indexStatus = await autoIndexEntry(
-            vectorManager,
-            db,
-            restored ?? entry_id,
-            restored?.workspaceId ?? wsId
-        )
+        let indexStatus = 'skipped'
+        if (vectorManager !== undefined) {
+            const restored = db.getEntryById(entry_id, wsId)
+            indexStatus = await autoIndexEntry(
+                vectorManager,
+                db,
+                restored ?? entry_id,
+                restored?.workspaceId ?? wsId
+            )
+        }
         return {
             success,
             entryId: entry_id,
@@ -114,30 +143,8 @@ export function createRestoreEntryTool(context: ToolContext): ToolDefinition {
         title: 'Restore Entry',
         description: 'Restore a soft-deleted journal entry.',
         group: 'admin',
-        inputSchema: z.preprocess(
-            (val: unknown) => {
-                if (isRecord(val) && val['id'] !== undefined && val['entry_id'] === undefined) {
-                    return { ...val, entry_id: val['id'] }
-                }
-                return val
-            },
-            z
-                .object({
-                    entry_id: relaxedNumber().optional(),
-                    project_number: relaxedNumber().optional(),
-                    workspace_id: z.string().optional(),
-                })
-                .loose()
-        ),
-        outputSchema: z
-            .object({
-                success: z.boolean().optional(),
-                entryId: z.number().optional(),
-                indexStatus: z.string().optional(),
-                warning: z.string().optional(),
-                error: z.string().optional(),
-            })
-            .extend(ErrorFieldsMixin.shape),
+        inputSchema: RestoreEntryInputSchemaMcp,
+        outputSchema: RestoreEntryOutputSchema,
         annotations: {
             readOnlyHint: false,
             destructiveHint: false,

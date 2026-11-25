@@ -299,26 +299,31 @@ export class GitHubIntegration {
         }
 
         const degraded: string[] = []
+        const commitPromise = isSameRepoTarget
+            ? this.client.git.log({ maxCount: 1 })
+            : Promise.resolve(null)
+        const collectionsPromise =
+            repoInfo.owner && repoInfo.repo
+                ? this.populateRepoContextCollections(
+                      context,
+                      repoInfo.owner,
+                      repoInfo.repo,
+                      degraded,
+                      abortSignal
+                  )
+                : Promise.resolve()
+
+        const [commitOutcome] = await Promise.allSettled([commitPromise, collectionsPromise])
         if (isSameRepoTarget) {
-            try {
-                const log = await this.client.git.log({ maxCount: 1 })
-                context.commit = log.latest?.hash ?? null
-            } catch (err) {
+            if (commitOutcome.status === 'fulfilled' && commitOutcome.value !== null) {
+                context.commit = commitOutcome.value.latest?.hash ?? null
+            } else if (commitOutcome.status === 'rejected') {
                 logger.debug(
-                    `git log failed: ${err instanceof Error ? err.message : String(err)}`,
+                    `git log failed: ${commitOutcome.reason instanceof Error ? commitOutcome.reason.message : String(commitOutcome.reason)}`,
                     { module: 'GitHubIntegration' }
                 )
                 degraded.push('commit')
             }
-        }
-        if (repoInfo.owner && repoInfo.repo) {
-            await this.populateRepoContextCollections(
-                context,
-                repoInfo.owner,
-                repoInfo.repo,
-                degraded,
-                abortSignal
-            )
         }
 
         if (degraded.length > 0) {

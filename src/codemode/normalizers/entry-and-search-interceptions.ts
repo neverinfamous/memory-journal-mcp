@@ -34,6 +34,11 @@ const DATE_RANGE_METHODS = new Set([
 const SEARCH_MODE_METHODS = new Set(['search_entries', 'searchEntries', 'team_search', 'teamSearch'])
 const DATE_RANGE_FORBIDDEN_KEYS = ['q', 'query', 'text', 'message', 'description', 'keep', 'path'] as const
 const SEARCH_QUERY_ALIAS_KEYS = ['q', 'text', 'message', 'description', 'path', 'keep'] as const
+const UPDATE_ENTRY_METHODS: ReadonlySet<string> = new Set([
+    'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry',
+])
+const SINGLE_ID_ARRAY_KEYS = ['ids', 'entry_ids', 'entry_id', 'id'] as const
+const SINGLE_ID_FORBIDDEN_KEYS = ['q', 'query', 'mode', 'search'] as const
 const POSITIVE_INT_STR_RE = /^[1-9]\d*$/
 
 function applySearchQueryInterception(
@@ -214,15 +219,13 @@ function interceptRecordSingleId(
     methodName: string,
     obj: Record<string, unknown>
 ): { error: Record<string, unknown> } | undefined {
-    if (['ids', 'entry_ids', 'entry_id', 'id'].some((k) => Array.isArray(obj[k]))) {
+    if (SINGLE_ID_ARRAY_KEYS.some((k) => Array.isArray(obj[k]))) {
         return validationError(
             `${methodName} only accepts a single entry_id. To process multiple entries, use the batch equivalent.`,
             'Use a batch method (e.g. batch_delete_entries) or pass { entry_id: number }'
         )
     }
-    const isUpdateEntryMethod = ['update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'].includes(
-        methodName
-    )
+    const isUpdateEntryMethod = UPDATE_ENTRY_METHODS.has(methodName)
     const hasExplicitId =
         obj['entry_id'] !== undefined || obj['entryId'] !== undefined || obj['id'] !== undefined
     const idVal =
@@ -245,10 +248,7 @@ function interceptRecordSingleId(
             }
         }
     }
-    if (
-        ['q', 'query', 'mode', 'search'].some((k) => obj[k] !== undefined) &&
-        !['update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'].includes(methodName)
-    ) {
+    if (SINGLE_ID_FORBIDDEN_KEYS.some((k) => obj[k] !== undefined) && !isUpdateEntryMethod) {
         return validationError(
             `${methodName} does not support q, query, search, or mode parameters. It operates on a single entry by entry_id.`,
             'Remove these parameters. Provide only the entry_id.'

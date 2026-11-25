@@ -345,7 +345,9 @@ export async function normalizeDispatchParams(
     const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
     const paramsObj = { ...finalParams }
     const aliasDerivedWs = paramsObj['_alias_derived_workspace'] === true
-    delete paramsObj['_alias_derived_workspace']
+    if (Object.hasOwn(paramsObj, '_alias_derived_workspace')) {
+        delete paramsObj['_alias_derived_workspace']
+    }
 
     normalizeWorkspaceStringField(paramsObj)
     const requirePositiveInt = tool.annotations?.readOnlyHint !== true

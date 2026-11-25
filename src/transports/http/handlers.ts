@@ -141,6 +141,8 @@ export function createAuthMiddleware(
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
     const expectedDigest =
         authToken.trim() !== '' ? createHash('sha256').update(authToken, 'utf8').digest() : null
+    const MAX_IDENTITY_CACHE = 1024
+    const identityCache = new Map<string, string>()
 
     return (req: Request, res: Response, next: () => void): void => {
         if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/health') {
@@ -157,17 +159,18 @@ export function createAuthMiddleware(
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.
-
-        // Derive identity from token securely.
-        // We cannot use a random nonce or mcp-session-id here because standard MCP SDK clients
-        // do not send mcp-session-id during initialization, which would cause the identity hash
-        // to change between initialization and subsequent requests, breaking stateful sessions.
-        // We bind the client IP to the hash to provide strict session isolation for shared tokens.
         const clientIp = getClientIp(req)
-        const hashInput = `${authToken}:${clientIp}`
-
-        const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
-        const identity = `bearer-${identityHash}`
+        let identity = identityCache.get(clientIp)
+        if (identity === undefined) {
+            const hashInput = `${authToken}:${clientIp}`
+            const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
+            identity = `bearer-${identityHash}`
+            if (identityCache.size >= MAX_IDENTITY_CACHE) {
+                const oldestKey = identityCache.keys().next().value
+                if (oldestKey !== undefined) identityCache.delete(oldestKey)
+            }
+            identityCache.set(clientIp, identity)
+        }
 
         Object.assign(req, {
             auth: {

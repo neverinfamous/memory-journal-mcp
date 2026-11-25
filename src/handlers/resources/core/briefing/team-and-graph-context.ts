@@ -57,15 +57,16 @@ function fetchDistinctTeamBriefingEntries(
                       teamWorkspace
                   )
               )
-    const origins =
-        teamCandidates.length > 0
-            ? teamDb.getMirrorOrigins?.(teamCandidates.map((e) => e.id))
-            : undefined
     const personalIdx =
         personalCandidates && personalCandidates.length > 0
             ? buildPersonalMirrorIndex(personalCandidates)
             : undefined
     if (!personalIdx) return teamCandidates
+
+    const origins =
+        teamCandidates.length > 0
+            ? teamDb.getMirrorOrigins?.(teamCandidates.map((e) => e.id))
+            : undefined
 
     return teamCandidates.filter((e) => {
         const explicitOrigin =

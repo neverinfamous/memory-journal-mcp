@@ -69,6 +69,10 @@ beforeAll(async () => {
             })
         }
     })
+    const nativeDb = (
+        db as unknown as { connection: { getNativeDb: () => { exec: (sql: string) => void } } }
+    ).connection.getNativeDb()
+    nativeDb.exec('ANALYZE')
     sessionContext = { db, config }
 
     const validationProbe = validateSandboxCode(CLEAN_SCRIPT)
@@ -136,6 +140,19 @@ test('callTool mj_execute_code (warm worker scalar)', async ({ bench }) => {
         await callTool(
             'mj_execute_code',
             { code: 'return 1 + 1', workspace_id: 'bench-ws' },
+            db,
+            undefined,
+            undefined,
+            config
+        )
+    }).run()
+})
+
+test('callTool mj_execute_code (warm worker RPC)', async ({ bench }) => {
+    await bench('callTool mj_execute_code (warm worker RPC)', async () => {
+        await callTool(
+            'mj_execute_code',
+            { code: CLEAN_SCRIPT, workspace_id: 'bench-ws' },
             db,
             undefined,
             undefined,

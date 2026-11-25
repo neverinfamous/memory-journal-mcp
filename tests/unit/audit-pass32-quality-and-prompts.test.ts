@@ -388,7 +388,7 @@ describe('Pass 32 Quality, Transport, SQLite, Schema & Prompt Regressions (M2-M1
         })) as Record<string, unknown>
         expect(dryRes['simulated']).toBe(true)
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
         const cqText = (
             getCodeQualityAuditPromptDefinition().handler(
                 { target: 'memory-journal-mcp' },

@@ -15,6 +15,7 @@ import {
 import { ALREADY_HEALED_ARGS } from '../../server/mcp-server/tool-registration/healed-args-marker.js'
 import {
     exceedsMaxToolInputElements,
+    getValidatedToolInputMax,
     resolveEffectiveMaxToolInputElements,
 } from '../../utils/tool-input-bounds.js'
 import { applyArgInterceptions } from './arg-interceptions.js'
@@ -44,6 +45,8 @@ export function enforceToolInputElementBound(
     config?: ToolHandlerConfig
 ): Record<string, unknown> | undefined {
     const maxElements = resolveEffectiveMaxToolInputElements(config?.maxToolInputElements)
+    const validatedMax = getValidatedToolInputMax(args)
+    if (validatedMax !== undefined && validatedMax <= maxElements) return undefined
     if (!exceedsMaxToolInputElements(args, maxElements)) return undefined
     return {
         success: false,

@@ -63,12 +63,41 @@ export function getSearchFacets(
 
     const expandedFilterTags =
         options?.tags !== undefined && options.tags.length > 0 ? expandTagFilterValues(options.tags) : []
-    const baseConditions = [...conditions]
-    const baseParams = [...params]
-    appendFacetFilterConditions(baseConditions, baseParams, { ...options, tags: undefined })
+    const runFtsPath = useFts && !fallbackToLike
 
-    const entryTypeConditions = [...conditions]
-    const entryTypeParams = [...params]
+    if (runFtsPath) {
+        const baseConditions = [...conditions]
+        const baseParams = [...params]
+        appendFacetFilterConditions(baseConditions, baseParams, { ...options, tags: undefined })
+        try {
+            const combined = executeMaterializedFtsFacetQuery(db, baseConditions, baseParams, expandedFilterTags)
+            return {
+                tags: combined.tagsRows.map((r) => ({ name: r.name, count: r.cnt })),
+                entryTypes: combined.entryTypesRows.map((r) => ({ name: r.name, count: r.cnt })),
+            }
+        } catch (err) {
+            if (!isFts5QueryError(err)) throw err
+            const likeConds = replaceFtsMatchWithLike(conditions, params, escapedLikeQuery)
+            const res = runNonFtsFacetQueries(db, likeConds.conditions, likeConds.params, expandedFilterTags, options)
+            return { ...res, degraded: true }
+        }
+    }
+
+    const result = runNonFtsFacetQueries(db, conditions, params, expandedFilterTags, options)
+    return fallbackToLike ? { ...result, degraded: true } : result
+}
+
+function runNonFtsFacetQueries(
+    db: EntriesSharedContext['db'],
+    baseConditions: string[],
+    baseParams: unknown[],
+    expandedFilterTags: string[],
+    options: SearchFacetOptions | undefined
+): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+    const conditions = [...baseConditions]
+    const params = [...baseParams]
+    const entryTypeConditions = [...baseConditions]
+    const entryTypeParams = [...baseParams]
     if (expandedFilterTags.length > 0) {
         const membership = chunkedInPredicate(
             expandedFilterTags,
@@ -79,15 +108,9 @@ export function getSearchFacets(
         entryTypeConditions.push(membership.sql)
         entryTypeParams.push(...membership.params)
     }
-
     appendFacetFilterConditions(conditions, params, options)
     appendFacetFilterConditions(entryTypeConditions, entryTypeParams, { ...options, tags: undefined })
-
-    const result = executeFacetCountQueries(
-        db, useFts && !fallbackToLike, conditions, params, entryTypeConditions,
-        entryTypeParams, escapedLikeQuery, baseConditions, baseParams, expandedFilterTags
-    )
-    return fallbackToLike ? { ...result, degraded: true } : result
+    return executeFacetCountQueries(db, false, conditions, params, entryTypeConditions, entryTypeParams)
 }
 
 function buildFtsFacetTagClauses(

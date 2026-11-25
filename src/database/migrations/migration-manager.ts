@@ -4,6 +4,11 @@ import { MIGRATIONS } from './migration-list.js'
 
 /** Migration versions that only apply to team databases (7: author, 20: origin_personal_id). */
 const TEAM_ONLY_MIGRATION_VERSIONS: ReadonlySet<number> = new Set([7, 20])
+const LATEST_MIGRATION_VERSION = MIGRATIONS.at(-1)?.version ?? 0
+
+export function getExpectedUserVersion(isTeam: boolean): number {
+    return LATEST_MIGRATION_VERSION * 2 + (isTeam ? 1 : 0)
+}
 
 /**
  * Ensures the schema_migrations table exists.
@@ -119,6 +124,15 @@ export const MigrationManager = {
      * @param isTeam Whether the database is a team database
      */
     runMigrations(db: Database, isTeam = false): void {
+        const expectedUserVersion = getExpectedUserVersion(isTeam)
+        if (
+            expectedUserVersion > 0 &&
+            db.pragma('user_version', { simple: true }) === expectedUserVersion &&
+            tableExists(db, 'memory_journal')
+        ) {
+            return
+        }
+
         runInImmediateTx(db, () => {
             retrofitPreMigrationDb(db)
             ensureMigrationsTable(db)
@@ -147,6 +161,10 @@ export const MigrationManager = {
                         module: 'MigrationManager',
                     })
                 }
+            }
+
+            if (expectedUserVersion > 0 && tableExists(db, 'memory_journal')) {
+                db.pragma(`user_version = ${String(expectedUserVersion)}`)
             }
         })
     },

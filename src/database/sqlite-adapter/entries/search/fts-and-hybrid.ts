@@ -26,13 +26,11 @@ interface SearchPage {
 
 function fetchPostLimitSnippets(
     db: EntriesSharedContext['db'],
-    queryStr: string,
+    sanitizedFts: string,
     entryIds: number[]
 ): Map<number, string> {
     const snippetMap = new Map<number, string>()
-    if (entryIds.length === 0) return snippetMap
-    const sanitized = sanitizeFtsQuery(queryStr)
-    if (sanitized === '') return snippetMap
+    if (entryIds.length === 0 || sanitizedFts === '') return snippetMap
     for (const { placeholders, params } of bucketInParams(entryIds, SCOPED_IN_PARAM_BUCKETS)) {
         const rows = db
             .prepare<unknown[], { id: number; highlight_snippet: string }>(
@@ -40,7 +38,7 @@ function fetchPostLimitSnippets(
                  FROM fts_content
                  WHERE fts_content MATCH ? AND rowid IN (${placeholders})`
             )
-            .all(sanitized, ...params)
+            .all(sanitizedFts, ...params)
         for (const row of rows) {
             snippetMap.set(row.id, row.highlight_snippet)
         }
@@ -56,7 +54,8 @@ function executeSearchQuery(
     offset: number,
     hasKeyset: boolean,
     keysetT: string,
-    keysetId: number
+    keysetId: number,
+    preSanitizedFts?: string
 ): SearchPage {
     const { db, tagsMgr } = context
     const { sql, params } = buildSearchQuery(
@@ -66,7 +65,8 @@ function executeSearchQuery(
         offset,
         hasKeyset,
         keysetT,
-        keysetId
+        keysetId,
+        preSanitizedFts
     )
     const rows = db.prepare(sql).all(params)
     const entries = rowsToEntries(tagsMgr, rows)
@@ -96,9 +96,10 @@ function executeSearchQuery(
     }
     if (useFts && options?.includeHighlights === true) {
         if (needsImportance && entries.length > 0) {
+            const sanitized = preSanitizedFts ?? sanitizeFtsQuery(queryStr)
             const snippetMap = fetchPostLimitSnippets(
                 db,
-                queryStr,
+                sanitized,
                 entries.map((e) => e.id)
             )
             result.highlights = entries.map((e) => ({
@@ -180,13 +181,24 @@ export function searchEntries(
     }
 
     const { offset, hasKeyset, keysetT, keysetId, degradedCursor } = readSearchPosition(options)
+    const preSanitizedFts = queryStr.length > 0 ? sanitizeFtsQuery(queryStr) : ''
 
     const runQuery = (useFts: boolean): SearchPage =>
-        executeSearchQuery(context, queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
+        executeSearchQuery(
+            context,
+            queryStr,
+            options,
+            useFts,
+            offset,
+            hasKeyset,
+            keysetT,
+            keysetId,
+            useFts ? preSanitizedFts : undefined
+        )
 
     // Try FTS5 first for relevance-ranked results, fall back to LIKE on empty/syntax error or 0 hits
     if (queryStr.length > 0) {
-        if (sanitizeFtsQuery(queryStr) === '') {
+        if (preSanitizedFts === '') {
             const likeFallback = runQuery(false)
             if (likeFallback.entries.length > 0 || offset > 0 || hasKeyset) {
                 return { ...likeFallback, degraded: true }

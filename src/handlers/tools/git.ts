@@ -41,6 +41,48 @@ export {
 
 const MaxUnreleasedCountSchema = z.number().int().positive().max(5000)
 const MaxPatternCommitsSchema = z.number().int().positive().max(10000)
+const OptionalStrictProjectNumberSchema = StrictProjectNumberSchema.optional()
+const CheckEntryStalenessInputSchemaMcp = z.object({
+    entry_id: relaxedNumber().optional().describe('The ID of the journal entry to check'),
+    entryId: relaxedNumber().optional().describe('The ID of the journal entry to check (alias for entry_id)'),
+    workspace_id: z.string().optional().describe('Workspace identifier (defaults to current project)'),
+    workspaceId: z.string().optional().describe('Workspace identifier alias'),
+    project_number: relaxedNumber().optional().describe('Numeric project identifier'),
+    projectNumber: relaxedNumber().optional().describe('Numeric project identifier alias'),
+    session_id: z
+        .string()
+        .optional()
+        .describe(
+            'Optional session filter (when explicitly passed without entry_id, limits recent-entry staleness scan to that session; not auto-inherited from top-level mj_execute_code session_id).'
+        ),
+})
+const CheckEntryStalenessOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        results: z
+            .array(
+                z.object({
+                    anchorId: z.number(),
+                    path: z.string(),
+                    oldStatus: z.string(),
+                    newStatus: z.string(),
+                    commitsSince: z.number(),
+                    isDeleted: z.boolean(),
+                    error: z.string().optional(),
+                })
+            )
+            .optional(),
+        skippedWorkspaces: z.array(z.string()).optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+const AnalyzeCommitPatternsOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        analysis: z.unknown().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 async function executeGetCommitHistory(
     params: unknown,
@@ -125,7 +167,7 @@ async function executeGetUnreleasedCommits(
             parsedMcp.maxCount !== undefined
                 ? MaxUnreleasedCountSchema.parse(parsedMcp.maxCount)
                 : undefined
-        const projectNumber = StrictProjectNumberSchema.optional().parse(parsedMcp.project_number)
+        const projectNumber = OptionalStrictProjectNumberSchema.parse(parsedMcp.project_number)
         const input = { ...parsedMcp, maxCount, project_number: projectNumber }
         const cwd = resolveGitWorkingDir(input, context.config)
         await sendProgress(context.progress, 0, 1, 'Fetching unreleased commits...')
@@ -153,7 +195,7 @@ async function executeAnalyzeCommitPatterns(
     try {
         const parsedMcp = GitAnalyzePatternsOptionsSchema.parse(params ?? {})
         const max = MaxPatternCommitsSchema.parse(parsedMcp.maxCount)
-        const projectNumber = StrictProjectNumberSchema.optional().parse(parsedMcp.project_number)
+        const projectNumber = OptionalStrictProjectNumberSchema.parse(parsedMcp.project_number)
         const input = { ...parsedMcp, maxCount: max, project_number: projectNumber }
         const cwd = resolveGitWorkingDir(input, context.config)
         const progress = context.progress
@@ -216,45 +258,8 @@ function createCheckEntryStalenessTool(context: ToolContext): ToolDefinition {
         description:
             "Check if a journal entry's anchors have been modified or deleted in git since the entry was created.",
         group: 'git',
-        inputSchema: z.object({
-            entry_id: relaxedNumber().optional().describe('The ID of the journal entry to check'),
-            entryId: relaxedNumber()
-                .optional()
-                .describe('The ID of the journal entry to check (alias for entry_id)'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe('Workspace identifier (defaults to current project)'),
-            workspaceId: z.string().optional().describe('Workspace identifier alias'),
-            project_number: relaxedNumber().optional().describe('Numeric project identifier'),
-            projectNumber: relaxedNumber().optional().describe('Numeric project identifier alias'),
-            session_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional session filter (when explicitly passed without entry_id, limits recent-entry staleness scan to that session; not auto-inherited from top-level mj_execute_code session_id).'
-                ),
-        }),
-        outputSchema: z
-            .object({
-                success: z.boolean().optional(),
-                results: z
-                    .array(
-                        z.object({
-                            anchorId: z.number(),
-                            path: z.string(),
-                            oldStatus: z.string(),
-                            newStatus: z.string(),
-                            commitsSince: z.number(),
-                            isDeleted: z.boolean(),
-                            error: z.string().optional(),
-                        })
-                    )
-                    .optional(),
-                skippedWorkspaces: z.array(z.string()).optional(),
-                error: z.string().optional(),
-            })
-            .extend(ErrorFieldsMixin.shape),
+        inputSchema: CheckEntryStalenessInputSchemaMcp,
+        outputSchema: CheckEntryStalenessOutputSchema,
         annotations: {
             readOnlyHint: false,
             destructiveHint: false,
@@ -281,13 +286,7 @@ function createAnalyzeCommitPatternsTool(context: ToolContext): ToolDefinition {
         description: 'Analyze patterns in a list of commits or recent history',
         group: 'git',
         inputSchema: GitAnalyzePatternsOptionsSchema,
-        outputSchema: z
-            .object({
-                success: z.boolean().optional(),
-                analysis: z.unknown().optional(),
-                error: z.string().optional(),
-            })
-            .extend(ErrorFieldsMixin.shape),
+        outputSchema: AnalyzeCommitPatternsOutputSchema,
         annotations: {
             readOnlyHint: true,
             destructiveHint: false,

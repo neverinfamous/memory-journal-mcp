@@ -16,6 +16,8 @@ import {
     ImportExternalOutputSchema,
 } from './schemas.js'
 
+const FILENAME_COLLATOR = new Intl.Collator()
+
 type ExternalFileOutcome =
     | { filename: string; skipped: true }
     | { filename: string; error: string }
@@ -142,7 +144,7 @@ async function readAndConvertExternalFiles(
             // Directory stream may already be closed after iteration.
         })
     }
-    allMdFiles.sort((a, b) => a.localeCompare(b))
+    allMdFiles.sort(FILENAME_COLLATOR.compare)
     const mdFiles = allMdFiles.slice(0, input.limit)
     const openFlags = constants.O_RDONLY | constants.O_NOFOLLOW
     return await readExternalFileChunks(

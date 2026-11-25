@@ -212,13 +212,13 @@ describe('Pass 41 Audit — Storage, Path Containment, Resource Isolation & Prom
     })
 
     it('AP1-AP7: bumps AUDIT_PROMPT_REVISION to pass41 and preserves required code-quality prompt contract', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
         const db = await createMemoryAdapter()
         try {
             const def = getCodeQualityAuditPromptDefinition()
             const rendered = await def.handler({ target: 'memory-journal-mcp' }, db)
             const text = rendered.messages[0]?.content.text ?? ''
-            expect(text).toContain('Prompt revision: 2026-11-24-audit-pass93')
+            expect(text).toContain('Prompt revision: 2026-11-25-audit-pass94')
             for (const token of [
                 'explore',
                 'generalPurpose',

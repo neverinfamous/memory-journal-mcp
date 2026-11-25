@@ -66,7 +66,6 @@ import {
 } from './call-guards.js'
 import { getAuthContext } from '../../auth/auth-context.js'
 import { getRequestContext, requestContextStorage } from '../../utils/request-context.js'
-import { isRecord } from '../../utils/type-guards.js'
 
 // Re-export for backward compatibility
 export type { ToolHandlerConfig }
@@ -236,7 +235,14 @@ export function isCacheHit(
 }
 
 function isCachedToolContextRefs(val: unknown): val is CachedToolContextRefs {
-    return isRecord(val) && 'db' in val && isRecord(val['db'])
+    return (
+        typeof val === 'object' &&
+        val !== null &&
+        !Array.isArray(val) &&
+        'db' in val &&
+        typeof val.db === 'object' &&
+        val.db !== null
+    )
 }
 
 function hasValidToolCache(

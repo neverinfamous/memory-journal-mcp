@@ -270,6 +270,6 @@ describe('Pass 93 Audit — Pass 14 Remediations', () => {
         } finally {
             conn.close()
         }
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass93')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
     })
 })

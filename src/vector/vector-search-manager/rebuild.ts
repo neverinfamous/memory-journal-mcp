@@ -159,36 +159,14 @@ async function generateBatchVectors(
     return vectorsToUpsert
 }
 
-/** Embed and upsert one batch of entries, updating `stats`. Returns true when embedding work ran. */
+/** Embed and upsert one pre-filtered batch of entries, updating `stats`. Returns true when embedding work ran. */
 async function processBatch(
     manager: VectorSearchManager,
     dbAdapter: IDatabaseAdapter,
-    batch: JournalEntry[],
-    force: boolean,
-    skipExistenceCheck: boolean,
-    projectNumber: number | undefined,
-    existingVectorIds: ReadonlySet<number> | undefined,
+    toEmbed: JournalEntry[],
     stats: RebuildStats
 ): Promise<boolean> {
-    if (isManagerDisposed(manager)) return false
-    const toEmbed: JournalEntry[] = []
-    for (const entry of batch) {
-        if (
-            shouldSkipEntry(
-                dbAdapter,
-                entry,
-                force,
-                skipExistenceCheck,
-                projectNumber,
-                existingVectorIds
-            )
-        ) {
-            stats.skipped++
-            continue
-        }
-        toEmbed.push(entry)
-    }
-    if (toEmbed.length === 0) return false
+    if (isManagerDisposed(manager) || toEmbed.length === 0) return false
 
     const vectorsToUpsert = await generateBatchVectors(manager, toEmbed, stats)
     if (vectorsToUpsert === null || isManagerDisposed(manager)) return false
@@ -208,6 +186,26 @@ async function processBatch(
         })
     }
     return true
+}
+
+function filterPageEntriesToEmbed(
+    entries: JournalEntry[],
+    dbAdapter: IDatabaseAdapter,
+    force: boolean,
+    skipExistenceCheck: boolean,
+    projectNumber: number | undefined,
+    pageExistingVectorIds: ReadonlySet<number> | undefined,
+    stats: RebuildStats
+): JournalEntry[] {
+    const toEmbed: JournalEntry[] = []
+    for (const entry of entries) {
+        if (shouldSkipEntry(dbAdapter, entry, force, skipExistenceCheck, projectNumber, pageExistingVectorIds)) {
+            stats.skipped++
+            continue
+        }
+        toEmbed.push(entry)
+    }
+    return toEmbed
 }
 
 function cleanupStaleVectorsSafely(dbAdapter: IDatabaseAdapter): string | undefined {
@@ -239,42 +237,25 @@ interface RebuildLoopContext {
 
 async function processPageBatchesSequentially(
     ctx: RebuildLoopContext,
-    entries: JournalEntry[],
-    pageExistingVectorIds: ReadonlySet<number> | undefined,
+    toEmbed: JournalEntry[],
+    pageEntryCount: number,
     offset: number,
     batchOffset: number,
     anyEmbedded = false
 ): Promise<boolean> {
-    if (batchOffset >= entries.length || isManagerDisposed(ctx.manager)) return anyEmbedded
-    const batch = entries.slice(batchOffset, batchOffset + ctx.batchSize)
-    const didEmbed = await processBatch(
-        ctx.manager,
-        ctx.dbAdapter,
-        batch,
-        ctx.force,
-        ctx.skipExistenceCheck,
-        ctx.projectNumber,
-        pageExistingVectorIds,
-        ctx.stats
-    )
+    if (batchOffset >= toEmbed.length || isManagerDisposed(ctx.manager)) return anyEmbedded
+    const batch = toEmbed.slice(batchOffset, batchOffset + ctx.batchSize)
+    const didEmbed = await processBatch(ctx.manager, ctx.dbAdapter, batch, ctx.stats)
     if (isManagerDisposed(ctx.manager)) return anyEmbedded || didEmbed
-    if (didEmbed) {
-        await new Promise((resolve) => setTimeoutFn(resolve, 0))
-    }
+    if (didEmbed) await new Promise((resolve) => setTimeoutFn(resolve, 0))
+    const processedInPage = Math.min(pageEntryCount, Math.round(((batchOffset + batch.length) / toEmbed.length) * pageEntryCount))
     await sendProgress(
         ctx.progress,
-        offset + batchOffset + batch.length,
+        offset + processedInPage,
         ctx.totalEntries,
         `Indexing... (${ctx.stats.indexed} indexed, ${ctx.stats.skipped} skipped)`
     )
-    return processPageBatchesSequentially(
-        ctx,
-        entries,
-        pageExistingVectorIds,
-        offset,
-        batchOffset + ctx.batchSize,
-        anyEmbedded || didEmbed
-    )
+    return processPageBatchesSequentially(ctx, toEmbed, pageEntryCount, offset, batchOffset + ctx.batchSize, anyEmbedded || didEmbed)
 }
 
 async function runRebuildPagesSequentially(
@@ -288,24 +269,16 @@ async function runRebuildPagesSequentially(
         : ctx.dbAdapter.getEntriesPage(offset, ctx.pageSize, ctx.wsScope, ctx.projectNumber).entries
     if (entries.length === 0) return
 
-    const pageExistingVectorIds = lookupExistingBatchVectorIds(
-        ctx.dbAdapter,
-        entries,
-        ctx.force,
-        ctx.skipExistenceCheck,
-        ctx.projectNumber
-    )
-    const pageEmbedded = await processPageBatchesSequentially(
-        ctx,
-        entries,
-        pageExistingVectorIds,
-        offset,
-        0
-    )
-    if (isManagerDisposed(ctx.manager)) return
-    if (!pageEmbedded) {
-        await new Promise((resolve) => setTimeoutFn(resolve, 0))
+    const pageExistingVectorIds = lookupExistingBatchVectorIds(ctx.dbAdapter, entries, ctx.force, ctx.skipExistenceCheck, ctx.projectNumber)
+    const toEmbed = filterPageEntriesToEmbed(entries, ctx.dbAdapter, ctx.force, ctx.skipExistenceCheck, ctx.projectNumber, pageExistingVectorIds, ctx.stats)
+    let pageEmbedded = false
+    if (toEmbed.length === 0) {
+        await sendProgress(ctx.progress, offset + entries.length, ctx.totalEntries, `Indexing... (${ctx.stats.indexed} indexed, ${ctx.stats.skipped} skipped)`)
+    } else {
+        pageEmbedded = await processPageBatchesSequentially(ctx, toEmbed, entries.length, offset, 0)
     }
+    if (isManagerDisposed(ctx.manager)) return
+    if (!pageEmbedded) await new Promise((resolve) => setTimeoutFn(resolve, 0))
 
     let nextCursor = cursor
     if (ctx.useKeyset) {
@@ -350,6 +323,35 @@ async function runRebuildLoop(
     )
 }
 
+interface ParsedRebuildOptions {
+    force: boolean
+    batchSize: number
+    pageSize: number
+    wsScope: string
+    projectNumber: number | undefined
+}
+
+function parseRebuildOptions(options?: {
+    force?: boolean
+    batchSize?: number
+    pageSize?: number
+    projectNumber?: number
+    workspaceId?: string
+}): ParsedRebuildOptions {
+    const rawBatch = options?.batchSize
+    const batchSize =
+        typeof rawBatch === 'number' && Number.isFinite(rawBatch) && rawBatch >= 1
+            ? Math.floor(rawBatch)
+            : REBUILD_BATCH_SIZE
+    const rawPage = options?.pageSize
+    const pageSize =
+        typeof rawPage === 'number' && Number.isFinite(rawPage) && rawPage >= 1
+            ? Math.floor(rawPage)
+            : REBUILD_PAGE_SIZE
+    const wsScope = options?.workspaceId !== undefined ? effectiveWorkspace(options.workspaceId) : '*'
+    return { force: options?.force ?? false, batchSize, pageSize, wsScope, projectNumber: options?.projectNumber }
+}
+
 /**
  * Rebuild the vector index incrementally to avoid blocking the event loop or database.
  * This function handles the orchestration, while relying on the manager instance for
@@ -370,24 +372,12 @@ export async function rebuildIndex(
     if (isManagerDisposed(manager)) {
         return { success: false, indexed: 0, failed: 0, firstError: DISPOSED_MANAGER_ERROR }
     }
-    const force = options?.force ?? false
-    const rawBatch = options?.batchSize
-    const batchSize =
-        typeof rawBatch === 'number' && Number.isFinite(rawBatch) && rawBatch >= 1
-            ? Math.floor(rawBatch)
-            : REBUILD_BATCH_SIZE
-    const rawPage = options?.pageSize
-    const pageSize =
-        typeof rawPage === 'number' && Number.isFinite(rawPage) && rawPage >= 1
-            ? Math.floor(rawPage)
-            : REBUILD_PAGE_SIZE
-    const wsScope = options?.workspaceId !== undefined ? effectiveWorkspace(options.workspaceId) : '*'
-
+    const { force, batchSize, pageSize, wsScope, projectNumber } = parseRebuildOptions(options)
     const stats: RebuildStats = { indexed: 0, skipped: 0, errorsCount: 0, firstError: null }
 
     let totalEntries: number
     try {
-        totalEntries = dbAdapter.getActiveEntryCount(wsScope, options?.projectNumber)
+        totalEntries = dbAdapter.getActiveEntryCount(wsScope, projectNumber)
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         logger.error('Failed to count entries for vector indexing', { error: err })
@@ -405,22 +395,12 @@ export async function rebuildIndex(
         }
     }
 
-    const skipExistenceCheck =
-        !force && typeof dbAdapter.hasVectors === 'function' && !dbAdapter.hasVectors()
+    const skipExistenceCheck = !force && typeof dbAdapter.hasVectors === 'function' && !dbAdapter.hasVectors()
 
     await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild')
     await runRebuildLoop(
-        manager,
-        dbAdapter,
-        totalEntries,
-        pageSize,
-        batchSize,
-        force,
-        skipExistenceCheck,
-        wsScope,
-        options?.projectNumber,
-        progress,
-        stats
+        manager, dbAdapter, totalEntries, pageSize, batchSize,
+        force, skipExistenceCheck, wsScope, projectNumber, progress, stats
     )
 
     if (isManagerDisposed(manager)) {

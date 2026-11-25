@@ -76,6 +76,7 @@ export default defineConfig({
                     pool: 'forks',
                     isolate: true,
                     include: isolatedTestFiles,
+                    benchmark: { include: [] },
                 },
             },
             {

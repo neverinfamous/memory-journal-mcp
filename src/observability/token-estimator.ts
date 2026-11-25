@@ -123,7 +123,7 @@ export function estimatePayloadTokens(payload: unknown): number {
         }
     }
     try {
-        const serialized = safeJsonStringify(payload, 32, false)
+        const serialized = fastJsonStringify(payload)
         const est = estimateTokens(serialized, 'json')
         if (typeof payload === 'object') {
             payloadTokenCache.set(payload, est)
@@ -141,6 +141,16 @@ export function estimatePayloadTokens(payload: unknown): number {
 
 export function bigintReplacer(_key: string, value: unknown): unknown {
     return typeof value === 'bigint' ? value.toString() : value
+}
+
+/** Fast-path native `JSON.stringify` avoiding V8 JS-replacer deopt; falls back to `safeJsonStringify` on error. */
+function fastJsonStringify(payload: unknown): string {
+    try {
+        const json = JSON.stringify(payload)
+        return typeof json === 'string' ? json : 'null'
+    } catch {
+        return safeJsonStringify(payload, 32, false)
+    }
 }
 
 /** Cycle-safe, depth-bounded, bigint-coercing JSON serializer with optional `toJSON()` fallback. */
@@ -190,11 +200,11 @@ export function getSerializedPayloadJson(payload: unknown): string {
     if (typeof payload === 'object' && payload !== null) {
         const cached = serializedPayloadCache.get(payload)
         if (cached !== undefined) return cached
-        const json = safeJsonStringify(payload, 32, false)
+        const json = fastJsonStringify(payload)
         serializedPayloadCache.set(payload, json)
         return json
     }
-    return safeJsonStringify(payload, 32, false)
+    return fastJsonStringify(payload)
 }
 
 // ============================================================================

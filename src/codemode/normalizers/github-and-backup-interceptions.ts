@@ -91,29 +91,37 @@ function methodLeaf(methodName: string): string {
     return splitAt === -1 ? methodName : methodName.slice(splitAt + 1)
 }
 
-function leafEquals(methodName: string, names: readonly string[]): boolean {
-    return names.includes(methodLeaf(methodName))
+const CREATE_ISSUE_LEAVES: ReadonlySet<string> = new Set([
+    'create_github_issue', 'createGithubIssue',
+    'create_github_issue_with_entry', 'createGithubIssueWithEntry',
+])
+const MILESTONE_WRITE_LEAVES: ReadonlySet<string> = new Set([
+    'create_github_milestone', 'createGithubMilestone',
+    'update_github_milestone', 'updateGithubMilestone',
+])
+const CLOSE_ISSUE_LEAVES: ReadonlySet<string> = new Set([
+    'close_github_issue', 'closeGithubIssue',
+    'close_github_issue_with_entry', 'closeGithubIssueWithEntry',
+])
+const STATE_PARAM_LEAVES: ReadonlySet<string> = new Set([
+    'get_github_issues', 'getGithubIssues',
+    'get_github_prs', 'getGithubPrs',
+    'get_github_milestones', 'getGithubMilestones',
+])
+const GITHUB_CONTEXT_LEAVES: ReadonlySet<string> = new Set(['get_github_context', 'getGithubContext'])
+const BACKUP_CREATE_METHODS: ReadonlySet<string> = new Set(['backup_journal', 'backupJournal', 'team_backup', 'teamBackup'])
+const BACKUP_LIST_METHODS: ReadonlySet<string> = new Set(['list_backups', 'listBackups', 'team_list_backups', 'teamListBackups'])
+const BACKUP_RESTORE_METHODS: ReadonlySet<string> = new Set(['restore_backup', 'restoreBackup', 'team_restore_backup', 'teamRestoreBackup'])
+const BACKUP_CLEANUP_METHODS: ReadonlySet<string> = new Set(['cleanup_backups', 'cleanupBackups', 'team_cleanup_backups', 'teamCleanupBackups'])
+
+function leafEquals(methodName: string, names: ReadonlySet<string>): boolean {
+    return names.has(methodLeaf(methodName))
 }
 
 function mapGithubTextKeys(methodName: string, obj: Record<string, unknown>): void {
-    const isCreateIssue = leafEquals(methodName, [
-        'create_github_issue',
-        'createGithubIssue',
-        'create_github_issue_with_entry',
-        'createGithubIssueWithEntry',
-    ])
-    const isMilestoneWrite = leafEquals(methodName, [
-        'create_github_milestone',
-        'createGithubMilestone',
-        'update_github_milestone',
-        'updateGithubMilestone',
-    ])
-    const isCloseIssue = leafEquals(methodName, [
-        'close_github_issue',
-        'closeGithubIssue',
-        'close_github_issue_with_entry',
-        'closeGithubIssueWithEntry',
-    ])
+    const isCreateIssue = leafEquals(methodName, CREATE_ISSUE_LEAVES)
+    const isMilestoneWrite = leafEquals(methodName, MILESTONE_WRITE_LEAVES)
+    const isCloseIssue = leafEquals(methodName, CLOSE_ISSUE_LEAVES)
 
     for (const key of ['text', 'message', 'description'] as const) {
         if (obj[key] === undefined) continue
@@ -216,14 +224,7 @@ function applyGithubInterceptions(
     splitOwnerRepoSlug(obj)
     mapGithubTextKeys(methodName, obj)
 
-    const hasStateParam = leafEquals(methodName, [
-        'get_github_issues',
-        'getGithubIssues',
-        'get_github_prs',
-        'getGithubPrs',
-        'get_github_milestones',
-        'getGithubMilestones',
-    ])
+    const hasStateParam = leafEquals(methodName, STATE_PARAM_LEAVES)
     if (hasStateParam && obj['keep'] !== undefined && obj['state'] === undefined) {
         if (obj['keep'] === true) obj['state'] = 'open'
         else if (obj['keep'] === false) obj['state'] = 'closed'
@@ -251,7 +252,7 @@ function applyGithubInterceptions(
         }
     }
 
-    if (leafEquals(methodName, ['get_github_context', 'getGithubContext']) && obj['path'] !== undefined) {
+    if (leafEquals(methodName, GITHUB_CONTEXT_LEAVES) && obj['path'] !== undefined) {
         return {
             error: {
                 success: false,
@@ -273,7 +274,7 @@ function applyBackupInterceptions(
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
     const obj = { ...rawObj }
 
-    if (['backup_journal', 'backupJournal', 'team_backup', 'teamBackup'].includes(methodName)) {
+    if (BACKUP_CREATE_METHODS.has(methodName)) {
         if (obj['name'] === undefined) {
             for (const k of ['description', 'message', 'text', 'path', 'q', 'keep', 'mode']) {
                 if (obj[k] !== undefined && obj['name'] === undefined) obj['name'] = obj[k]
@@ -282,7 +283,7 @@ function applyBackupInterceptions(
         }
     }
 
-    if (['list_backups', 'listBackups', 'team_list_backups', 'teamListBackups'].includes(methodName)) {
+    if (BACKUP_LIST_METHODS.has(methodName)) {
         if (
             obj['q'] !== undefined ||
             obj['query'] !== undefined ||
@@ -319,7 +320,7 @@ function applyBackupInterceptions(
         }
     }
 
-    if (['restore_backup', 'restoreBackup', 'team_restore_backup', 'teamRestoreBackup'].includes(methodName)) {
+    if (BACKUP_RESTORE_METHODS.has(methodName)) {
         if (obj['filename'] === undefined) {
             for (const k of ['path', 'file', 'text', 'message', 'description', 'q', 'keep', 'mode']) {
                 if (obj[k] !== undefined && obj['filename'] === undefined) obj['filename'] = obj[k]
@@ -328,7 +329,7 @@ function applyBackupInterceptions(
         }
     }
 
-    if (['cleanup_backups', 'cleanupBackups', 'team_cleanup_backups', 'teamCleanupBackups'].includes(methodName)) {
+    if (BACKUP_CLEANUP_METHODS.has(methodName)) {
         if (obj['keep_count'] === undefined) {
             for (const k of ['keep', 'limit', 'q', 'mode', 'text', 'message', 'description', 'path']) {
                 if (obj[k] !== undefined && obj['keep_count'] === undefined) obj['keep_count'] = obj[k]

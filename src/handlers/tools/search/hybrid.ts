@@ -12,7 +12,6 @@ import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import {
-    attachTeamMirrorOrigins,
     passMetadataFilters,
     canAccessTeamSilently,
     isTeamDbReady,
@@ -117,38 +116,17 @@ async function queryStoreHybrid(
     const [ftsResults, semanticResults] = await Promise.all([
         Promise.resolve(
             store.searchEntries(query, {
-                limit: overfetchLimit,
-                isPersonal: isPersonalFilter,
-                projectNumber: options.projectNumber,
-                issueNumber: options.issueNumber,
-                prNumber: options.prNumber,
-                prStatus: options.prStatus,
-                workflowRunId: options.workflowRunId,
-                tags: options.tags,
-                excludeTags: options.excludeTags,
-                entryType,
-                startDate: options.startDate,
-                endDate: options.endDate,
-                includeArchived: options.includeArchived,
-                workspaceId: options.workspaceId,
+                limit: overfetchLimit, isPersonal: isPersonalFilter, projectNumber: options.projectNumber,
+                issueNumber: options.issueNumber, prNumber: options.prNumber, prStatus: options.prStatus,
+                workflowRunId: options.workflowRunId, tags: options.tags, excludeTags: options.excludeTags,
+                entryType, startDate: options.startDate, endDate: options.endDate,
+                includeArchived: options.includeArchived, workspaceId: options.workspaceId,
             })
         ),
         vecMgr
             ? (typeof vecMgr.searchCandidates === 'function'
-                  ? vecMgr.searchCandidates(
-                        query,
-                        overfetchLimit,
-                        0.15,
-                        options.workspaceId,
-                        options.projectNumber
-                    )
-                  : vecMgr.search(
-                        query,
-                        overfetchLimit,
-                        0.15,
-                        options.workspaceId,
-                        options.projectNumber
-                    )
+                  ? vecMgr.searchCandidates(query, overfetchLimit, 0.15, options.workspaceId, options.projectNumber)
+                  : vecMgr.search(query, overfetchLimit, 0.15, options.workspaceId, options.projectNumber)
               ).catch((err: unknown) => {
                   logger.warning(
                       `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
@@ -293,6 +271,30 @@ function compareHybridCandidates(
     return (b.timestamp ?? '').localeCompare(a.timestamp ?? '')
 }
 
+function stampTeamMirrorOriginsForChunk(
+    teamDb: IDatabaseAdapter | undefined,
+    chunkEntries: EntryWithSource[],
+    originCache: Map<number, number | null>
+): EntryWithSource[] {
+    if (teamDb === undefined || typeof teamDb.getMirrorOrigins !== 'function') return chunkEntries
+    const uncachedIds: number[] = []
+    for (const entry of chunkEntries) {
+        const id = entry['id']
+        if (entry.source === 'team' && entry.team_db === undefined && typeof id === 'number' && !originCache.has(id)) {
+            uncachedIds.push(id)
+        }
+    }
+    if (uncachedIds.length > 0) {
+        const fetched = teamDb.getMirrorOrigins(uncachedIds)
+        for (const id of uncachedIds) originCache.set(id, fetched.get(id) ?? null)
+    }
+    return chunkEntries.map((entry) => {
+        const id = entry['id']
+        const origin = entry.source === 'team' && entry.team_db === undefined && typeof id === 'number' ? originCache.get(id) : undefined
+        return origin !== undefined && origin !== null ? { ...entry, originPersonalId: origin } : entry
+    })
+}
+
 function assembleHybridCandidates(
     sortedKeys: string[],
     qualifiedFusionScores: Map<string, number>,
@@ -304,6 +306,7 @@ function assembleHybridCandidates(
     teamFtsById: ReadonlyMap<number, JournalEntry>
 ): EntryWithSource[] {
     const accumulated: EntryWithSource[] = []
+    const teamOriginCache = new Map<number, number | null>()
     let cursor = 0
     let chunkSize = Math.max(options.limit * 2, 24)
 
@@ -311,31 +314,20 @@ function assembleHybridCandidates(
     while (cursor < sortedKeys.length) {
         let end = Math.min(cursor + chunkSize, sortedKeys.length)
         const boundaryKey = sortedKeys[end - 1]
-        const boundaryScore =
-            boundaryKey !== undefined ? (qualifiedFusionScores.get(boundaryKey) ?? 0) : 0
+        const boundaryScore = boundaryKey !== undefined ? (qualifiedFusionScores.get(boundaryKey) ?? 0) : 0
         while (end < sortedKeys.length) {
             const nextKey = sortedKeys[end]
             const nextScore = nextKey !== undefined ? (qualifiedFusionScores.get(nextKey) ?? 0) : 0
             if (nextScore !== boundaryScore) break
             end++
         }
-        const chunk = sortedKeys.slice(cursor, end)
-        accumulated.push(
-            ...hydrateHybridChunk(
-                chunk,
-                db,
-                teamDb,
-                canQueryTeam,
-                options,
-                personalFtsById,
-                teamFtsById
-            )
+        const chunkEntries = hydrateHybridChunk(
+            sortedKeys.slice(cursor, end), db, teamDb, canQueryTeam, options, personalFtsById, teamFtsById
         )
+        accumulated.push(...(canQueryTeam ? stampTeamMirrorOriginsForChunk(teamDb, chunkEntries, teamOriginCache) : chunkEntries))
         cursor = end
         if (accumulated.length >= options.limit) {
-            const uniqueCount = canQueryTeam
-                ? collapseTeamMirrors(attachTeamMirrorOrigins(teamDb, accumulated)).length
-                : accumulated.length
+            const uniqueCount = canQueryTeam ? collapseTeamMirrors(accumulated).length : accumulated.length
             if (uniqueCount >= options.limit) break
         }
         chunkSize = Math.max(chunkSize * 2, 64)
@@ -343,9 +335,7 @@ function assembleHybridCandidates(
 
     const ordered = accumulated.sort((a, b) => compareHybridCandidates(a, b, qualifiedFusionScores))
     // [INVARIANT] M2: collapse personal/team mirror pairs (keep personal, annotate `alsoInTeam`).
-    return collapseTeamMirrors(
-        attachTeamMirrorOrigins(canQueryTeam ? teamDb : undefined, ordered)
-    ).slice(0, options.limit)
+    return collapseTeamMirrors(ordered).slice(0, options.limit)
 }
 
 function fuseHybridStoreResults(

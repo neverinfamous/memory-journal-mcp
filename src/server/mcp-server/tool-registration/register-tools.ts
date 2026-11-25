@@ -40,6 +40,7 @@ import {
 
 import {
     DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
+    markValidatedToolInput,
     resolveEffectiveMaxToolInputElements,
 } from '../../../utils/tool-input-bounds.js'
 
@@ -198,6 +199,7 @@ async function executeRegisteredTool(
         syncLiveHandlerConfig(customToolHandlerConfig, currentConfig, options, nextBriefing)
 
         const toolArgs = isRecord(args) ? args : {}
+        markValidatedToolInput(toolArgs, resolveEffectiveMaxToolInputElements(options.maxToolInputElements))
 
         const result = await callTool(
             tool.name,
