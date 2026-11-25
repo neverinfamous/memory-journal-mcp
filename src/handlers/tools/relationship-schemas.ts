@@ -12,10 +12,9 @@ import {
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { parsePositiveProjectNumber } from '../../utils/safe-positive-int.js'
 
-/** Coerce relaxedNumber string input to number; `""` -> undefined, whitespace-only/malformed/unsafe -> NaN (rejected downstream). */
+/** Coerce relaxedNumber string input to number; empty/whitespace-only/malformed/unsafe strings -> NaN (rejected downstream). */
 function coerceRelaxed(v: number | string | undefined): number | undefined {
     if (v === undefined || typeof v === 'number') return v
-    if (v === '') return undefined
     const trimmed = v.trim()
     if (trimmed === '') return Number.NaN
     if (!/^-?(?:0|[1-9]\d*)$/.test(trimmed)) return Number.NaN
@@ -24,7 +23,7 @@ function coerceRelaxed(v: number | string | undefined): number | undefined {
 }
 
 function coerceCanonicalId(v: number | string | undefined): number | undefined {
-    if (v === undefined || v === '') return undefined
+    if (v === undefined) return undefined
     if (typeof v === 'string' && v.trim() === '') return Number.NaN
     return parsePositiveProjectNumber(v) ?? Number.NaN
 }
@@ -73,7 +72,7 @@ export const LinkEntriesSchema = z
             )
             .optional()
             .default('references'),
-        description: z.string().optional(),
+        description: z.string().max(2000).optional(),
         project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z.string().max(255).optional(),
     })
@@ -94,7 +93,7 @@ export const LinkEntriesSchemaMcp = z
         relationship_type: z.string().optional(),
         type: z.string().optional(),
         rel: z.string().optional(),
-        description: z.string().optional(),
+        description: z.string().max(2000).optional(),
         message: z.string().optional(),
         text: z.string().optional(),
     })
@@ -148,7 +147,7 @@ export const VisualizeInputSchema = z
             .positive()
             .optional()
             .describe('Specific entry ID to visualize (shows connected entries)'),
-        tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+        tags: z.array(z.string().max(100)).max(100).optional().describe('Filter entries by tags'),
         relationship_type: z
             .enum([
                 'evolves_from',
@@ -187,11 +186,11 @@ export const VisualizeInputSchemaMcp = z
             .optional()
             .describe('Specific entry ID to visualize (shows connected entries)'),
         id: relaxedNumber().optional(),
-        tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+        tags: z.array(z.string().max(100)).max(100).optional().describe('Filter entries by tags'),
         q: z.string().optional(),
         text: z.string().optional(),
         message: z.string().optional(),
-        description: z.string().optional(),
+        description: z.string().max(2000).optional(),
         relationship_type: z
             .string()
             .optional()

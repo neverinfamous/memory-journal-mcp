@@ -161,6 +161,7 @@ export const ListAuthorAliasesSchema = z.preprocess(
                 .string()
                 .trim()
                 .min(1)
+                .max(255)
                 .optional()
                 .describe('Optional canonical author to filter aliases by'),
             project_number: StrictProjectNumberSchema,

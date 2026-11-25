@@ -145,7 +145,7 @@ function applyFuzzyFallback(
     if (result.entries.length !== 0 || options?.fuzzy_match !== true) return undefined
     const vocab = buildVocabulary(db, effectiveWorkspace(options.workspaceId))
     const fuzzyRes = expandFuzzyQuery(queryStr, vocab, options.auto_correct)
-    if (fuzzyRes.corrected && fuzzyRes.expanded !== queryStr) {
+    if (fuzzyRes.corrected && fuzzyRes.expanded !== queryStr && fuzzyRes.expanded.length <= 500) {
         const correctedResult = searchEntries(context, fuzzyRes.expanded, {
             ...options,
             fuzzy_match: false,

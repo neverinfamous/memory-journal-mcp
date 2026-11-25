@@ -395,6 +395,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     closeDbBeforeRestore(): void {
+        this.initEpoch++
         if (this.ftsRebuildTimer !== null) {
             clearTimeout(this.ftsRebuildTimer)
             this.ftsRebuildTimer = null

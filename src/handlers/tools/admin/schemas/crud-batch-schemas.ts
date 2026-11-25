@@ -185,7 +185,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe('Current validation status of the entry (passed, none, failed).'),
-            session_id: z.string().nullable().optional().describe('Agent session ID for thread isolation.'),
+            session_id: z.string().max(255).nullable().optional().describe('Agent session ID for thread isolation.'),
         })
         .strict()
 )

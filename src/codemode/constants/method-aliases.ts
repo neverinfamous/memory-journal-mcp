@@ -106,7 +106,7 @@ Object.assign(METHOD_ALIASES, {
         SHARED_GREP_SEARCH_ALIASES,
         {
             listEntries: 'searchEntries',
-            create_entry_minimal: 'createEntryMinimal',
+            create_entry_minimal: 'createEntry',
             search_audit_log: 'searchAuditLog',
             update: 'updateEntry',
             delete: 'deleteEntry',

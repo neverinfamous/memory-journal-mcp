@@ -102,6 +102,7 @@ function checkProjectNumAgainstPinnedWorkspace(
 
 function checkRecordProjectAliasAgainstBounds(
     rawProject: unknown,
+    fieldName: string,
     effectivePinnedWs: string | undefined,
     pinnedProj: number | undefined,
     registry: RegistryMap
@@ -110,11 +111,11 @@ function checkRecordProjectAliasAgainstBounds(
         if (Number.isFinite(rawProject)) {
             if (pinnedProj !== undefined && rawProject !== pinnedProj) {
                 return validationErrResult(
-                    `project ${String(rawProject)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+                    `${fieldName} ${String(rawProject)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
                 )
             }
             if (effectivePinnedWs !== undefined && pinnedProj === undefined) {
-                return checkProjectNumAgainstPinnedWorkspace(rawProject, 'project', effectivePinnedWs, registry)
+                return checkProjectNumAgainstPinnedWorkspace(rawProject, fieldName, effectivePinnedWs, registry)
             }
         }
         return undefined
@@ -124,39 +125,82 @@ function checkRecordProjectAliasAgainstBounds(
     if (trimmed === '') return undefined
     if (trimmed === '*') {
         return effectivePinnedWs !== undefined
-            ? validationErrResult(`project '*' is not allowed inside nested executeCode scope '${effectivePinnedWs}'.`)
+            ? validationErrResult(`${fieldName} '*' is not allowed inside nested executeCode scope '${effectivePinnedWs}'.`)
             : undefined
     }
     if (/^[+-]?\d+$/.test(trimmed) || /^[p#]-?\d+$/i.test(trimmed)) {
         const parsed = parsePrefixedProjectInt(trimmed)
         if (pinnedProj !== undefined && parsed !== pinnedProj) {
             return validationErrResult(
-                `project '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+                `${fieldName} '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
             )
         }
         if (effectivePinnedWs !== undefined && pinnedProj === undefined) {
             if (parsed === undefined) {
                 return validationErrResult(
-                    `project '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+                    `${fieldName} '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
                 )
             }
-            return checkProjectNumAgainstPinnedWorkspace(parsed, 'project', effectivePinnedWs, registry)
+            return checkProjectNumAgainstPinnedWorkspace(parsed, fieldName, effectivePinnedWs, registry)
         }
         return undefined
     }
     if (effectivePinnedWs !== undefined && workspacesConflict(trimmed, effectivePinnedWs, registry)) {
         return validationErrResult(
-            `project '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+            `${fieldName} '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
         )
     }
     if (pinnedProj !== undefined) {
         if (trimmed.toLowerCase() === 'default' || resolveRegistryEntryProject(trimmed, registry).projectNumber !== pinnedProj) {
             return validationErrResult(
-                `project '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+                `${fieldName} '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
             )
         }
     }
     return undefined
+}
+
+function checkSinglePinnedProjectNumValue(
+    rawProj: unknown,
+    fieldName: string,
+    pinnedProj: number,
+    registry: RegistryMap
+): { resolved: number | undefined } | Record<string, unknown> {
+    if (rawProj === null) {
+        return validationErrResult(
+            `${fieldName} cannot be cleared (null) inside nested executeCode pinned to project_number ${String(pinnedProj)}.`
+        )
+    }
+    if (typeof rawProj === 'number') {
+        if (Number.isFinite(rawProj) && rawProj !== pinnedProj) {
+            return validationErrResult(
+                `${fieldName} ${String(rawProj)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+            )
+        }
+        return { resolved: rawProj }
+    }
+    if (typeof rawProj !== 'string') return { resolved: undefined }
+    const trimmed = rawProj.trim()
+    if (trimmed === '') return { resolved: undefined }
+    const parsedInt = parsePrefixedProjectInt(trimmed)
+    if (parsedInt !== undefined) {
+        if (parsedInt !== pinnedProj) {
+            return validationErrResult(
+                `${fieldName} '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+            )
+        }
+        return { resolved: parsedInt }
+    }
+    const regProj =
+        trimmed.toLowerCase() === 'default'
+            ? undefined
+            : resolveRegistryEntryProject(trimmed, registry).projectNumber
+    if (regProj !== pinnedProj) {
+        return validationErrResult(
+            `${fieldName} '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+        )
+    }
+    return { resolved: regProj }
 }
 
 function checkPinnedProjectNumberField(
@@ -164,44 +208,12 @@ function checkPinnedProjectNumberField(
     pinnedProj: number,
     registry: RegistryMap
 ): Record<string, unknown> | undefined {
-    const rawProj = rec['project_number']
-    if (rawProj === null) {
-        return validationErrResult(
-            `project_number cannot be cleared (null) inside nested executeCode pinned to project_number ${String(pinnedProj)}.`
-        )
-    }
-    let resolvedProjNum: number | undefined
-    if (typeof rawProj === 'number') {
-        if (Number.isFinite(rawProj) && rawProj !== pinnedProj) {
-            return validationErrResult(
-                `project_number ${String(rawProj)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
-            )
-        }
-        resolvedProjNum = rawProj
-    } else if (typeof rawProj === 'string') {
-        const trimmed = rawProj.trim()
-        if (trimmed !== '') {
-            const parsedInt = parsePrefixedProjectInt(trimmed)
-            if (parsedInt !== undefined) {
-                if (parsedInt !== pinnedProj) {
-                    return validationErrResult(
-                        `project_number '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
-                    )
-                }
-                resolvedProjNum = parsedInt
-            } else {
-                const regProj =
-                    trimmed.toLowerCase() === 'default'
-                        ? undefined
-                        : resolveRegistryEntryProject(trimmed, registry).projectNumber
-                if (regProj !== pinnedProj) {
-                    return validationErrResult(
-                        `project_number '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
-                    )
-                }
-                resolvedProjNum = regProj
-            }
-        }
+    let matchedPinned = false
+    for (const fieldName of ['project_number', 'projectNumber', 'project_id', 'projectId'] as const) {
+        if (rec[fieldName] === undefined) continue
+        const checkRes = checkSinglePinnedProjectNumValue(rec[fieldName], fieldName, pinnedProj, registry)
+        if (!('resolved' in checkRes)) return checkRes
+        if (checkRes.resolved === pinnedProj) matchedPinned = true
     }
     const rawWs =
         typeof rec['workspace_id'] === 'string'
@@ -209,7 +221,7 @@ function checkPinnedProjectNumberField(
             : typeof rec['workspace'] === 'string'
               ? rec['workspace'].trim()
               : undefined
-    if (rawWs === '*' && resolvedProjNum !== pinnedProj) {
+    if (rawWs === '*' && !matchedPinned) {
         return validationErrResult(
             `workspace_id '*' requires project_number ${String(pinnedProj)} inside nested executeCode.`
         )
@@ -219,11 +231,12 @@ function checkPinnedProjectNumberField(
 
 function checkPinnedWorkspaceProjectNumberField(
     rawProj: unknown,
+    fieldName: string,
     effectivePinnedWs: string,
     registry: RegistryMap
 ): Record<string, unknown> | undefined {
     if (typeof rawProj === 'number' && Number.isFinite(rawProj)) {
-        return checkProjectNumAgainstPinnedWorkspace(rawProj, 'project_number', effectivePinnedWs, registry)
+        return checkProjectNumAgainstPinnedWorkspace(rawProj, fieldName, effectivePinnedWs, registry)
     }
     if (typeof rawProj !== 'string') return undefined
     const trimmed = rawProj.trim()
@@ -232,14 +245,14 @@ function checkPinnedWorkspaceProjectNumberField(
         const parsedInt = parsePrefixedProjectInt(trimmed)
         if (parsedInt === undefined) {
             return validationErrResult(
-                `project_number '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+                `${fieldName} '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
             )
         }
-        return checkProjectNumAgainstPinnedWorkspace(parsedInt, 'project_number', effectivePinnedWs, registry)
+        return checkProjectNumAgainstPinnedWorkspace(parsedInt, fieldName, effectivePinnedWs, registry)
     }
     if (trimmed !== '*' && workspacesConflict(trimmed, effectivePinnedWs, registry)) {
         return validationErrResult(
-            `project_number '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+            `${fieldName} '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
         )
     }
     return undefined
@@ -272,8 +285,12 @@ function checkRecordAgainstRpcBounds(
         const repoErr = checkScopedRepoAndOwnerFields(rec, effectivePinnedWs, registry)
         if (repoErr !== undefined) return repoErr
     }
-    const projAliasErr = checkRecordProjectAliasAgainstBounds(rec['project'], effectivePinnedWs, pinnedProj, registry)
-    if (projAliasErr !== undefined) return projAliasErr
+    for (const projAliasKey of ['project', 'project_name', 'projectName'] as const) {
+        const projAliasErr = checkRecordProjectAliasAgainstBounds(
+            rec[projAliasKey], projAliasKey, effectivePinnedWs, pinnedProj, registry
+        )
+        if (projAliasErr !== undefined) return projAliasErr
+    }
     const cwdErr = checkRecordCwdAgainstRpcBounds(rec['cwd'], effectivePinnedWs, pinnedProj, registry)
     if (cwdErr !== undefined) return cwdErr
 
@@ -283,8 +300,10 @@ function checkRecordAgainstRpcBounds(
         const pnErr = checkPinnedProjectNumberField(rec, pinnedProj, registry)
         if (pnErr !== undefined) return pnErr
     } else if (effectivePinnedWs !== undefined) {
-        const wsProjErr = checkPinnedWorkspaceProjectNumberField(rec['project_number'], effectivePinnedWs, registry)
-        if (wsProjErr !== undefined) return wsProjErr
+        for (const pnKey of ['project_number', 'projectNumber', 'project_id', 'projectId'] as const) {
+            const wsProjErr = checkPinnedWorkspaceProjectNumberField(rec[pnKey], pnKey, effectivePinnedWs, registry)
+            if (wsProjErr !== undefined) return wsProjErr
+        }
     }
     return undefined
 }

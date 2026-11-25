@@ -157,6 +157,14 @@ function computeGroupNamespaceProperty(
     if (resolvedKey === 'getConfig') return createGetConfigInterceptor()
     if (resolvedKey === 'getBriefing') return createGetBriefingInterceptor()
     if (resolvedKey === 'readResource') return createReadResourceInterceptor()
+    if (resolvedKey === 'maintenanceUnavailable') {
+        return (): Promise<Record<string, unknown>> =>
+            Promise.resolve({
+                success: false,
+                error: 'Maintenance call is not available',
+                code: 'VALIDATION_ERROR',
+            })
+    }
     if (resolvedKey === 'then') return undefined
 
     const snakeKey = /[A-Z]/.test(resolvedKey)

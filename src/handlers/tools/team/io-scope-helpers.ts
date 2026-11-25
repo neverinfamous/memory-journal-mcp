@@ -260,6 +260,7 @@ async function readAndConvertSingleExternalFile(
 
 async function readExternalMarkdownChunks(
     pinnedSourceDir: string,
+    allowedRoots: string[],
     mdFiles: string[],
     sourceFormat: SourceFormat,
     defaultEntryType: EntryType | undefined
@@ -277,12 +278,13 @@ async function readExternalMarkdownChunks(
         if (realpathSync.native(pinnedSourceDir) !== pinnedSourceDir) {
             throw new Error('Source directory realpath changed during import scan.')
         }
+        assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
         const outcomes = await Promise.all(
             chunk.map((filename) =>
                 readAndConvertSingleExternalFile(
                     pinnedSourceDir,
                     filename,
-                    [pinnedSourceDir],
+                    allowedRoots,
                     sourceFormat,
                     defaultEntryType
                 )
@@ -307,6 +309,7 @@ export async function readAndConvertExternalMarkdownFiles(
 ): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[]; skipped: number }> {
     assertSafeDirectoryPath(sourceDir, allowedRoots)
     const pinnedSourceDir = realpathSync.native(sourceDir)
+    assertSafeDirectoryPath(pinnedSourceDir, allowedRoots)
     const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
     const allMdFiles: string[] = []
     let scannedEntries = 0
@@ -328,7 +331,7 @@ export async function readAndConvertExternalMarkdownFiles(
     const mdFiles = allMdFiles.slice(0, limit)
 
     await sendProgress(progress, 1, 3, 'Converting external formats...')
-    return readExternalMarkdownChunks(pinnedSourceDir, mdFiles, sourceFormat, defaultEntryType)
+    return readExternalMarkdownChunks(pinnedSourceDir, allowedRoots, mdFiles, sourceFormat, defaultEntryType)
 }
 
 export type TeamImportContextAuthor =

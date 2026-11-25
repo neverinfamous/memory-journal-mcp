@@ -48,8 +48,8 @@ async function executeGetCommitHistory(
 ): Promise<Record<string, unknown> | ErrorResponse> {
     try {
         const parsedMcp = GitHistoryOptionsSchemaMcp.parse(params)
-        const cwd = resolveGitWorkingDir(parsedMcp, context.config)
         const input = GitHistoryOptionsSchema.parse(parsedMcp)
+        const cwd = resolveGitWorkingDir(input, context.config)
         if (input.uncommitted === true) {
             await sendProgress(context.progress, 0, 1, 'Fetching working-tree state...')
             const historyRequested =
@@ -89,8 +89,8 @@ async function executeSearchCommits(
 ): Promise<Record<string, unknown> | ErrorResponse> {
     try {
         const parsedMcp = GitSearchOptionsSchemaMcp.parse(params)
-        const cwd = resolveGitWorkingDir(parsedMcp, context.config)
         const input = GitSearchOptionsSchema.parse(parsedMcp)
+        const cwd = resolveGitWorkingDir(input, context.config)
         await sendProgress(context.progress, 0, 1, `Searching commits for "${input.query}"...`)
         const commits = await fetchCommits(input, cwd)
         return { success: true, commits: fenceCommitEntries(commits) }
@@ -105,8 +105,8 @@ async function executeGetReleaseInfo(
 ): Promise<Record<string, unknown> | ErrorResponse> {
     try {
         const parsedMcp = GitReleaseInfoOptionsSchemaMcp.parse(params)
-        const cwd = resolveGitWorkingDir(parsedMcp, context.config)
         const input = GitReleaseInfoOptionsSchema.parse(parsedMcp)
+        const cwd = resolveGitWorkingDir(input, context.config)
         await sendProgress(context.progress, 0, 1, 'Fetching release info...')
         const commits = await fetchCommits({ ref: input.ref, maxCount: 10 }, cwd)
         return { success: true, commits: fenceCommitEntries(commits) }
@@ -152,12 +152,12 @@ async function executeAnalyzeCommitPatterns(
 ): Promise<Record<string, unknown> | ErrorResponse> {
     try {
         const parsedMcp = GitAnalyzePatternsOptionsSchema.parse(params ?? {})
+        const max = MaxPatternCommitsSchema.parse(parsedMcp.maxCount)
         const projectNumber = StrictProjectNumberSchema.optional().parse(parsedMcp.project_number)
-        const input = { ...parsedMcp, project_number: projectNumber }
+        const input = { ...parsedMcp, maxCount: max, project_number: projectNumber }
         const cwd = resolveGitWorkingDir(input, context.config)
         const progress = context.progress
         await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
-        const max = MaxPatternCommitsSchema.parse(input.maxCount)
         const commits = await fetchCommits({ maxCount: max }, cwd)
         await sendProgress(progress, 1, 2, 'Analyzing commits...')
 

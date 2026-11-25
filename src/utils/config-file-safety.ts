@@ -43,7 +43,7 @@ export function readSafeRegularConfigTextSync(
         if (stat.size > maxBytes) {
             throw new Error(`Config file exceeds maximum allowed size (${String(maxBytes)} bytes)`)
         }
-        return { content: fs.readFileSync(fd, 'utf-8'), stat }
+        return { content: fs.readFileSync(fd, 'utf-8').replace(/^\uFEFF/, ''), stat }
     } finally {
         fs.closeSync(fd)
     }

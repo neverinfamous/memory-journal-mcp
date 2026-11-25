@@ -11,7 +11,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { milestoneCompletionPct, fenceUntrustedInline } from '../../resources/shared.js'
 import { markUntrustedContent } from '../../../utils/security-utils.js'
-import { isValidCalendarDate } from '../schemas.js'
+import { isValidCalendarDate, MAX_CONTENT_LENGTH } from '../schemas.js'
 
 const MAX_MILESTONE_DESC_CHARS = 4000
 
@@ -91,11 +91,11 @@ const isValidDueOn = (val: string): boolean => {
 const DUE_ON_MESSAGE = 'due_on must be YYYY-MM-DD or an ISO-8601 timestamp'
 
 const MilestoneCreateSchema = z.object({
-    title: z.string().min(1),
-    description: z.string().optional(),
+    title: z.string().min(1).max(255),
+    description: z.string().max(MAX_CONTENT_LENGTH).optional(),
     due_on: z.string().refine(isValidDueOn, DUE_ON_MESSAGE).nullable().optional(),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
+    owner: z.string().max(255).optional(),
+    repo: z.string().max(255).optional(),
     ...githubScopeParseFields,
 }).strict()
 const MilestoneUpdateSchemaMcp = z.object({
@@ -110,12 +110,12 @@ const MilestoneUpdateSchemaMcp = z.object({
 })
 const MilestoneUpdateSchema = z.object({
     milestone_number: z.preprocess(coerceIntString, z.number().int().positive()),
-    title: z.string().optional(),
-    description: z.string().optional(),
+    title: z.string().max(255).optional(),
+    description: z.string().max(MAX_CONTENT_LENGTH).optional(),
     due_on: z.string().refine(isValidDueOn, DUE_ON_MESSAGE).nullable().optional(),
     state: z.enum(['open', 'closed']).optional(),
-    owner: z.string().optional(),
-    repo: z.string().optional(),
+    owner: z.string().max(255).optional(),
+    repo: z.string().max(255).optional(),
     ...githubScopeParseFields,
 }).strict()
 const MilestoneDeleteSchemaMcp = z.object({

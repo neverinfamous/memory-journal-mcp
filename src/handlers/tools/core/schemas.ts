@@ -50,14 +50,14 @@ export const CreateEntrySchema = z.preprocess(
         trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),
         anchors: z.array(z.object({
-            anchor_path: z.string(),
-            anchor_type: z.string(),
+            anchor_path: z.string().max(500),
+            anchor_type: z.string().max(64),
             status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional().default('pending'),
-        })).optional(),
+        }).strict()).max(100).optional(),
         share_with_team: z.boolean().optional().default(false),
         auto_link: z.boolean().optional(),
         auto_context: z.string().optional(),
-        session_id: z.string().optional(),
+        session_id: z.string().max(255).optional(),
         relationships: z.array(
             z.preprocess(
                 preprocessRelationshipItem,

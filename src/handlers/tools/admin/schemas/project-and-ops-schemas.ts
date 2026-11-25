@@ -48,13 +48,14 @@ export const SearchAuditLogSchema = z.preprocess(
     preprocessSearchAuditLog,
     z
         .object({
-            tool_name: z.string().optional(),
-            user: z.string().optional(),
+            tool_name: z.string().max(255).optional(),
+            user: z.string().max(255).optional(),
             date_range: z
                 .object({
-                    start: z.string().optional(),
-                    end: z.string().optional(),
+                    start: z.string().max(64).optional(),
+                    end: z.string().max(64).optional(),
                 })
+                .strict()
                 .optional(),
             status: z.boolean().optional(),
             category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
@@ -67,21 +68,24 @@ export const SearchAuditLogSchema = z.preprocess(
 
 export const SearchAuditLogSchemaMcp = z.preprocess(
     preprocessSearchAuditLog,
-    z.object({
-        tool_name: z.string().optional(),
-        user: z.string().optional(),
-        date_range: z
-            .object({
-                start: z.string().optional(),
-                end: z.string().optional(),
-            })
-            .optional(),
-        status: z.boolean().optional(),
-        category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
-        limit: relaxedNumber().optional(),
-        project_number: relaxedNumber().optional(),
-        workspace_id: z.string().optional(),
-    })
+    z
+        .object({
+            tool_name: z.string().max(255).optional(),
+            user: z.string().max(255).optional(),
+            date_range: z
+                .object({
+                    start: z.string().max(64).optional(),
+                    end: z.string().max(64).optional(),
+                })
+                .strict()
+                .optional(),
+            status: z.boolean().optional(),
+            category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
+            limit: relaxedNumber().optional(),
+            project_number: relaxedNumber().optional(),
+            workspace_id: z.string().max(255).optional(),
+        })
+        .strict()
 )
 
 function coerceNonNegativeDecimal(v: unknown): unknown {

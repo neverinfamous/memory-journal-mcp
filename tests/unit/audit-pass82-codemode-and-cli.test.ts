@@ -313,15 +313,15 @@ describe('Pass 81 Audit — ReDoS Nullable Chains, Code Mode Dispatch, Filter Re
         expect(encSrc).toContain('lstatSync')
         expect(encSrc).toContain('O_NOFOLLOW')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass91')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass91')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
         const cqDef = getCodeQualityAuditPromptDefinition()
         const cqRes = await cqDef.handler(
             { target: 'src', copilot: 'false' },
             { searchByDateRange: () => [] } as unknown as Parameters<typeof cqDef.handler>[1]
         )
         const cqText = (cqRes as { messages?: { content?: { text?: string } }[] }).messages?.[0]?.content?.text ?? ''
-        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass91')
+        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass92')
         expect(cqText).toContain('prevQuantAtoms')
         expect(cqText).toContain('mj.append(entry, options)')
     })

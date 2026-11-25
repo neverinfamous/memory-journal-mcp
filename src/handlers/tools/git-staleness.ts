@@ -376,7 +376,7 @@ const CheckEntryStalenessParseSchema = z
         workspaceId: z.string().max(255).optional(),
         project_number: coercedPositiveInt.optional(),
         projectNumber: coercedPositiveInt.optional(),
-        session_id: z.string().optional(),
+        session_id: z.string().max(255).optional(),
     })
     .strict()
 

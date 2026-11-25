@@ -349,10 +349,16 @@ export function healSortByField(obj: Record<string, unknown>): boolean {
 export function healIncludeArchivedField(obj: Record<string, unknown>): boolean {
     let modified = false
     for (const aliasKey of ['is_archived', 'isArchived', 'archived', 'includeArchived'] as const) {
-        if (aliasKey in obj) {
-            if (obj['include_archived'] === undefined && typeof obj[aliasKey] === 'boolean') {
-                obj['include_archived'] = obj[aliasKey]
-            }
+        if (!(aliasKey in obj)) continue
+        const rawVal = obj[aliasKey]
+        if (typeof rawVal !== 'boolean') continue
+        if (obj['include_archived'] === undefined) {
+            obj['include_archived'] = rawVal
+            Reflect.deleteProperty(obj, aliasKey)
+            modified = true
+            continue
+        }
+        if (obj['include_archived'] === rawVal) {
             Reflect.deleteProperty(obj, aliasKey)
             modified = true
         }

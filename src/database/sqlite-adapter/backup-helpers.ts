@@ -301,6 +301,7 @@ export async function preparePreRestoreSnapshot(
         // [INVARIANT] Complete pre-swap snapshot before any swap step; if snapshot creation fails,
         // the live DB is untouched so rollback must never copy a partial oldDbBackupPath over it.
         await fs.promises.copyFile(ctx.getDbPath(), oldDbBackupPath)
+        await fs.promises.chmod(oldDbBackupPath, 0o600).catch(() => undefined)
     } catch (prepErr) {
         await unlinkBestEffort(oldDbBackupPath)
         await unlinkBestEffort(tempDbPath)
@@ -333,6 +334,7 @@ export async function applySwappedDatabase(
             error: renameErr instanceof Error ? renameErr.message : String(renameErr),
         })
         await fs.promises.copyFile(tempDbPath, dbPath)
+        await fs.promises.chmod(dbPath, 0o600).catch(() => undefined)
         await unlinkBestEffort(tempDbPath)
     }
 
@@ -379,6 +381,7 @@ async function tryRollbackCopy(
     const dbPath = ctx.getDbPath()
     try {
         await fs.promises.copyFile(oldDbBackupPath, dbPath)
+        await fs.promises.chmod(dbPath, 0o600).catch(() => undefined)
         await unlinkBestEffort(`${dbPath}-wal`)
         await unlinkBestEffort(`${dbPath}-shm`)
         return true

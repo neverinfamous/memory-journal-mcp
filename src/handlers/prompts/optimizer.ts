@@ -60,9 +60,11 @@ function resolveOptimizeTargetScope(
     if (targetProject === undefined || targetProject === '') {
         return { workspaceId: '*' }
     }
-    const numMatch = /^#?([1-9]\d*)$/.exec(targetProject)
-    if (numMatch?.[1] !== undefined) {
-        const parsedNum = parseCanonicalPositiveInt(numMatch[1])
+    const trimmedTarget = targetProject.trim()
+    if (/^#?[+-]?\d+$/.test(trimmedTarget)) {
+        const parsedNum = /^#?([1-9]\d*)$/.test(trimmedTarget)
+            ? parseCanonicalPositiveInt(trimmedTarget.replace(/^#/, ''))
+            : undefined
         if (parsedNum === undefined) {
             throw new ValidationError(
                 `Invalid project '${targetProject}'. Expected a canonical positive integer or a registered project name.`

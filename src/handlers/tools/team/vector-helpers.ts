@@ -286,7 +286,7 @@ const TeamRebuildVectorIndexSchema = z
     .object({
         workspace_id: z.string().max(255).optional(),
         project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
-        session_id: z.string().optional(),
+        session_id: z.string().max(255).optional(),
     })
     .strict()
 

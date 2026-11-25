@@ -6,6 +6,7 @@ import {
     loadProjectRegistryFromConfig,
     setActiveSessionProject,
 } from '../../utils/workspace-resolver.js'
+import { sanitizePromptTarget } from './adversarial-helpers.js'
 
 /**
  * Extract the configured `project_number` from a registry entry, if present
@@ -169,6 +170,22 @@ function resolveActiveBriefingLabel(
     return ''
 }
 
+function sanitizeBriefingErrorToken(token: string): string {
+    let cleaned = ''
+    for (const ch of token) {
+        const cp = ch.codePointAt(0)
+        if (
+            cp !== undefined &&
+            (cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0x2028 || cp === 0x2029)
+        ) {
+            cleaned += ' '
+        } else {
+            cleaned += ch
+        }
+    }
+    return sanitizePromptTarget(cleaned).slice(0, 120)
+}
+
 function buildBriefingLoadErrorResponse(
     registry: Record<string, ProjectRegistryEntry>,
     registryKeys: string[],
@@ -177,10 +194,10 @@ function buildBriefingLoadErrorResponse(
 ): { messages: PromptMessage[] } {
     let errorMsg = `Error resolving requested projects:\n`
     if (notFound.length > 0) {
-        errorMsg += `- Not found: ${notFound.join(', ')}\n`
+        errorMsg += `- Not found: ${notFound.map(sanitizeBriefingErrorToken).join(', ')}\n`
     }
     if (ambiguous.length > 0) {
-        errorMsg += `- Ambiguous: ${ambiguous.join(', ')}\n`
+        errorMsg += `- Ambiguous: ${ambiguous.map(sanitizeBriefingErrorToken).join(', ')}\n`
     }
     const availableList = registryKeys
         .map((k) => {

@@ -238,7 +238,7 @@ export const TeamSemanticSearchSchema = z.preprocess(
                 .optional()
                 .describe('Filter results by GitHub Actions workflow run ID'),
             include_archived: z.boolean().optional().default(false),
-            session_id: z.string().optional(),
+            session_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -284,7 +284,7 @@ export const TeamAddToVectorIndexSchema = z
         entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
         project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
         workspace_id: z.string().max(255).optional(),
-        session_id: z.string().optional(),
+        session_id: z.string().max(255).optional(),
     })
     .strict()
 
@@ -379,7 +379,7 @@ export const TeamCrossProjectInsightsSchema = z
             .describe(
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
-        session_id: z.string().optional(),
+        session_id: z.string().max(255).optional(),
     })
     .strict()
 

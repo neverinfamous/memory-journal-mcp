@@ -20,7 +20,8 @@ export {
 
 const NUMERIC_ID_KEYS = [
     'entry_id', 'entryId', 'id', 'from_entry_id', 'fromEntryId', 'to_entry_id', 'toEntryId',
-    'project_number', 'projectNumber', 'issue_number', 'issueNumber', 'pr_number', 'prNumber',
+    'project_number', 'projectNumber', 'project_id', 'projectId',
+    'issue_number', 'issueNumber', 'pr_number', 'prNumber',
     'milestone_number', 'milestoneNumber', 'offset', 'limit',
 ]
 

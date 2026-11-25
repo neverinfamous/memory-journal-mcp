@@ -38,9 +38,10 @@ function isYamlPath(configPath: string): boolean {
  * Throws `RegistryConfigError` on syntax errors.
  */
 export function parseConfigObjectContent(configPath: string, raw: string): unknown {
+    const cleanRaw = raw.replace(/^\uFEFF/, '')
     const yamlMode = isYamlPath(configPath)
     try {
-        return yamlMode ? (parseYaml as (text: string) => unknown)(raw) : JSON.parse(raw)
+        return yamlMode ? (parseYaml as (text: string) => unknown)(cleanRaw) : JSON.parse(cleanRaw)
     } catch (err) {
         throw new RegistryConfigError(
             `Refusing to load project registry from ${configPath}: invalid ${yamlMode ? 'YAML' : 'JSON'}`,

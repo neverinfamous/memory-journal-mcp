@@ -91,11 +91,20 @@ export function unpackFilterContainers(obj: Record<string, unknown>): boolean {
     for (const containerKey of ['filters', 'filter']) {
         if (!(containerKey in obj)) continue
         const val = obj[containerKey]
-        Reflect.deleteProperty(obj, containerKey)
-        modified = true
         if (!isRecord(val)) continue
+        let hasConflict = false
         for (const [k, v] of Object.entries(val)) {
-            if (obj[k] === undefined && v !== undefined) obj[k] = v
+            if (v === undefined) continue
+            if (obj[k] === undefined) {
+                obj[k] = v
+                modified = true
+            } else if (!Object.is(obj[k], v)) {
+                hasConflict = true
+            }
+        }
+        if (!hasConflict) {
+            Reflect.deleteProperty(obj, containerKey)
+            modified = true
         }
     }
     return modified
@@ -161,14 +170,14 @@ const SEARCH_KEY_ALIAS_MAP: Record<string, string> = {
     excluded_tags: 'exclude_tags',
 }
 
-const SCOPE_CONFLICT_PRESERVED_KEYS = new Set([
-    'project_id',
-    'projectId',
-    'projectNumber',
-    'repo',
-    'repository',
-    'repo_name',
-])
+function searchAliasValuesEquivalent(a: unknown, b: unknown): boolean {
+    if (Object.is(a, b)) return true
+    if (typeof a === 'string' && typeof b === 'string') return a.trim() === b.trim()
+    if (Array.isArray(a) && Array.isArray(b)) {
+        return a.length === b.length && a.every((v, i) => searchAliasValuesEquivalent(v, b[i]))
+    }
+    return false
+}
 
 function healSearchSortBy(obj: Record<string, unknown>): boolean {
     if ('sort_by' in obj && typeof obj['sort_by'] === 'string') {
@@ -217,12 +226,14 @@ export function healSearchPayload(val: unknown): unknown {
         if (!Object.hasOwn(SEARCH_KEY_ALIAS_MAP, badKey)) continue
         const goodKey = SEARCH_KEY_ALIAS_MAP[badKey]
         if (goodKey === undefined) continue
-        const hasConflict =
-            SCOPE_CONFLICT_PRESERVED_KEYS.has(badKey) &&
+        if (
             goodKey in obj &&
             obj[goodKey] !== undefined &&
-            obj[goodKey] !== obj[badKey]
-        if (hasConflict) continue
+            obj[badKey] !== undefined &&
+            !searchAliasValuesEquivalent(obj[goodKey], obj[badKey])
+        ) {
+            continue
+        }
         if (obj[goodKey] === undefined && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
         Reflect.deleteProperty(obj, badKey)
         modified = true

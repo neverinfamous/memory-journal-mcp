@@ -8,7 +8,7 @@ import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { fenceUntrustedInline } from '../../resources/shared.js'
-import { coerceIntString, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
+import { coerceIntString, MAX_CONTENT_LENGTH, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { unwrapFencedRemoteText } from './fencing-helpers.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
@@ -18,14 +18,14 @@ import { resolveIssueEntryScope, scopeMismatchResponse } from './create-issue-to
 const CloseIssueHandlerInputSchema = z
     .object({
         issue_number: z.preprocess(coerceIntString, z.number().int().positive()),
-        resolution_notes: z.string().optional(),
-        comment: z.string().optional(),
+        resolution_notes: z.string().max(MAX_CONTENT_LENGTH).optional(),
+        comment: z.string().max(MAX_CONTENT_LENGTH).optional(),
         move_to_done: z.boolean().optional().default(false),
         project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema),
         workspace_id: z.string().max(255).optional(),
-        owner: z.string().optional(),
-        repo: z.string().optional(),
-        tags: z.array(z.string()).optional(),
+        owner: z.string().max(255).optional(),
+        repo: z.string().max(255).optional(),
+        tags: z.array(z.string().max(100)).max(50).optional(),
     })
     .strict()
 

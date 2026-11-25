@@ -426,6 +426,6 @@ describe('Pass 88 Audit — Pass 9 Remediations', () => {
         })
 
         expect(CANONICAL_SERVER_ENV_KEYS).toContain('MCP_CORS_ORIGIN')
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass91')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass92')
     })
 })

@@ -48,22 +48,25 @@ export function getGitHubIntegration(
     const resolvedDir = path.resolve(workingDir === '.' ? process.cwd() : workingDir)
     const normalizedDir = process.platform === 'win32' ? resolvedDir.toLowerCase() : resolvedDir
 
+    const effectiveToken = token !== undefined && token !== '' ? token : process.env['GITHUB_TOKEN']
+
     // Support instance-scoped runtime pools for multi-tenant isolation
     if (runtime) {
         runtime.githubClientPool ??= new Map<string, GitHubIntegration>()
-        const cacheKey = token
-            ? `${normalizedDir}:${createHash('sha256').update(token).digest('hex').substring(0, 12)}`
-            : normalizedDir
+        const cacheKey =
+            effectiveToken !== undefined && effectiveToken !== ''
+                ? `${normalizedDir}:${createHash('sha256').update(effectiveToken).digest('hex').substring(0, 12)}`
+                : normalizedDir
         let instance = runtime.githubClientPool.get(cacheKey)
         if (!instance) {
-            instance = new GitHubIntegration(resolvedDir, token)
+            instance = new GitHubIntegration(resolvedDir, effectiveToken)
             runtime.githubClientPool.set(cacheKey, instance)
         }
         return instance
     }
 
     // Fallback to non-pooled transient instances if no runtime is provided
-    return new GitHubIntegration(resolvedDir, token)
+    return new GitHubIntegration(resolvedDir, effectiveToken)
 }
 
 /**

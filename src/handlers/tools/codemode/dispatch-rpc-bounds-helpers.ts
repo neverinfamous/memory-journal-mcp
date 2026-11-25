@@ -192,6 +192,15 @@ function checkProjectAdminCandidate(
     return undefined
 }
 
+const DB_WIDE_BACKUP_TOOL_NAMES: ReadonlySet<string> = new Set([
+    'restore_backup',
+    'cleanup_backups',
+    'backup_journal',
+    'list_backups',
+    'team_backup',
+    'team_list_backups',
+])
+
 export function checkToolSpecificRpcBounds(
     toolName: string,
     rec: Record<string, unknown>,
@@ -199,8 +208,8 @@ export function checkToolSpecificRpcBounds(
     pinnedProj: number | undefined,
     registry: RegistryMap
 ): Record<string, unknown> | undefined {
-    if (toolName === 'update_configuration') {
-        return validationErrResult("Tool 'update_configuration' is not allowed inside a scope-narrowed nested executeCode call.")
+    if (toolName === 'update_configuration' || DB_WIDE_BACKUP_TOOL_NAMES.has(toolName)) {
+        return validationErrResult(`Tool '${toolName}' is not allowed inside a scope-narrowed nested executeCode call.`)
     }
     if (PROJECT_ADMIN_TOOL_NAMES.has(toolName)) {
         const keys =

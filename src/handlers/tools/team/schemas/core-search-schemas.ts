@@ -70,18 +70,21 @@ export const TeamCreateEntrySchema = z.preprocess(
             impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
-            session_id: z.string().optional(),
+            session_id: z.string().max(255).optional(),
             anchors: z
                 .array(
-                    z.object({
-                        anchor_path: z.string(),
-                        anchor_type: z.string(),
-                        status: z
-                            .enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable'])
-                            .optional()
-                            .default('pending'),
-                    })
+                    z
+                        .object({
+                            anchor_path: z.string().max(500),
+                            anchor_type: z.string().max(64),
+                            status: z
+                                .enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable'])
+                                .optional()
+                                .default('pending'),
+                        })
+                        .strict()
                 )
+                .max(100)
                 .optional(),
             relationships: z
                 .array(
@@ -311,7 +314,7 @@ export const TeamSearchSchema = z.preprocess(
     preprocessTeamSearchQuery,
     z
         .object({
-            query: z.string().optional(),
+            query: z.string().max(500).optional(),
             cursor: z.string().optional().describe('Cursor for pagination'),
             tags: z.array(z.string()).optional(),
             exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),

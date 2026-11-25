@@ -122,11 +122,22 @@ function normalizeSingleAnchorItem(
               ? 'symbol'
               : 'file'
     const mappedStatus =
-        rawStatus !== undefined ? (coerceAnchorStatusAlias(rawStatus) ?? 'pending') : undefined
+        rawStatus !== undefined ? (coerceAnchorStatusAlias(rawStatus) ?? rawStatus) : undefined
     const rebuilt: Record<string, unknown> = {
         anchor_path: normalizedPath,
         anchor_type: normalizedType,
         ...(mappedStatus !== undefined ? { status: mappedStatus } : {}),
+    }
+    for (const [k, v] of Object.entries(itemObj)) {
+        if (
+            k === 'anchor_path' || k === 'anchorPath' || k === 'path' || k === 'file' ||
+            k === 'filepath' || k === 'filePath' || k === 'value' || k === 'target' ||
+            k === 'uri' || k === 'location' || k === 'anchor_type' || k === 'anchorType' ||
+            k === 'type' || k === 'status'
+        ) {
+            continue
+        }
+        rebuilt[k] = v
     }
     const changed =
         itemObj['anchor_path'] !== rebuilt['anchor_path'] ||

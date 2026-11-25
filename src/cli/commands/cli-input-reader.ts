@@ -81,7 +81,7 @@ export function readBoundedCliInputFile(
             }
             chunks.push(Buffer.from(buf.subarray(0, bytesRead)))
         }
-        return Buffer.concat(chunks, totalBytes).toString('utf-8')
+        return Buffer.concat(chunks, totalBytes).toString('utf-8').replace(/^\uFEFF/, '')
     } finally {
         fs.closeSync(fd)
     }

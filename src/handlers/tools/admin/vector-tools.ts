@@ -59,7 +59,7 @@ async function executeRebuildVectorIndex(
             .object({
                 project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
                 workspace_id: z.string().max(255).optional(),
-                session_id: z.string().optional(),
+                session_id: z.string().max(255).optional(),
             })
             .strict()
             .parse(params)
@@ -179,7 +179,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                 .object({
                     project_number: relaxedNumber().optional(),
                     workspace_id: z.string().optional(),
-                    session_id: z.string().optional(),
+                    session_id: z.string().max(255).optional(),
                 })
                 .strict(),
             outputSchema: RebuildVectorIndexOutputSchema,

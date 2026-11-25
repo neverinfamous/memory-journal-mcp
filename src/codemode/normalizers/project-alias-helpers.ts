@@ -241,17 +241,27 @@ export function normalizeProjectAliases(
     if (obj['workspace_id'] !== undefined) {
         Reflect.deleteProperty(obj, 'workspace')
     }
-    if (obj['project_number'] === undefined) {
-        if (obj['projectNumber'] !== undefined) obj['project_number'] = obj['projectNumber']
-    } else if (
-        typeof obj['project_number'] === 'string' &&
-        obj['project_number'].trim() === '' &&
-        obj['projectNumber'] !== undefined &&
-        !(typeof obj['projectNumber'] === 'string' && obj['projectNumber'].trim() === '')
-    ) {
-        obj['project_number'] = obj['projectNumber']
+    for (const projKey of ['projectNumber', 'project_id', 'projectId'] as const) {
+        const aliasVal = obj[projKey]
+        if (aliasVal === undefined) continue
+        const canonicalVal = obj['project_number']
+        const canonicalBlank = typeof canonicalVal === 'string' && canonicalVal.trim() === ''
+        const aliasBlank = typeof aliasVal === 'string' && aliasVal.trim() === ''
+        if (canonicalVal === undefined || (canonicalBlank && !aliasBlank)) {
+            obj['project_number'] = aliasVal
+            Reflect.deleteProperty(obj, projKey)
+            continue
+        }
+        if (aliasBlank && !canonicalBlank) continue
+        const matchesCanonical =
+            Object.is(canonicalVal, aliasVal) ||
+            ((typeof canonicalVal === 'string' || typeof canonicalVal === 'number') &&
+                (typeof aliasVal === 'string' || typeof aliasVal === 'number') &&
+                String(canonicalVal).trim() === String(aliasVal).trim())
+        if (matchesCanonical) {
+            Reflect.deleteProperty(obj, projKey)
+        }
     }
-    Reflect.deleteProperty(obj, 'projectNumber')
     if (!allowProjectAlias) return undefined
     for (const projAlias of ['project_name', 'projectName', 'project'] as const) {
         if (obj[projAlias] === undefined) continue
