@@ -147,26 +147,27 @@ memory-journal-mcp/
 │   ├── test-import.ts                       # Smoke checks compiled tool, resource, and prompt imports
 │   ├── update-badges.ts                     # Updates README test and coverage badges
 │   ├── update-code-map.ts                   # Regenerates test-server/code-map.md from live registries
-│   └── vendor-doc-neutralizer.ts            # Strips host-local references from synced vendor docs
+│   ├── vendor-doc-neutralizer.ts            # Strips host-local references from synced vendor docs
+│   └── vendor-import-scanner.ts             # Lightweight comment/string-aware ESM module specifier scanner for sync-vendor
 ├── skills/ (1 file)                         # Bundled SEP-2640 memory-journal-mcp agent skill
 ├── src/                                     # Memory Journal MCP Server TypeScript source
-│   ├── audit/ (8 files)                     # AuditInterceptor and JSONL audit log writers
+│   ├── audit/ (9 files)                     # AuditInterceptor and JSONL audit log writers
 │   ├── auth/ (15 files)                     # OAuth 2.1, JWKS, and scope validation middleware
-│   ├── cli/ (30 files)                      # CLI option parsing, config loading, and admin subcommands
-│   ├── codemode/ (71 files)                 # V8 isolate Code Mode sandbox and mj.* API bridges
+│   ├── cli/ (33 files)                      # CLI option parsing, config loading, and admin subcommands
+│   ├── codemode/ (73 files)                 # V8 isolate Code Mode sandbox and mj.* API bridges
 │   ├── constants/ (32 files)                # Markdown SSoT and generated server instruction modules
-│   ├── database/ (84 files)                 # SQLite (better-sqlite3/FTS5) & Team DB schema/adapters
+│   ├── database/ (87 files)                 # SQLite (better-sqlite3/FTS5) & Team DB schema/adapters
 │   ├── filtering/ (3 files)                 # Dynamic tool-group filter parser and presets
-│   ├── github/ (14 files)                   # GitHub Issues, PRs, Actions, and Projects v2 client
-│   ├── handlers/ (226 files)                # MCP tools, resources, prompts, schemas, and healers
+│   ├── github/ (18 files)                   # GitHub Issues, PRs, Actions, and Projects v2 client
+│   ├── handlers/ (234 files)                # MCP tools, resources, prompts, schemas, and healers
 │   ├── markdown/ (14 files)                 # Markdown journal export/import formatters
 │   ├── observability/ (8 files)             # OpenTelemetry metrics, server (:9465), and trace helpers
-│   ├── server/ (25 files)                   # MCP server factory, briefing, and capability wiring
+│   ├── server/ (26 files)                   # MCP server factory, briefing, and capability wiring
 │   ├── transports/ (12 files)               # stdio, Streamable HTTP, and Legacy SSE transports
 │   ├── types/ (8 files)                     # Core journal, relationship, and protocol TypeScript types
-│   ├── utils/ (36 files)                    # Security, error formatting, token estimation, and path helpers
-│   ├── vector/ (8 files)                    # Embedding provider and hybrid vector similarity index
-│   ├── vendor/ (109 files)                  # Vendored commit/exec/git-history tooling (managed by sync-vendor)
+│   ├── utils/ (37 files)                    # Security, error formatting, token estimation, and path helpers
+│   ├── vector/ (10 files)                   # Embedding provider and hybrid vector similarity index
+│   ├── vendor/ (126 files)                  # Vendored commit/exec/git-history tooling (managed by sync-vendor)
 │   ├── index.ts                             # CLI and server startup entrypoint
 │   └── version.ts                           # Runtime package.json version loader
 ├── test-server/                             # Manual QA coordinators, Docker infra, and code maps
@@ -189,21 +190,22 @@ memory-journal-mcp/
 │   ├── e2e/ (70 files)                      # Playwright MCP protocol, transport, and OAuth E2E specs
 │   ├── filtering/ (1 file)                  # Tool filtering preset tests
 │   ├── github/ (9 files)                    # GitHub API integration and mocking tests
-│   ├── handlers/ (64 files)                 # Tool, resource, prompt, and schema handler tests
+│   ├── handlers/ (65 files)                 # Tool, resource, prompt, and schema handler tests
 │   ├── integration/ (5 files)               # End-to-end database/server integration specs
 │   ├── markdown/ (6 files)                  # Markdown export/import round-trip tests
 │   ├── observability/ (6 files)             # Metrics and telemetry endpoint tests
 │   ├── security/ (3 files)                  # Injection, path traversal, and SSRF guard tests
 │   ├── server/ (8 files)                    # Server wiring, briefing, and startup tests
 │   ├── transports/ (6 files)                # HTTP/SSE/stdio transport tests
-│   ├── unit/ (131 files)                    # Focused unit tests including vendor-doc-neutralizer
+│   ├── unit/ (150 files)                    # Focused unit tests including vendor-doc-neutralizer
 │   ├── utils/ (12 files)                    # Utility and validation tests
 │   ├── vector/ (5 files)                    # Embedding and vector search tests
 │   ├── build-externals.test.ts              # Built dist/ externals verification test
 │   ├── codemode-healing-guardrails.test.ts  # Code Mode autonomous healing guardrail tests
 │   ├── edge-cases.test.ts                   # Anti-hallucination payload normalization edge-case tests
 │   ├── global-teardown.ts                   # Cleans temporary test backup artifacts after Vitest runs
-│   └── README.md                            # Automated test execution guide
+│   ├── README.md                            # Automated test execution guide
+│   └── vitest-env-reset.ts                  # Vitest setup restoring process.env and mocks between tests
 ├── AGENT_README.md                          # Agent-optimized repository quick reference
 ├── AGENTS.md                                # Repository-local rules (pnpm gates, codegen, vendor parity)
 ├── CHANGELOG.md                             # Version changelog
