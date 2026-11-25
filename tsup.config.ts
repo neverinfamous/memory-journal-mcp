@@ -9,7 +9,9 @@ const sharedOptions = {
     format: ['esm'] as ('esm')[],
     platform: 'node' as const,
     dts: false,
-    treeshake: true,
+    // [INTENT] esbuild performs native ESM tree-shaking; disabling tsup's secondary
+    // Rollup pass avoids spurious UNUSED_EXTERNAL_IMPORT warnings on split vendor chunks.
+    treeshake: false,
     sourcemap: false,
     minify: false,
     outDir: 'dist',
