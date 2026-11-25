@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 
 /** [INVARIANT] Stored under gitignored `.test-output/` so an aborted sync never dirties `src/vendor/`. */
@@ -174,33 +174,111 @@ function hasGitMarkerUpTree(startDir: string): boolean {
   }
 }
 
+function resolveGitDirFast(cwd: string): string | null {
+  if (
+    process.env['GIT_DIR'] !== undefined ||
+    process.env['GIT_WORK_TREE'] !== undefined ||
+    process.env['GIT_COMMON_DIR'] !== undefined
+  ) {
+    return null;
+  }
+  const gitPath = join(cwd, '.git');
+  const gitStat = lstatSync(gitPath, { throwIfNoEntry: false });
+  if (gitStat === undefined || gitStat.isSymbolicLink() || !gitStat.isDirectory()) return null;
+  const headStat = lstatSync(join(gitPath, 'HEAD'), { throwIfNoEntry: false });
+  if (headStat === undefined || headStat.isSymbolicLink() || !headStat.isFile()) return null;
+  return gitPath;
+}
+
+/**
+ * Reject symlinks anywhere along `rootDir` -> `targetPath` (inclusive) so an intermediate
+ * symlinked directory cannot bypass leaf `lstatSync` containment checks.
+ */
+export function assertNoSymlinkInSubpath(rootDir: string, targetPath: string, label: string): void {
+  const resolvedRoot = resolve(rootDir);
+  const resolvedTarget = resolve(targetPath);
+  const rel = relative(resolvedRoot, resolvedTarget);
+  if (rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)) {
+    throw new Error(`Path escapes containment root (${label}): ${targetPath}`);
+  }
+  const rootStat = lstatSync(resolvedRoot, { throwIfNoEntry: false });
+  if (rootStat?.isSymbolicLink() === true) {
+    throw new Error(`Refusing symbolic link at ${label} root: ${resolvedRoot}`);
+  }
+  if (rel === '') return;
+  let current = resolvedRoot;
+  for (const segment of rel.split(sep)) {
+    if (segment === '' || segment === '.') continue;
+    current = join(current, segment);
+    const st = lstatSync(current, { throwIfNoEntry: false });
+    if (st === undefined) break;
+    if (st.isSymbolicLink()) {
+      throw new Error(`Refusing symbolic link in ${label}: ${current}`);
+    }
+  }
+}
+
+/**
+ * Refuse syncing from upstream library directories that contain uncommitted changes unless
+ * `--allow-dirty` is set, preventing WIP edits from being stamped with an unrelated `HEAD` SHA.
+ */
+export function assertCleanUpstreamLibPaths(
+  upstreamRoot: string,
+  sourceDirs: readonly string[],
+  allowDirty: boolean
+): void {
+  if (allowDirty || sourceDirs.length === 0) return;
+  const normalizedDirs = [...new Set(sourceDirs.map((d) => d.replace(/\\/g, '/').replace(/\/+$/, '')))];
+  const rawStatus = execFileSync(
+    'git',
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', ...normalizedDirs],
+    {
+      cwd: upstreamRoot,
+      encoding: 'utf8',
+      maxBuffer: GIT_STATUS_MAX_BUFFER,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    }
+  );
+  const dirtySet = new Set(parseGitPorcelainZ(rawStatus));
+  if (dirtySet.size === 0) return;
+
+  const sorted = [...dirtySet].sort();
+  const extra = sorted.length > MAX_FOREIGN_PREVIEW ? ` (+ ${String(sorted.length - MAX_FOREIGN_PREVIEW)} more)` : '';
+  throw new Error(
+    `Refusing vendor sync: upstream source paths contain uncommitted changes (${sorted.slice(0, MAX_FOREIGN_PREVIEW).join(', ')}${extra}). Commit or stash upstream WIP, or pass --allow-dirty.`
+  );
+}
+
 /**
  * Refuse vendor writes while `.git/index.lock` is active or when uncommitted changes
  * touch files outside `src/vendor/VENDOR.json` and `src/vendor/<libsToSync>/`.
  */
 export function assertSafeSyncWorktree(cwd: string, libsToSync: readonly string[], allowDirty: boolean): void {
-  let gitDirRaw: string;
-  try {
-    gitDirRaw = execFileSync('git', ['rev-parse', '--git-dir'], {
-      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
-    }).trim();
-  } catch (err: unknown) {
-    const status = typeof err === 'object' && err !== null && 'status' in err ? err.status : undefined;
-    const stderrText =
-      typeof err === 'object' && err !== null && 'stderr' in err && err.stderr !== undefined
-        ? String(err.stderr)
-        : '';
-    if (
-      status === 128 &&
-      /not a git repository/i.test(stderrText) &&
-      !hasGitMarkerUpTree(cwd)
-    ) {
-      return;
+  let gitDirRaw = resolveGitDirFast(cwd);
+  if (gitDirRaw === null) {
+    try {
+      gitDirRaw = execFileSync('git', ['rev-parse', '--git-dir'], {
+        cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+      }).trim();
+    } catch (err: unknown) {
+      const status = typeof err === 'object' && err !== null && 'status' in err ? err.status : undefined;
+      const stderrText =
+        typeof err === 'object' && err !== null && 'stderr' in err && err.stderr !== undefined
+          ? String(err.stderr)
+          : '';
+      if (
+        status === 128 &&
+        /not a git repository/i.test(stderrText) &&
+        !hasGitMarkerUpTree(cwd)
+      ) {
+        return;
+      }
+      throw new Error(
+        `Failed to verify git worktree safety at ${cwd}: ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
+      );
     }
-    throw new Error(
-      `Failed to verify git worktree safety at ${cwd}: ${err instanceof Error ? err.message : String(err)}`,
-      { cause: err }
-    );
   }
   if (gitDirRaw === '') return;
 

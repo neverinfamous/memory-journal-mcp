@@ -1,22 +1,20 @@
 import { parseArgs } from 'node:util';
-import { readFileSync, mkdirSync, existsSync, readdirSync, lstatSync } from 'node:fs';
+import { readFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, resolve, relative, isAbsolute, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { builtinModules } from 'node:module';
-import ts from 'typescript';
 import { z } from 'zod';
 import {
   acquireSyncVendorLock,
+  assertCleanUpstreamLibPaths,
+  assertNoSymlinkInSubpath,
   assertSafeSyncWorktree,
   writeBufferAtomicIfChanged,
 } from './sync-vendor-guards.js';
+import { collectModuleSpecifiers } from './vendor-import-scanner.js';
 import { hasHostScriptReferences, neutralizeVendoredDoc } from './vendor-doc-neutralizer.js';
 
 const BUILTIN_MODULES = new Set(builtinModules);
-
-function collectModuleSpecifiers(source: string): string[] {
-  return ts.preProcessFile(source, true, true).importedFiles.map((entry) => entry.fileName);
-}
 
 /**
  * Extract relative and third-party package specifiers using TypeScript's lightweight preprocessor scan.
@@ -52,11 +50,11 @@ function resolveUpstreamRoot(cwd: string, explicit?: string): string {
     return resolve(cwd, configured);
   }
   const parentDir = resolve(cwd, '..');
-  if (existsSync(parentDir)) {
+  if (statSync(parentDir, { throwIfNoEntry: false })?.isDirectory() === true) {
     for (const entry of readdirSync(parentDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const candidate = join(parentDir, entry.name);
-      if (existsSync(join(candidate, '.agents', 'scripts', 'lib-agent-exec', 'agent-exec.ts'))) {
+      if (statSync(join(candidate, '.agents', 'scripts', 'lib-agent-exec', 'agent-exec.ts'), { throwIfNoEntry: false }) !== undefined) {
         return candidate;
       }
     }
@@ -141,12 +139,12 @@ function stageVendorWrites(
   const stagedPaths = new Set<string>();
   const nextManifest = structuredClone(manifest);
   const syncedAt = new Date().toISOString();
+  const vendorRoot = resolve(join(cwd, 'src', 'vendor'));
+  const upstreamResolved = resolve(upstreamRoot);
 
   for (const lib of libsToSync) {
     const libConfig = nextManifest.libs[lib];
     if (libConfig === undefined) continue;
-    const vendorRoot = resolve(join(cwd, 'src', 'vendor'));
-    const upstreamResolved = resolve(upstreamRoot);
     const sourceDir = resolve(join(upstreamResolved, libConfig.source));
     const sourceDirRel = relative(upstreamResolved, sourceDir);
     if (sourceDirRel === '..' || sourceDirRel.startsWith('..' + sep) || isAbsolute(sourceDirRel)) {
@@ -163,17 +161,13 @@ function stageVendorWrites(
       if (srcRel === '..' || srcRel.startsWith('..' + sep) || isAbsolute(srcRel)) {
         throw new Error(`Vendor source path escapes upstream library root: ${file}`);
       }
-      if (lstatSync(srcFile, { throwIfNoEntry: false })?.isSymbolicLink()) {
-        throw new Error(`Refusing symbolic link in vendor source: ${file}`);
-      }
+      assertNoSymlinkInSubpath(upstreamResolved, srcFile, `vendor source ${lib}`);
       const destFile = resolve(join(destDir, file));
       const destRel = relative(destDir, destFile);
       if (destRel === '..' || destRel.startsWith('..' + sep) || isAbsolute(destRel)) {
         throw new Error(`Vendor destination path escapes src/vendor/${lib}: ${file}`);
       }
-      if (lstatSync(destFile, { throwIfNoEntry: false })?.isSymbolicLink()) {
-        throw new Error(`Refusing symbolic link at vendor destination: ${file}`);
-      }
+      assertNoSymlinkInSubpath(vendorRoot, destFile, `vendor destination ${lib}`);
       stagedPaths.add(destFile);
       if (file.endsWith('.ts')) {
         const content = readFileSync(srcFile, 'utf8');
@@ -194,6 +188,21 @@ function stageVendorWrites(
   return { writes, stagedTsSources, stagedPaths, nextManifest };
 }
 
+function targetExists(
+  target: string,
+  existingTargets: Set<string>,
+  missingTargets: Set<string>
+): boolean {
+  if (existingTargets.has(target)) return true;
+  if (missingTargets.has(target)) return false;
+  if (statSync(target, { throwIfNoEntry: false }) !== undefined) {
+    existingTargets.add(target);
+    return true;
+  }
+  missingTargets.add(target);
+  return false;
+}
+
 function validateVendorLibraries(
   cwd: string,
   libsToSync: string[],
@@ -209,21 +218,17 @@ function validateVendorLibraries(
   for (const lib of libsToSync) {
     const libConfig = manifest.libs[lib];
     if (libConfig === undefined) continue;
+    const libRoot = resolve(join(cwd, 'src', 'vendor', lib));
     for (const file of libConfig.files) {
       if (!file.endsWith('.ts')) continue;
-      const filePath = resolve(join(cwd, 'src', 'vendor', lib, file));
+      const filePath = resolve(join(libRoot, file));
       const source = stagedTsSources?.get(filePath) ?? readFileSync(filePath, 'utf8');
       const { relative: relativeSpecifiers, packages } = classifyVendorSpecifiers(source);
       for (const specifier of relativeSpecifiers) {
         const target = resolve(dirname(filePath), specifier.replace(/\.js$/, '.ts'));
-        if (existingTargets.has(target)) continue;
-        if (!missingTargets.has(target)) {
-          if (existsSync(target)) {
-            existingTargets.add(target);
-            continue;
-          }
-          missingTargets.add(target);
-        }
+        const targetRel = relative(libRoot, target);
+        const escapesLib = targetRel === '..' || targetRel.startsWith('..' + sep) || isAbsolute(targetRel);
+        if (!escapesLib && targetExists(target, existingTargets, missingTargets)) continue;
         const normalizedSpecifier = specifier.replace(/\\/g, '/');
         const normalizedFile = file.replace(/\\/g, '/');
         const users = unresolved.get(`${lib}/${normalizedSpecifier}`) ?? new Set<string>();
@@ -241,21 +246,30 @@ function validateVendorLibraries(
   return { unresolved, missing };
 }
 
-function findNonNeutralVendorDocs(cwd: string, libsToSync: string[], manifest: VendorManifest): string[] {
-  const offenders: string[] = [];
+function findVendorDocsAndMissingFiles(
+  cwd: string,
+  libsToSync: string[],
+  manifest: VendorManifest
+): { missingFiles: string[]; nonNeutralDocs: string[] } {
+  const missingFiles: string[] = [];
+  const nonNeutralDocs: string[] = [];
   for (const lib of libsToSync) {
     const libConfig = manifest.libs[lib];
     if (libConfig === undefined) continue;
     for (const file of libConfig.files) {
-      if (!file.endsWith('.md')) continue;
       const filePath = resolve(join(cwd, 'src', 'vendor', lib, file));
-      if (!existsSync(filePath)) continue;
-      if (hasHostScriptReferences(readFileSync(filePath, 'utf8'))) {
-        offenders.push(`${lib}/${file.replace(/\\/g, '/')}`);
+      const normalized = `${lib}/${file.replace(/\\/g, '/')}`;
+      const st = statSync(filePath, { throwIfNoEntry: false });
+      if (st === undefined || !st.isFile()) {
+        missingFiles.push(normalized);
+        continue;
+      }
+      if (file.endsWith('.md') && hasHostScriptReferences(readFileSync(filePath, 'utf8'))) {
+        nonNeutralDocs.push(normalized);
       }
     }
   }
-  return offenders;
+  return { missingFiles, nonNeutralDocs };
 }
 
 function assertNoVendorIssues(
@@ -326,8 +340,8 @@ function runVendorSelfTests(
   }
   const testFiles =
     rawLib === 'lib-agent-exec'
-      ? ['tests/unit/vendor-doc-neutralizer.test.ts']
-      : ['tests/unit/git-tools.test.ts', 'tests/unit/vendor-doc-neutralizer.test.ts'];
+      ? ['tests/unit/sync-vendor-guards.test.ts', 'tests/unit/vendor-doc-neutralizer.test.ts']
+      : ['tests/unit/git-tools.test.ts', 'tests/unit/sync-vendor-guards.test.ts', 'tests/unit/vendor-doc-neutralizer.test.ts'];
   execFileSync(process.execPath, [join(cwd, 'node_modules', 'vitest', 'vitest.mjs'), 'run', ...testFiles], {
     stdio: 'inherit',
     shell: false,
@@ -363,6 +377,20 @@ function validateAndAssertLibraries(
 function runCheckMode(cwd: string, vendorJsonPath: string, rawLib?: string, rawUpstream?: string): void {
   const vendorData = VendorManifestSchema.parse(JSON.parse(readFileSync(vendorJsonPath, 'utf8')));
   const libsToSync = resolveSelectedLibs(vendorData, rawLib);
+
+  // [INVARIANT] Synced docs are neutralized at stage time; --check guards against missing files or hand-copied upstream READMEs.
+  const { missingFiles, nonNeutralDocs } = findVendorDocsAndMissingFiles(cwd, libsToSync, vendorData);
+  if (missingFiles.length > 0) {
+    console.error('\nMissing vendored files listed in src/vendor/VENDOR.json (re-run `pnpm run sync:vendor`):');
+    for (const missingFile of missingFiles) console.error(`  - ${missingFile}`);
+    throw new Error('Missing vendored files found.');
+  }
+  if (nonNeutralDocs.length > 0) {
+    console.error('\nVendored docs still reference host-only `.agents/scripts` wrappers (re-run `pnpm run sync:vendor`):');
+    for (const doc of nonNeutralDocs) console.error(`  - ${doc}`);
+    throw new Error('Non-neutral vendored docs found.');
+  }
+
   const resolveUpstreamDeps = (): Record<string, string> => {
     try {
       return readUpstreamDepRanges(resolveUpstreamRoot(cwd, rawUpstream));
@@ -371,14 +399,6 @@ function runCheckMode(cwd: string, vendorJsonPath: string, rawLib?: string, rawU
     }
   };
   validateAndAssertLibraries(cwd, libsToSync, vendorData, resolveUpstreamDeps);
-
-  // [INVARIANT] Synced docs are neutralized at stage time; --check guards against hand-copied upstream READMEs.
-  const nonNeutralDocs = findNonNeutralVendorDocs(cwd, libsToSync, vendorData);
-  if (nonNeutralDocs.length > 0) {
-    console.error('\nVendored docs still reference host-only `.agents/scripts` wrappers (re-run `pnpm run sync:vendor`):');
-    for (const doc of nonNeutralDocs) console.error(`  - ${doc}`);
-    throw new Error('Non-neutral vendored docs found.');
-  }
 }
 
 function runWriteMode(
@@ -394,7 +414,16 @@ function runWriteMode(
     const libsToSync = resolveSelectedLibs(vendorData, rawLib);
     assertSafeSyncWorktree(cwd, libsToSync, allowDirty);
     const upstreamRoot = resolveUpstreamRoot(cwd, rawUpstream);
-    const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8', windowsHide: true }).trim();
+    const sourceDirs = libsToSync
+      .map((lib) => vendorData.libs[lib]?.source)
+      .filter((source): source is string => source !== undefined);
+    assertCleanUpstreamLibPaths(upstreamRoot, sourceDirs, allowDirty);
+    const headSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: upstreamRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    }).trim();
     const staged = stageVendorWrites(cwd, upstreamRoot, headSha, libsToSync, vendorData);
     validateAndAssertLibraries(cwd, libsToSync, staged.nextManifest, () => readUpstreamDepRanges(upstreamRoot), staged);
     commitStagedVendorWrites(vendorJsonPath, vendorData, libsToSync, staged);
@@ -417,6 +446,9 @@ function runSyncVendor(): void {
   const vendorJsonPath = join(cwd, 'src', 'vendor', 'VENDOR.json');
   const rawLib = typeof args.values.lib === 'string' ? args.values.lib : undefined;
   const rawUpstream = typeof args.values['upstream-root'] === 'string' ? args.values['upstream-root'] : undefined;
+  if (rawUpstream !== undefined && rawUpstream.trim() === '') {
+    throw new Error('Invalid blank --upstream-root path.');
+  }
 
   if (args.values.check) {
     runCheckMode(cwd, vendorJsonPath, rawLib, rawUpstream);

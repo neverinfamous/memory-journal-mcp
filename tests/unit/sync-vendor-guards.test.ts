@@ -3,14 +3,18 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import ts from 'typescript';
 import {
   acquireSyncVendorLock,
+  assertCleanUpstreamLibPaths,
+  assertNoSymlinkInSubpath,
   assertSafeSyncWorktree,
   isAllowedVendorSyncPath,
   parseGitPorcelainZ,
   SYNC_LOCK_REL_PATH,
   writeBufferAtomicIfChanged,
 } from '../../scripts/sync-vendor-guards.js';
+import { collectModuleSpecifiers } from '../../scripts/vendor-import-scanner.js';
 
 function runGit(cwd: string, args: string[]): string {
   return execFileSync('git', args, {
@@ -363,5 +367,128 @@ describe('sync-vendor-guards', () => {
         })
       ).toThrow(/escapes upstream root/i);
     }, 30_000);
+
+    it('CQ-1: rejects uncommitted WIP in selected upstream library paths unless --allow-dirty is set', () => {
+      const upstream = makeTempDir('sync-up-dirty-');
+      mkdirSync(path.join(upstream, '.agents', 'scripts', 'lib-agent-exec'), { recursive: true });
+      mkdirSync(path.join(upstream, 'docs'), { recursive: true });
+      writeFileSync(path.join(upstream, '.agents', 'scripts', 'lib-agent-exec', 'index.ts'), 'export const a = 1;\n', 'utf8');
+      writeFileSync(path.join(upstream, 'docs', 'notes.md'), '# docs\n', 'utf8');
+      initAndCommitTempGitRepo(upstream, 'init');
+
+      // Dirty unrelated path should not block selected lib sync
+      writeFileSync(path.join(upstream, 'docs', 'notes.md'), '# updated docs\n', 'utf8');
+      expect(() =>
+        assertCleanUpstreamLibPaths(upstream, ['.agents/scripts/lib-agent-exec'], false)
+      ).not.toThrow();
+
+      // Dirty file inside selected lib dir blocks unless allowDirty is true
+      writeFileSync(path.join(upstream, '.agents', 'scripts', 'lib-agent-exec', 'index.ts'), 'export const a = 2;\n', 'utf8');
+      expect(() =>
+        assertCleanUpstreamLibPaths(upstream, ['.agents/scripts/lib-agent-exec'], false)
+      ).toThrow(/upstream source paths contain uncommitted changes[\s\S]*index\.ts/i);
+      expect(() =>
+        assertCleanUpstreamLibPaths(upstream, ['.agents/scripts/lib-agent-exec'], true)
+      ).not.toThrow();
+    }, 30_000);
+
+    it('CQ-2: rejects intermediate directory symlinks via assertNoSymlinkInSubpath', () => {
+      const root = makeTempDir('sync-sym-root-');
+      const outside = makeTempDir('sync-sym-outside-');
+      const linkedDir = path.join(root, 'interceptors');
+      try {
+        symlinkSync(outside, linkedDir, 'dir');
+      } catch {
+        return;
+      }
+
+      const target = path.join(linkedDir, 'utils.ts');
+      expect(() => assertNoSymlinkInSubpath(root, target, 'vendor destination')).toThrow(/Refusing symbolic link/);
+    });
+
+    it('CQ-3 & CQ-5 & CQ-6: rejects blank --upstream-root, missing vendored docs, and escaping relative imports in --check mode', () => {
+      const down = makeTempDir('sync-check-hardened-');
+      mkdirSync(path.join(down, 'src', 'vendor', 'demo'), { recursive: true });
+      writeFileSync(path.join(down, 'package.json'), '{"name":"demo-down","dependencies":{}}\n', 'utf8');
+      writeFileSync(path.join(down, 'src', 'escape.ts'), 'export const leak = 1;\n', 'utf8');
+      writeFileSync(
+        path.join(down, 'src', 'vendor', 'demo', 'index.ts'),
+        "import '../../escape.js';\nexport const x = 1;\n",
+        'utf8'
+      );
+      writeFileSync(
+        path.join(down, 'src', 'vendor', 'VENDOR.json'),
+        JSON.stringify({
+          libs: {
+            demo: {
+              source: 'src',
+              files: ['index.ts', 'AGENT_README.md'],
+            },
+          },
+        }),
+        'utf8'
+      );
+
+      const tsxCli = path.resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      const syncScript = path.resolve(process.cwd(), 'scripts', 'sync-vendor.ts');
+
+      expect(() =>
+        execFileSync(process.execPath, [tsxCli, syncScript, '--check', '--upstream-root', ''], {
+          cwd: down,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        })
+      ).toThrow(/Invalid blank --upstream-root/i);
+
+      expect(() =>
+        execFileSync(process.execPath, [tsxCli, syncScript, '--check', '--lib', 'demo'], {
+          cwd: down,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        })
+      ).toThrow(/Missing vendored files[\s\S]*demo\/AGENT_README\.md/i);
+
+      writeFileSync(path.join(down, 'src', 'vendor', 'demo', 'AGENT_README.md'), '# Clean\n', 'utf8');
+      expect(() =>
+        execFileSync(process.execPath, [tsxCli, syncScript, '--check', '--lib', 'demo'], {
+          cwd: down,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        })
+      ).toThrow(/not synced[\s\S]*demo\/\.\.\/\.\.\/escape\.js/i);
+    }, 30_000);
+
+    it('PF-1: collectModuleSpecifiers matches ts.preProcessFile across all vendored TS files and edge syntax', () => {
+      // Regex literals with embedded `import '...'` must be ignored cleanly
+      expect(collectModuleSpecifiers("const r = /import 're'/g;\n")).toEqual([]);
+
+      const samples = [
+        "// import 'commented';\n/* export * from 'block'; */\nconst s = \"import 'str'\";\nconst r = /import\\s+/g;\nimport './a.js';\nexport type { Foo } from './types.js';\nexport {\n  alpha,\n  beta,\n} from './multi.js';\nobj.import('method-call');\nconst tpl = `x ${await import(`dynamic-tpl`)}`;\nconst obj = { import: 'not-import', from: 'still-not' };\nimport.meta.url;\n",
+      ];
+      for (const sample of samples) {
+        const expected = ts.preProcessFile(sample, true, true).importedFiles.map((f) => f.fileName);
+        expect(new Set(collectModuleSpecifiers(sample))).toEqual(new Set(expected));
+      }
+
+      const vendorRoot = path.resolve(process.cwd(), 'src', 'vendor');
+      const manifest = JSON.parse(readFileSync(path.join(vendorRoot, 'VENDOR.json'), 'utf8')) as {
+        libs: Record<string, { files: string[] }>;
+      };
+      let checkedFiles = 0;
+      for (const [lib, cfg] of Object.entries(manifest.libs)) {
+        for (const file of cfg.files) {
+          if (!file.endsWith('.ts')) continue;
+          const src = readFileSync(path.join(vendorRoot, lib, file), 'utf8');
+          const expected = new Set(ts.preProcessFile(src, true, true).importedFiles.map((f) => f.fileName));
+          const actual = new Set(collectModuleSpecifiers(src));
+          expect(actual, `Parity mismatch in ${lib}/${file}`).toEqual(expected);
+          checkedFiles++;
+        }
+      }
+      expect(checkedFiles).toBeGreaterThan(0);
+    });
   });
 });
