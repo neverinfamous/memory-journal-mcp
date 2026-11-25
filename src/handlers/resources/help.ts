@@ -185,9 +185,25 @@ async function handleHelpGroupResource(
         )
     }
 
-    const tools = filterVisibleHelpTools(await getAllToolDefinitionsAsync(context), context)
-    const groupTools = tools.filter((t) => t.group === groupName)
     const staticContent = HELP_CONTENT.get(groupName)
+    // [INVARIANT] Static-only topics (e.g., `gotchas`, `templates`) do not belong to any tool
+    // group; return them immediately without triggering the lazy tools/index.js dynamic import.
+    if (staticContent !== undefined && !Object.hasOwn(GROUP_DESCRIPTIONS, groupName)) {
+        return { data: staticContent }
+    }
+
+    let rawTools: MinimalToolDef[]
+    try {
+        rawTools = await getAllToolDefinitionsAsync(context)
+    } catch (err: unknown) {
+        if (staticContent !== undefined && isStaleModuleNotFoundError(err)) {
+            return { data: staticContent }
+        }
+        throw err
+    }
+
+    const tools = filterVisibleHelpTools(rawTools, context)
+    const groupTools = tools.filter((t) => t.group === groupName)
 
     if (groupTools.length > 0) {
         const toolDetails = formatGroupToolDetails(groupTools, context)
@@ -275,6 +291,24 @@ import { getRuntimeWrapperConfig } from '../tools/tool-cache-helpers.js'
 
 let toolIndexModule: { getTools: typeof getTools } | null = null
 
+/** Detect stale hashed ESM chunk import failures after an out-of-process dist/ rebuild. */
+export function isStaleModuleNotFoundError(err: unknown): boolean {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ERR_MODULE_NOT_FOUND') {
+        return true
+    }
+    const msg = err instanceof Error ? err.message : String(err)
+    return /ERR_MODULE_NOT_FOUND|Cannot find module/i.test(msg)
+}
+
+/** Format tool-definition load errors with actionable restart guidance on stale dist/ chunks. */
+export function formatHelpLoadErrorMessage(err: unknown): string {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isStaleModuleNotFoundError(err)) {
+        return `Failed to load tool definitions: ${message} 🛠️ AUTONOMOUS HEALING: dist/ was likely rebuilt while this MCP server process was running (rotating chunk hashes). Restart the memory-journal-mcp server or click Refresh in your MCP client.`
+    }
+    return `Failed to load tool definitions: ${message}`
+}
+
 /**
  * Get all tool definitions from the context's database.
  * Uses lazy dynamic import to avoid circular dependency with tools/index.ts.
@@ -313,10 +347,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
         logger.error('HELP_LOAD_TOOLS_FAILED', { error: message })
-        throw new ProtocolError(
-            ProtocolErrorCode.InternalError,
-            `Failed to load tool definitions: ${message}`
-        )
+        throw new ProtocolError(ProtocolErrorCode.InternalError, formatHelpLoadErrorMessage(e))
     }
 }
 

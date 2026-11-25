@@ -3,6 +3,7 @@
  */
 
 import {
+    isDbSourceSelector,
     isRecord,
     PARAM_ALIASES,
 } from '../normalizers/shared-utils.js'
@@ -144,6 +145,7 @@ function isExactMethod(methodLower: string | undefined, names: readonly string[]
 const EXPORT_MARKDOWN_METHODS = ['export_markdown', 'exportmarkdown', 'team_export_markdown', 'teamexportmarkdown']
 const IMPORT_EXTERNAL_METHODS = ['import_external', 'importexternal', 'team_import_external', 'teamimportexternal']
 const IMPORT_MARKDOWN_METHODS = ['import_markdown', 'importmarkdown', 'team_import_markdown', 'teamimportmarkdown']
+const MERGE_TAG_METHODS_LOWER = ['merge_tags', 'mergetags', 'team_merge_tags', 'teammergetags']
 
 /** camelCase → snake_case plus context-aware renames (id, link params, type, filename, target_user). */
 function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
@@ -264,8 +266,16 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
     ) {
         return startKey
     }
-    if (startKey === 'source' && isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS)) return 'source_format'
-    if (startKey === 'source' && isExactMethod(methodLower, IMPORT_MARKDOWN_METHODS)) return startKey
+    if (startKey === 'source') {
+        if (isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS)) return 'source_format'
+        if (
+            isExactMethod(methodLower, MERGE_TAG_METHODS_LOWER) ||
+            (methodLower === undefined && !isDbSourceSelector(obj))
+        ) {
+            return alias
+        }
+        return startKey
+    }
     if (startKey === 'path') {
         const pathKey = pathAliasReplacement(methodLower)
         if (pathKey === 'keep') return alias
