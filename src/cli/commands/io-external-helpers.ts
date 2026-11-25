@@ -8,6 +8,7 @@ const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const MAX_DIRECTORY_SCAN_ENTRIES = 10_000
 const DEFAULT_EXTERNAL_IMPORT_LIMIT = 500
 const READ_CONCURRENCY = 16
+const FILENAME_COLLATOR = new Intl.Collator()
 
 type ExternalImportFormat = 'notion' | 'obsidian' | 'logseq'
 
@@ -80,7 +81,7 @@ export async function collectExternalMarkdownFiles(
             // Directory stream may already be closed after iteration.
         })
     }
-    allMdFiles.sort((a, b) => a.localeCompare(b))
+    allMdFiles.sort((a, b) => FILENAME_COLLATOR.compare(a, b))
     const mdFiles = allMdFiles.slice(0, limit)
 
     const parsedFiles: ParsedFile[] = []

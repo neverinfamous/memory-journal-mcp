@@ -289,7 +289,8 @@ function attachVirtualNamespaces(
     methods: Record<string, string[]>,
     safeRpcCall: (group: string, method: string, args: unknown[]) => Promise<unknown>,
     invokeRpc: (group: string, method: string, args: unknown[]) => Promise<unknown>,
-    contextObj?: Record<string, unknown>
+    contextObj?: Record<string, unknown>,
+    isAlreadyDeepFrozen = false
 ): void {
     api['schema'] = createSchemaProxy(safeRpcCall)
     api['help'] = () => {
@@ -316,7 +317,7 @@ function attachVirtualNamespaces(
     api['system'] = systemProxy
     api['adapters'] = systemProxy
 
-    const { contextProxy, getContextRpc } = createContextNamespaceProxy(contextObj)
+    const { contextProxy, getContextRpc } = createContextNamespaceProxy(contextObj, isAlreadyDeepFrozen)
     api['context'] = contextProxy
     api['getContext'] = getContextRpc
     api['get_context'] = getContextRpc
@@ -346,7 +347,8 @@ export function buildApiProxy(
     methods: Record<string, string[]>,
     schemas?: Record<string, Record<string, string>>,
     readonlyMode?: boolean,
-    contextObj?: Record<string, unknown>
+    contextObj?: Record<string, unknown>,
+    isAlreadyDeepFrozen = false
 ): Record<string, unknown> {
     const api = createNullProtoRecord()
     const methodToGroup = new Map<string, string>()
@@ -404,7 +406,7 @@ export function buildApiProxy(
         })
     }
 
-    attachVirtualNamespaces(api, methods, safeRpcCall, invokeRpc, contextObj)
+    attachVirtualNamespaces(api, methods, safeRpcCall, invokeRpc, contextObj, isAlreadyDeepFrozen)
     Object.freeze(api)
 
     return new Proxy(api, {

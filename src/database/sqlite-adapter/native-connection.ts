@@ -175,8 +175,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private migrateSchema(isWarmCurrent = false): void {
         const db = this.ensureDb()
 
-        // 1. Run versioned migrations (fast-path skips tx/DDL when user_version matches)
-        MigrationManager.runMigrations(db, this.teamSchemaApplied)
+        // 1. Run versioned migrations (skip duplicate user_version/table_exists probes on warm opens)
+        if (!isWarmCurrent) {
+            MigrationManager.runMigrations(db, this.teamSchemaApplied)
+        }
 
         if (isWarmCurrent) {
             const rebuildReason = detectFtsRebuildReason(db)

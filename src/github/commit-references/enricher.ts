@@ -124,7 +124,7 @@ export async function enrichCommits(
     const validHashes = commitHashes.filter((hash) => /^[0-9a-fA-F]{7,40}$/.test(hash))
     const cachedRepoInfo = github?.getCachedRepoInfo()
     const repoInfoPromise =
-        github && cachedRepoInfo === undefined
+        github && (cachedRepoInfo === undefined || cachedRepoInfo === null)
             ? github.getRepoInfo()
             : Promise.resolve(cachedRepoInfo ?? null)
 

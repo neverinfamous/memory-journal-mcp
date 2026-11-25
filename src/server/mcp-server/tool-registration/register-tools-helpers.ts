@@ -149,14 +149,16 @@ export function resolveActiveBriefingConfig(
     allowedIoRoots: string[],
     sessionRuntime?: object | null
 ): typeof DEFAULT_BRIEFING_CONFIG {
-    if (sessionRuntime === undefined) {
-        const cached = activeBriefingConfigCache.get(briefingConfig)
-        if (cached?.roots === allowedIoRoots) {
-            return cached.resolved
-        }
-    }
     const sessionCtx: { workspaceId?: string; projectNumber?: number } =
         sessionRuntime !== undefined ? getActiveSessionProject(sessionRuntime) : {}
+    const hasSessionOverride =
+        sessionCtx.workspaceId !== undefined || sessionCtx.projectNumber !== undefined
+    if (!hasSessionOverride) {
+        const cached = activeBriefingConfigCache.get(briefingConfig)
+        if (cached !== undefined) {
+            if (cached.roots === allowedIoRoots) return cached.resolved
+        }
+    }
     const resolvedRegistry = briefingConfig.projectRegistry
     const resolvedDefaultWs = briefingConfig.defaultWorkspaceId ?? sessionCtx.workspaceId
     const canonicalWs =
@@ -187,16 +189,32 @@ export function resolveActiveBriefingConfig(
         sessionCtx,
     })
     const nextConfig: typeof DEFAULT_BRIEFING_CONFIG = {
-        ...briefingConfig,
+        commitCount: briefingConfig.commitCount,
+        entryCount: briefingConfig.entryCount,
+        ...(briefingConfig.summaryCount !== undefined ? { summaryCount: briefingConfig.summaryCount } : {}),
+        includeTeam: briefingConfig.includeTeam,
+        issueCount: briefingConfig.issueCount,
+        prCount: briefingConfig.prCount,
+        prStatusBreakdown: briefingConfig.prStatusBreakdown,
+        ...(briefingConfig.milestoneCount !== undefined ? { milestoneCount: briefingConfig.milestoneCount } : {}),
+        ...(briefingConfig.rulesFilePath !== undefined ? { rulesFilePath: briefingConfig.rulesFilePath } : {}),
+        ...(briefingConfig.skillsDirPath !== undefined ? { skillsDirPath: briefingConfig.skillsDirPath } : {}),
+        workflowCount: briefingConfig.workflowCount,
+        workflowStatusBreakdown: briefingConfig.workflowStatusBreakdown,
+        copilotReviews: briefingConfig.copilotReviews,
+        ...(briefingConfig.workflowSummary !== undefined ? { workflowSummary: briefingConfig.workflowSummary } : {}),
+        ...(briefingConfig.briefingImportanceThreshold !== undefined
+            ? { briefingImportanceThreshold: briefingConfig.briefingImportanceThreshold }
+            : {}),
+        ...(briefingConfig.graphPivots !== undefined ? { graphPivots: briefingConfig.graphPivots } : {}),
+        ...(briefingConfig.insights !== undefined ? { insights: briefingConfig.insights } : {}),
+        ...(briefingConfig.instructionLevel !== undefined ? { instructionLevel: briefingConfig.instructionLevel } : {}),
         allowedIoRoots,
+        ...(resolvedDefaultProj !== undefined ? { defaultProjectNumber: resolvedDefaultProj } : {}),
+        ...(resolvedRegistry !== undefined ? { projectRegistry: resolvedRegistry } : {}),
+        ...(resolvedDefaultWs !== undefined ? { defaultWorkspaceId: resolvedDefaultWs } : {}),
     }
-    if (resolvedDefaultProj !== undefined) nextConfig.defaultProjectNumber = resolvedDefaultProj
-    else delete nextConfig.defaultProjectNumber
-    if (resolvedRegistry !== undefined) nextConfig.projectRegistry = resolvedRegistry
-    else delete nextConfig.projectRegistry
-    if (resolvedDefaultWs !== undefined) nextConfig.defaultWorkspaceId = resolvedDefaultWs
-    else delete nextConfig.defaultWorkspaceId
-    if (sessionRuntime === undefined) {
+    if (!hasSessionOverride) {
         activeBriefingConfigCache.set(briefingConfig, {
             roots: allowedIoRoots,
             resolved: nextConfig,

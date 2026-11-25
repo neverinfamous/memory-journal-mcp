@@ -7,6 +7,7 @@
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import {
     exceedsMaxToolInputElements,
+    getValidatedToolInputMax,
     resolveEffectiveMaxToolInputElements,
 } from '../../../utils/tool-input-bounds.js'
 
@@ -111,7 +112,11 @@ export function validateRawPayloadSize(
     configuredMaxElements?: number
 ): string | null {
     const maxElements = resolveEffectiveMaxToolInputElements(configuredMaxElements)
-    if (exceedsMaxToolInputElements(params, maxElements)) {
+    const validatedMax = getValidatedToolInputMax(params)
+    if (
+        (validatedMax === undefined || validatedMax > maxElements) &&
+        exceedsMaxToolInputElements(params, maxElements)
+    ) {
         return `Security validation failed: Tool input exceeds maximum of ${String(maxElements)} elements`
     }
     const overLimit = (): string =>

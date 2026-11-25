@@ -119,6 +119,54 @@ export function formatVmErrorResult(
 const MAX_COMPILED_SCRIPTS = 64
 const compiledScriptCache = new Map<string, vm.Script>()
 
+export type RawSandboxCacheEntry =
+    | { ok: true; script: vm.Script }
+    | { ok: false; error: string }
+
+const rawSandboxCache = new Map<string, RawSandboxCacheEntry>()
+
+export function getCachedRawSandboxScript(rawCode: string): RawSandboxCacheEntry | undefined {
+    const cached = rawSandboxCache.get(rawCode)
+    if (cached !== undefined) {
+        rawSandboxCache.delete(rawCode)
+        rawSandboxCache.set(rawCode, cached)
+    }
+    return cached
+}
+
+export function setCachedRawSandboxScript(rawCode: string, entry: RawSandboxCacheEntry): void {
+    if (rawSandboxCache.has(rawCode)) {
+        rawSandboxCache.delete(rawCode)
+    } else if (rawSandboxCache.size >= MAX_COMPILED_SCRIPTS) {
+        const oldestKey = rawSandboxCache.keys().next().value
+        if (oldestKey !== undefined) {
+            rawSandboxCache.delete(oldestKey)
+        }
+    }
+    rawSandboxCache.set(rawCode, entry)
+}
+
+/** Resolve a compiled `vm.Script` or cached validation error for raw Code Mode input. */
+export function resolveCompiledSandboxEntry(
+    code: string,
+    prepareFn: (raw: string) => { transformed: string } | { error: string }
+): RawSandboxCacheEntry {
+    const cached = getCachedRawSandboxScript(code)
+    if (cached !== undefined) return cached
+    const prepared = prepareFn(code)
+    const entry: RawSandboxCacheEntry =
+        'error' in prepared
+            ? { ok: false, error: prepared.error }
+            : {
+                  ok: true,
+                  script: getOrCompileVmScript(
+                      `"use strict";\n(async () => {\n${prepared.transformed}\n})()`
+                  ),
+              }
+    setCachedRawSandboxScript(code, entry)
+    return entry
+}
+
 let cachedMethodList: Record<string, string[]> = Object.freeze({})
 let cachedSchemaList: Record<string, Record<string, string>> | undefined
 

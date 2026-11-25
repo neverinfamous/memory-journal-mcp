@@ -21,6 +21,7 @@ import { buildApiProxy } from './worker-api-proxy.js'
 import { hardenOuterFunctionPrototypes, freezeInnerVmContext } from './worker/prototype-hardening.js'
 import { createSafeFsShim } from './worker/node-shims.js'
 import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shims.js'
+import { deepFreezeContextClone } from './worker/result-proxy-aliases.js'
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals, type ExecutionLifecycleState } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
@@ -32,8 +33,8 @@ import {
 import { createSandboxExecutor } from './worker/nested-exec-scope.js'
 import {
     formatVmErrorResult,
-    getOrCompileVmScript,
     isExecuteMessage,
+    resolveCompiledSandboxEntry,
     resolveWorkerMetadata,
     safeFormatSandboxError,
     type ExecuteWorkerMessage,
@@ -148,10 +149,12 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
         readonlyMode, dryRunMode, useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw,
         projectRegistryRaw, activeTimers, executionLifecycle,
     } = options
-    const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
+    const frozenContextObj =
+        contextObj !== undefined ? deepFreezeContextClone(contextObj) : undefined
+    const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, frozenContextObj, true)
     Object.freeze(mjApi)
 
-    const safeFsShim = createSafeFsShim(contextObj)
+    const safeFsShim = createSafeFsShim(frozenContextObj)
     const executeCodeFnRef: { current?: (...args: unknown[]) => Promise<unknown> } = {}
     const updateMemoryFnHolder: { current?: (...args: unknown[]) => unknown } = {}
 
@@ -165,7 +168,7 @@ function createVmExecutionContext(options: VmExecutionContextOptions): vm.Contex
     const updateMemoryFn = createUpdateMemoryFn(shimMj)
     updateMemoryFnHolder.current = updateMemoryFn
 
-    const frozenContext = createContextProxy(contextObj)
+    const frozenContext = createContextProxy(frozenContextObj, true)
     const vmContextRef: { current?: vm.Context } = {}
     const runIsolatedNestedCode = createIsolatedNestedRunner(
         options,
@@ -284,12 +287,11 @@ async function executeCode(
             activeTimers,
             ...(executionLifecycle !== undefined ? { executionLifecycle } : {}),
         })
-        const prepared = prepareTransformedSandboxCode(code)
-        if ('error' in prepared) {
-            return makeZeroMetricError(prepared.error)
+        const rawCached = resolveCompiledSandboxEntry(code, prepareTransformedSandboxCode)
+        if (!rawCached.ok) {
+            return makeZeroMetricError(rawCached.error)
         }
-        const script = getOrCompileVmScript(`"use strict";\n(async () => {\n${prepared.transformed}\n})()`)
-        const rawExecution: unknown = script.runInContext(context, { timeout: vmTimeoutMs })
+        const rawExecution: unknown = rawCached.script.runInContext(context, { timeout: vmTimeoutMs })
         const result: unknown = await Promise.resolve(rawExecution)
         const endTime = performance.now()
         const endCpu = process.cpuUsage(startCpu)

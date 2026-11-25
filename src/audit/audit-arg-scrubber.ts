@@ -1,7 +1,7 @@
 import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { createNullProtoRecord, isRecord } from '../utils/type-guards.js'
 import { logger } from '../utils/logger.js'
-import { estimateTokens, safeJsonStringify } from '../observability/token-estimator.js'
+import { estimatePayloadTokens, estimateTokens } from '../observability/token-estimator.js'
 import {
     isCrossRealmDate,
     isCrossRealmError,
@@ -182,7 +182,7 @@ export function estimateOperationResultTokens(result: unknown, name: string): nu
         const fastTokens = estimateEnvelopeTextTokens(result)
         if (fastTokens !== undefined) return fastTokens
         try {
-            return estimateTokens(safeJsonStringify(result), 'json')
+            return estimatePayloadTokens(result)
         } catch (serializeError) {
             logger.debug('Token estimate skipped: result is not serializable', {
                 module: 'Audit',

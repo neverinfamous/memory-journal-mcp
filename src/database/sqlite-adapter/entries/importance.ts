@@ -77,12 +77,21 @@ export function buildStatsCteBody(
  * to avoid full-table scans across all workspaces (callers must bind workspaceId first).
  * Used with buildImportanceSqlExpression.
  */
-export function buildImportanceCte(scopedToWorkspace = false): string {
-    if (scopedToWorkspace) {
+export function buildImportanceCte(
+    scopedToWorkspace = false,
+    options?: { projectNumber?: boolean; includeArchived?: boolean }
+): string {
+    const hasProject = options?.projectNumber === true
+    const excludeArchived = options?.includeArchived === false
+    if (scopedToWorkspace || hasProject || excludeArchived) {
+        const conds = ['deleted_at IS NULL']
+        if (excludeArchived) conds.push('is_archived = 0')
+        if (scopedToWorkspace) conds.push('workspace_id = ?')
+        if (hasProject) conds.push('project_number = ?')
         return `
         ws_entries AS MATERIALIZED (
-            SELECT id, workspace_id FROM memory_journal WHERE deleted_at IS NULL AND workspace_id = ?
-        ),${buildStatsCteBody({ name: 'ws_entries', col: 'id' }, true)}
+            SELECT id, workspace_id FROM memory_journal WHERE ${conds.join(' AND ')}
+        ),${buildStatsCteBody({ name: 'ws_entries', col: 'id' }, scopedToWorkspace)}
     `
     }
     return buildStatsCteBody()

@@ -239,7 +239,7 @@ describe('Pass 70 Audit — Schemas, Recovery, Scope Dispatch, CLI Visualize, Cy
         expect(readFromBaselines).toBe(readFromHelpers)
         expect('searchAuditFileBackward' in auditQueryHelpers).toBe(false)
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
         const promptDb = new DatabaseAdapter(':memory:')
         await promptDb.initialize()
         let cqText: string
@@ -252,7 +252,7 @@ describe('Pass 70 Audit — Schemas, Recovery, Scope Dispatch, CLI Visualize, Cy
         } finally {
             promptDb.close()
         }
-        expect(cqText).toContain('Prompt revision: 2026-11-25-audit-pass94')
+        expect(cqText).toContain('Prompt revision: 2026-11-25-audit-pass95')
         expect(cqText).toContain('omitting `.default(...)` on canonical keys')
         expect(cqText).toContain('SQL recovery column allowlists')
     })

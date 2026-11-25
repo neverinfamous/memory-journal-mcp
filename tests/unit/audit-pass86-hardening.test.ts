@@ -365,7 +365,7 @@ describe('Pass 86 Audit — High, Moderate & Low Regressions', () => {
     })
 
     it('bumps AUDIT_PROMPT_REVISION to Pass 86', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
         expect(getCodeQualityAuditPromptDefinition().name).toBe('adversarial-audit-code-quality')
     })
 })

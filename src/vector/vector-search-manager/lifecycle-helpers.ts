@@ -8,13 +8,7 @@ import { logger } from '../../utils/logger.js'
 import { isRecord } from '../../utils/type-guards.js'
 import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
 import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
-import {
-    embedTextsSequentiallySettled,
-    formatEntryForEmbedding,
-    runPipelineBatchEmbeddingsSettled,
-    upsertEntryChunksSequentially,
-} from './candidate-search.js'
-import { getOrComputeCachedEmbedding, QUERY_EMBEDDING_CACHE_MAX_CHARS } from './embedding-cache.js'
+import { formatEntryForEmbedding, runPipelineBatchEmbeddingsSettled, embedTextsSequentiallySettled, upsertEntryChunksSequentially } from './candidate-search.js'
 import {
     invokeSingleEmbeddingPipeline,
     isModelCachedOnDisk,
@@ -26,8 +20,23 @@ import {
     type TransformersPipelineModule,
 } from './model-cache.js'
 import { REBUILD_BATCH_SIZE } from './types.js'
+import {
+    DISPOSED_MANAGER_ERROR,
+    filterLiveVectorsForUpsert,
+    flushPendingVectorRemovals,
+    generateValidatedSingleEmbedding,
+    isEntryLiveForVectorUpsert,
+    validateEmbeddingVector,
+} from './live-entry-helpers.js'
 
-export const DISPOSED_MANAGER_ERROR = 'VectorSearchManager has been disposed'
+export {
+    DISPOSED_MANAGER_ERROR,
+    filterLiveVectorsForUpsert,
+    flushPendingVectorRemovals,
+    generateValidatedSingleEmbedding,
+    isEntryLiveForVectorUpsert,
+    validateEmbeddingVector,
+}
 
 let modelLoadMutex: Promise<void> = Promise.resolve()
 
@@ -72,80 +81,6 @@ export async function loadPipelineWithRetry(
         }
         throw pipelineErr
     }
-}
-
-/** Flush queued entry deletions that occurred while a vector rebuild was running. */
-export function flushPendingVectorRemovals(
-    dbAdapter: IDatabaseAdapter,
-    pendingRemovedIds: Set<number>
-): void {
-    if (pendingRemovedIds.size === 0) return
-    const ids = [...pendingRemovedIds]
-    pendingRemovedIds.clear()
-    for (const id of ids) {
-        try {
-            dbAdapter.deleteVector(id)
-        } catch (error) {
-            logger.warning(`Failed to remove entry ${id} from vector index post-rebuild`, { error })
-        }
-    }
-}
-
-/** Validate vector dimensionality and finiteness. */
-export function validateEmbeddingVector(candidate: Float32Array, dims: number): Float32Array {
-    if (candidate.length !== dims) {
-        throw new Error(
-            `Embedding dimension mismatch: expected ${String(dims)}, got ${String(candidate.length)}`
-        )
-    }
-    for (const el of candidate) {
-        if (!Number.isFinite(el)) {
-            throw new Error('Generated embedding contains non-finite value')
-        }
-    }
-    return candidate
-}
-
-/**
- * Check whether an entry still exists in SQLite and was not removed concurrently.
- * Bare mock adapters without `getEntryById` (or returning `undefined`) remain allowed.
- */
-export function isEntryLiveForVectorUpsert(
-    dbAdapter: IDatabaseAdapter,
-    entryId: number,
-    pendingRemovedIds: ReadonlySet<number>
-): boolean {
-    if (pendingRemovedIds.has(entryId)) return false
-    if (typeof dbAdapter.getEntryById === 'function') {
-        return dbAdapter.getEntryById(entryId, '*') !== null
-    }
-    return true
-}
-
-/**
- * Filter a batch of computed vectors against concurrent tombstones and live SQLite rows
- * in a single batched `getEntriesByIds` lookup whenever supported.
- */
-export function filterLiveVectorsForUpsert(
-    dbAdapter: IDatabaseAdapter,
-    items: readonly { entryId: number; embedding: Float32Array }[],
-    pendingRemovedIds: ReadonlySet<number>
-): { entryId: number; embedding: Float32Array }[] {
-    const remaining = items.filter((item) => !pendingRemovedIds.has(item.entryId))
-    if (remaining.length === 0) return []
-    if (typeof dbAdapter.getEntriesByIds === 'function') {
-        const liveMap: unknown = dbAdapter.getEntriesByIds(
-            remaining.map((item) => item.entryId),
-            '*'
-        )
-        if (liveMap instanceof Map) {
-            return remaining.filter((item) => liveMap.has(item.entryId))
-        }
-    }
-    if (typeof dbAdapter.getEntryById === 'function') {
-        return remaining.filter((item) => dbAdapter.getEntryById(item.entryId, '*') !== null)
-    }
-    return remaining
 }
 
 /** Load the default transformers embedding pipeline and measure dimensions. */
@@ -295,37 +230,6 @@ export async function drainVectorPendingState(
     const hasDeadline = typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0
     const deadline = hasDeadline ? Date.now() + timeoutMs : undefined
     await runBoundedDrainPass(snapshot, deadline)
-}
-
-/** Generate and validate a single embedding using optional query cache or HF pipeline. */
-export async function generateValidatedSingleEmbedding(opts: {
-    text: string
-    modelName: string
-    bypassQueryCache: boolean
-    hasCustomGenerator: boolean
-    hasTransformers: boolean
-    initialize: () => Promise<void>
-    getDimensions: () => number | null
-    getPipeline: () => unknown
-    isDisposed: () => boolean
-}): Promise<Float32Array> {
-    await opts.initialize()
-    if (opts.isDisposed()) throw new Error(DISPOSED_MANAGER_ERROR)
-    const dims = opts.getDimensions()
-    if (dims === null || dims <= 0) {
-        throw new Error('Vector search not initialized properly. Cannot rebuild index.')
-    }
-    const canCache =
-        !opts.bypassQueryCache &&
-        !opts.hasCustomGenerator &&
-        opts.hasTransformers &&
-        opts.text.length <= QUERY_EMBEDDING_CACHE_MAX_CHARS
-    const raw = await getOrComputeCachedEmbedding(opts.modelName, opts.text, canCache, async () => {
-        const pipeline = opts.getPipeline()
-        if (opts.isDisposed() || pipeline === null) throw new Error(DISPOSED_MANAGER_ERROR)
-        return validateEmbeddingVector(await invokeSingleEmbeddingPipeline(pipeline, opts.text), dims)
-    })
-    return validateEmbeddingVector(raw, dims)
 }
 
 /** Generate settled per-item embeddings for a batch of texts, using tensor batching when available. */

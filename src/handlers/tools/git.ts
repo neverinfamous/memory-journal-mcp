@@ -25,6 +25,7 @@ import {
     fenceUnreleasedTag,
     fetchUncommittedWorkingTree,
     getUnreleasedChangelog,
+    prefetchCommitFilesSince,
 } from './git-commit-helpers.js'
 
 export {
@@ -274,7 +275,7 @@ function createCheckEntryStalenessTool(context: ToolContext): ToolDefinition {
                     fetchCommits({ path: anchorPath, since, maxCount, summary: true }, cwd).then(
                         (c) => c.length
                     ),
-                (since, cwd, maxCount) => fetchCommits({ since, maxCount }, cwd)
+                (since, cwd, maxCount) => prefetchCommitFilesSince(since, cwd, maxCount)
             ),
     }
 }

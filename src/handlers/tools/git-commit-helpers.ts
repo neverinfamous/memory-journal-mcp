@@ -21,6 +21,7 @@ import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
 import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
 import { getUncommittedStateAsync } from '../../vendor/lib-git-history/uncommitted.js'
 import { readLatestGitTag } from './git-staleness.js'
+import type { PrefetchedCommitFiles } from './git-staleness-prefetch.js'
 import { createNullProtoRecord } from '../../utils/type-guards.js'
 
 export interface FetchCommitsInput {
@@ -199,6 +200,79 @@ export async function fetchCommits(
         return commits
     }
     return applyCommitFilterSort(commits, input).slice(0, maxCount)
+}
+
+const MAX_PREFETCH_FILES_PER_COMMIT = 500
+const RENAME_OR_COPY_STATUS_RE = /^[RC]\d*$/
+
+function parsePrefetchFileTokens(filesBlock: string): {
+    files: { file: string; oldFile?: string | undefined }[]
+    isFilesTruncated: boolean
+} {
+    const files: { file: string; oldFile?: string | undefined }[] = []
+    let isFilesTruncated = false
+    let idx = 0
+    while (idx < filesBlock.length) {
+        const nulIdx = filesBlock.indexOf('\0', idx)
+        const end = nulIdx === -1 ? filesBlock.length : nulIdx
+        const status = filesBlock.slice(idx, end).trim()
+        idx = nulIdx === -1 ? filesBlock.length : nulIdx + 1
+        if (status === '') continue
+        let oldFile: string | undefined
+        if (RENAME_OR_COPY_STATUS_RE.test(status)) {
+            if (idx >= filesBlock.length) break
+            const oldNul = filesBlock.indexOf('\0', idx)
+            const oldEnd = oldNul === -1 ? filesBlock.length : oldNul
+            oldFile = filesBlock.slice(idx, oldEnd)
+            idx = oldNul === -1 ? filesBlock.length : oldNul + 1
+        }
+        if (idx >= filesBlock.length) break
+        const fileNul = filesBlock.indexOf('\0', idx)
+        const fileEnd = fileNul === -1 ? filesBlock.length : fileNul
+        const file = filesBlock.slice(idx, fileEnd)
+        idx = fileNul === -1 ? filesBlock.length : fileNul + 1
+        if (file === '') continue
+        if (files.length >= MAX_PREFETCH_FILES_PER_COMMIT) {
+            isFilesTruncated = true
+            break
+        }
+        files.push(oldFile !== undefined && oldFile !== '' ? { file, oldFile } : { file })
+    }
+    return { files, isFilesTruncated }
+}
+
+/** Lightweight git log prefetch returning only author date and changed/renamed paths (`--name-status -z`). */
+export async function prefetchCommitFilesSince(
+    since: string,
+    cwd: string,
+    maxCount = 500
+): Promise<PrefetchedCommitFiles[]> {
+    const gitArgs = [
+        'log',
+        '-M',
+        '--no-merges',
+        '--name-status',
+        '-z',
+        `--format=${RECORD_SEPARATOR}%aI`,
+        ...(since !== '' ? [`--since=${since}`] : []),
+        '-n',
+        String(maxCount),
+        'HEAD',
+    ]
+    const commits: PrefetchedCommitFiles[] = []
+    for await (const record of streamGitRecords(gitArgs, cwd)) {
+        const nlIdx = record.indexOf('\n')
+        const rawDate = nlIdx === -1 ? record : record.slice(0, nlIdx)
+        const date = rawDate.replaceAll('\0', '').trim()
+        if (date === '') continue
+        if (nlIdx === -1) {
+            commits.push({ date, files: [], isFilesTruncated: false })
+            continue
+        }
+        const { files, isFilesTruncated } = parsePrefetchFileTokens(record.slice(nlIdx + 1))
+        commits.push({ date, files, isFilesTruncated })
+    }
+    return commits
 }
 
 /** Upper bound on commits returned by get_unreleased_commits when requested explicitly. */

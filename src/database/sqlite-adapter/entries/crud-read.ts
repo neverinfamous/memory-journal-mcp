@@ -63,6 +63,30 @@ function fetchEntriesByIds(
     return result
 }
 
+export function hasActiveEntry(context: EntriesSharedContext, id: number): boolean {
+    const row = context.db
+        .prepare('SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL LIMIT 1')
+        .get(id)
+    return row !== undefined
+}
+
+export function getActiveEntryIds(
+    context: EntriesSharedContext,
+    ids: readonly number[]
+): Set<number> {
+    const active = new Set<number>()
+    if (ids.length === 0) return active
+    for (const { placeholders, params } of bucketInParams(ids, SCOPED_IN_PARAM_BUCKETS)) {
+        const rows = context.db
+            .prepare<unknown[], { id: number }>(
+                `SELECT id FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+            )
+            .all(...params)
+        for (const row of rows) active.add(row.id)
+    }
+    return active
+}
+
 export function getEntriesByIds(
     context: EntriesSharedContext,
     ids: number[],

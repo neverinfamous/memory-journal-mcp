@@ -181,6 +181,7 @@ function buildSearchEntriesContext(
         endDate: input.end_date,
         sortBy: input.sort_by,
         includeTeam,
+        ...(includeTeam ? { teamAccessAuthorized: true } : {}),
         includeArchived: input.include_archived,
         includeHighlights: input.include_highlights,
         fuzzy_match: effectiveFuzzyMatch,

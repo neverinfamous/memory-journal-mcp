@@ -10,6 +10,16 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 /** Delay between steps of the `trigger_progress` demo tool. */
 const PROGRESS_DEMO_STEP_DELAY_MS = 500
 
+const TriggerProgressInputSchema = z.object({}).strict()
+const TriggerProgressOutputSchema = z
+    .object({ success: z.boolean().optional(), message: z.string().optional() })
+    .extend(ErrorFieldsMixin.shape)
+const TestErrorHandlingInputSchema = z.object({
+    error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
+    message: z.string().optional().default('Test error message'),
+})
+const TestErrorHandlingOutputSchema = z.object({}).extend(ErrorFieldsMixin.shape)
+
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -111,10 +121,8 @@ export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Triggers a sequence of progress notifications to verify the transport layer supports them.',
             group: 'core',
-            inputSchema: z.object({}).strict(),
-            outputSchema: z
-                .object({ success: z.boolean().optional(), message: z.string().optional() })
-                .extend(ErrorFieldsMixin.shape),
+            inputSchema: TriggerProgressInputSchema,
+            outputSchema: TriggerProgressOutputSchema,
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -129,11 +137,8 @@ export function getDiagnosticTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Throws a specific type of error to verify the server formats and returns them correctly over MCP.',
             group: 'core',
-            inputSchema: z.object({
-                error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
-                message: z.string().optional().default('Test error message'),
-            }),
-            outputSchema: z.object({}).extend(ErrorFieldsMixin.shape),
+            inputSchema: TestErrorHandlingInputSchema,
+            outputSchema: TestErrorHandlingOutputSchema,
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,

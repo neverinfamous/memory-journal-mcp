@@ -13,12 +13,7 @@ import {
     normalizeDateRangeStart,
     normalizeDateRangeEnd,
 } from '../../../workspace-scope.js'
-import { chunkedInPredicate } from '../../row-helpers.js'
-import { expandTagFilterValues } from '../../tags.js'
-import {
-    excludesCommitNarrative,
-    legacyCommitExclusionSql,
-} from '../../../../utils/legacy-commit-narrative.js'
+import { appendDateRangeFilters, decodeDateRangeCursor } from './date-range-filters.js'
 
 /** Importance-ranked page of recent entries (offset-paginated). */
 function getRecentEntriesByImportance(
@@ -48,22 +43,34 @@ function getRecentEntriesByImportance(
     }
     const importanceExpr = buildImportanceSqlExpression()
     const scoped = workspaceId !== '*'
-    const cte = buildImportanceCte(scoped)
+    const hasProject = projectNumber !== undefined
+    const cte = buildImportanceCte(scoped, {
+        projectNumber: hasProject,
+        includeArchived,
+    })
 
     const params: unknown[] = []
     if (scoped) params.push(workspaceId)
+    if (hasProject) params.push(projectNumber)
     if (scoped) params.push(workspaceId)
-    if (projectNumber !== undefined) params.push(projectNumber)
+    if (hasProject) params.push(projectNumber)
     params.push(limit, actualOffset)
 
     const stmt = db.prepare(`
-            WITH ${cte}
-            SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
-            FROM memory_journal e
-            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
-            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND e.workspace_id = ?' : ''} ${projectNumber !== undefined ? 'AND e.project_number = ?' : ''}
-            ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
+            WITH ${cte},
+            top_ids AS MATERIALIZED (
+                SELECT e.id, ${importanceExpr} AS importanceScore
+                FROM memory_journal e
+                LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+                LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
+                WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${scoped ? 'AND e.workspace_id = ?' : ''} ${hasProject ? 'AND e.project_number = ?' : ''}
+                ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC
+                LIMIT ? OFFSET ?
+            )
+            SELECT ${ALIASED_ENTRY_COLUMNS}, top.importanceScore
+            FROM top_ids top
+            JOIN memory_journal e ON e.id = top.id
+            ORDER BY top.importanceScore DESC, e.timestamp DESC, e.id DESC
         `)
     const rows = stmt.all(params)
     const entries = rowsToEntries(tagsMgr, rows)
@@ -241,22 +248,16 @@ function buildDateRangeQuery(
     }
 
     const useImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
-    const importanceCol = useImportance
-        ? `, ${buildImportanceSqlExpression()} AS importanceScore`
-        : ''
     const { offset, hasKeyset, keysetT, keysetId } = decodeDateRangeCursor(options?.cursor)
 
     const scopedCte = targetWs !== '*'
-    if (useImportance && scopedCte) {
-        params.unshift(targetWs)
-    }
-    let query = useImportance ? `WITH ${buildImportanceCte(scopedCte)} ` : ''
-    query += `
-        SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
-    `
+    const hasProject = options?.projectNumber !== undefined
+    const includeArchived = options?.includeArchived === true
     if (useImportance) {
-        query += `LEFT JOIN rel_stats rs ON e.id = rs.entry_id `
-        query += `LEFT JOIN anchor_stats ans ON e.id = ans.entry_id `
+        const cteParams: unknown[] = []
+        if (scopedCte) cteParams.push(targetWs)
+        if (hasProject) cteParams.push(options.projectNumber)
+        params.unshift(...cteParams)
     }
 
     appendDateRangeFilters(conditions, params, options)
@@ -271,14 +272,42 @@ function buildDateRangeQuery(
         params.push(keysetT, keysetT, keysetId)
     }
 
-    const orderBy = useImportance
-        ? 'importanceScore DESC, e.timestamp DESC, e.id DESC'
-        : 'e.timestamp DESC, e.id DESC'
     const limit = options?.limit ?? 500
-    query += ` WHERE ${conditions.join(' AND ')} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
     params.push(limit, offset)
+    const sql = formatDateRangeSql(conditions, useImportance, scopedCte, hasProject, includeArchived)
+    return { sql, params, useImportance, offset, limit }
+}
 
-    return { sql: query, params, useImportance, offset, limit }
+function formatDateRangeSql(
+    conditions: string[],
+    useImportance: boolean,
+    scopedCte: boolean,
+    hasProject: boolean,
+    includeArchived: boolean
+): string {
+    if (!useImportance) {
+        return `
+            SELECT ${ALIASED_ENTRY_COLUMNS} FROM memory_journal e
+            WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
+        `
+    }
+    const cte = buildImportanceCte(scopedCte, { projectNumber: hasProject, includeArchived })
+    return `
+        WITH ${cte},
+        top_ids AS MATERIALIZED (
+            SELECT e.id, ${buildImportanceSqlExpression()} AS importanceScore
+            FROM memory_journal e
+            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
+            WHERE ${conditions.join(' AND ')}
+            ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC
+            LIMIT ? OFFSET ?
+        )
+        SELECT ${ALIASED_ENTRY_COLUMNS}, top.importanceScore
+        FROM top_ids top
+        JOIN memory_journal e ON e.id = top.id
+        ORDER BY top.importanceScore DESC, e.timestamp DESC, e.id DESC
+    `
 }
 
 export function searchByDateRange(
@@ -308,115 +337,4 @@ export function searchByDateRange(
     }
 
     return { entries }
-}
-
-/**
- * Decodes a pagination cursor into keyset/offset state for searchByDateRange.
- */
-function decodeDateRangeCursor(cursor: string | undefined): {
-    offset: number
-    hasKeyset: boolean
-    keysetT: string
-    keysetId: number
-} {
-    let offset = 0
-    let hasKeyset = false
-    let keysetT = ''
-    let keysetId = 0
-    if (cursor !== undefined && cursor !== '') {
-        const decoded = decodeCursor(cursor)
-        if (decoded === null) {
-            throw new ValidationError('Invalid cursor format')
-        }
-        if ('t' in decoded) {
-            hasKeyset = true
-            keysetT = decoded.t
-            keysetId = decoded.id
-        } else if ('offset' in decoded) {
-            offset = decoded.offset
-        }
-    }
-    return { offset, hasKeyset, keysetT, keysetId }
-}
-
-/**
- * Appends the optional tag/type/attribute filter conditions for searchByDateRange.
- */
-function appendDateRangeFilters(
-    conditions: string[],
-    params: unknown[],
-    options:
-        | {
-              entryType?: EntryType
-              tags?: string[]
-              excludeTags?: string[]
-              isPersonal?: boolean
-              projectNumber?: number
-              issueNumber?: number
-              prNumber?: number
-              workflowRunId?: number
-          }
-        | undefined
-): void {
-    if (options?.tags !== undefined && options.tags.length > 0) {
-        const expandedTags = expandTagFilterValues(options.tags)
-        if (expandedTags.length > 0) {
-            const membership = chunkedInPredicate(
-                expandedTags,
-                (placeholders) =>
-                    `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND LOWER(t.name) IN (${placeholders}))`,
-                'OR'
-            )
-            conditions.push(membership.sql)
-            params.push(...membership.params)
-        }
-    }
-
-    if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
-        const expandedExcluded = expandTagFilterValues(options.excludeTags)
-        if (expandedExcluded.length > 0) {
-            const membership = chunkedInPredicate(
-                expandedExcluded,
-                (placeholders) =>
-                    `NOT EXISTS (SELECT 1 FROM entry_tags et_ex JOIN tags t_ex ON et_ex.tag_id = t_ex.id WHERE et_ex.entry_id = e.id AND LOWER(t_ex.name) IN (${placeholders}))`,
-                'AND'
-            )
-            conditions.push(membership.sql)
-            params.push(...membership.params)
-        }
-        // [INVARIANT] M1 read-side fallback: untagged legacy session-commits rows are also excluded.
-        if (excludesCommitNarrative(expandedExcluded)) {
-            conditions.push(legacyCommitExclusionSql('e'))
-        }
-    }
-
-    if (options?.entryType !== undefined) {
-        conditions.push(`e.entry_type = ?`)
-        params.push(options.entryType)
-    }
-
-    if (options?.isPersonal !== undefined) {
-        conditions.push(`e.is_personal = ?`)
-        params.push(options.isPersonal ? 1 : 0)
-    }
-
-    if (options?.projectNumber !== undefined) {
-        conditions.push(`e.project_number = ?`)
-        params.push(options.projectNumber)
-    }
-
-    if (options?.issueNumber !== undefined) {
-        conditions.push(`e.issue_number = ?`)
-        params.push(options.issueNumber)
-    }
-
-    if (options?.prNumber !== undefined) {
-        conditions.push(`e.pr_number = ?`)
-        params.push(options.prNumber)
-    }
-
-    if (options?.workflowRunId !== undefined) {
-        conditions.push(`e.workflow_run_id = ?`)
-        params.push(options.workflowRunId)
-    }
 }

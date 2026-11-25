@@ -95,7 +95,7 @@ function executeSearchQuery(
         result.nextCursor = nextCursor
     }
     if (useFts && options?.includeHighlights === true) {
-        if (needsImportance && entries.length > 0) {
+        if (entries.length > 0) {
             const sanitized = preSanitizedFts ?? sanitizeFtsQuery(queryStr)
             const snippetMap = fetchPostLimitSnippets(
                 db,
@@ -107,7 +107,7 @@ function executeSearchQuery(
                 snippet: snippetMap.get(e.id) ?? '',
             }))
         } else {
-            result.highlights = rows.map((row: unknown) => extractSnippet(row))
+            result.highlights = []
         }
     }
     return result

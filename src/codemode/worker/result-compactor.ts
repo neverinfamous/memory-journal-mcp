@@ -304,6 +304,28 @@ export function serializeAndEnforceEgress(
     const egressLimit = maxResultSize ?? 100 * 1024
     const rootValue = unwrapResultProxy(result.result)
 
+    if (egressLimit >= 32) {
+        if (rootValue === null || rootValue === undefined || typeof rootValue === 'boolean') {
+            return
+        }
+        if (typeof rootValue === 'number') {
+            result.result = Number.isFinite(rootValue) ? rootValue : null
+            return
+        }
+        if (typeof rootValue === 'string') {
+            if (rootValue.length * 6 + 2 <= egressLimit) return
+            const byteLength = Buffer.byteLength(JSON.stringify(rootValue), 'utf8')
+            if (byteLength > egressLimit) {
+                handleEgressSerializationFailure(
+                    new Error(`EgressLimitExceeded:${byteLength}`),
+                    result,
+                    egressLimit
+                )
+            }
+            return
+        }
+    }
+
     try {
         const resultJson = JSON.stringify(rootValue, createEgressReplacer(egressLimit))
         if (resultJson !== undefined) {

@@ -21,6 +21,58 @@ import {
     handleMoveKanbanItem,
 } from './kanban-helpers.js'
 
+const GetKanbanBoardInputSchema = z.object({
+    ...githubScopeInputFields,
+    project_number: relaxedNumber()
+        .optional()
+        .describe('GitHub Project number (optional if repo is registered)'),
+    owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+    summary_only: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+            'Return column summaries only (name + itemCount), omitting individual items. Saves ~80% tokens.'
+        ),
+    item_limit: relaxedNumber()
+        .optional()
+        .describe(
+            'Maximum items per column (default 25, max 100). Set to 0 for summary_only behavior.'
+        ),
+})
+
+const MoveKanbanItemInputSchema = z.object({
+    ...githubScopeInputFields,
+    project_number: relaxedNumber()
+        .optional()
+        .describe('GitHub Project number (optional if repo is registered)'),
+    item_id: z.string().describe('Project item ID (from get_kanban_board)'),
+    target_status: z.string().describe('Target status column name (e.g., "In Progress", "Done")'),
+    owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+})
+
+const AddKanbanItemInputSchema = z.object({
+    ...githubScopeInputFields,
+    project_number: relaxedNumber()
+        .optional()
+        .describe('GitHub Project number (optional if repo is registered)'),
+    issue_number: relaxedNumber().optional().describe('The number of the issue or PR to add'),
+    owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+})
+
+const DeleteKanbanItemInputSchema = z.object({
+    ...githubScopeInputFields,
+    project_number: relaxedNumber()
+        .optional()
+        .describe('GitHub Project number (optional if repo is registered)'),
+    item_id: z.string().describe('The project item ID to remove (from get_kanban_board)'),
+    owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+})
+
 function buildGetKanbanBoardTool(context: ToolContext): ToolDefinition {
     return {
         name: 'get_kanban_board',
@@ -28,29 +80,7 @@ function buildGetKanbanBoardTool(context: ToolContext): ToolDefinition {
         description:
             'View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.',
         group: 'github',
-        inputSchema: z.object({
-            ...githubScopeInputFields,
-            project_number: relaxedNumber()
-                .optional()
-                .describe('GitHub Project number (optional if repo is registered)'),
-            owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name - LEAVE EMPTY to auto-detect'),
-            summary_only: z
-                .boolean()
-                .optional()
-                .default(false)
-                .describe(
-                    'Return column summaries only (name + itemCount), omitting individual items. Saves ~80% tokens.'
-                ),
-            item_limit: relaxedNumber()
-                .optional()
-                .describe(
-                    'Maximum items per column (default 25, max 100). Set to 0 for summary_only behavior.'
-                ),
-        }),
+        inputSchema: GetKanbanBoardInputSchema,
         outputSchema: KanbanBoardOutputSchema,
         annotations: {
             readOnlyHint: true,
@@ -69,21 +99,7 @@ function buildMoveKanbanItemTool(context: ToolContext): ToolDefinition {
         description:
             'Move a Kanban item to a different status column. Requires the project board to have a Status field.',
         group: 'github',
-        inputSchema: z.object({
-            ...githubScopeInputFields,
-            project_number: relaxedNumber()
-                .optional()
-                .describe('GitHub Project number (optional if repo is registered)'),
-            item_id: z.string().describe('Project item ID (from get_kanban_board)'),
-            target_status: z
-                .string()
-                .describe('Target status column name (e.g., "In Progress", "Done")'),
-            owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name - LEAVE EMPTY to auto-detect'),
-        }),
+        inputSchema: MoveKanbanItemInputSchema,
         outputSchema: MoveKanbanItemOutputSchema,
         annotations: {
             readOnlyHint: false,
@@ -102,23 +118,7 @@ function buildAddKanbanItemTool(context: ToolContext): ToolDefinition {
         description:
             'Add an existing GitHub Issue or Pull Request to a Kanban board (GitHub Project v2). Returns the project item ID on success.',
         group: 'github',
-        inputSchema: z.object({
-            ...githubScopeInputFields,
-            project_number: relaxedNumber()
-                .optional()
-                .describe('GitHub Project number (optional if repo is registered)'),
-            issue_number: relaxedNumber()
-                .optional()
-                .describe('The number of the issue or PR to add'),
-            owner: z
-                .string()
-                .optional()
-                .describe('Repository owner - LEAVE EMPTY to auto-detect'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name - LEAVE EMPTY to auto-detect'),
-        }),
+        inputSchema: AddKanbanItemInputSchema,
         outputSchema: AddKanbanItemOutputSchema,
         annotations: {
             readOnlyHint: false,
@@ -137,20 +137,7 @@ function buildDeleteKanbanItemTool(context: ToolContext): ToolDefinition {
         description:
             'Remove an item from a GitHub Kanban board cleanly. This untethers it from the project but does NOT close or delete the underlying Issue/PR.',
         group: 'github',
-        inputSchema: z.object({
-            ...githubScopeInputFields,
-            project_number: relaxedNumber()
-                .optional()
-                .describe('GitHub Project number (optional if repo is registered)'),
-            item_id: z
-                .string()
-                .describe('The project item ID to remove (from get_kanban_board)'),
-            owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name - LEAVE EMPTY to auto-detect'),
-        }),
+        inputSchema: DeleteKanbanItemInputSchema,
         outputSchema: DeleteKanbanItemOutputSchema,
         annotations: {
             readOnlyHint: false,

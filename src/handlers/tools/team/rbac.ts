@@ -39,13 +39,18 @@ export function resolveScopedTeamRole(
     teamDb: ToolContext['teamDb'],
     author: string,
     defaultRole: TeamRole | 'denied',
-    workspaceId?: string
+    workspaceId?: string,
+    rbacKnownActive?: boolean
 ): TeamRole | null {
     if (!teamDb || typeof teamDb.resolveTeamRole !== 'function') {
         return defaultRole === 'denied' ? null : defaultRole
     }
     if (typeof teamDb.getTeamMember === 'function') {
-        if (typeof teamDb.isTeamRbacActive === 'function' && !teamDb.isTeamRbacActive()) {
+        if (
+            rbacKnownActive !== true &&
+            typeof teamDb.isTeamRbacActive === 'function' &&
+            !teamDb.isTeamRbacActive()
+        ) {
             return 'admin'
         }
         const directMember = teamDb.getTeamMember(author)
@@ -119,7 +124,7 @@ export function isCallerTeamAdmin(
     }
     const defaultRole = config?.teamDefaultRole ?? 'denied'
     const targetWs = resolveTargetWorkspace(workspaceId, config)
-    return resolveScopedTeamRole(teamDb, author, defaultRole, targetWs) === 'admin'
+    return resolveScopedTeamRole(teamDb, author, defaultRole, targetWs, true) === 'admin'
 }
 
 /**
@@ -136,7 +141,7 @@ export function canReadTeamEntriesRbac(
     }
     const caller = resolveAuthenticatedAuthor()
     const targetWs = resolveTargetWorkspace(workspaceId, config)
-    const role = resolveScopedTeamRole(teamDb, caller, config?.teamDefaultRole ?? 'denied', targetWs)
+    const role = resolveScopedTeamRole(teamDb, caller, config?.teamDefaultRole ?? 'denied', targetWs, true)
     return role !== null
 }
 
@@ -161,7 +166,7 @@ export function enforceTeamRbac(
 
     const defaultRole = config?.teamDefaultRole ?? 'denied'
     const targetWs = resolveTargetWorkspace(workspaceId, config)
-    const role = resolveScopedTeamRole(teamDb, author, defaultRole, targetWs)
+    const role = resolveScopedTeamRole(teamDb, author, defaultRole, targetWs, true)
 
     if (role === null) {
         throw new AuthorizationError(`Access denied: author '${author}' is not registered and default role is 'denied'`)

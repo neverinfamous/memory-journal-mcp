@@ -19,6 +19,7 @@ import {
     DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
     exceedsMaxToolInputElements,
     getValidatedToolInputMax,
+    markValidatedToolInput,
 } from '../../utils/tool-input-bounds.js'
 import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 
@@ -63,8 +64,9 @@ function invokeGroupToolMethod(
 ): (...args: unknown[]) => Promise<unknown> {
     return async (...args: unknown[]): Promise<unknown> => {
         try {
+            let rpcValidatedMax: number | undefined
             if (args.length > 0) {
-                const rpcValidatedMax =
+                rpcValidatedMax =
                     args.length === 1 ? getValidatedToolInputMax(args[0]) : undefined
                 if (
                     rpcValidatedMax === undefined &&
@@ -80,6 +82,9 @@ function invokeGroupToolMethod(
                 }
             }
             const normalizedParams = normalizeParams(methodName, args) ?? {}
+            if (rpcValidatedMax !== undefined && isRecord(normalizedParams)) {
+                markValidatedToolInput(normalizedParams, rpcValidatedMax)
+            }
             if (dispatcher) {
                 return await dispatcher(tool.name, normalizedParams)
             }

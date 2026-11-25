@@ -209,23 +209,25 @@ export class RelationshipsManager {
                JOIN memory_journal peer ON peer.id = r.from_entry_id
                WHERE ${peerFilter} AND r.from_entry_id != r.to_entry_id
                GROUP BY r.to_entry_id`
-        const wsFilter = scoped ? ' AND m.workspace_id = ?' : ''
         const params: unknown[] = scoped
-            ? [scopeId, scopeId, scopeId, scopeId, scopeId, limit]
+            ? [scopeId, scopeId, scopeId, scopeId, limit]
             : [limit]
         const rows = this.db
             .prepare<unknown[], { entry_id: number; total_links: number; content: string }>(
-                `SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
-                 FROM (
-                     ${linkFrom}
-                     UNION ALL
-                     ${linkTo}
-                 ) counts
-                 JOIN memory_journal m ON counts.entry_id = m.id
-                 WHERE m.deleted_at IS NULL${wsFilter}
-                 GROUP BY counts.entry_id
-                 ORDER BY total_links DESC, counts.entry_id DESC
-                 LIMIT ?`
+                `WITH top AS MATERIALIZED (
+                     SELECT counts.entry_id, SUM(counts.link_count) as total_links
+                     FROM (
+                         ${linkFrom}
+                         UNION ALL
+                         ${linkTo}
+                     ) counts
+                     GROUP BY counts.entry_id
+                     ORDER BY total_links DESC, counts.entry_id DESC
+                     LIMIT ?
+                 )
+                 SELECT top.entry_id, top.total_links, m.content
+                 FROM top
+                 JOIN memory_journal m ON top.entry_id = m.id`
             )
             .all(...params)
 

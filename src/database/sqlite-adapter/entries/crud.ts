@@ -10,6 +10,8 @@ export {
 } from './crud-write.js'
 export {
     getEntryById,
+    hasActiveEntry,
+    getActiveEntryIds,
     getEntriesByIds,
     getEntryByIdIncludeDeleted,
     getEntriesByIdsIncludeDeleted,

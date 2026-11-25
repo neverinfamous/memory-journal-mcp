@@ -113,17 +113,17 @@ function needsSnakeCaseNormalization(
         return value.some((item) => needsSnakeCaseNormalization(item, depth + 1))
     }
     if (!isPlainRecord(value)) return false
-    for (const [k, v] of Object.entries(value)) {
+    for (const k in value) {
+        if (!Object.hasOwn(value, k)) continue
         if (FORBIDDEN_KEYS.has(k)) return true
-        const snakeKey = toSnakeKey(k)
-        if (snakeKey !== k) return true
+        if (UPPERCASE_RE.test(k)) return true
         if (
-            OPAQUE_ANY_DEPTH_KEYS.has(snakeKey) ||
-            (depth === 0 && opaqueTopLevelKeys?.has(snakeKey) === true)
+            OPAQUE_ANY_DEPTH_KEYS.has(k) ||
+            (depth === 0 && opaqueTopLevelKeys?.has(k) === true)
         ) {
             continue
         }
-        if (needsSnakeCaseNormalization(v, depth + 1)) return true
+        if (needsSnakeCaseNormalization(value[k], depth + 1)) return true
     }
     return false
 }

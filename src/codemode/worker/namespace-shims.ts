@@ -390,10 +390,15 @@ function resolveContextProxyProp(target: Record<string, unknown>, prop: string |
     return undefined
 }
 
-export function createContextProxy(contextObj?: Record<string, unknown>): Record<string, unknown> {
+export function createContextProxy(
+    contextObj?: Record<string, unknown>,
+    isAlreadyDeepFrozen = false
+): Record<string, unknown> {
     const target =
         contextObj !== undefined
-            ? deepFreezeContextClone(contextObj)
+            ? isAlreadyDeepFrozen
+                ? contextObj
+                : deepFreezeContextClone(contextObj)
             : Object.freeze({})
     return new Proxy(target, {
         get: (t, prop): unknown => resolveContextProxyProp(t, prop),

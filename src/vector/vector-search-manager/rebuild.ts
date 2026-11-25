@@ -233,6 +233,7 @@ interface RebuildLoopContext {
     progress: ProgressContext | undefined
     stats: RebuildStats
     useKeyset: boolean
+    lastYieldMs: number
 }
 
 async function processPageBatchesSequentially(
@@ -278,7 +279,12 @@ async function runRebuildPagesSequentially(
         pageEmbedded = await processPageBatchesSequentially(ctx, toEmbed, entries.length, offset, 0)
     }
     if (isManagerDisposed(ctx.manager)) return
-    if (!pageEmbedded) await new Promise((resolve) => setTimeoutFn(resolve, 0))
+    if (pageEmbedded) {
+        ctx.lastYieldMs = performance.now()
+    } else if (performance.now() - ctx.lastYieldMs >= 16) {
+        await new Promise((resolve) => setTimeoutFn(resolve, 0))
+        ctx.lastYieldMs = performance.now()
+    }
 
     let nextCursor = cursor
     if (ctx.useKeyset) {
@@ -317,6 +323,7 @@ async function runRebuildLoop(
             progress,
             stats,
             useKeyset: typeof dbAdapter.getEntriesAfter === 'function',
+            lastYieldMs: performance.now(),
         },
         0,
         undefined

@@ -18,6 +18,7 @@ import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import { isTargetExcludedByRules } from '../dummy-filter-helpers.js'
 import { canReadTeamEntriesRbac } from '../team/rbac.js'
+import { progressiveSearchVectorResults } from './semantic-candidate-hydration.js'
 import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import {
     excludesCommitNarrative,
@@ -46,6 +47,7 @@ export interface ISearchFilters {
     startDate?: string | undefined
     endDate?: string | undefined
     includeTeam?: boolean | undefined
+    teamAccessAuthorized?: boolean | undefined
     includeArchived?: boolean | undefined
     workspaceId?: string | undefined
     similarityThreshold?: number | undefined
@@ -209,13 +211,42 @@ async function hydrateTeamVectorHits(
     pushEntry: (entry: JournalEntry, similarity?: number) => void
 ): Promise<boolean> {
     try {
-        const hits = await teamVectorManager.search(
+        const threshold = options.similarityThreshold ?? 0.15
+        const hasTagFilters =
+            (options.tags !== undefined && options.tags.length > 0) ||
+            (options.excludeTags !== undefined && options.excludeTags.length > 0)
+        const hasPostFilters =
+            hasTagFilters ||
+            options.entryType !== undefined ||
+            options.startDate !== undefined ||
+            options.endDate !== undefined ||
+            options.issueNumber !== undefined ||
+            options.prNumber !== undefined ||
+            options.prStatus !== undefined ||
+            options.workflowRunId !== undefined ||
+            options.includeArchived !== true
+        const progressive = await progressiveSearchVectorResults({
+            db: teamDb,
+            vectorManager: teamVectorManager,
             query,
-            limit,
-            options.similarityThreshold ?? 0.15,
-            options.workspaceId,
-            options.projectNumber
-        )
+            candidateLimit: limit,
+            targetCount: limit,
+            threshold,
+            wsId: options.workspaceId ?? 'default',
+            projectNumber: options.projectNumber,
+            filterOptions: options,
+            hasTagFilters,
+            hasPostFilters,
+        })
+        const hits =
+            progressive ??
+            (await teamVectorManager.search(
+                query,
+                limit,
+                threshold,
+                options.workspaceId,
+                options.projectNumber
+            ))
         const missingIds = hits.filter((hit) => hit.entry === undefined).map((hit) => hit.entryId)
         const hydrated =
             missingIds.length > 0
@@ -283,7 +314,8 @@ export async function collectTeamSearchEntries(
 ): Promise<EntryWithSource[]> {
     if (
         !isTeamDbReady(teamDb) ||
-        !canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId)
+        (options.teamAccessAuthorized !== true &&
+            !canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId))
     ) {
         return []
     }

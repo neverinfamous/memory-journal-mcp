@@ -341,6 +341,6 @@ describe('Pass 92 Audit — Pass 13 Remediations', () => {
         expect(parseConfigObjectContent(regFile, fs.readFileSync(regFile, 'utf-8'))).toEqual({ alpha: { path: '/tmp' } })
         expect(readCachedConfigObject(regFile)).toEqual({ alpha: { path: '/tmp' } })
         expect(JSON.parse(readBoundedCliInputFile(cliFile, '--metadata'))).toEqual({ tags: ['bom'] })
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
     })
 })

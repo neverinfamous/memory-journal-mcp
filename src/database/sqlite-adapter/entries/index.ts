@@ -7,6 +7,8 @@ import type { EntriesSharedContext } from './shared.js'
 import {
     createEntry,
     getEntryById,
+    hasActiveEntry,
+    getActiveEntryIds,
     getEntriesByIds,
     getEntryByIdIncludeDeleted,
     getEntriesByIdsIncludeDeleted,
@@ -60,6 +62,14 @@ export class EntriesManager {
 
     getEntryById(id: number, workspaceId?: string): JournalEntry | null {
         return getEntryById(this.sharedContext, id, workspaceId)
+    }
+
+    hasActiveEntry(id: number): boolean {
+        return hasActiveEntry(this.sharedContext, id)
+    }
+
+    getActiveEntryIds(ids: readonly number[]): Set<number> {
+        return getActiveEntryIds(this.sharedContext, ids)
     }
 
     getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry> {

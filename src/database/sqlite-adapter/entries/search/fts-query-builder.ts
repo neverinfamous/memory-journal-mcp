@@ -98,11 +98,6 @@ function buildBaseSelect(
         ? `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
         : ''
 
-    const snippetCol =
-        !useMaterializedFtsOuter && useFts && options?.includeHighlights === true
-            ? ", snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet"
-            : ''
-
     if (useMaterializedFtsOuter) {
         return `
             ${ctePrefix}
@@ -116,7 +111,7 @@ function buildBaseSelect(
     if (useFts) {
         return `
             ${ctePrefix}
-            SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol}${snippetCol}
+            SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM fts_content fts
             CROSS JOIN memory_journal e ON e.id = fts.rowid
             ${joinClause}

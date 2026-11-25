@@ -15,6 +15,15 @@ import {
     fenceGitHubPullRequestSummary,
 } from './fencing-helpers.js'
 
+const GetGitHubContextInputSchema = z.object({
+    ...githubScopeInputFields,
+    owner: z.string().optional().describe('Repository owner'),
+    repo: z
+        .string()
+        .optional()
+        .describe('Repository name (use this to switch projects dynamically)'),
+})
+
 const ContextInputSchema = z
     .object({
         owner: z.string().optional(),
@@ -100,14 +109,7 @@ export function createGitHubContextTool(context: ToolContext): ToolDefinition {
         description:
             'Get current repository context including branch, open issues, and open PRs. IMPORTANT: Leave owner/repo empty to auto-detect from git, OR specify the repository name if working in a multi-project registry.',
         group: 'github',
-        inputSchema: z.object({
-            ...githubScopeInputFields,
-            owner: z.string().optional().describe('Repository owner'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name (use this to switch projects dynamically)'),
-        }),
+        inputSchema: GetGitHubContextInputSchema,
         outputSchema: GitHubContextOutputSchema,
         annotations: {
             readOnlyHint: true,

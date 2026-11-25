@@ -24,6 +24,13 @@ function truncateCopilotCommentBody(body: string): string {
 // Tool Definitions
 // ============================================================================
 
+const GetCopilotReviewsInputSchema = z.object({
+    ...githubScopeInputFields,
+    pr_number: relaxedNumber().describe('Pull request number'),
+    owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+    repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+})
+
 const GetCopilotReviewsStrictSchema = z
     .object({
         pr_number: z.preprocess(coerceIntString, z.number().int().positive()),
@@ -41,12 +48,7 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get Copilot\'s code review findings for a pull request. Returns review state (approved/changes_requested/commented/none) and file-level comments with paths and line numbers. Use to learn from Copilot\'s review patterns and create journal entries with tag "copilot-finding".',
             group: 'github',
-            inputSchema: z.object({
-                ...githubScopeInputFields,
-                pr_number: relaxedNumber().describe('Pull request number'),
-                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
-            }),
+            inputSchema: GetCopilotReviewsInputSchema,
             outputSchema: CopilotReviewsOutputSchema,
             annotations: {
                 readOnlyHint: true,

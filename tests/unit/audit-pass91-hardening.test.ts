@@ -433,6 +433,6 @@ describe('Pass 91 Audit — Pass 12 Remediations', () => {
             for (const { ev, fn } of addedListeners) process.off(ev, fn)
         }
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
     })
 })

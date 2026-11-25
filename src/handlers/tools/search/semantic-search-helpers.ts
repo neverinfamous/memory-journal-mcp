@@ -196,6 +196,7 @@ async function runSemanticSearchQueries(
         effectiveQuery !== ''
             ? collectTeamSearchEntries(effectiveQuery, teamDb, teamVectorManager, {
                   ...filterOptions,
+                  teamAccessAuthorized: true,
                   limit: Math.min(internalLimit, 500),
                   similarityThreshold: threshold,
                   enforceSimilarityThreshold:

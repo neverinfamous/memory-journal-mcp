@@ -286,12 +286,12 @@ export async function upsertEntryChunksSequentially(
     let firstRejection: unknown = undefined
     let hasRejection = false
 
-    const processFrom = async (offset: number): Promise<void> => {
-        if (offset >= entries.length) return
+    for (let offset = 0; offset < entries.length; offset += batchSize) {
         if (shouldAbort?.() === true) {
             throw new Error('VectorSearchManager has been disposed')
         }
         const chunk = entries.slice(offset, offset + batchSize)
+        // eslint-disable-next-line no-await-in-loop -- sequential chunk embedding bounds peak retained heap to O(batchSize)
         const settled = await embedSettled(chunk.map(formatEntryForEmbedding))
         if (shouldAbort?.() === true) {
             throw new Error('VectorSearchManager has been disposed')
@@ -315,10 +315,7 @@ export async function upsertEntryChunksSequentially(
                 for (const item of items) upsertSingle(item.entryId, item.embedding)
             }
         }
-        await processFrom(offset + batchSize)
     }
-
-    await processFrom(0)
     if (hasRejection) throw firstRejection
 }
 

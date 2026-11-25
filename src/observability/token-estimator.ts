@@ -143,6 +143,15 @@ export function bigintReplacer(_key: string, value: unknown): unknown {
     return typeof value === 'bigint' ? value.toString() : value
 }
 
+/** Fast-path native `JSON.stringify` for sentinel meta injection, falling back to `bigintReplacer`. */
+function stringifyWithBigintFallback(value: unknown): string {
+    try {
+        return JSON.stringify(value)
+    } catch {
+        return JSON.stringify(value, bigintReplacer)
+    }
+}
+
 /** Fast-path native `JSON.stringify` avoiding V8 JS-replacer deopt; falls back to `safeJsonStringify` on error. */
 function fastJsonStringify(payload: unknown): string {
     try {
@@ -226,15 +235,17 @@ function injectIntoExistingMeta(
     obj: Record<string, unknown>,
     existingMeta: Record<string, unknown>
 ): unknown {
-    const cleanMeta = { ...existingMeta }
-    delete cleanMeta['tokenEstimate']
+    const cleanMeta: Record<string, unknown> = {}
+    for (const k of Object.keys(existingMeta)) {
+        if (k !== 'tokenEstimate') cleanMeta[k] = existingMeta[k]
+    }
     const hadOtherMetaKeys = Object.keys(cleanMeta).length > 0
     const placeholder = {
         ...obj,
         _meta: { ...cleanMeta, tokenEstimate: TOKEN_ESTIMATE_SENTINEL },
     }
     try {
-        const placeholderJson = JSON.stringify(placeholder, bigintReplacer)
+        const placeholderJson = stringifyWithBigintFallback(placeholder)
         const needleIdx = placeholderJson.indexOf(TOKEN_EXISTING_META_NEEDLE)
         if (
             needleIdx !== -1 &&
@@ -319,7 +330,7 @@ export function injectTokenEstimate(payload: unknown): unknown {
 
         const placeholder = { ...payload, _meta: { tokenEstimate: TOKEN_ESTIMATE_SENTINEL } }
         try {
-            const placeholderJson = JSON.stringify(placeholder, bigintReplacer)
+            const placeholderJson = stringifyWithBigintFallback(placeholder)
             if (placeholderJson.endsWith(TOKEN_SENTINEL_META_SUFFIX)) {
                 const rawBytes =
                     Buffer.byteLength(placeholderJson, 'utf8') - TOKEN_SENTINEL_OVERHEAD_BYTES

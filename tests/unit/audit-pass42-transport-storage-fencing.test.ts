@@ -353,11 +353,11 @@ describe('Pass 42 Security Audit — Transport, SSRF, Storage, Audit & Fencing',
         expect(linkImportedRelationships(mockRelDb as never, 1, [{ type: 'references', target_id: -5 }], undefined, new Map()).missingTargets).toEqual([-5])
         expect(transformOutsideCodeFences('prose `x`\n```\nkeep\n```\nend', (s) => s.toUpperCase())).toContain('PROSE')
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
         const secDef = getSecurityAuditPromptDefinition()
         const rendered = await Promise.resolve(
             secDef.handler({ target: 'memory-journal-mcp' }, { searchByDateRange: () => ({ entries: [] }) } as never)
         )
-        expect(rendered.messages[0]?.content.text).toContain('Prompt revision: 2026-11-25-audit-pass94')
+        expect(rendered.messages[0]?.content.text).toContain('Prompt revision: 2026-11-25-audit-pass95')
     })
 })

@@ -404,7 +404,8 @@ export async function hybridSearch(
         options.includeTeam === true &&
         options.isPersonal !== true &&
         isTeamDbReady(teamDb) &&
-        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId)
+        (options.teamAccessAuthorized === true ||
+            canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId))
 
     const [personalStoreRes, teamStoreRes] = await Promise.all([
         queryStoreHybrid(query, db, vectorManager, options, overfetchLimit, options.isPersonal),

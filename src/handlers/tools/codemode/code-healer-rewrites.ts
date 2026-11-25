@@ -381,7 +381,7 @@ function rewriteDefaultExportFunction(src: string, existingSpans?: readonly NonC
 /** Rewrite top-level ESM/CommonJS module statements outside string literals and comments into `mj` bindings. */
 export function rewriteModuleImportsAndExports(src: string): string {
     let executionCode = src
-    if (executionCode.includes('export')) {
+    if (/\bexport\s+default\b/.test(executionCode)) {
         const spans = buildNonCodeSpans(executionCode)
         let exportDefaultCount = 0
         for (const m of executionCode.matchAll(/\bexport\s+default\b/g)) {

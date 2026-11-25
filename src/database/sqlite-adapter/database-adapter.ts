@@ -29,6 +29,14 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntryById(id, workspaceId)
     }
 
+    hasActiveEntry(id: number): boolean {
+        return this.entriesMgr.hasActiveEntry(id)
+    }
+
+    getActiveEntryIds(ids: readonly number[]): Set<number> {
+        return this.entriesMgr.getActiveEntryIds(ids)
+    }
+
     getEntryHistory(id: number, workspaceId?: string): EntryRevision[] {
         return this.entriesMgr.getEntryHistory(id, workspaceId)
     }

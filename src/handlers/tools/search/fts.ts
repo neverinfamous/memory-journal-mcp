@@ -39,6 +39,7 @@ interface FtsSearchOptions {
     endDate?: string | undefined
     sortBy?: 'timestamp' | 'importance' | 'blended' | undefined
     includeTeam?: boolean | undefined
+    teamAccessAuthorized?: boolean | undefined
     includeArchived?: boolean | undefined
     includeHighlights?: boolean | undefined
     fuzzy_match?: boolean | undefined
@@ -253,7 +254,8 @@ export function ftsSearch(
         isTeamDbReady(teamDb) &&
         options.includeTeam === true &&
         options.isPersonal !== true &&
-        canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId)
+        (options.teamAccessAuthorized === true ||
+            canAccessTeamSilently('search_entries', { teamDb, config: options.config }, options.workspaceId))
     const cursors = resolveFtsCursors(options.cursor, canIncludeTeam)
     const perDbLimit = calcPerDbLimit(options.limit, canIncludeTeam)
 

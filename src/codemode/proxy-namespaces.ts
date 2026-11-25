@@ -6,6 +6,7 @@
 import { wrapResult } from './worker-result-proxy.js'
 import { wrapPromise } from './proxy-helpers.js'
 import { deepFreezeContextClone, IMMUTABLE_PROXY_TRAPS } from './worker/result-proxy-aliases.js'
+import { createNullProtoRecord } from '../utils/type-guards.js'
 import { PACKAGE_VERSION } from './package-version.js'
 import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from './api/schema-help.js'
 
@@ -332,24 +333,32 @@ function buildContextProxyHandler(
 /**
  * Builds the `mj.context` virtual namespace proxy and `getContext` RPC helper.
  */
-export function createContextNamespaceProxy(contextObj?: Record<string, unknown>): {
+export function createContextNamespaceProxy(
+    contextObj?: Record<string, unknown>,
+    isAlreadyDeepFrozen = false
+): {
     contextProxy: object
     getContextRpc: (keyOrObj?: unknown) => Promise<unknown>
 } {
     const projNum = contextObj?.['project_number'] ?? contextObj?.['projectNumber']
     const sessId = contextObj?.['session_id'] ?? contextObj?.['sessionId'] ?? 'session-default'
     const wsId = contextObj?.['workspace_id'] ?? contextObj?.['workspaceId']
-    const rawContextData: Record<string, unknown> = {
-        success: true,
-        ...(projNum !== undefined
-            ? { project_number: projNum, projectNumber: projNum, project_id: projNum, projectId: projNum }
-            : {}),
-        session_id: sessId,
-        sessionId: sessId,
-        ...(wsId !== undefined ? { workspace_id: wsId, workspaceId: wsId } : {}),
-        ...(contextObj ?? {}),
-    }
-    const contextData = deepFreezeContextClone(rawContextData)
+    const rawContextData: Record<string, unknown> = Object.assign(
+        createNullProtoRecord(),
+        {
+            success: true,
+            ...(projNum !== undefined
+                ? { project_number: projNum, projectNumber: projNum, project_id: projNum, projectId: projNum }
+                : {}),
+            session_id: sessId,
+            sessionId: sessId,
+            ...(wsId !== undefined ? { workspace_id: wsId, workspaceId: wsId } : {}),
+        },
+        contextObj ?? {}
+    )
+    const contextData = isAlreadyDeepFrozen
+        ? Object.freeze(rawContextData)
+        : deepFreezeContextClone(rawContextData)
 
     const getContextRpc = (keyOrObj?: unknown): Promise<unknown> => {
         if (typeof keyOrObj === 'string') {

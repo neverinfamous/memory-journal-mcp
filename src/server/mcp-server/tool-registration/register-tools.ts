@@ -167,6 +167,12 @@ function formatRegisteredToolResponse(
     }
 }
 
+interface SyncBriefingCache {
+    rawConfig?: unknown
+    allowedIoRoots?: string[]
+    resolvedBriefing?: unknown
+}
+
 async function executeRegisteredTool(
     server: McpServer,
     tool: ToolRegistration,
@@ -175,7 +181,8 @@ async function executeRegisteredTool(
     extra: unknown,
     context: ServerContext,
     options: ServerOptions,
-    customToolHandlerConfig: ToolHandlerConfig
+    customToolHandlerConfig: ToolHandlerConfig,
+    syncCache: SyncBriefingCache
 ): Promise<CallToolResult> {
     const {
         configManager,
@@ -192,11 +199,20 @@ async function executeRegisteredTool(
             progressToken !== undefined ? { server: server.server, progressToken } : undefined
 
         const currentConfig = configManager.getConfig()
-        const nextBriefing = resolveActiveBriefingConfig(
-            currentConfig.briefingConfig,
-            allowedIoRoots
-        )
-        syncLiveHandlerConfig(customToolHandlerConfig, currentConfig, options, nextBriefing)
+        if (
+            syncCache.rawConfig !== currentConfig ||
+            syncCache.allowedIoRoots !== allowedIoRoots ||
+            customToolHandlerConfig.briefingConfig !== syncCache.resolvedBriefing
+        ) {
+            const nextBriefing = resolveActiveBriefingConfig(
+                currentConfig.briefingConfig,
+                allowedIoRoots
+            )
+            syncLiveHandlerConfig(customToolHandlerConfig, currentConfig, options, nextBriefing)
+            syncCache.rawConfig = currentConfig
+            syncCache.allowedIoRoots = allowedIoRoots
+            syncCache.resolvedBriefing = nextBriefing
+        }
 
         const toolArgs = isRecord(args) ? args : {}
         markValidatedToolInput(toolArgs, resolveEffectiveMaxToolInputElements(options.maxToolInputElements))
@@ -235,6 +251,7 @@ function registerAllToolsOnServer(
     allTools: ToolRegistration[],
     customToolHandlerConfig: ToolHandlerConfig
 ): void {
+    const syncCache: SyncBriefingCache = {}
     for (const tool of allTools) {
         const toolOptions = buildToolRegistrationOptions(tool)
         const hasOutputSchema = Boolean(tool.outputSchema)
@@ -251,7 +268,8 @@ function registerAllToolsOnServer(
                     extra,
                     context,
                     options,
-                    customToolHandlerConfig
+                    customToolHandlerConfig,
+                    syncCache
                 )
         )
     }

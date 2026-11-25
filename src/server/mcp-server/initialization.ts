@@ -341,10 +341,11 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         const configAndJobs = await initConfigAndStartupJobs({ options, db, runtime })
         configManager = configAndJobs.configManager
 
-        const github = await initializeGitHubIntegration(configAndJobs.effectiveOptions, runtime)
-
         const allowedIoRoots = resolveFinalAllowedIoRoots(options)
-        const skillCatalog = await loadBundledSkillCatalog()
+        const [github, skillCatalog] = await Promise.all([
+            initializeGitHubIntegration(configAndJobs.effectiveOptions, runtime),
+            loadBundledSkillCatalog(),
+        ])
 
         return {
             db,

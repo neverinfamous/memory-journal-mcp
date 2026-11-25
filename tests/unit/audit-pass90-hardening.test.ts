@@ -549,7 +549,7 @@ describe('Pass 90 Audit — Pass 11 Remediations', () => {
             const staleConflict = (await runCheckEntryStaleness({ entry_id: 1, entryId: 2 }, ctx, () => Promise.resolve(0))) as { success: boolean; code?: string }
             expect(staleConflict.success).toBe(false)
             expect(staleConflict.code).toBe('VALIDATION_ERROR')
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass94')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
         } finally {
             db.close()
         }

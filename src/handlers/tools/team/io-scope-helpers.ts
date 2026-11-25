@@ -13,7 +13,7 @@ import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
-import { enforceTeamRbac, getCallerIdentity, isCallerTeamAdmin, resolveScopedTeamRole } from './rbac.js'
+import { enforceTeamRbac, getCallerIdentity, resolveScopedTeamRole } from './rbac.js'
 import { resolveWorkspaceFromFilePath } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -24,6 +24,8 @@ import {
 import { convertFile, exportEntriesToMarkdown } from '../../../markdown/index.js'
 import type { ExportableEntry, ParsedFile, SourceFormat } from '../../../markdown/index.js'
 import { MAX_IMPORT_FILE_BYTES } from '../io/tools.js'
+
+const FILENAME_COLLATOR = new Intl.Collator()
 import {
     coerceIntString,
     DATE_FORMAT_MESSAGE,
@@ -328,7 +330,7 @@ export async function readAndConvertExternalMarkdownFiles(
             // Directory stream may already be closed after iteration.
         })
     }
-    allMdFiles.sort((a, b) => a.localeCompare(b))
+    allMdFiles.sort((a, b) => FILENAME_COLLATOR.compare(a, b))
     const mdFiles = allMdFiles.slice(0, limit)
 
     await sendProgress(progress, 1, 3, 'Converting external formats...')
@@ -369,9 +371,10 @@ export function resolveTeamImportContextAuthor(
     if ('errorResponse' in authorResult) {
         return authorResult
     }
+    let allowAdminAuthorOverride = false
     if (rbacActive) {
         const defaultRole = context.config?.teamDefaultRole ?? 'denied'
-        const role = resolveScopedTeamRole(teamDb, authorResult.author, defaultRole, workspaceId)
+        const role = resolveScopedTeamRole(teamDb, authorResult.author, defaultRole, workspaceId, true)
         if (role === null || role === 'viewer') {
             return {
                 errorResponse: {
@@ -383,15 +386,11 @@ export function resolveTeamImportContextAuthor(
                 },
             }
         }
+        allowAdminAuthorOverride = role === 'admin'
     }
     return {
         author: authorResult.author,
         enforceStrictTeamOwnership: true,
-        allowAdminAuthorOverride: isCallerTeamAdmin(
-            teamDb,
-            authorResult.author,
-            context.config,
-            workspaceId
-        ),
+        allowAdminAuthorOverride,
     }
 }
