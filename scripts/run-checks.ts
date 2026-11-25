@@ -169,8 +169,6 @@ function runChecksMain(): void {
         const passed = runNodeBin(
             ['node_modules', 'eslint', 'bin', 'eslint.js'],
             [
-                '--concurrency',
-                'auto',
                 '--cache',
                 '--cache-location',
                 'node_modules/.cache/eslintcache',
