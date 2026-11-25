@@ -125,8 +125,8 @@
         "windows-wrapper-utils.ts",
         "wsl-command-wrapper.ts"
       ],
-      "syncedAt": "2026-11-25T05:26:27.695Z",
-      "syncedFromCommit": "8da1916bf3cf1e1092e5579ba5bbbc29f6131916"
+      "syncedAt": "2026-11-25T07:26:26.136Z",
+      "syncedFromCommit": "41eb272c355c4afb9f6ba77a9583d44f5d4b5d27"
     },
     "commit": {
       "source": ".agents/scripts",

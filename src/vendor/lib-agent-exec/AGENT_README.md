@@ -16,7 +16,7 @@ You only need to manually pass a JSON payload (as described below) if you are ex
 ## ⚠️ The `&&` Pipeline Chaining Rule & WSL2 Linux Support
 
 > [!WARNING]
-> Antigravity `run_command` executes in **Windows PowerShell 5.1 (`powershell.exe`)**, which does **not** support native `&&` or `||` (local human terminals run **PowerShell 7.7**). Global rules and the `PreToolUse` hook forbid raw `&&` / `||` natively; `PreToolUse` folds top-level `&&` chains into conditional `$LASTEXITCODE` guards and denies `||`.
+> Antigravity `run_command` executes in **Windows PowerShell 5.1 (`powershell.exe`)**, which does **not** support native `&&` or `||` (local human terminals run **PowerShell 7.7**). `PreToolUse` folds top-level `&&` and `||` chains into conditional `$LASTEXITCODE` guards while denying nested `&&`/`||` inside blocks/subexpressions and empty chain operands.
 > 
 > **Rule of Thumb:**
 > 1. For native Windows command separation, **MUST** use semicolons (`;`).
