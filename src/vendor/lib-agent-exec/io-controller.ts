@@ -1,11 +1,11 @@
 // @ts-nocheck
-import * as fs from 'node:fs';
-import { Writable } from 'node:stream';
-import { ChildProcess } from 'node:child_process';
+import type * as fs from 'node:fs';
+import { type Writable } from 'node:stream';
+import { type ChildProcess } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import { StreamManager } from './stream-manager.js';
 import { checkPrompt } from './prompt-detector.js';
-import { ExecPayload } from './schema.js';
+import { type ExecPayload } from './schema.js';
 import {
   DEFAULT_MAX_BUFFER,
   INFINITE_MAX_BUFFER,
@@ -19,6 +19,7 @@ import {
   parseEnvelopeFromTail,
   pauseStreamUntilDrained,
 } from './io-utils.js';
+import { recordAgentIssue } from './utils.js';
 
 const STDIN_CHUNK_SIZE = 64 * 1024;
 const PROMPT_STALL_TIMEOUT_MS = 2000;
@@ -35,9 +36,9 @@ export class IOController {
   private pendingStdout = '';
   private _lastDataTime = Date.now();
   
-  public get stdoutTail() { return this._stdoutTail; }
-  public get stderrTail() { return this._stderrTail; }
-  public get lastDataTime() { return this._lastDataTime; }
+  public get stdoutTail(): string { return this._stdoutTail; }
+  public get stderrTail(): string { return this._stderrTail; }
+  public get lastDataTime(): number { return this._lastDataTime; }
   
   public getParsedEnvelope(): Record<string, unknown> | null {
     if (!this.payload.expectJsonEnvelope) return null;
@@ -97,8 +98,8 @@ export class IOController {
     return res;
   }
   
-  private outStream?: fs.WriteStream | Writable;
-  private errStream?: fs.WriteStream | Writable;
+  private outStream?: fs.WriteStream | Writable | undefined;
+  private errStream?: fs.WriteStream | Writable | undefined;
   
   private stallTimer: NodeJS.Timeout | null = null;
   private promptStallTimer: NodeJS.Timeout | null = null;
@@ -124,7 +125,7 @@ export class IOController {
     this.streamManager = new StreamManager(payload.truncateOutputLength, undefined, undefined, isJson);
   }
 
-  public setupStreams() {
+  public setupStreams(): void {
     this.setupFileStreams();
     this.setupStdin();
     this.bindStdout();
@@ -132,7 +133,7 @@ export class IOController {
     this.resetStallTimer();
   }
 
-  private setupFileStreams() {
+  private setupFileStreams(): void {
     if (this.payload.stdoutFile) {
       this.outStream = createConfiguredOutputStream('STDOUT', this.payload.stdoutFile, this.payload, this.cwd, this.isJson);
     }
@@ -144,7 +145,7 @@ export class IOController {
     this.streamManager = new StreamManager(this.payload.truncateOutputLength, this.outStream, this.errStream, this.isJson);
   }
 
-  private setupStdin() {
+  private setupStdin(): void {
     const input = this.payload.stdin;
     const stdin = this.child.stdin;
     if (!stdin) return;
@@ -153,7 +154,9 @@ export class IOController {
         this.isStdinBroken = true;
         try { stdin.destroy(); } catch { /* ignore */ }
       } else {
-        console.error(`❌ STDIN Stream Error:`, err);
+        const msg = err instanceof Error ? err.message : String(err);
+        if (this.isJson) recordAgentIssue('IO_STREAM_ERROR', `STDIN Stream Error: ${msg}`, this.payload);
+        else console.error(`❌ STDIN Stream Error:`, err);
       }
     });
     if (!input) {
@@ -164,7 +167,7 @@ export class IOController {
 
     const inputBuffer = Buffer.from(input, 'utf8');
     let offset = 0;
-    const writeNextChunk = () => {
+    const writeNextChunk = (): void => {
       if (this.isStdinBroken) return;
       let canWrite = true;
       try {
@@ -181,7 +184,9 @@ export class IOController {
         this.isStdinBroken = true;
         const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
         if (code !== 'EPIPE' && code !== 'EOF' && code !== 'ECONNRESET') {
-          console.error('❌ STDIN Stream Error:', err);
+          const msg = err instanceof Error ? err.message : String(err);
+          if (this.isJson) recordAgentIssue('IO_STREAM_ERROR', `STDIN Stream Error: ${msg}`, this.payload);
+          else console.error('❌ STDIN Stream Error:', err);
         }
       }
     };
@@ -190,7 +195,7 @@ export class IOController {
     writeNextChunk();
   }
 
-  private resetStallTimer() {
+  private resetStallTimer(): void {
     const currentStallTimeoutMs = this.payload.stallTimeoutMs ?? 0;
     if (currentStallTimeoutMs > 0) {
       if (this.stallTimer) clearTimeout(this.stallTimer);
@@ -201,7 +206,7 @@ export class IOController {
     }
   }
 
-  private evaluatePromptStall() {
+  private evaluatePromptStall(): void {
     if (this.payload.bypassInterceptors) return;
     if (this.payload.stdin && !this.isStdinClosed && !this.isStdinBroken) return;
     if (hasAnsiTuiSequence(this._stdoutTail) || hasAnsiTuiSequence(this._stderrTail)) {
@@ -220,7 +225,7 @@ export class IOController {
     }
   }
 
-  private scheduleStreamFlush(isErr: boolean) {
+  private scheduleStreamFlush(isErr: boolean): void {
     const timer = isErr ? this.stderrFlushTimer : this.stdoutFlushTimer;
     if (timer) return;
     const newTimer = setTimeout(() => {
@@ -299,9 +304,9 @@ export class IOController {
       return true;
     }
     if (this.payload.truncateOutputLength !== undefined) return true;
-    const outMax = this.payload.stdoutFile ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
-    const errMax = this.payload.stderrFile ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
-    const combinedMax = (this.payload.stdoutFile || this.payload.stderrFile) ? (outMax + errMax) : DEFAULT_MAX_BUFFER;
+    const outMax = this.outStream !== undefined ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
+    const errMax = this.errStream !== undefined ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
+    const combinedMax = (this.outStream !== undefined || this.errStream !== undefined) ? (outMax + errMax) : DEFAULT_MAX_BUFFER;
     const outLen = this.streamManager.getBufferedLength(false) + this.pendingStdout.length;
     const errLen = this.streamManager.getBufferedLength(true);
     const exceededLimit =
@@ -316,7 +321,7 @@ export class IOController {
     return true;
   }
 
-  private processData(isErr: boolean, data: Buffer) {
+  private processData(isErr: boolean, data: Buffer): void {
     if (this.aborted) return;
     this._lastDataTime = Date.now();
     let decoded = isErr ? this.stderrDecoder.write(data) : this.stdoutDecoder.write(data);
@@ -350,12 +355,12 @@ export class IOController {
     pauseStreamUntilDrained(stream, streamsToDrain);
   }
 
-  private processEnd(isErr: boolean) {
+  private processEnd(isErr: boolean): void {
     if (isErr) this.stderrEnded = true;
     else this.stdoutEnded = true;
     if (isErr && this.stderrFlushTimer) { clearTimeout(this.stderrFlushTimer); this.stderrFlushTimer = null; }
     if (!isErr && this.stdoutFlushTimer) { clearTimeout(this.stdoutFlushTimer); this.stdoutFlushTimer = null; }
-    if (this.promptStallTimer) { clearTimeout(this.promptStallTimer); this.promptStallTimer = null; }
+    if (this.stdoutEnded && this.stderrEnded && this.promptStallTimer) { clearTimeout(this.promptStallTimer); this.promptStallTimer = null; }
     if (this.stdoutEnded && this.stderrEnded && this.stallTimer) { clearTimeout(this.stallTimer); this.stallTimer = null; }
     if (this.aborted) return;
     let decoded = isErr ? this.stderrDecoder.end() : this.stdoutDecoder.end();
@@ -374,21 +379,21 @@ export class IOController {
     }
   }
 
-  private bindStdout() {
+  private bindStdout(): void {
     if (this.child.stdout) {
       this.child.stdout.on('data', (data: Buffer) => this.processData(false, data));
       this.child.stdout.on('end', () => this.processEnd(false));
     }
   }
 
-  private bindStderr() {
+  private bindStderr(): void {
     if (this.child.stderr) {
       this.child.stderr.on('data', (data: Buffer) => this.processData(true, data));
       this.child.stderr.on('end', () => this.processEnd(true));
     }
   }
 
-  public flushAll() {
+  public flushAll(): void {
     if (this.stallTimer) { clearTimeout(this.stallTimer); this.stallTimer = null; }
     if (this.promptStallTimer) { clearTimeout(this.promptStallTimer); this.promptStallTimer = null; }
     if (this.stdoutFlushTimer) { clearTimeout(this.stdoutFlushTimer); this.stdoutFlushTimer = null; }
@@ -426,7 +431,7 @@ export class IOController {
     await closeStreamsWithTimeout([this.outStream, this.errStream], timeoutMs);
   }
 
-  public destroyStreams() {
+  public destroyStreams(): void {
     this.aborted = true;
     if (this.child.stdout) this.child.stdout.destroy();
     if (this.child.stderr) this.child.stderr.destroy();

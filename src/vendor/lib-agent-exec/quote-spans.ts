@@ -75,58 +75,66 @@ function closeRegexLiteral(source: string, index: number): number {
   return index;
 }
 
-function closeTemplateLiteral(source: string, index: number, options: NonCodeSpanOptions): number {
-  let i = index;
-  while (i < source.length) {
-    const ch = source[i];
-    if (ch === '\\') {
-      i += 2;
-      continue;
-    }
-    if (ch === '$' && source[i + 1] === '{') {
-      i = closeTemplateExpr(source, i + 2, options);
-      continue;
-    }
-    if (ch === '`') return i + 1;
-    i += 1;
+type TemplateFrame = { kind: 'template' } | { kind: 'expr'; depth: number };
+
+function stepTemplateBody(source: string, i: number, stack: TemplateFrame[]): number {
+  const ch = source[i];
+  if (ch === '\\') return i + 2;
+  if (ch === '$' && source[i + 1] === '{') {
+    stack.push({ kind: 'expr', depth: 1 });
+    return i + 2;
   }
-  return i;
+  if (ch === '`') {
+    stack.pop();
+    return i + 1;
+  }
+  return i + 1;
 }
 
-function closeTemplateExpr(source: string, index: number, options: NonCodeSpanOptions): number {
+function stepTemplateExpr(
+  source: string,
+  i: number,
+  topExpr: { kind: 'expr'; depth: number },
+  stack: TemplateFrame[],
+  options: NonCodeSpanOptions,
+): number {
   const { includeSlashComments = true, includeRegexLiterals = true } = options;
-  let depth = 1;
+  const ch = source[i];
+  if (includeSlashComments && ch === '/' && source[i + 1] === '/') {
+    let end = i + 2;
+    while (end < source.length && source[end] !== '\n') end += 1;
+    return end;
+  }
+  if (includeSlashComments && ch === '/' && source[i + 1] === '*') {
+    const endBlock = source.indexOf('*/', i + 2);
+    return endBlock === -1 ? source.length : endBlock + 2;
+  }
+  if (includeRegexLiterals && ch === '/' && looksLikeRegexStart(source, i)) {
+    const regexEnd = closeRegexLiteral(source, i + 1);
+    if (regexEnd > i + 1) return regexEnd;
+  }
+  if (ch === "'" || ch === '"') return closeQuote(source, i + 1, ch, options);
+  if (ch === '`') {
+    stack.push({ kind: 'template' });
+    return i + 1;
+  }
+  if (ch === '{') topExpr.depth += 1;
+  else if (ch === '}') {
+    topExpr.depth -= 1;
+    if (topExpr.depth === 0) stack.pop();
+  }
+  return i + 1;
+}
+
+function closeTemplateLiteral(source: string, index: number, options: NonCodeSpanOptions): number {
+  const stack: TemplateFrame[] = [{ kind: 'template' }];
   let i = index;
-  while (i < source.length && depth > 0) {
-    const ch = source[i];
-    if (includeSlashComments && ch === '/' && source[i + 1] === '/') {
-      i += 2;
-      while (i < source.length && source[i] !== '\n') i += 1;
-      continue;
-    }
-    if (includeSlashComments && ch === '/' && source[i + 1] === '*') {
-      const endBlock = source.indexOf('*/', i + 2);
-      i = endBlock === -1 ? source.length : endBlock + 2;
-      continue;
-    }
-    if (includeRegexLiterals && ch === '/' && looksLikeRegexStart(source, i)) {
-      const regexEnd = closeRegexLiteral(source, i + 1);
-      if (regexEnd > i + 1) {
-        i = regexEnd;
-        continue;
-      }
-    }
-    if (ch === "'" || ch === '"') {
-      i = closeQuote(source, i + 1, ch);
-      continue;
-    }
-    if (ch === '`') {
-      i = closeTemplateLiteral(source, i + 1, options);
-      continue;
-    }
-    if (ch === '{') depth += 1;
-    else if (ch === '}') depth -= 1;
-    i += 1;
+  while (i < source.length && stack.length > 0) {
+    const top = stack[stack.length - 1];
+    if (top === undefined) break;
+    i = top.kind === 'template'
+      ? stepTemplateBody(source, i, stack)
+      : stepTemplateExpr(source, i, top, stack, options);
   }
   return i;
 }

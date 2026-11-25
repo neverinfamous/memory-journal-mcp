@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ExecPayload } from '../schema.js';
 import { RG_VALUE_FLAGS, convertToWindowsPath, convertToWslPath, escapeUnixArg, extractLeadingShortFlags } from '../command-utils.js';
-import { isJavaScriptOrTypeScriptCode, isPythonCode } from '../eval-healer.js';
+import { isJavaScriptOrTypeScriptCode, isPythonCode, isShellCommandScript } from '../eval-healer.js';
 import { buildNonCodeSpans, isIndexInSpans } from '../quote-spans.js';
 import { findEcosystemScript } from '../utils.js';
 import { AGENT_EXEC_README_URL, splitFirstShellSegment } from './utils.js';
@@ -74,9 +74,10 @@ function healGrepSearchFunction(payload: EvalPayload, trimmedCode: string): void
   if (isCaseInsensitive) flags.push('-i');
   if (!isRegex) flags.push('-F');
   if (pattern.startsWith('-')) flags.push('-e');
-  payload.target = 'wsl2';
+  const isWin32 = process.platform === 'win32';
+  if (isWin32) payload.target = 'wsl2';
   payload.interpreter = 'bash';
-  payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
+  payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(isWin32 ? convertToWslPath(searchPath) : searchPath, false)}`;
   console.error(`\n   💡 AGENT HINT: 'grep_search' called as a function inside eval code.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating grep_search function call to ripgrep (rg) command... (Frictionless Recovery)\x1b[0m`);
 }
@@ -93,9 +94,10 @@ function healGrepSearchCli(payload: EvalPayload, trimmedCode: string, baseCwd: s
     return true;
   }
   if (parsed.searchPath.length > 0) {
-    payload.target = 'wsl2';
+    const isWin32 = process.platform === 'win32';
+    if (isWin32) payload.target = 'wsl2';
     payload.interpreter = 'bash';
-    payload.code = `rg --files ${escapeUnixArg(convertToWslPath(parsed.searchPath), false)}`;
+    payload.code = `rg --files ${escapeUnixArg(isWin32 ? convertToWslPath(parsed.searchPath) : parsed.searchPath, false)}`;
     console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code without pattern.`);
     console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg) --files... (Frictionless Recovery)\x1b[0m`);
     return true;
@@ -111,14 +113,15 @@ function writeGrepSearchRg(
   isWord: boolean,
   isRegex: boolean,
 ): void {
-  payload.target = 'wsl2';
+  const isWin32 = process.platform === 'win32';
+  if (isWin32) payload.target = 'wsl2';
   payload.interpreter = 'bash';
   const rgFlags = ['-n'];
   if (isCaseInsensitive) rgFlags.push('-i');
   if (isWord) rgFlags.push('-w');
   if (!isRegex) rgFlags.push('-F');
   if (pattern.startsWith('-')) rgFlags.push('-e');
-  payload.code = `rg ${rgFlags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
+  payload.code = `rg ${rgFlags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(isWin32 ? convertToWslPath(searchPath) : searchPath, false)}`;
   console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
 }
@@ -133,9 +136,10 @@ function healListDirEval(payload: EvalPayload, trimmedCode: string): boolean {
   if (listDirMatch === null) return false;
   const rest = stripOptionalEvalCallParens(listDirMatch[1] ?? '').replace(/^['"`]|['"`]$/g, '').trim();
   const targetPath = rest.length > 0 ? rest : '.';
-  payload.target = 'wsl2';
+  const isWin32 = process.platform === 'win32';
+  if (isWin32) payload.target = 'wsl2';
   payload.interpreter = 'bash';
-  payload.code = `ls ${escapeUnixArg(convertToWslPath(targetPath), false)}`;
+  payload.code = `ls ${escapeUnixArg(isWin32 ? convertToWslPath(targetPath) : targetPath, false)}`;
   console.error(`\n   💡 AGENT HINT: 'list_dir' executed directly in eval code.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'list_dir' to ls... (Frictionless Recovery)\x1b[0m`);
   return true;
@@ -154,9 +158,10 @@ function healViewFileEval(payload: EvalPayload, trimmedCode: string): boolean {
     if (!inner.includes(',')) targetPath = inner;
   }
   if (targetPath.length === 0) return false;
-  payload.target = 'wsl2';
+  const isWin32 = process.platform === 'win32';
+  if (isWin32) payload.target = 'wsl2';
   payload.interpreter = 'bash';
-  payload.code = `cat ${escapeUnixArg(convertToWslPath(targetPath), false)}`;
+  payload.code = `cat ${escapeUnixArg(isWin32 ? convertToWslPath(targetPath) : targetPath, false)}`;
   console.error(`\n   💡 AGENT HINT: 'view_file/read_file' executed directly in eval code.`);
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating to cat... (Frictionless Recovery)\x1b[0m`);
   return true;
@@ -168,7 +173,7 @@ function healPackageRunnerSearch(payload: EvalPayload, trimmedCode: string): voi
   const isFd = /^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(?:fd|fdfind)\b/i.test(trimmedCode);
   const toolName = isFd ? 'fd' : 'rg';
   const rest = pkgRunnerMatch[1] ?? '';
-  payload.target = 'wsl2';
+  if (process.platform === 'win32') payload.target = 'wsl2';
   payload.interpreter = 'bash';
   payload.code = `${toolName} ${rest}`.trim();
   console.error(`\n   💡 AGENT HINT: '${toolName}' executed via package runner in eval code.`);
@@ -241,7 +246,7 @@ function healGitInspectEval(payload: EvalPayload, trimmedCode: string, baseCwd: 
   const fallbackScript = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../get-git-history-json.ts');
   const script = scriptCandidate ?? fallbackScript;
   if (!fs.existsSync(script)) return;
-  payload.target = 'windows';
+  if (process.platform === 'win32') payload.target = 'windows';
   payload.interpreter = 'bun';
   payload.code = gitHistorySpawn(script.replace(/\\/g, '/'), baseCwd.replace(/\\/g, '/'), extraArgs);
   console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' inside eval payload detected.`);
@@ -259,6 +264,7 @@ function healFindMissingName(payload: EvalPayload, trimmedCode: string): void {
   if (findGlobMatch === null || findGlobMatch[1] === undefined || findGlobMatch[2] === undefined) return;
   if (!findGlobMatch[2].includes('*') && !findGlobMatch[2].includes('?')) return;
   const searchPath = stripWrappingQuotes(findGlobMatch[1]);
+  if (searchPath.startsWith('-') || searchPath === '(' || searchPath === '!' || searchPath === '\\(') return;
   const pattern = stripWrappingQuotes(findGlobMatch[2]);
   if (pattern.includes('/') || pattern.includes('\\')) return;
   const rest = findGlobMatch[3] ?? '';
@@ -315,7 +321,7 @@ function healBroadFindEval(payload: EvalPayload): void {
 }
 
 function unbundleQuotedSearchFlags(payload: EvalPayload): void {
-  if (isJavaScriptOrTypeScriptCode(payload.code) || isPythonCode(payload.code)) return;
+  if (!isShellCommandScript(payload.code) && (isJavaScriptOrTypeScriptCode(payload.code) || isPythonCode(payload.code))) return;
   const match = bundledSearchFlagsRegex.exec(payload.code);
   if (match === null) return;
   const spans = buildNonCodeSpans(payload.code, { includeHashComments: true });

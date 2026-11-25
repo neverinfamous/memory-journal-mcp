@@ -6,8 +6,8 @@ import {
   handleKubectlInterception,
   splitDockerMultiTargets,
 } from './docker-lifecycle-guards.js';
-import { DOCKER_VALUE_FLAGS, guardDockerTtyAndRepl } from './docker-tty-repl-guard.js';
-import { ExecutionContext } from './types.js';
+import { DOCKER_VALUE_FLAGS, absorbsNextDockerShortValue, guardDockerTtyAndRepl } from './docker-tty-repl-guard.js';
+import { type ExecutionContext } from './types.js';
 
 const DOCKER_RUN_EXEC_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS);
 const DOCKER_CMDS = ['docker', 'docker.exe', 'docker.bat'];
@@ -27,7 +27,7 @@ function isLeadingDockerHelp(args: readonly string[], isComposeCmd: boolean): bo
     const activeFlags = inRunOrExec
       ? DOCKER_RUN_EXEC_VALUE_FLAG_SET
       : ((isComposeCmd || firstSub === 'compose') ? COMPOSE_GLOBAL_VALUE_FLAGS : DOCKER_GLOBAL_VALUE_FLAGS);
-    if (activeFlags.has(a)) { i++; continue; }
+    if (activeFlags.has(a) || (inRunOrExec && absorbsNextDockerShortValue(a))) { i++; continue; }
     if (a.startsWith('-')) continue;
     if (inRunOrExec) return false;
     if (firstSub === undefined) {
@@ -91,7 +91,8 @@ function stripFollowFromLogsArgs(args: string[], startIdx: number, endIdx: numbe
   for (let i = endIdx - 1; i >= startIdx; i--) {
     const a = args[i];
     if (a === undefined) continue;
-    if (a === '-f' || a === '--follow' || (a.startsWith('--follow=') && a.toLowerCase() !== '--follow=false' && a !== '--follow=0')) {
+    const low = a.toLowerCase();
+    if (a === '-f' || a === '--follow' || (low.startsWith('--follow=') && low !== '--follow=false' && a !== '--follow=0') || (a.startsWith('-f=') && low !== '-f=false' && a !== '-f=0')) {
       args.splice(i, 1);
       stripped = true;
     } else if (/^-[a-zA-Z]*f[a-zA-Z]*$/.test(a)) {
@@ -99,6 +100,14 @@ function stripFollowFromLogsArgs(args: string[], startIdx: number, endIdx: numbe
       if (rest === '-') args.splice(i, 1);
       else args[i] = rest;
       stripped = true;
+    } else {
+      const m = /^(-[a-zA-Z]+)f=(.*)$/.exec(a);
+      if (m !== null && !/^(?:false|0)$/i.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replace(/f/g, '');
+        if (rest === '-') args.splice(i, 1);
+        else args[i] = rest;
+        stripped = true;
+      }
     }
   }
   return stripped;
@@ -134,9 +143,47 @@ function hasDockerStartInteractiveFlag(args: readonly string[], startSubIdx = -1
     const a = args[i];
     if (a === undefined || a === '--') break;
     if (a === '--detach-keys' || a === '--checkpoint' || a === '--checkpoint-dir') { i++; continue; }
-    if (a === '--interactive' || a === '--attach' || (!a.startsWith('--') && /^-[a-zA-Z]*[ia][a-zA-Z]*$/.test(a))) return true;
+    const low = a.toLowerCase();
+    const eqIdx = !a.startsWith('--') && /^-[a-zA-Z]+=/.test(a) ? a.indexOf('=') : -1;
+    const shortEqActive = eqIdx !== -1 && (/[ia]/.test(a.slice(1, eqIdx - 1)) || ((a[eqIdx - 1] === 'i' || a[eqIdx - 1] === 'a') && !/^(?:false|0)$/i.test(a.slice(eqIdx + 1))));
+    if (
+      a === '--interactive' ||
+      a === '--attach' ||
+      (low.startsWith('--attach=') && low !== '--attach=false' && low !== '--attach=0') ||
+      (low.startsWith('--interactive=') && low !== '--interactive=false' && low !== '--interactive=0') ||
+      (!a.startsWith('--') && /^-[a-zA-Z]*[ia][a-zA-Z]*$/.test(a)) ||
+      shortEqActive
+    ) {
+      return true;
+    }
   }
   return false;
+}
+
+function stripWatchFromComposeUpArgs(args: string[], composeSubIdx: number, endIdx: number): boolean {
+  let strippedWatch = false;
+  for (let i = endIdx - 1; i > composeSubIdx; i--) {
+    const a = args[i];
+    if (a === undefined) continue;
+    if (a === '--watch' || a === '-w' || (a.startsWith('--watch=') && a.toLowerCase() !== '--watch=false' && a !== '--watch=0') || (a.startsWith('-w=') && !/^-w=(?:false|0)$/i.test(a))) {
+      args.splice(i, 1);
+      strippedWatch = true;
+    } else if (/^-[dVw]*w[dVw]*$/.test(a)) {
+      const rest = a.replace(/w/g, '');
+      if (rest === '-') args.splice(i, 1);
+      else args[i] = rest;
+      strippedWatch = true;
+    } else {
+      const m = /^(-[dVw]+)w=(.*)$/.exec(a);
+      if (m !== null && !/^(?:false|0)$/i.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replace(/w/g, '');
+        if (rest === '-') args.splice(i, 1);
+        else args[i] = rest;
+        strippedWatch = true;
+      }
+    }
+  }
+  return strippedWatch;
 }
 
 function guardDockerComposeSubcmd(
@@ -161,21 +208,7 @@ function guardDockerComposeSubcmd(
     }
     const postDdIdx = args.indexOf('--', Math.max(0, composeSubIdx + 1));
     const endIdx = postDdIdx === -1 ? args.length : postDdIdx;
-    let strippedWatch = false;
-    for (let i = endIdx - 1; i > composeSubIdx; i--) {
-      const a = args[i];
-      if (a === undefined) continue;
-      if (a === '--watch' || a === '-w' || (a.startsWith('--watch=') && a.toLowerCase() !== '--watch=false' && a !== '--watch=0')) {
-        args.splice(i, 1);
-        strippedWatch = true;
-      } else if (/^-[dVw]*w[dVw]*$/.test(a)) {
-        const rest = a.replace(/w/g, '');
-        if (rest === '-') args.splice(i, 1);
-        else args[i] = rest;
-        strippedWatch = true;
-      }
-    }
-    if (strippedWatch) {
+    if (stripWatchFromComposeUpArgs(args, composeSubIdx, endIdx)) {
       syncArgs();
       console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose up --watch' runs indefinitely and will cause a timeout. Automatically stripping '--watch / -w' flag... (Frictionless Recovery)`);
     }
@@ -292,13 +325,14 @@ function guardNonInteractiveDockerSubcmds(
 
 export function dockerInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, args, payload } = ctx;
-  if (KUBECTL_CMDS.includes(cmdBasename)) {
+  const lowerCmd = cmdBasename.toLowerCase();
+  if (KUBECTL_CMDS.includes(lowerCmd)) {
     handleKubectlInterception(args, ctx);
     return;
   }
 
-  const isDockerCmd = DOCKER_CMDS.includes(cmdBasename);
-  const isComposeCmd = DOCKER_COMPOSE_CMDS.includes(cmdBasename);
+  const isDockerCmd = DOCKER_CMDS.includes(lowerCmd);
+  const isComposeCmd = DOCKER_COMPOSE_CMDS.includes(lowerCmd);
   if (!isDockerCmd && !isComposeCmd) return;
   if (isLeadingDockerHelp(args, isComposeCmd)) return;
 

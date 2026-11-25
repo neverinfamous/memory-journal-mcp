@@ -352,9 +352,14 @@ function forwardHistoryArgs(
   return forwarded;
 }
 
-function injectDiffPathSeparator(ctx: ExecutionContext, cmd: string, knownPath: (value: string) => boolean): void {
+function injectDiffPathSeparator(
+  ctx: ExecutionContext,
+  cmd: string,
+  knownPath: (value: string) => boolean,
+  subcmdIdx = -1,
+): void {
   if (cmd !== 'diff' || ctx.args.includes('--')) return;
-  const diffIdx = ctx.args.indexOf('diff');
+  const diffIdx = subcmdIdx !== -1 ? subcmdIdx : ctx.args.indexOf('diff');
   const startIdx = diffIdx !== -1 ? diffIdx + 1 : 0;
   const posItems: Array<{ idx: number; arg: string }> = [];
   for (let i = startIdx; i < ctx.args.length; i++) {
@@ -388,7 +393,7 @@ export function rewriteGitInspection(
   explicitCwd: string | undefined,
 ): void {
   if (cmd === 'diff' && args.includes('--no-index')) return;
-  const cwd = ctx.payload.cwd || process.cwd();
+  const cwd = ctx.payload.cwd || ctx.cwd || process.cwd();
   const scriptCandidate = resolveHistoryScript(targetCwd, rawCwd, cwd);
   const knownPathCache = new Map<string, boolean>();
   const knownPath = (argStr: string): boolean => {
@@ -401,11 +406,11 @@ export function rewriteGitInspection(
   const subcmdIdx = findGitSubcommandIndex(args, cmd);
   if (hasCustomGitTreeFlags(args, subcmdIdx)) return;
   if (scriptCandidate === null) {
-    injectDiffPathSeparator(ctx, cmd, knownPath);
+    injectDiffPathSeparator(ctx, cmd, knownPath, subcmdIdx);
     return;
   }
   if (shouldLeaveNative(cmd, args, subcmdIdx, ctx, knownPath)) return;
-  ctx.payload.target = 'windows';
+  if (process.platform === 'win32') ctx.payload.target = 'windows';
   if (cmd === 'status') {
     rewriteStatus(ctx, scriptCandidate, targetCwd, explicitCwd);
     return;

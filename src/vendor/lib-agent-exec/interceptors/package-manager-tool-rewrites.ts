@@ -1,7 +1,7 @@
 // @ts-nocheck
 import os from 'node:os';
 import path from 'node:path';
-import { convertToWindowsPath } from '../command-utils.js';
+import { convertToWindowsPath, convertToWslPath } from '../command-utils.js';
 import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
 import {
   AUTONOMOUS_HEALING_MSG,
@@ -187,7 +187,7 @@ export function rewriteToolBinary(
   }
   ctx.cmdBasename = mappedCmd;
   ctx.args = args.slice(targetIdx + 1);
-  if (!isRg) ctx.payload.target = 'wsl2';
+  if (!isRg && process.platform === 'win32') ctx.payload.target = 'wsl2';
   if ('command' in ctx.payload) {
     ctx.payload.command = mappedCmd;
     ctx.payload.args = ctx.args;
@@ -239,9 +239,10 @@ function handleAgentNativeToolSubcmd(
     const subIdx = findFirstPkgSubcmdIndex(args);
     const afterSub = subIdx !== -1 ? args.slice(subIdx + 1) : args;
     const pathArg = afterSub.find(a => !a.startsWith('-')) ?? '.';
+    const isWin32 = process.platform === 'win32';
     ctx.cmdBasename = 'ls';
-    ctx.args = [pathArg];
-    ctx.payload.target = 'wsl2';
+    ctx.args = [isWin32 ? convertToWslPath(pathArg) : pathArg];
+    if (isWin32) ctx.payload.target = 'wsl2';
     if ('command' in ctx.payload) { ctx.payload.command = 'ls'; ctx.payload.args = ctx.args; }
     console.error(`\n   💡 AGENT HINT: 'list_dir' is an agent-native tool, NOT a package manager script.`);
     console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ls... (Frictionless Recovery)\x1b[0m`);
@@ -253,9 +254,10 @@ function handleAgentNativeToolSubcmd(
     const fileArg = afterSub.find(a => !a.startsWith('-'));
     if (fileArg) {
       applySubcmdPrefixCwd(ctx, args);
+      const isWin32 = process.platform === 'win32';
       ctx.cmdBasename = 'cat';
-      ctx.args = [fileArg];
-      ctx.payload.target = 'wsl2';
+      ctx.args = [isWin32 ? convertToWslPath(fileArg) : fileArg];
+      if (isWin32) ctx.payload.target = 'wsl2';
       if ('command' in ctx.payload) { ctx.payload.command = 'cat'; ctx.payload.args = ctx.args; }
       console.error(`\n   💡 AGENT HINT: 'view_file' is an agent-native tool, NOT a package manager script.`);
       console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to cat... (Frictionless Recovery)\x1b[0m`);

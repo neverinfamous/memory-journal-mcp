@@ -39,6 +39,7 @@ const PIPE_DATA_PREV_FLAGS = new Set([
 export function rejectUnsafePosixPipes(payload: ExecPayload, isJson: boolean, exitWithError: (message: string) => never): void {
   if (process.platform !== 'win32' || payload.target === 'wsl2' || payload.bypassInterceptors === true) return;
   const cmdBase = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
+  if (isCmd(cmdBase)) return;
   const hasPipeCommand = payload.type === 'command' && (
     payload.command.includes(' && ') || payload.command.includes(' || ') ||
     payload.command.includes(' | ') || payload.command.includes(' > ')
@@ -72,6 +73,7 @@ const SCRIPT_INTERPRETER_ALIASES: Readonly<Record<string, string>> = {
   nodejs: 'node',
   py: 'python',
   ps1: 'pwsh',
+  bat: 'cmd.exe',
   sh: 'bash',
 };
 
@@ -115,11 +117,12 @@ function inferScriptInterpreter(scriptFile: string): string {
 
 function formatScriptArgs(localCmd: string, scriptPath: string, rawArgs: readonly string[] | undefined): string[] {
   const normalizedScript = scriptPath.replace(/\\/g, '/');
+  const cmdBase = path.basename(localCmd);
   const tail = rawArgs ?? [];
-  if (isPwsh(localCmd)) {
+  if (isPwsh(cmdBase)) {
     return ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-File', normalizedScript, ...tail];
   }
-  if (isCmd(localCmd)) {
+  if (isCmd(cmdBase)) {
     return ['/c', normalizedScript, ...tail];
   }
   return [normalizedScript, ...tail];
@@ -182,8 +185,66 @@ export function buildScriptPayload(
   return { cmd: localCmd, args: localArgs, tempScriptPath };
 }
 
+function scanMaskShellHeredocState(
+  line: string,
+  state: { quote: '"' | "'" | '`' | null },
+): { heredocEnd: string | null; stripTabs: boolean } {
+  let heredocEnd: string | null = null;
+  let stripTabs = false;
+  let escaped = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i] ?? '';
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\' && state.quote !== "'") { escaped = true; continue; }
+    if (state.quote !== null) {
+      if (ch === state.quote) state.quote = null;
+      continue;
+    }
+    if (ch === '#' && (i === 0 || /[\s;(]/.test(line[i - 1] ?? ''))) break;
+    if (ch === '"' || ch === "'" || ch === '`') { state.quote = ch; continue; }
+    if (ch === '<' && line[i - 1] !== '<' && line[i + 1] === '<' && line[i + 2] !== '<') {
+      const m = /^(<<-?)\s*\\?(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/.exec(line.slice(i));
+      if (m?.[3] !== undefined) {
+        stripTabs = m[1] === '<<-';
+        heredocEnd = m[3];
+      }
+    }
+  }
+  return { heredocEnd, stripTabs };
+}
+
+function maskShHeredocBodies(code: string): string {
+  const lines = code.split('\n');
+  const masked: string[] = [];
+  let activeHeredocEnd: string | null = null;
+  let activeStripTabs = false;
+  const quoteState: { quote: '"' | "'" | '`' | null } = { quote: null };
+  for (const line of lines) {
+    if (activeHeredocEnd !== null) {
+      masked.push(' '.repeat(line.length));
+      const normalizedLine = activeStripTabs ? line.replace(/^\t+/, '') : line;
+      if (normalizedLine === activeHeredocEnd) {
+        activeHeredocEnd = null;
+        activeStripTabs = false;
+      }
+      continue;
+    }
+    if (quoteState.quote === null && /^\s*\/\//.test(line)) {
+      masked.push(' '.repeat(line.length));
+      continue;
+    }
+    masked.push(line);
+    const detected = scanMaskShellHeredocState(line, quoteState);
+    if (detected.heredocEnd !== null) {
+      activeHeredocEnd = detected.heredocEnd;
+      activeStripTabs = detected.stripTabs;
+    }
+  }
+  return masked.join('\n');
+}
+
 function rewriteShCommentsOutsideHeredocsAndQuotes(code: string): string {
-  const spans = buildNonCodeSpans(code, {
+  const spans = buildNonCodeSpans(maskShHeredocBodies(code), {
     includeHashComments: true,
     includeSlashComments: false,
     includeRegexLiterals: false,
@@ -214,15 +275,19 @@ function rewriteShCommentsOutsideHeredocsAndQuotes(code: string): string {
     const trimmedMatch = line.match(/^(\s*)\/\/(.*)$/);
     if (!insideSpan && trimmedMatch !== null) {
       rewrittenLines.push(`${trimmedMatch[1]}#${trimmedMatch[2]}`);
-    } else {
-      rewrittenLines.push(line);
+      continue;
     }
+    rewrittenLines.push(line);
 
-    const heredocMatch = line.match(/(<<-?)\s*\\?(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/);
-    const heredocOffset = heredocMatch?.index;
-    if (heredocMatch?.[3] !== undefined && heredocOffset !== undefined && !isIndexInSpans(spans, lineStart + heredocOffset)) {
-      activeStripTabs = heredocMatch[1] === '<<-';
-      activeHeredocEnd = heredocMatch[3];
+    for (const hm of line.matchAll(/(<<-?)\s*\\?(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/g)) {
+      const hmOffset = hm.index;
+      if (hmOffset === undefined || hm[1] === undefined || hm[3] === undefined) continue;
+      if (line[hmOffset - 1] === '<' || line[hmOffset + hm[1].length] === '<') continue;
+      if (!isIndexInSpans(spans, lineStart + hmOffset)) {
+        activeStripTabs = hm[1] === '<<-';
+        activeHeredocEnd = hm[3];
+        break;
+      }
     }
   }
   return rewrittenLines.join('\n');

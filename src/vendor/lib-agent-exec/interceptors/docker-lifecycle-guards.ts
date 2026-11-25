@@ -30,7 +30,7 @@ function stripFollowFlag(args: string[], startIdx: number, endIdx: number): bool
   for (let i = endIdx - 1; i >= startIdx; i--) {
     const a = args[i];
     if (a === undefined) continue;
-    if (a === '-f' || a === '--follow' || (a.startsWith('--follow=') && a.toLowerCase() !== '--follow=false' && a !== '--follow=0')) {
+    if (a === '-f' || a === '--follow' || (a.startsWith('--follow=') && a.toLowerCase() !== '--follow=false' && a !== '--follow=0') || (a.startsWith('-f=') && !/^-f=(?:false|0)$/i.test(a))) {
       args.splice(i, 1);
       stripped = true;
     } else if (/^-[fpti]*f[fpti]*$/.test(a)) {
@@ -38,6 +38,14 @@ function stripFollowFlag(args: string[], startIdx: number, endIdx: number): bool
       if (rest === '-') args.splice(i, 1);
       else args[i] = rest;
       stripped = true;
+    } else {
+      const m = /^(-[fpti]+)f=(.*)$/.exec(a);
+      if (m !== null && !/^(?:false|0)$/i.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replace(/f/g, '');
+        if (rest === '-') args.splice(i, 1);
+        else args[i] = rest;
+        stripped = true;
+      }
     }
   }
   return stripped;
@@ -85,11 +93,11 @@ function hasExplicitDockerHost(args: readonly string[], payloadEnv: Record<strin
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
-    if (a === '-H' || a === '--host' || a.startsWith('--host=') || a.startsWith('-H=')) return true;
+    if (a === '-H' || a === '--host' || a.startsWith('--host=') || (a.startsWith('-H') && a.length > 2)) return true;
     if (DOCKER_GLOBAL_VALUE_FLAGS.has(a)) { i++; continue; }
     if (!a.startsWith('-')) break;
   }
-  const hostVal = payloadEnv?.DOCKER_HOST ?? payloadEnv?.docker_host ?? process.env['DOCKER_HOST'];
+  const hostVal = payloadEnv?.['DOCKER_HOST'] ?? payloadEnv?.['docker_host'] ?? process.env['DOCKER_HOST'];
   return typeof hostVal === 'string' && hostVal.trim().length > 0;
 }
 

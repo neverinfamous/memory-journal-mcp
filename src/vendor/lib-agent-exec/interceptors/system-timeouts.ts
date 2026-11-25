@@ -61,7 +61,7 @@ function wslCommandTimeout(derived: SystemCommandDerived, baseCwd?: string): num
   const { payload, cmdBasename, args } = derived;
   const effectiveCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? payload.cwd : baseCwd;
   const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, effectiveCwd);
-  const isNestedAgentExec = nestedAgentExec(args);
+  const isNestedAgentExec = nestedAgentExec(args, 0, cmdBasename);
   maybeSplitJoinedTestArgs(cmdBasename, args, underlyingScript, payload, isNestedAgentExec);
   const profile = wslCommandProfile(cmdBasename, args, underlyingScript, isNestedAgentExec);
   if (profile.isDockerScout) {
@@ -130,7 +130,7 @@ function applyWindowsCommandTimeout(derived: SystemCommandDerived, baseCwd?: str
   const { payload, cmdBasename, args } = derived;
   const effectiveCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? payload.cwd : baseCwd;
   const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, effectiveCwd);
-  const isNestedAgentExec = nestedAgentExec(args);
+  const isNestedAgentExec = nestedAgentExec(args, 0, cmdBasename);
   maybeSplitJoinedTestArgs(cmdBasename, args, underlyingScript, payload, isNestedAgentExec);
   const profile = windowsCommandProfile(cmdBasename, args, underlyingScript, isNestedAgentExec);
   if (profile.isPlaywright || profile.isDocker) {

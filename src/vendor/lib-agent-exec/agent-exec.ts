@@ -175,7 +175,7 @@ try {
         ? [...parsedArgs.interceptors]
         : (typeof parsedArgs.interceptors === 'string' ? [parsedArgs.interceptors] : []);
       if (typeof parsedArgs.plugin === 'string') interceptors.push(parsedArgs.plugin);
-      return { path: validInput, interceptors, explicitPayload: parsedArgs.payload !== undefined || parsedArgs.payloadPath !== undefined };
+      return { path: validInput.trim(), interceptors, explicitPayload: parsedArgs.payload !== undefined || parsedArgs.payloadPath !== undefined };
     })
     .otherwise(() => showUsageError('Missing payload JSON file path.', isJson));
 
@@ -218,6 +218,7 @@ try {
   }
 
   const payload = parseResult.data;
+  isJson = isJson || Boolean(payload.expectJsonEnvelope);
   if (targetOverride !== undefined) {
     const normalized = normalizeTarget(targetOverride);
     if (!normalized) fatalError(`Invalid --target value: '${targetOverride}'. Must be 'windows', 'wsl2', or an alias (wsl, linux, ubuntu, native, win, pwsh, cmd, bash).`);
@@ -243,11 +244,10 @@ try {
   });
 
   const cwd = resolveAndValidateCwd(payload, (badCwd) => fatalError(`The provided cwd '${badCwd}' does not exist or is not a directory.`));
-  const effectiveIsJson = isJson || Boolean(payload.expectJsonEnvelope);
-  const { cmd, args, tempScriptPath, envOverrides, resolvedCwd } = buildCommand(payload, cwd, effectiveIsJson);
+  const { cmd, args, tempScriptPath, envOverrides, resolvedCwd } = buildCommand(payload, cwd, isJson);
   const finalEnv = mergeFinalEnvironment(payload.env, envOverrides);
 
-  await executeCommand(payload, resolvedCwd ?? cwd, cmd, args, finalEnv, tempScriptPath, effectiveIsJson);
+  await executeCommand(payload, resolvedCwd ?? cwd, cmd, args, finalEnv, tempScriptPath, isJson);
 } catch (err) {
   if (err instanceof SyntaxError) {
     fatalError(`Invalid JSON in payload file. ${err.message}`);

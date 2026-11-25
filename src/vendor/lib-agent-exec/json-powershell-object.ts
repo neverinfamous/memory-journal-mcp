@@ -64,7 +64,11 @@ function consumeDepthChar(scan: PairScan, ch: string): boolean {
 }
 
 function takePairAtComma(scan: PairScan): void {
-  const rest = scan.content.slice(scan.index + 1).trimStart();
+  let k = scan.index + 1;
+  while (k < scan.content.length && /\s/.test(scan.content[k] ?? '')) k++;
+  const firstCh = scan.content[k];
+  if (firstCh === undefined || !/[a-zA-Z"'\\]/.test(firstCh)) return;
+  const rest = scan.content.slice(k, k + 40);
   const matchKey = scan.knownKeys.find(key => keyRestStarts(rest, key));
   if (matchKey === undefined) return;
   const rawVal = scan.content.slice(scan.valStart, scan.index).trim();
@@ -147,11 +151,47 @@ function cleanArrayItem(item: string): string {
   return cleaned.replace(/\\(["',])/g, '$1');
 }
 
+function splitTopLevelArrayItems(inner: string): string[] {
+  const items: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let inQuote: '"' | "'" | null = null;
+  let escaped = false;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\') {
+      const nextCh = inner[i + 1] ?? '';
+      if (inQuote !== null || (nextCh !== ',' && nextCh !== ']' && nextCh !== '}' && nextCh !== ')')) {
+        escaped = true;
+      }
+      continue;
+    }
+    if (inQuote !== null) {
+      if (ch === inQuote) inQuote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inQuote = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+    if (ch === ')' || ch === ']' || ch === '}') { if (depth > 0) depth--; continue; }
+    if (ch === ',' && depth === 0) {
+      items.push(inner.slice(start, i));
+      start = i + 1;
+    }
+  }
+  items.push(inner.slice(start));
+  return items;
+}
+
 function coerceArray(cleanVal: string): string[] | null {
   if (!cleanVal.startsWith('[') || !cleanVal.endsWith(']')) return null;
   const inner = cleanVal.slice(1, -1).trim();
   if (inner.length === 0) return [];
-  return inner.split(',').map(cleanArrayItem);
+  const rawItems = splitTopLevelArrayItems(inner);
+  if (rawItems.length > 1 && (rawItems[rawItems.length - 1] ?? '').trim().length === 0) {
+    rawItems.pop();
+  }
+  return rawItems.map(cleanArrayItem);
 }
 
 function coerceScalar(cleanVal: string): unknown {
@@ -164,13 +204,13 @@ function coerceScalar(cleanVal: string): unknown {
 
 function coercePowershellValue(rawVal: string): unknown {
   const cleanVal = stripWrappingBackslashes(rawVal);
-  const quoted = unwrapQuotes(cleanVal);
-  if (quoted !== null) return quoted;
   try {
     return JSON.parse(cleanVal);
   } catch {
-    // Not JSON primitive
+    // Fall back to unwrapping quotes for malformed PowerShell values with unescaped backslashes
   }
+  const quoted = unwrapQuotes(cleanVal);
+  if (quoted !== null) return quoted;
   const items = coerceArray(cleanVal);
   if (items !== null) return items;
   return coerceScalar(cleanVal);
@@ -182,7 +222,7 @@ function hasPayloadIdentity(pairs: readonly PowershellPair[]): boolean {
   );
 }
 
-export function tryPowershellObject(trimmed: string, knownKeys: readonly string[]): unknown | undefined {
+export function tryPowershellObject(trimmed: string, knownKeys: readonly string[]): unknown {
   if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return undefined;
   try {
     const pairs = scanPowershellPairs(trimmed.slice(1, -1).trim(), knownKeys);

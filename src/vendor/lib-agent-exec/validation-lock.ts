@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isPidAlive } from './process-manager.js';
+import { runAsyncUntil } from './utils.js';
 
 export type ValidationLockKind = 'build' | 'typecheck' | 'playwright' | 'full-lint' | 'full-test' | 'check';
 export interface ValidationClassification { kind: ValidationLockKind; label: string; }
@@ -226,13 +227,29 @@ function tryReclaimStaleLock(lockPath: string, staleTtlMs: number, isPidAliveFn:
   }
 }
 
+const RELEASE_SLEEP_VIEW = new Int32Array(new SharedArrayBuffer(4));
+
+function sleepSyncBrief(ms: number): void {
+  try {
+    Atomics.wait(RELEASE_SLEEP_VIEW, 0, 0, ms);
+  } catch { /* fallback no-op if Atomics unavailable */ }
+}
+
 function createOwnershipRelease(lockPath: string, token: string): () => void {
   let released = false;
   return () => {
     if (released) return;
     released = true;
     const reclaimDir = `${lockPath}.reclaim`;
-    if (!tryAcquireReclaimMutex(reclaimDir)) return;
+    let acquiredReclaim = false;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (tryAcquireReclaimMutex(reclaimDir)) {
+        acquiredReclaim = true;
+        break;
+      }
+      sleepSyncBrief(15);
+    }
+    if (!acquiredReclaim) return;
     try {
       const record = parseLockRecord(fs.readFileSync(lockPath, 'utf8'));
       if (record !== null && record.token === token) fs.unlinkSync(lockPath);
@@ -288,32 +305,39 @@ export async function acquireValidationLock(options: AcquireValidationLockOption
   const deadlineMs = Date.now() + (options.timeoutMs ?? 90_000);
   let loggedWait = false;
   let reclaimAttempts = 0;
-  let retryReclaimed: boolean;
 
-  do {
-    retryReclaimed = false;
+  return runAsyncUntil<ValidationLockHandle | null>(async () => {
     const payload = JSON.stringify({ ...baseRecord, acquiredAt: Date.now() });
     const step = tryAcquireLockStep(lockPath, payload, staleTtlMs, isPidAliveFn, options.isJson);
     if (step === 'acquired') {
-      return { lockPath, scopeKey, kind: options.classification.kind, release: createOwnershipRelease(lockPath, token) };
+      return {
+        done: true,
+        value: { lockPath, scopeKey, kind: options.classification.kind, release: createOwnershipRelease(lockPath, token) },
+      };
     }
-    if (step === 'fatal') return null;
+    if (step === 'fatal') return { done: true, value: null };
     if (step === 'reclaimed') {
       if (reclaimAttempts < 2) {
         reclaimAttempts += 1;
-        retryReclaimed = true;
-        continue;
+        return { done: false };
       }
-      break;
+      reclaimAttempts = 0;
     }
-    if (Date.now() >= deadlineMs) break;
+    if (Date.now() >= deadlineMs) {
+      if (options.isJson !== true) {
+        console.error(`⚠️ Timed out waiting for validation lock (${options.classification.label}); proceeding fail-open.`);
+      }
+      return { done: true, value: null };
+    }
     if (!loggedWait && options.isJson !== true) {
       loggedWait = true;
       console.error(`⏳ Waiting for active ${options.classification.kind} validation lock in ${normalizedDir}...`);
     }
     await new Promise((r) => setTimeout(r, 150 + Math.random() * 150));
-  } while (retryReclaimed || Date.now() < deadlineMs);
-
-  if (options.isJson !== true) console.error(`⚠️ Timed out waiting for validation lock (${options.classification.label}); proceeding fail-open.`);
-  return null;
+    if (Date.now() < deadlineMs) return { done: false };
+    if (options.isJson !== true) {
+      console.error(`⚠️ Timed out waiting for validation lock (${options.classification.label}); proceeding fail-open.`);
+    }
+    return { done: true, value: null };
+  });
 }

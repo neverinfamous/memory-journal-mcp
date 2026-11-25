@@ -1,18 +1,15 @@
 // @ts-nocheck
 import path from 'node:path';
 import fs from 'node:fs';
-import os from 'node:os';
-import crypto from 'node:crypto';
-import { IMMUTABLE_ENV_OVERRIDES } from './environment.js';
-import { convertToWindowsPath, convertToWslPath } from './path-convert.js';
 
 export { formatForCmdExe, convertToWslPath, convertToWindowsPath } from './path-convert.js';
 export { healRegexPattern, sanitizeWslRegex } from './regex-healer.js';
 export { healFragmentedQuotes } from './quote-healer.js';
 export { tryHealJsonPayload } from './json-payload-healer.js';
+export { buildWslEnvArgs, getUnderlyingPackageScript } from './command-env-utils.js';
 
-export const isPwsh = (cmd: string) => ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd.toLowerCase());
-export const isCmd = (cmd: string) => ['cmd', 'cmd.exe'].includes(cmd.toLowerCase());
+export const isPwsh = (cmd: string): boolean => ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd.toLowerCase());
+export const isCmd = (cmd: string): boolean => ['cmd', 'cmd.exe'].includes(cmd.toLowerCase());
 
 /**
  * [INTENT]: Escape ASCII and Unicode smart single-quote characters recognized by PowerShell CharTraits.IsSingleQuote.
@@ -87,7 +84,7 @@ export function tokenizeArgs(str: string): string[] {
 export function applyTemplateOverride(templateOverride: string, baseCmd: string, baseArgs: string[], replaceTemplates: (str: string) => string): { cmd: string; args: string[] } {
   const innerCmdStr = [baseCmd, ...baseArgs]
     .map(a => a.length === 0 || /\s/.test(a) || a.includes('"') || a.includes("'") || a.endsWith('\\')
-      ? `"${a.replace(/(\\*)"/g, (_m, slashes: string) => `${slashes}${slashes}\\"`).replace(/\\+$/, (m) => m + m)}"`
+      ? `"${a.replace(/(?<!\\)(\\*)"/g, (_m, slashes: string) => `${slashes}${slashes}\\"`).replace(/(?<!\\)\\+$/, (m) => m + m)}"`
       : a)
     .join(' ');
 
@@ -183,7 +180,7 @@ export const FLAGS_WITH_ARG_BY_TOOL: Record<string, string[]> = {
   tail: ['-n', '--lines', '-c', '--bytes', '-s', '--sleep-interval', '--pid', '--max-unchanged-stats'],
   sort: ['-k', '--key', '-t', '--field-separator', '-o', '--output', '-T', '--temporary-directory', '-S', '--buffer-size', '--parallel', '--batch-size', '--compress-program', '--files0-from', '--random-source', '--sort'],
   uniq: ['-f', '--skip-fields', '-s', '--skip-chars', '-w', '--check-chars', '--all-repeated', '--group'],
-  gpg: ['-u', '--local-user', '-r', '--recipient', '-R', '--hidden-recipient', '-o', '--output', '--passphrase', '--passphrase-fd', '--passphrase-file', '--cipher-algo', '--digest-algo', '--homedir', '--status-fd', '--command-fd', '--keyserver', '--pinentry-mode', '--default-key', '--import-options', '--export-options', '--verify'],
+  gpg: ['-u', '--local-user', '-r', '--recipient', '-R', '--hidden-recipient', '-o', '--output', '--passphrase', '--passphrase-fd', '--passphrase-file', '--cipher-algo', '--digest-algo', '--homedir', '--status-fd', '--command-fd', '--keyserver', '--pinentry-mode', '--default-key', '--import-options', '--export-options'],
 };
 const JQ_TWO_ARG_FLAGS = new Set(['--arg', '--argjson', '--slurpfile', '--rawfile', '--argfile']);
 const SHORT_VALUE_CHARS_BY_TOOL: Record<string, string> = {
@@ -192,11 +189,15 @@ const SHORT_VALUE_CHARS_BY_TOOL: Record<string, string> = {
   fgrep: 'efmdDABC',
   rg: 'ABCMdefgjmrtTE',
   sed: 'ef',
+  awk: 'FvfW',
+  gawk: 'FvfW',
   jq: 'Lf',
+  yq: 'f',
   head: 'nc',
   tail: 'ncs',
   sort: 'ktoTS',
   uniq: 'fsw',
+  gpg: 'urRo',
 };
 
 /** Return only the option-letter prefix before any attached short value operand (e.g. `-ieError` -> `-ie`). */
@@ -271,10 +272,13 @@ export function hasSearchPcre2Flag(cmd: string, args: readonly string[]): boolea
   return hasSearchShortOrLongFlag(cmd, args, ['-P', '--pcre2', '--perl-regexp'], /^-[a-zA-Z]*P[a-zA-Z]*$/);
 }
 
+const PATTERN_EXPR_TOOLS: ReadonlySet<string> = new Set([
+  'grep', 'egrep', 'fgrep', 'rg', 'sed', 'awk', 'gawk', 'jq', 'yq',
+]);
+
 export function findPatternExprIndex(cmd: string, args: string[]): number {
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
-  const ddIdx = args.indexOf('--');
-  if (base === 'rg' && (ddIdx === -1 ? args : args.slice(0, ddIdx)).includes('--files')) return -1;
+  if (!PATTERN_EXPR_TOOLS.has(base)) return -1;
   const toolFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, base) ? FLAGS_WITH_ARG_BY_TOOL[base] : undefined;
   if (!toolFlags) return -1;
 
@@ -290,15 +294,16 @@ export function findPatternExprIndex(cmd: string, args: string[]): number {
     if (!seenDoubleDash && isAttachedPatternOrFileFlag(a, isPatternFlagTool)) { patternSuppliedByFlag = true; continue; }
     if (!seenDoubleDash && (base === 'jq' || base === 'yq') && JQ_TWO_ARG_FLAGS.has(a)) { i += 2; continue; }
     const shortInfo = !seenDoubleDash ? inspectCombinedShortFlag(base, a, toolFlags) : null;
-    if (shortInfo !== null && isPatternFlagTool) {
-      if (shortInfo.tailChar === 'e' && shortInfo.takesSeparateValue && i + 1 < args.length) return i + 1;
-      if (shortInfo.hasAttachedValue && (shortInfo.tailChar === 'e' || shortInfo.tailChar === 'f')) { patternSuppliedByFlag = true; continue; }
+    if (shortInfo !== null) {
+      if (isPatternFlagTool && shortInfo.tailChar === 'e' && shortInfo.takesSeparateValue && i + 1 < args.length) return i + 1;
+      if (shortInfo.hasAttachedValue && (shortInfo.tailChar === 'f' || (isPatternFlagTool && shortInfo.tailChar === 'e'))) { patternSuppliedByFlag = true; continue; }
     }
     if (!seenDoubleDash && (shortInfo?.takesSeparateValue || toolFlags.includes(a))) {
       if (a === '-f' || a === '--file' || a === '--from-file' || (shortInfo?.tailChar === 'f' && shortInfo.takesSeparateValue)) patternSuppliedByFlag = true;
       i++;
       continue;
     }
+    if (!seenDoubleDash && base === 'rg' && a === '--files') return -1;
     if (!seenDoubleDash && a.startsWith('-')) continue;
     if (!patternSuppliedByFlag) return i;
   }
@@ -326,123 +331,4 @@ export function getPositionalArgs(cmd: string, args: string[]): string[] {
   return getPositionalArgIndices(cmd, args).map(idx => args[idx] ?? '');
 }
 
-export function buildWslEnvArgs(payloadEnv?: Record<string, unknown>, envOverrides: Record<string, string> = {}): string[] {
-  const wslEnvArgs: string[] = [];
-  const wslUuid = crypto.randomUUID();
-  wslEnvArgs.push(`AGENT_EXEC_WSL_UUID=${wslUuid}`);
-  const env = payloadEnv ?? {};
-  let hasExplicitPath = false;
-  for (const [k, v] of Object.entries(env)) {
-    if (v === undefined || v === null || k.length === 0 || /[=\r\n\0]/.test(k)) continue;
-    const upperKey = k.toUpperCase();
-    if (upperKey === 'AGENT_EXEC_WSL_UUID' || IMMUTABLE_ENV_OVERRIDES.has(upperKey)) continue;
-    if (upperKey === 'PATH') {
-      hasExplicitPath = true;
-      const rawPath = String(v);
-      const wslPathVal = /[a-zA-Z]:[/\\]/.test(rawPath)
-        ? rawPath.split(';').filter(Boolean).map(seg => convertToWslPath(seg)).join(':')
-        : rawPath;
-      wslEnvArgs.push(`PATH=${wslPathVal}`);
-      continue;
-    }
-    wslEnvArgs.push(`${k}=${convertToWslPath(String(v))}`);
-  }
-  for (const [k, v] of Object.entries(envOverrides)) {
-    const upperKey = k.toUpperCase();
-    if (upperKey === 'PATH') {
-      hasExplicitPath = true;
-      const wslPathVal = /[a-zA-Z]:[/\\]/.test(v)
-        ? v.split(';').filter(Boolean).map(seg => convertToWslPath(seg)).join(':')
-        : v;
-      wslEnvArgs.push(`PATH=${wslPathVal}`);
-      continue;
-    }
-    wslEnvArgs.push(`${k}=${convertToWslPath(v)}`);
-  }
-
-  if (!hasExplicitPath) {
-    const wslUser = (process.env.WSL_USER ?? path.basename(os.homedir())).trim() || 'ubuntu';
-    const defaultWslPathsList = [
-      `/home/${wslUser}/.bun/bin`,
-      `/home/${wslUser}/.cargo/bin`,
-      `/home/${wslUser}/.local/bin`,
-      '/root/.bun/bin',
-      '/root/.cargo/bin',
-      '/root/.local/bin',
-      '/usr/local/sbin',
-      '/usr/local/bin',
-      '/usr/sbin',
-      '/usr/bin',
-      '/sbin',
-      '/bin',
-    ];
-    if (process.env.APPDATA !== undefined && process.env.APPDATA.length > 0) {
-      defaultWslPathsList.push(convertToWslPath(path.join(process.env.APPDATA, 'npm')));
-    } else {
-      defaultWslPathsList.push(convertToWslPath(path.join(os.homedir(), 'AppData', 'Roaming', 'npm')));
-    }
-    const defaultWslPaths = defaultWslPathsList.join(':');
-    wslEnvArgs.push(`PATH=${defaultWslPaths}`);
-  }
-
-  return wslEnvArgs;
-}
-
 export { handleWindowsUnixCommandWrappers, expandGlobArgsInProcess } from './windows-wrapper-utils.js';
-
-const PKG_SCRIPT_VALUE_FLAGS = new Set([
-  '--filter', '-F', '-C', '--dir', '--cwd', '--prefix', '--config', '-c',
-]);
-const PKG_DIR_FLAGS = new Set(['-C', '--dir', '--cwd', '--prefix']);
-
-function normalizePkgCwd(rawDir: string): string {
-  return process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(rawDir)
-    ? convertToWindowsPath(rawDir)
-    : rawDir;
-}
-
-function resolvePkgScriptDir(payloadCwd: string | undefined, dirFlagVal: string | undefined): string {
-  const normBase = payloadCwd !== undefined && payloadCwd.length > 0 ? normalizePkgCwd(payloadCwd) : process.cwd();
-  const baseCwd = path.resolve(normBase);
-  if (dirFlagVal === undefined || dirFlagVal.length === 0) return baseCwd;
-  const normFlag = normalizePkgCwd(dirFlagVal);
-  return path.isAbsolute(normFlag) ? path.normalize(normFlag) : path.resolve(baseCwd, normFlag);
-}
-
-export function getUnderlyingPackageScript(cmdBasename: string, args: string[] | undefined, payloadCwd: string | undefined): string {
-  const base = cmdBasename.toLowerCase().replace(/\.(cmd|exe)$/i, '');
-  if (!['pnpm', 'npm', 'bun', 'yarn'].includes(base) || !args || args.length === 0) return '';
-  const nonFlagArgs: string[] = [];
-  let dirFlagVal: string | undefined;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === undefined || a === '--') break;
-    const eqIdx = a.indexOf('=');
-    const flagKey = eqIdx === -1 ? a : a.slice(0, eqIdx);
-    if (eqIdx !== -1 && PKG_DIR_FLAGS.has(flagKey)) {
-      dirFlagVal = a.slice(eqIdx + 1);
-      continue;
-    }
-    if (PKG_SCRIPT_VALUE_FLAGS.has(a)) {
-      if (PKG_DIR_FLAGS.has(a) && args[i + 1] !== undefined) dirFlagVal = args[i + 1];
-      i += 1;
-      continue;
-    }
-    if (a.startsWith('-')) continue;
-    nonFlagArgs.push(a);
-  }
-  const scriptName = (nonFlagArgs[0] === 'run' || nonFlagArgs[0] === 'exec') ? nonFlagArgs[1] : nonFlagArgs[0];
-  if (!scriptName) return '';
-  try {
-    const pkgPath = path.join(resolvePkgScriptDir(payloadCwd, dirFlagVal), 'package.json');
-    if (!fs.existsSync(pkgPath)) return '';
-    const pkg: unknown = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    if (pkg === null || typeof pkg !== 'object' || Array.isArray(pkg) || !Object.hasOwn(pkg, 'scripts')) return '';
-    const scriptsEntry = Object.entries(pkg).find(([k]) => k === 'scripts')?.[1];
-    if (scriptsEntry === null || typeof scriptsEntry !== 'object' || Array.isArray(scriptsEntry)) return '';
-    const val = Object.entries(scriptsEntry).find(([k]) => k === scriptName)?.[1];
-    return typeof val === 'string' ? val : '';
-  } catch {
-    return '';
-  }
-}

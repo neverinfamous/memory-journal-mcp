@@ -36,16 +36,20 @@ export function matchesGitLongOpt(arg: string, fullFlag: string, minLen: number)
   return arg.length >= minLen && arg.length <= fullFlag.length && fullFlag.startsWith(arg);
 }
 
-export function stripGitPathspecMagic(rawSpec: string): { isTopRooted: boolean; isExcluded: boolean; cleaned: string } {
+export function stripGitPathspecMagic(rawSpec: string): { isTopRooted: boolean; isExcluded: boolean; hasNonLiteralMagic: boolean; cleaned: string } {
   let s = rawSpec.trim().replace(/^['"]|['"]$/g, '');
   let isTopRooted = false;
   let isExcluded = false;
+  let hasNonLiteralMagic = false;
   if (s.startsWith(':(')) {
     const closeIdx = s.indexOf(')');
     if (closeIdx !== -1) {
       const attrs = s.slice(2, closeIdx).split(',').map((part) => part.trim().toLowerCase());
       if (attrs.includes('top')) isTopRooted = true;
       if (attrs.includes('exclude')) isExcluded = true;
+      if (attrs.some(attr => attr.length > 0 && attr !== 'top' && attr !== 'exclude' && attr !== 'literal')) {
+        hasNonLiteralMagic = true;
+      }
       s = s.slice(closeIdx + 1);
     }
   } else if (s.startsWith(':')) {
@@ -60,7 +64,7 @@ export function stripGitPathspecMagic(rawSpec: string): { isTopRooted: boolean; 
   }
   const norm = s.replace(/\\/g, '/');
   const trimmedLeading = isTopRooted ? norm.replace(/^\/+/, '') : norm;
-  return { isTopRooted, isExcluded, cleaned: trimmedLeading.length > 0 ? trimmedLeading : '.' };
+  return { isTopRooted, isExcluded, hasNonLiteralMagic, cleaned: trimmedLeading.length > 0 ? trimmedLeading : '.' };
 }
 
 function stripWin32TrailingDotsAndSpaces(seg: string): string {

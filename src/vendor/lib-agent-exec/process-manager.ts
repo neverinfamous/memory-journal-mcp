@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { ChildProcess, spawnSync } from 'node:child_process';
+import { type ChildProcess, spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];
@@ -95,12 +95,29 @@ function killWindowsDescendantsFallback(rootPid: number): void {
 
 const WSL_UUID_ARG = /^AGENT_EXEC_WSL_UUID=[0-9a-f-]+$/i;
 
+export function extractWslDistroArgs(spawnargs: readonly string[]): string[] {
+  for (let i = 0; i < spawnargs.length; i++) {
+    const arg = spawnargs[i];
+    if (arg === undefined) continue;
+    if (arg === '--' || arg === '-e' || arg === '--exec') break;
+    if ((arg === '-d' || arg === '--distribution') && spawnargs[i + 1] !== undefined) {
+      return ['-d', spawnargs[i + 1] ?? ''];
+    }
+    if (arg.startsWith('--distribution=')) {
+      const distro = arg.slice('--distribution='.length);
+      if (distro.length > 0) return ['-d', distro];
+    }
+  }
+  return [];
+}
+
 function killWslProcessGroup(spawnargs: readonly string[]): void {
   const uuidArg = spawnargs.find((arg) => arg.startsWith('AGENT_EXEC_WSL_UUID='));
   if (uuidArg === undefined || !WSL_UUID_ARG.test(uuidArg)) return;
   try {
+    const distroArgs = extractWslDistroArgs(spawnargs);
     const killScript = `pids=$(grep -l -z '${uuidArg}' /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3); if [ -n "$pids" ]; then for pid in $pids; do kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null; done; fi`;
-    spawnSync('wsl.exe', ['-u', 'root', '-e', 'sh', '-c', killScript], { stdio: 'ignore', timeout: 10000, windowsHide: true });
+    spawnSync('wsl.exe', [...distroArgs, '-u', 'root', '-e', 'sh', '-c', killScript], { stdio: 'ignore', timeout: 10000, windowsHide: true });
   } catch { /* ignore */ }
 }
 
@@ -123,7 +140,7 @@ function taskkillTree(pid: number): boolean {
 
 function killWindowsTree(child: ChildProcess, pid: number, parentGone: boolean): void {
   const spawnfile = child.spawnfile || '';
-  const spawnargs: string[] = child.spawnargs || [];
+  const spawnargs: string[] = child.spawnargs;
   const baseSpawn = path.basename(spawnfile).toLowerCase().replace(/\.exe$/, '');
   if (baseSpawn === 'wsl') killWslProcessGroup(spawnargs);
   if (parentGone || !taskkillTree(pid)) killWindowsDescendantsFallback(pid);
@@ -153,6 +170,7 @@ function killUnixTree(child: ChildProcess, pid: number, force = true): void {
     return;
   }
   setTimeout(() => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
     try {
       process.kill(-pid, 'SIGKILL');
     } catch { /* ignore */ }
@@ -163,7 +181,7 @@ function killUnixTree(child: ChildProcess, pid: number, force = true): void {
 }
 
 export function killProcessTree(child: ChildProcess, force = true): void {
-  if (!child.pid) return;
+  if (child.pid === undefined || child.pid === 0) return;
   const pid = child.pid;
   const parentGone = child.killed || child.exitCode !== null || child.signalCode !== null;
   for (const hook of processManagerHooks) {

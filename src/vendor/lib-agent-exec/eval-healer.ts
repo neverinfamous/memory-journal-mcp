@@ -19,7 +19,7 @@ const SHELL_INTERPRETERS = new Set([
 
 export function isJavaScriptOrTypeScriptCode(code: string): boolean {
   const trimmed = code.trim();
-  const isJsImport = /^import(?:\s*\(|\s*\.meta\b|\s+(?:type\s+)?(?:['"*{]|[A-Za-z_$][\w$]*(?:\s*,\s*(?:[*A-Za-z_${][\w$},\s*]*))?\s+from\s+['"]))/.test(trimmed);
+  const isJsImport = /^import(?:\s*\(|\s*\.meta\b|\s+(?:type\s+)?(?:['"*{]|[A-Za-z_$][\w$]*(?:\s*,\s*(?:\*\s+as\s+[A-Za-z_$][\w$]*|\{[^}]*\}))?\s+from\s+['"]))/.test(trimmed);
   // Direct statements at the top (keep bare Python `import mod` distinct from JS ESM `import` syntax)
   if (isJsImport || /^(?:export\s|console\.(?:log|error|warn|info|dir|trace)\b|const\s|let\s|var\s|async\s+function|function\*?\s|process\.(?:exit|env|cwd|version|argv)\b|require\s*\()/.test(trimmed)) {
     return true;
@@ -281,9 +281,8 @@ function tryHealSqlCallAt(code: string, dotIdx: number): HealedSqlCall | null {
   if (closeParenIdx === -1) return null;
   const rawBody = code.slice(openParenIdx + 1, closeParenIdx)
     .replace(/^(\s*)\\/, '$1')
-    .replace(/(\\+)(\s*)$/, (m, slashes: string, ws: string) => (slashes.length % 2 === 1 ? `${slashes.slice(0, -1)}${ws}` : m))
-    .replace(/`/g, '\\`')
-    .replace(/\$\{/g, '\\${');
+    .replace(/(?<!\\)(\\+)(\s*)$/, (m, slashes: string, ws: string) => (slashes.length % 2 === 1 ? `${slashes.slice(0, -1)}${ws}` : m))
+    .replace(/(?<!\\)(\\*)(`|\$\{)/g, (_m, slashes: string, tok: string) => (slashes.length % 2 === 1 ? `${slashes}\\\\${tok}` : `${slashes}\\${tok}`));
   return { openParenIdx, closeParenIdx, sqlLiteral: `\`${rawBody}\`` };
 }
 
@@ -358,8 +357,11 @@ export function resolveEvalExecutionTarget(
   p: Extract<ExecPayload, { type: 'eval' }>
 ): EvalExecutionTarget {
   let effectiveInterpreter = p.interpreter;
-  if (p.target === 'wsl2' && effectiveInterpreter !== undefined && (isPwsh(effectiveInterpreter) || isCmd(effectiveInterpreter))) {
-    effectiveInterpreter = 'bash';
+  if (p.target === 'wsl2' && effectiveInterpreter !== undefined) {
+    const interpBase = path.basename(effectiveInterpreter.replace(/\\/g, '/')).toLowerCase();
+    if (isPwsh(interpBase) || isCmd(interpBase) || interpBase === 'ps1' || interpBase === 'bat') {
+      effectiveInterpreter = 'bash';
+    }
   }
 
   const currentInterp = (effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun')).toLowerCase();

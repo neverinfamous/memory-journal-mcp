@@ -15,7 +15,7 @@ import {
 import { emitInterceptBanner, resolveNativeBinary } from '../utils.js';
 import { normalizeRipgrepInvocation } from './ripgrep-flag-normalize.js';
 import { healRipgrepPatternShape, readRipgrepSearchFlags } from './ripgrep-pattern-heal.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 
 const RG_NON_PATH_VALUE_FLAGS = new Set([
   '-e', '--regexp', '-r', '--replace', '-g', '--glob', '--iglob',
@@ -106,7 +106,7 @@ function appendRipgrepDefaultTarget(
   hasFiles: boolean,
   updatedPositional: readonly string[],
 ): void {
-  if (hasStdin || hasHelpOrVersion) return;
+  if (hasStdin || (hasHelpOrVersion && !hasFiles)) return;
   const patternOrFilesMode = hasPatternFlag || hasFiles;
   const targetPositionals = patternOrFilesMode ? updatedPositional : updatedPositional.slice(1);
   if (targetPositionals.includes('.')) return;

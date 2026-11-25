@@ -30,7 +30,7 @@ function extractEvalSearchPositionals(tokens: readonly string[], isRg: boolean):
     if (!seenDoubleDash && tok === '--') { seenDoubleDash = true; continue; }
     if (!seenDoubleDash && tok.startsWith('-')) {
       const shortPrefix = !tok.startsWith('--') ? extractLeadingShortFlags(isRg ? 'rg' : 'grep', tok) : '';
-      if (tok === '-r' || tok === '-R' || tok === '--recursive' || (shortPrefix.length > 1 && /[rR]/.test(shortPrefix))) {
+      if (tok === '-r' || tok === '-R' || tok === '--recursive' || tok === '--dereference-recursive' || (shortPrefix.length > 1 && /[rR]/.test(shortPrefix))) {
         hasRecursiveFlag = true;
       }
       const lastShort = shortPrefix.length > 1 ? `-${shortPrefix[shortPrefix.length - 1]}` : '';
@@ -164,7 +164,7 @@ function stepRgExtendedRewrite(
       const stripped = rebuildSegmentWithTokenReplacement(segment, i + 1, leadPrefix);
       return stripped !== segment ? { segment: stripped, kind: 'stripped' } : null;
     }
-    if (!isKnownRgEncoding(stripTokenQuotes(next))) {
+    if (eSplit.hadAttachedBoolSuffix || !isKnownRgEncoding(stripTokenQuotes(next))) {
       const replacement = leadPrefix.length > 0 ? `${leadPrefix} -e` : '-e';
       const rewritten = rebuildSegmentWithTokenReplacement(segment, i + 1, replacement);
       return rewritten !== segment ? { segment: rewritten, kind: 'rewrote' } : null;

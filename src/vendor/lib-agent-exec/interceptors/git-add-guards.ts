@@ -7,7 +7,6 @@ import type { ExecutionContext } from './types.js';
 import {
   AGENTS_PATH_RE,
   GLOB_META_RE,
-  PATHSPEC_FROM_FILE_RE,
   blockGitAdd,
   extractGitDirWorkTreeFlags,
   guardPathspecFromFile,
@@ -20,8 +19,17 @@ import {
   stripGitPathspecMagic,
   tryRealpath,
 } from './git-add-broad-scan.js';
+import { collectGitPathspecs, syncGitPayloadArgs } from './git-staged-deletions.js';
 
 export { blockGitAdd };
+export {
+  collectGitPathspecs,
+  findAlreadyStagedGitDeletions,
+  healGitAddStagedDeletions,
+  healGitRmStagedDeletions,
+  isAlreadyStagedGitDeletion,
+  syncGitPayloadArgs,
+} from './git-staged-deletions.js';
 
 /** [INTENT]: Keep in sync with commit.ts stale-lock threshold (5 minutes). */
 export const STALE_INDEX_LOCK_MS = 5 * 60 * 1000;
@@ -30,7 +38,6 @@ const GIT_ADD_FORCE_RE = /^-[nvfipeuANU]*f[nvfipeuANU]*$/;
 const BROAD_ADD_GLOBS = new Set(['.', './', '..', '../', '.agents', '.agents/', '.agents/*', '.agents/**', '*', '**']);
 const ALL_ADD_FLAG_RE = /^-[nvfipeuANU]*A[nvfipeuANU]*$/;
 const UPDATE_ADD_FLAG_RE = /^-[nvfipeuANU]*u[nvfipeuANU]*$/;
-const SKIP_STAGED_DEL_SHORT_RE = /^-[nvfipeuANU]*[nipe][nvfipeuANU]*$/;
 
 export interface GitIgnoreProbe {
   ignored: boolean;
@@ -147,125 +154,6 @@ function isWildcardTargetingAgents(posixRelFromRoot: string): boolean {
   }
   if (!/[*?[\]]/.test(firstSeg)) return false;
   return globSegmentMatches('.agents', firstSeg);
-}
-
-export function syncGitPayloadArgs(ctx: ExecutionContext): void {
-  if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {
-    ctx.payload.args = [...ctx.args];
-  }
-}
-
-export function collectGitPathspecs(afterArgs: readonly string[]): Array<{ offset: number; value: string }> {
-  const specs: Array<{ offset: number; value: string }> = [];
-  let sawSeparator = false;
-  for (let offset = 0; offset < afterArgs.length; offset++) {
-    const a = afterArgs[offset];
-    if (a === undefined) continue;
-    if (!sawSeparator && a === '--') { sawSeparator = true; continue; }
-    if (!sawSeparator && a.startsWith('-')) continue;
-    specs.push({ offset, value: a });
-  }
-  return specs;
-}
-
-export function findAlreadyStagedGitDeletions(
-  gitCwd: string,
-  rawPathspecs: readonly string[],
-  gitOverrideFlags: readonly string[] = [],
-  payloadEnv?: Record<string, string | undefined>
-): Set<string> {
-  const stagedDeletions = new Set<string>();
-  const missingTargets: Array<{ original: string; relPosix: string }> = [];
-  for (const rawPathspec of rawPathspecs) {
-    const cleaned = rawPathspec.trim().replace(/^['"]|['"]$/g, '');
-    if (cleaned.length === 0 || cleaned === '.' || cleaned === '..' || cleaned.startsWith(':') || /[*?[\]]/.test(cleaned)) continue;
-    const absPath = path.resolve(gitCwd, cleaned);
-    if (fs.lstatSync(absPath, { throwIfNoEntry: false }) !== undefined) continue;
-    const rel = path.relative(gitCwd, absPath);
-    if (rel === '' || rel === '.' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) continue;
-    missingTargets.push({ original: rawPathspec, relPosix: rel.replace(/\\/g, '/') });
-  }
-  if (missingTargets.length === 0) return stagedDeletions;
-  const fold = (s: string): string => (process.platform === 'win32' ? s.toLowerCase() : s);
-  const specPrefix = process.platform === 'win32' ? ':(icase,literal)' : ':(literal)';
-  try {
-    const cachedDelRes = spawnSync(
-      'git',
-      [...gitOverrideFlags, 'diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z', '--', ...missingTargets.map(m => `${specPrefix}${m.relPosix}`)],
-      {
-        cwd: gitCwd,
-        encoding: 'utf8',
-        timeout: 10000,
-        windowsHide: true,
-        env: mergeGitEnv(payloadEnv),
-      }
-    );
-    if (cachedDelRes.status !== 0 || typeof cachedDelRes.stdout !== 'string') return stagedDeletions;
-    const cachedDeletedSet = new Set(cachedDelRes.stdout.split('\0').filter(Boolean).map(fold));
-    for (const item of missingTargets) {
-      if (cachedDeletedSet.has(fold(item.relPosix))) stagedDeletions.add(item.original);
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`WARN: failed checking staged deletions in '${gitCwd}': ${msg}`);
-    return stagedDeletions;
-  }
-  return stagedDeletions;
-}
-
-export function isAlreadyStagedGitDeletion(gitCwd: string, rawPathspec: string): boolean {
-  return findAlreadyStagedGitDeletions(gitCwd, [rawPathspec]).has(rawPathspec);
-}
-
-export function healGitRmStagedDeletions(ctx: ExecutionContext, gitCwd: string, rmIdx: number): void {
-  const afterRm = ctx.args.slice(rmIdx + 1);
-  if (afterRm.includes('--ignore-unmatch') || afterRm.some(a => PATHSPEC_FROM_FILE_RE.test(a))) return;
-  const paths = collectGitPathspecs(afterRm).map(s => s.value);
-  const { flags: gitOverrideFlags } = extractGitDirWorkTreeFlags(ctx.args.slice(0, rmIdx), ctx.payload.env);
-  if (paths.length > 0 && findAlreadyStagedGitDeletions(gitCwd, paths, gitOverrideFlags, ctx.payload.env).size > 0) {
-    ctx.args.splice(rmIdx + 1, 0, '--ignore-unmatch');
-    syncGitPayloadArgs(ctx);
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Injecting '--ignore-unmatch' into 'git rm' for already-staged deletion(s)... (Frictionless Recovery)\x1b[0m`);
-  }
-}
-
-export function healGitAddStagedDeletions(ctx: ExecutionContext, gitCwd: string, addIdx: number): boolean {
-  const afterAdd = ctx.args.slice(addIdx + 1);
-  const ddIdx = afterAdd.indexOf('--');
-  const preDdAdd = ddIdx === -1 ? afterAdd : afterAdd.slice(0, ddIdx);
-  if (
-    preDdAdd.some(
-      (a) =>
-        a === '--dry-run' ||
-        a === '--interactive' ||
-        a === '--patch' ||
-        a === '--edit' ||
-        SKIP_STAGED_DEL_SHORT_RE.test(a) ||
-        PATHSPEC_FROM_FILE_RE.test(a)
-    )
-  ) {
-    return false;
-  }
-  const pathSpecs = collectGitPathspecs(afterAdd).map(s => ({ argIndex: addIdx + 1 + s.offset, value: s.value }));
-  if (pathSpecs.length === 0) return false;
-  const { flags: gitOverrideFlags } = extractGitDirWorkTreeFlags(ctx.args.slice(0, addIdx), ctx.payload.env);
-  const stagedSet = findAlreadyStagedGitDeletions(gitCwd, pathSpecs.map(s => s.value), gitOverrideFlags, ctx.payload.env);
-  if (stagedSet.size === 0) return false;
-  const stagedDeleted = pathSpecs.filter(s => stagedSet.has(s.value));
-  if (pathSpecs.length > stagedDeleted.length) {
-    for (let idx = stagedDeleted.length - 1; idx >= 0; idx--) {
-      const item = stagedDeleted[idx];
-      if (item !== undefined) ctx.args.splice(item.argIndex, 1);
-    }
-    syncGitPayloadArgs(ctx);
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Omitting already-staged deletion(s) from 'git add' pathspecs to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
-    return false;
-  }
-  const prefixFlags = ctx.args.slice(0, addIdx);
-  ctx.args.splice(0, ctx.args.length, ...prefixFlags, 'ls-files', '--stage', '--', ...stagedDeleted.map(s => s.value));
-  syncGitPayloadArgs(ctx);
-  console.error(`\n   🛠️ AUTONOMOUS HEALING: Pathspec(s) passed to 'git add' are already staged as deleted; treating as idempotent no-op to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
-  return true;
 }
 
 function hasBroadAllAddFlag(afterAdd: readonly string[]): boolean {
@@ -422,10 +310,13 @@ export function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string, addId
   let hasFullRepoScan = hasFullRepoFlag;
   const agentsProbes: PendingAgentsProbe[] = [];
   const broadScanTargets: string[] = [];
+  let hasPositivePath = false;
+  let hasExcludedPath = false;
 
   for (const rawSpec of paths) {
     const magic = stripGitPathspecMagic(rawSpec);
-    if (magic.isExcluded) continue;
+    if (magic.isExcluded) { hasExcludedPath = true; continue; }
+    hasPositivePath = true;
     const baseDir = magic.isTopRooted ? repoRoot : gitCwd;
     const posixNorm = path.posix.normalize(magic.cleaned);
     const fsSpec = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(posixNorm) ? convertToWindowsPath(posixNorm) : posixNorm;
@@ -438,10 +329,11 @@ export function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string, addId
       return blockGitAdd(`Refusing to ${hasForce ? 'force-add' : 'add'} '${rawSpec}': secrets/env/private key files must never be staged.`, `Remove '${rawSpec}' from 'git add'.`);
     }
     const isDirTarget = fs.statSync(absResolved, { throwIfNoEntry: false })?.isDirectory() === true;
+    const unquotedRawSpec = rawSpec.trim().replace(/^['"]|['"]$/g, '');
     if (isSameFsPath(absResolved, repoRoot) || isContainedInDir(repoRoot, absResolved)) {
       hasFullRepoScan = true;
-    } else if (GLOB_META_RE.test(magic.cleaned) || isDirTarget) {
-      broadScanTargets.push(magic.isTopRooted ? `:/${magic.cleaned}` : magic.cleaned);
+    } else if (GLOB_META_RE.test(magic.cleaned) || isDirTarget || magic.hasNonLiteralMagic) {
+      broadScanTargets.push(magic.hasNonLiteralMagic ? unquotedRawSpec : (magic.isTopRooted ? `:/${magic.cleaned}` : magic.cleaned));
     }
     const normRel = posixNorm.replace(/\/+$/, '');
     const relToRoot = path.relative(repoRoot, absResolved).replace(/\\/g, '/');
@@ -456,6 +348,11 @@ export function healGitAddForceFlag(ctx: ExecutionContext, gitCwd: string, addId
     if (!isAgents) { hasNonAgentsPath = true; continue; }
     const canProbeFromRoot = relToRoot.length > 0 && !relToRoot.startsWith('..');
     agentsProbes.push({ rawSpec, probeRoot: canProbeFromRoot ? repoRoot : baseDir, probeTarget: canProbeFromRoot ? relToRoot : magic.cleaned, isWildcardOrRootGlob });
+  }
+  if (hasExcludedPath && !hasPositivePath) {
+    anyBroadOrWildcard = true;
+    broadScanTargets.push(...paths.map(p => p.trim().replace(/^['"]|['"]$/g, '')));
+    if (hasForce) ensureAgentsForceGuarded(paths[0] ?? ':!');
   }
   if (hasFullRepoScan || broadScanTargets.length > 0) {
     scanBroadGitAddForBlockedPaths({ gitCwd, repoRoot, targets: broadScanTargets, hasFullRepoScan, hasForce, isUpdateOnly: !hasBroadAll && hasUpdateFlag, gitOverrideFlags, hasGitOverride, payloadEnv: ctx.payload.env });
@@ -479,7 +376,7 @@ export function validateNonHostWslAddPaths(gitCwd: string, afterAdd: readonly st
   for (const spec of collectGitPathspecs(afterAdd)) {
     const magic = stripGitPathspecMagic(spec.value);
     if (magic.isExcluded) continue;
-    const normArg = magic.cleaned;
+    const normArg = path.posix.normalize(magic.cleaned);
     if (isPrivateRuntimePath(spec.value) || isPrivateRuntimePath(normArg) || isPrivateRuntimePath(path.posix.resolve(normCwd, normArg))) {
       return blockMsg(spec.value);
     }

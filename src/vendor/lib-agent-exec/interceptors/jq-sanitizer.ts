@@ -52,11 +52,24 @@ function stripJqPreambleNoise(raw: string): SanitizedJqText {
   if (isValidJsonOrJsonl(raw)) {
     return { cleaned: raw, reason: null };
   }
-  const tagMatch = raw.match(/<([a-zA-Z0-9_-]+_output|output)>([\s\S]*?)<\/\1>/i);
-  if (tagMatch?.[2] !== undefined && tagMatch[1] !== undefined) {
-    const cand = tagMatch[2].trim();
+  const openTagRe = /<([a-zA-Z0-9_-]+_output|output)>/gi;
+  const lowerRaw = raw.toLowerCase();
+  const missingCloseTags = new Set<string>();
+  let openMatch: RegExpExecArray | null;
+  while ((openMatch = openTagRe.exec(raw)) !== null) {
+    const tagName = openMatch[1];
+    if (tagName === undefined) continue;
+    const lowerTag = tagName.toLowerCase();
+    if (missingCloseTags.has(lowerTag)) continue;
+    const contentStart = openMatch.index + openMatch[0].length;
+    const closeIdx = lowerRaw.indexOf(`</${lowerTag}>`, contentStart);
+    if (closeIdx === -1) {
+      missingCloseTags.add(lowerTag);
+      continue;
+    }
+    const cand = raw.slice(contentStart, closeIdx).trim();
     if (cand.length > 0 && cand !== raw && isValidJsonOrJsonl(cand)) {
-      return { cleaned: cand, reason: 'tags', tagName: tagMatch[1] };
+      return { cleaned: cand, reason: 'tags', tagName };
     }
   }
   const openIdx = raw.indexOf('```');
@@ -64,7 +77,9 @@ function stripJqPreambleNoise(raw: string): SanitizedJqText {
     const closeIdx = raw.lastIndexOf('```');
     if (closeIdx > openIdx + 2) {
       let inner = raw.slice(openIdx + 3, closeIdx);
-      if (inner.slice(0, 4).toLowerCase() === 'json') {
+      if (inner.slice(0, 5).toLowerCase() === 'jsonl') {
+        inner = inner.slice(5);
+      } else if (inner.slice(0, 4).toLowerCase() === 'json') {
         inner = inner.slice(4);
       }
       const cand = inner.trim();
@@ -117,7 +132,7 @@ export function sanitizeJqInvocation(ctx: ExecutionContext, args: string[]): voi
   const { hasFromFile: hasFilterFile } = scanJqFromFiles(args);
   if (hasStdin && !hasFilterFile && getPositionalArgs('jq', args).length === 0) {
     ctx.args.push('.');
-    if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {
+    if (ctx.payload.type === 'command') {
       ctx.payload.args = [...ctx.args];
     }
     console.error(`\n   💡 AGENT HINT: 'jq' requires a filter argument when reading from stdin.`);
@@ -161,8 +176,8 @@ export function sanitizeJqInvocation(ctx: ExecutionContext, args: string[]): voi
 
       const newFileArg = isWslPath ? convertToWslPath(tmpSanitized) : tmpSanitized;
       ctx.args[argIdx] = newFileArg;
-      if ('args' in ctx.payload && Array.isArray(ctx.payload.args) && ctx.payload.args.length === ctx.args.length) {
-        ctx.payload.args[argIdx] = newFileArg;
+      if (ctx.payload.type === 'command') {
+        ctx.payload.args = [...ctx.args];
       }
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped untrusted wrapper tags / warning preambles from jq input file '${fileArg}'... (Frictionless Recovery)\x1b[0m`);
     } catch (err: unknown) {

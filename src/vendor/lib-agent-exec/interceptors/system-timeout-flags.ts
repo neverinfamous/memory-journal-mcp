@@ -58,10 +58,11 @@ const NESTED_RUNNER_VALUE_FLAGS = new Set([
 const NESTED_RUNNER_SUBCMDS = new Set(['run', 'exec', 'x', 'dlx']);
 const NESTED_JS_WRAPPERS = new Set(['bun', 'node', 'tsx', 'ts-node', 'deno']);
 
-export function nestedAgentExec(args: readonly string[], startIdx = 0): boolean {
+export function nestedAgentExec(args: readonly string[], startIdx = 0, outerCmdBasename?: string): boolean {
   let sawSubcmd = false;
   let sawWrapper = false;
   let seenDoubleDash = false;
+  const isOuterJsRuntime = outerCmdBasename !== undefined && NESTED_JS_WRAPPERS.has(path.basename(outerCmdBasename).toLowerCase().replace(/\.(?:exe|cmd)$/i, ''));
   for (let i = startIdx; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
@@ -71,13 +72,13 @@ export function nestedAgentExec(args: readonly string[], startIdx = 0): boolean 
       if (low === '-e' || low === '--eval' || low === '--print' || low.startsWith('--eval=') || low.startsWith('--print=')) {
         return false;
       }
-      if (low === '-p') { i++; continue; }
+      if (low === '-p') { if (isOuterJsRuntime || sawWrapper) return false; i++; continue; }
       if (!arg.includes('=') && NESTED_RUNNER_VALUE_FLAGS.has(arg)) i++;
       continue;
     }
     if (!sawSubcmd && !sawWrapper && NESTED_RUNNER_SUBCMDS.has(low)) { sawSubcmd = true; continue; }
     const base = path.basename(arg).toLowerCase();
-    if (base === 'agent-exec.ts') return true;
+    if (base === 'agent-exec.ts' || base === 'agent-exec.js') return true;
     const noExt = base.replace(/\.(?:exe|cmd)$/i, '');
     if (!sawWrapper && NESTED_JS_WRAPPERS.has(noExt)) { sawWrapper = true; continue; }
     return false;

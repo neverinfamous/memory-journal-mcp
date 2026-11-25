@@ -22,7 +22,7 @@ const GLOB_EXCLUDE_DIR_REGEXES: ReadonlyMap<string, RegExp> = new Map(
 );
 
 function shouldExcludeGlobEntry(entryPath: string, pattern: string): boolean {
-  const base = path.posix.basename(entryPath.replace(/\\/g, '/'));
+  const base = path.posix.basename(entryPath.replace(/\\/g, '/')).toLowerCase();
   const re = GLOB_EXCLUDE_DIR_REGEXES.get(base);
   if (re === undefined) return false;
   return !re.test(pattern);
@@ -51,9 +51,9 @@ function rewriteUnmatchedRgWinGlobs(
   args: string[],
   cmd: string,
   overflowedGlobs?: ReadonlySet<string>,
-): { args: string[]; rewrittenCount: number; droppedCount: number } {
+): { args: string[]; rewrittenCount: number; droppedCount: number; needsShellFallback: boolean } {
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
-  if (base !== 'rg') return { args, rewrittenCount: 0, droppedCount: 0 };
+  if (base !== 'rg') return { args, rewrittenCount: 0, droppedCount: 0, needsShellFallback: false };
   const patternIdx = findPatternExprIndex(cmd, args);
   const toolFlags = FLAGS_WITH_ARG_BY_TOOL['rg'] ?? [];
   const nextArgs: string[] = [];
@@ -92,14 +92,17 @@ function rewriteUnmatchedRgWinGlobs(
     nextArgs.push(a);
   }
 
-  if (unmatchedEntries.length === 0) return { args, rewrittenCount: 0, droppedCount: 0 };
+  if (unmatchedEntries.length === 0) return { args, rewrittenCount: 0, droppedCount: 0, needsShellFallback: false };
+  if (hasTargetPath && unmatchedEntries.some(e => e.overflowed)) {
+    return { args, rewrittenCount: 0, droppedCount: 0, needsShellFallback: true };
+  }
   const unmatchedGlobs: string[] = [];
   const extraTargetDirs: string[] = [];
   let droppedCount = 0;
   for (const entry of unmatchedEntries) {
     // [INVARIANT]: When concrete non-glob targets already exist, never inject a global `-g` filter for a 0-match glob
     // because `-g` would silently blind ripgrep from searching all unrelated concrete target paths.
-    if (hasTargetPath && !entry.overflowed) {
+    if (hasTargetPath) {
       droppedCount += 1;
       continue;
     }
@@ -118,7 +121,7 @@ function rewriteUnmatchedRgWinGlobs(
     if (extraTargetDirs.length > 0) nextArgs.push(...extraTargetDirs);
     else if (!hasTargetPath) nextArgs.push('.');
   }
-  return { args: nextArgs, rewrittenCount: unmatchedGlobs.length, droppedCount };
+  return { args: nextArgs, rewrittenCount: unmatchedGlobs.length, droppedCount, needsShellFallback: false };
 }
 
 const GLOB_FILTER_PREV_FLAGS = new Set([
@@ -145,7 +148,7 @@ function collectPatternOrFilterIndices(cmdBase: string, args: readonly string[],
   return skip;
 }
 
-function collectGlobCandidateIndices(cmdBase: string, args: readonly string[], exemptIndices: ReadonlySet<number>): number[] {
+function collectGlobCandidateIndices(_cmdBase: string, args: readonly string[], exemptIndices: ReadonlySet<number>): number[] {
   const globIdxs: number[] = [];
   let seenDoubleDash = false;
   for (let idx = 0; idx < args.length; idx++) {
@@ -232,9 +235,17 @@ function wrapUnixGlobThroughShell(
   exemptIndices: ReadonlySet<number>,
   payload: ExecPayload,
 ): { cmd: string; args: string[] } {
-  const originalArgs = args.map((a, idx) =>
-    exemptIndices.has(idx) ? escapeUnixArg(a, false) : escapeUnixArg(convertToWslPath(a), true),
-  ).join(' ');
+  let seenDoubleDash = false;
+  const originalArgs = args.map((a, idx) => {
+    if (!seenDoubleDash && a === '--') {
+      seenDoubleDash = true;
+      return escapeUnixArg(a, false);
+    }
+    if (exemptIndices.has(idx) || (!seenDoubleDash && a.startsWith('-'))) {
+      return escapeUnixArg(a, false);
+    }
+    return escapeUnixArg(convertToWslPath(a), true);
+  }).join(' ');
   if (process.platform === 'win32' && payload.target !== 'wsl2') {
     payload.target = 'wsl2';
   }
@@ -303,6 +314,9 @@ export function handleWindowsUnixCommandWrappers(
   }
   if (cmdBasenameForGlob === 'rg' && payload.target !== 'wsl2') {
     const rewritten = rewriteUnmatchedRgWinGlobs(resolvedArgs, resolvedCmd, expansion.overflowedGlobs);
+    if (rewritten.needsShellFallback) {
+      return wrapUnixGlobThroughShell(cmdBasenameForGlob, preExpansionArgs, exemptIndices, payload);
+    }
     if (rewritten.rewrittenCount > 0 || rewritten.droppedCount > 0) {
       resolvedArgs = rewritten.args;
       if (payload.type === 'command') payload.args = resolvedArgs;

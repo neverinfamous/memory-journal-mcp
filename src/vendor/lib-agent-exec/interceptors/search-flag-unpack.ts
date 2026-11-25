@@ -1,7 +1,7 @@
 // @ts-nocheck
 import path from 'node:path';
 import { FLAGS_WITH_ARG_BY_TOOL, RG_VALUE_FLAGS, inspectCombinedShortFlag, tokenizeArgs } from '../command-utils.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 
 const BUNDLED_SHORT_FLAG = /^-[a-zA-Z0-9]+$/;
 const BUNDLED_LONG_FLAG = /^--[a-zA-Z0-9-]+$/;

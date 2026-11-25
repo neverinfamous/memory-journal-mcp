@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { convertToWindowsPath } from '../command-utils.js';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 import { findFirstPkgSubcmdIndex } from './utils.js';
 import { resolvePackageProjectDir, rewriteJsPackageManager, stripScopedInteractiveFlags } from './package-manager-js-rewrites.js';
 import { applyPackageManagerTimeouts } from './package-manager-timeouts.js';
@@ -44,11 +44,22 @@ const PYTHON_PRE_MODULE_VALUE_FLAGS = new Set(['-W', '-X', '--check-hash-based-p
 function findPythonPipStartIndex(args: readonly string[]): number {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === undefined || a === '--' || a === '-c' || a.startsWith('-c')) return -1;
-    if (a === '-m') return args[i + 1] === 'pip' ? i + 2 : -1;
-    if (a === '-mpip') return i + 1;
+    if (a === undefined || a === '--') return -1;
     if (PYTHON_PRE_MODULE_VALUE_FLAGS.has(a)) { i++; continue; }
+    if (a.startsWith('--')) continue;
     if (!a.startsWith('-')) return -1;
+    for (let j = 1; j < a.length; j++) {
+      const ch = a[j] ?? '';
+      if (ch === 'c') return -1;
+      if (ch === 'W' || ch === 'X') {
+        if (j === a.length - 1) i++;
+        break;
+      }
+      if (ch === 'm') {
+        const rest = a.slice(j + 1);
+        return rest.length > 0 ? (rest === 'pip' ? i + 1 : -1) : (args[i + 1] === 'pip' ? i + 2 : -1);
+      }
+    }
   }
   return -1;
 }

@@ -44,7 +44,11 @@ export function unwrapPackageRunnerShell(ctx: ExecutionContext): void {
   let targetDir: string | undefined;
   while (runIdx < ctx.args.length) {
     const a = ctx.args[runIdx];
-    if (a === undefined || a === '--') break;
+    if (a === undefined) break;
+    if (a === '--') {
+      if (!isJsRuntime || sawSubcmd) runIdx += 1;
+      break;
+    }
     const low = a.toLowerCase();
     if (low === '-e' || low === '--eval' || low === '--print' || low.startsWith('--eval=') || low.startsWith('--print=') || (isJsRuntime && low === '-p')) {
       return;

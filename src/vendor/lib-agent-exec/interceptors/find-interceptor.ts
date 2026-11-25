@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { convertToWslPath } from '../command-utils.js';
 import { GREP_EXCLUDE_DIRS } from './grep-exclusions.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 
 const FIND_NAME_FLAGS = ['-name', '-iname', '-path', '-ipath', '-wholename', '-iwholename', '-regex', '-iregex', '-lname', '-ilname'];
 const FIND_ACTIONS = [
@@ -9,7 +9,7 @@ const FIND_ACTIONS = [
   '-delete', '-ls', '-fls', '-fprint', '-fprint0', '-fprintf',
 ];
 
-const WIN_FIND_SWITCH_RE = /^\/(?:[sSbBwWpPqQcC4ivn?]|[aA](?::[dhrsalio-]+|[dhrsalio]{1,3})?|[oO](?::[nesdg-]+|[nesdg]{1,3})?)$/;
+const WIN_FIND_SWITCH_RE = /^\/(?:[sSbBwWpPqQcC4ivn?]|[aA](?::[dhrsalio-]+|(?:-?[dhrsalio]){1,3})?|[oO](?::[nesdg-]+|(?:-?[nesdg]){1,3})?)$/;
 
 function findFindTargetPath(args: string[], filterIdx: number): string {
   for (let i = 0; i < args.length; i++) {
@@ -23,12 +23,14 @@ function findFindTargetPath(args: string[], filterIdx: number): string {
 }
 
 function rewritePowerShellFindFilter(ctx: ExecutionContext): boolean {
-  const filterIdx = ctx.args.findIndex((arg) => ['-filter', '-include'].includes(arg.toLowerCase()));
-  if (filterIdx === -1 || filterIdx + 1 >= ctx.args.length) return false;
-  const pattern = ctx.args[filterIdx + 1];
+  const execStopIdx = ctx.args.findIndex((arg) => ['-exec', '-execdir', '-ok', '-okdir', '--'].includes(arg));
+  const scanArgs = execStopIdx === -1 ? ctx.args : ctx.args.slice(0, execStopIdx);
+  const filterIdx = scanArgs.findIndex((arg) => ['-filter', '-include'].includes(arg.toLowerCase()));
+  if (filterIdx === -1 || filterIdx + 1 >= scanArgs.length) return false;
+  const pattern = scanArgs[filterIdx + 1];
   if (pattern === undefined) return false;
-  const hasRecurse = ctx.args.some((arg) => ['-recurse', '-r', '-R', '/s'].includes(arg.toLowerCase()));
-  const newArgs = [findFindTargetPath(ctx.args, filterIdx)];
+  const hasRecurse = scanArgs.some((arg) => ['-recurse', '-r', '-R', '/s'].includes(arg.toLowerCase()));
+  const newArgs = [findFindTargetPath(scanArgs, filterIdx)];
   if (!hasRecurse) newArgs.push('-maxdepth', '1');
   newArgs.push('-name', pattern);
   ctx.args = newArgs;

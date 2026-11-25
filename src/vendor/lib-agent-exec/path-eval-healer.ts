@@ -74,10 +74,11 @@ function healFileToolToken(token: string, isDirTool: boolean, isMutatingTool: bo
     }
     return null;
   }
-  const cleanPath = trimmed.replace(/^['"`]|['"`]$/g, '').replace(/[\\/]+$/, '');
+  const unquoted = trimmed.replace(/^['"`]|['"`]$/g, '');
+  const cleanPath = unquoted.replace(/[\\/]+$/, '');
   if (isDirTool && !cleanPath.includes('/') && !cleanPath.includes('\\') && !cleanPath.includes('.')) return null;
   const res = healSingleEvalPathResult(trimmed, isDirTool, cwd, target);
-  if (res === null || res.healed === trimmed) return null;
+  if (res === null || res.healed === unquoted) return null;
   const { healed, normalizedOnly } = res;
   const isBarrel = /(?:^|[/\\])index\.[jt]sx?$/i.test(healed) && !/(?:^|[/\\])index\.[jt]sx?$/i.test(trimmed);
   const hint = normalizedOnly
@@ -103,7 +104,7 @@ const SEARCH_EVAL_PATTERN_FLAGS: ReadonlySet<string> = new Set(['-e', '--regexp'
 
 function healInspectionMatch(fullMatch: string, cmdWord: string, restArgs: string, offset: number, spans: NonCodeSpans, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
   if (isIndexInSpans(spans, offset)) return fullMatch;
-  const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
+  const prefixWs = /^[ \t]*/.exec(fullMatch)?.[0] ?? '';
   const lower = cmdWord.toLowerCase();
   const isDirTool = READ_DIR_TOOLS.has(lower);
   const isMutatingTool = MUTATING_FILE_TOOLS.has(lower);
@@ -131,7 +132,7 @@ function healInspectionMatch(fullMatch: string, cmdWord: string, restArgs: strin
 }
 
 function healEvalFileTools(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
-  const fileInspectionRegex = /(?:^|(?<=[;&|\n]))\s*(cat|head|tail|wc|ls|dir|rm|cp|mv|touch|mkdir|chmod|diff)\b([^;&|\n#]*)/gi;
+  const fileInspectionRegex = /(?:^|(?<=[;&|\n]))[ \t]*(cat|head|tail|wc|ls|dir|rm|cp|mv|touch|mkdir|chmod|diff)\b([^;&|\n#]*)/gi;
   const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(fileInspectionRegex, (fullMatch: string, cmdWord: string, restArgs: string, offset: number) => {
     return healInspectionMatch(fullMatch, cmdWord, restArgs, offset, spans, cwd, target, deferredLogs);
@@ -183,11 +184,11 @@ function healSearchToken(
 }
 
 function healEvalSearchTools(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
-  const searchMatchRegex = /(?:^|(?<=[;&|\n]))\s*(grep|egrep|fgrep|rg)\b([^;&|\n#]*)/g;
+  const searchMatchRegex = /(?:^|(?<=[;&|\n]))[ \t]*(grep|egrep|fgrep|rg)\b([^;&|\n#]*)/g;
   const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(searchMatchRegex, (fullMatch: string, cmdWord: string, restArgs: string, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
-    const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
+    const prefixWs = /^[ \t]*/.exec(fullMatch)?.[0] ?? '';
     const tokens = restArgs.match(TOKEN_RE) ?? [];
     const cmdBase = cmdWord.toLowerCase();
     const state = { seenDoubleDash: false, skipNext: false, hasPatternFlag: false, posCount: 0, sawRedirect: false };
@@ -202,11 +203,11 @@ function healEvalSearchTools(code: string, cwd: string, target: HealTarget | und
   });
 }
 
-function isLikelyTypeScriptTypeOrJs(code: string, offset: number, cmdlet: string, afterMatch: string): boolean {
+function isLikelyTypeScriptTypeOrJs(code: string, offset: number, cmdlet: string, restArgs: string): boolean {
   if (cmdlet.toLowerCase() !== 'type') return false;
   const before = code.slice(Math.max(0, offset - 32), offset);
   if (/\b(?:export|import|declare)\s+$/.test(before)) return true;
-  if (/^[ \t]*(?:[=:<{]|extends\b)/.test(afterMatch)) return true;
+  if (/^[ \t]*(?:[=:<{]|extends\b|[A-Za-z_$][\w$]*[ \t]*(?:<[^>\r\n]*>[ \t]*)?=)/.test(restArgs)) return true;
   return /\b(?:const|let|var|function|import|export|interface)\b/.test(code) || /=>/.test(code);
 }
 
@@ -244,16 +245,15 @@ function extractPsLeadingPath(restTokens: readonly string[]): { prefix: string; 
 function healEvalPowerShell(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[], interpreter?: string): string {
   if (target === 'wsl2') return code;
   if (interpreter !== undefined && !/^(?:pwsh|powershell|cmd)(?:\.exe)?$/i.test(path.basename(interpreter.trim()))) return code;
-  const psCmdletRegex = /(?:^|(?<=[;&|\n]))\s*(Get-Content|gc|type|Get-ChildItem|gci)\b([^;&|\n#]*)/gi;
+  const psCmdletRegex = /(?:^|(?<=[;&|\n]))[ \t]*(Get-Content|gc|type|Get-ChildItem|gci)\b([^;&|\n#]*)/gi;
   const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(psCmdletRegex, (fullMatch: string, cmdlet: string, restArgs: string, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
-    const afterMatch = code.slice(offset + fullMatch.length);
-    if (isLikelyTypeScriptTypeOrJs(code, offset, cmdlet, afterMatch)) return fullMatch;
+    if (isLikelyTypeScriptTypeOrJs(code, offset, cmdlet, restArgs)) return fullMatch;
     const tokens = restArgs.match(TOKEN_RE) ?? [];
     const parsed = extractPsLeadingPath(tokens);
     if (parsed === null || /^['"`]|['"`]$/.test(parsed.targetToken)) return fullMatch;
-    const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
+    const prefixWs = /^[ \t]*/.exec(fullMatch)?.[0] ?? '';
     const allowDirs = /Get-ChildItem|gci/i.test(cmdlet);
     const healed = healSingleEvalPath(parsed.targetToken, allowDirs, cwd, target);
     if (healed === null) return fullMatch;
@@ -270,7 +270,7 @@ function healRunnerToken(token: string, runnerCmd: string, cwd: string, target: 
   const isPathLike = cleanPath.includes('/') || cleanPath.includes('\\') || /\.(?:ts|js|mjs|cjs|py|json)$/i.test(cleanPath);
   if (!isPathLike) return null;
   const res = healSingleEvalPathResult(trimmed, false, cwd, target);
-  if (res === null || res.healed === trimmed) return null;
+  if (res === null || res.healed === cleanPath) return null;
   const hint = res.normalizedOnly
     ? `Script path '${trimmed}' in eval code requires WSL path normalization.`
     : `Script path '${trimmed}' in eval code not found on disk, but found at '${res.healed}'.`;
@@ -301,6 +301,7 @@ function stepRunnerToken(
     const isPython = lowerRunner === 'python' || lowerRunner === 'python3';
     if (
       flagKey === '-e' || flagKey === '--eval' || flagKey === '-p' || flagKey === '--print' ||
+      flagKey === '-pe' || flagKey === '-ep' ||
       (isPython && (flagKey === '-c' || flagKey === '-m' || trimmed.startsWith('-c') || trimmed.startsWith('-m')))
     ) {
       state.sawScript = true;
@@ -315,11 +316,11 @@ function stepRunnerToken(
 }
 
 function healEvalRunners(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
-  const runnerRegex = /(?:^|(?<=[;&|\n]))\s*(bun|node|tsx|ts-node|python|python3)\b([^;&|\n#]*)/gi;
+  const runnerRegex = /(?:^|(?<=[;&|\n]))[ \t]*(bun|node|tsx|ts-node|python|python3)\b([^;&|\n#]*)/gi;
   const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(runnerRegex, (fullMatch: string, runnerCmd: string, restArgs: string, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
-    const prefixWs = /^\s*/.exec(fullMatch)?.[0] ?? '';
+    const prefixWs = /^[ \t]*/.exec(fullMatch)?.[0] ?? '';
     const tokens = restArgs.match(TOKEN_RE) ?? [];
     const state = { sawRedirect: false, skipNext: false, aborted: false, sawScript: false };
     let modified = false;
@@ -352,7 +353,7 @@ function getReadOnlyPsPathMode(code: string, offset: number): 'dir' | 'file' | n
 }
 
 function healEvalPathFlag(code: string, cwd: string, target: HealTarget | undefined, deferredLogs?: string[]): string {
-  if (target === 'wsl2' || /(?:^|(?<=[;&|\n]))\s*find\b/i.test(code)) return code;
+  if (target === 'wsl2' || /(?:^|(?<=[;&|\n]))[ \t]*find\b/i.test(code)) return code;
   const pathFlagRegex = /(-Path\s+)(?:"([^"]+)"|'([^']+)'|([^\s"'`;|]+))/gi;
   const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
   return code.replace(pathFlagRegex, (fullMatch: string, flagPrefix: string, qDouble: string | undefined, qSingle: string | undefined, unquoted: string | undefined, offset: number) => {

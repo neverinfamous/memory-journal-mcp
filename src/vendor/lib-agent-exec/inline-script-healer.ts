@@ -60,6 +60,7 @@ export interface InlineScriptDetails {
 function findStringRawEndIdx(code: string, startIdx: number): number {
   let parenDepth = 0;
   let bracketDepth = 0;
+  let braceDepth = 0;
   for (let k = startIdx; k < code.length; k++) {
     const c = code[k];
     if (c === '(') parenDepth++;
@@ -70,7 +71,11 @@ function findStringRawEndIdx(code: string, startIdx: number): number {
     else if (c === ']') {
       if (bracketDepth === 0) return k;
       bracketDepth--;
-    } else if (parenDepth === 0 && bracketDepth === 0 && (c === ',' || c === ';' || c === '\n' || c === '\r')) {
+    } else if (c === '{') braceDepth++;
+    else if (c === '}') {
+      if (braceDepth === 0) return k;
+      braceDepth--;
+    } else if (parenDepth === 0 && bracketDepth === 0 && braceDepth === 0 && (c === ',' || c === ';' || c === '\n' || c === '\r')) {
       return k;
     }
   }
@@ -88,7 +93,8 @@ function tryHealStringRawAt(code: string, idx: number): { startIdx: number; endI
   }
   const endIdx = findStringRawEndIdx(code, startIdx);
   if (endIdx <= startIdx) return null;
-  const rawBody = code.slice(startIdx, endIdx).replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  const rawBody = code.slice(startIdx, endIdx)
+    .replace(/(?<!\\)(\\*)(`|\$\{)/g, (_m, slashes: string, tok: string) => (slashes.length % 2 === 1 ? `${slashes}${tok}` : `${slashes}\\${tok}`));
   let trailingSlashes = 0;
   for (let k = rawBody.length - 1; k >= 0 && rawBody[k] === '\\'; k--) trailingSlashes++;
   const safeBody = trailingSlashes % 2 === 1 ? `${rawBody.slice(0, -1)}\${'\\\\'}` : rawBody;
@@ -190,10 +196,10 @@ export function configureCwdModuleResolution(
       readEnvCaseInsensitive(payloadEnv, 'NODE_OPTIONS') ??
       readEnvCaseInsensitive(process.env, 'NODE_OPTIONS') ??
       '';
-    if (!baseNodeOptions.includes(resolverUrl)) {
-      const trimmed = baseNodeOptions.trim();
-      envOverrides['NODE_OPTIONS'] = trimmed.length > 0 ? `${trimmed} ${importFlag}` : importFlag;
-    }
+    const trimmed = baseNodeOptions.trim();
+    envOverrides['NODE_OPTIONS'] = trimmed.includes(resolverUrl)
+      ? trimmed
+      : (trimmed.length > 0 ? `${trimmed} ${importFlag}` : importFlag);
   }
 }
 

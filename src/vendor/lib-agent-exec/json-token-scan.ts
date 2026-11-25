@@ -6,7 +6,7 @@ interface ScanState {
   index: number;
 }
 
-export function tryParse(json: string): unknown | undefined {
+export function tryParse(json: string): unknown {
   try {
     return JSON.parse(json);
   } catch {
@@ -51,7 +51,7 @@ function appendEscapedChar(state: ScanState, source: string, ch: string): void {
   state.out = state.out.slice(0, -1) + '\\\\' + ch;
 }
 
-function appendPlainStringChar(state: ScanState, ch: string): void {
+function appendPlainStringChar(state: ScanState, source: string, ch: string): void {
   if (ch === '\\') {
     state.isEscaped = true;
     state.out += ch;
@@ -67,7 +67,8 @@ function appendPlainStringChar(state: ScanState, ch: string): void {
     return;
   }
   if (ch === '\r') {
-    state.out += '\\r';
+    if (source[state.index + 1] === '\n') state.index++;
+    state.out += '\\n';
     return;
   }
   if (ch === '\t') {
@@ -119,7 +120,7 @@ function scanTokenAwareJson(source: string): string {
       appendEscapedChar(state, source, ch);
       continue;
     }
-    appendPlainStringChar(state, ch);
+    appendPlainStringChar(state, source, ch);
   }
   if (state.isEscaped) {
     state.out = state.out.slice(0, -1) + '\\\\';
@@ -127,7 +128,7 @@ function scanTokenAwareJson(source: string): string {
   return stripTrailingCommasOutsideStrings(state.out);
 }
 
-export function tryTokenAwareJson(trimmed: string): unknown | undefined {
+export function tryTokenAwareJson(trimmed: string): unknown {
   try {
     return tryParse(scanTokenAwareJson(unescapeStructuralPrefix(trimmed)));
   } catch {

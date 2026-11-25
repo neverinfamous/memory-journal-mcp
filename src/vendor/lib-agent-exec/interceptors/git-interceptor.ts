@@ -1,7 +1,7 @@
 // @ts-nocheck
 import path from 'node:path';
 import { convertToWindowsPath, convertToWslPath } from '../command-utils.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 import { applyEarlyGitGuards, applyEditorGitHeals, applyInteractiveGitBlocks } from './git-guards.js';
 import { syncGitPayloadArgs } from './git-add-guards.js';
 
@@ -23,7 +23,7 @@ const GIT_SUBCMD_VALUE_FLAGS = new Set([
 ]);
 
 const SUBCMD_SHORT_VALUE_CLUSTER_RE = /^-[a-zA-Z]*[mFCct]$/;
-const DANGEROUS_GIT_CONFIG_RE = /^(?:alias\.|core\.hookspath$|core\.fsmonitor$|core\.sshcommand$|core\.gitproxy$|core\.alternaterefscommand$|credential\.(?:.+\.)?helper$|core\.pager$|pager\.|diff\.external$|diff\..+\.(?:command|textconv)$|merge\..+\.driver$|uploadpack\.|remote\..+\.(?:uploadpack|receivepack)$|protocol\.ext\.allow$|include\.path$|includeif\..+\.path$|filter\..+\.(?:clean|smudge|process)$|gpg\.(?:.+\.)?program$)/i;
+const DANGEROUS_GIT_CONFIG_RE = /^(?:alias\.|core\.hookspath$|core\.fsmonitor$|core\.sshcommand$|core\.gitproxy$|core\.alternaterefscommand$|core\.askpass$|core\.editor$|sequence\.editor$|credential\.(?:.+\.)?helper$|core\.pager$|pager\.|diff\.external$|diff\..+\.(?:command|textconv)$|merge\..+\.driver$|uploadpack\.|remote\..+\.(?:uploadpack|receivepack)$|protocol\.ext\.allow$|include\.path$|includeif\..+\.path$|filter\..+\.(?:clean|smudge|process)$|gpg\.(?:.+\.)?program$)/i;
 
 function stripWrappingQuotes(token: string): string {
   return (token.startsWith('"') && token.endsWith('"') && token.length >= 2) || (token.startsWith("'") && token.endsWith("'") && token.length >= 2)

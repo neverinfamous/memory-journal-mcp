@@ -25,6 +25,7 @@ export function formatForCmdExe(args: string[]): string[] {
   let inQuotes = false;
   for (let i = 0; i < crtJoined.length; i++) {
     const char = crtJoined[i];
+    if (char === undefined) continue;
     if (char === '"') {
       inQuotes = !inQuotes;
       commandLine += char;
@@ -48,7 +49,7 @@ export function convertToWslPath(winPath: string): string {
     return winPath;
   }
 
-  const transform = (p: string) => {
+  const transform = (p: string): string => {
     return p.replace(/^([a-zA-Z]):[/\\]+(.*)/, (_match, drive: string, rest: string) => `/mnt/${drive.toLowerCase()}/${rest.replace(/\\+/g, '/')}`);
   };
 

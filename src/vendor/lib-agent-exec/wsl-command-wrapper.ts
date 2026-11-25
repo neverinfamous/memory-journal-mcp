@@ -71,8 +71,10 @@ export function collectWslPathExemptIndices(cmd: string, args: readonly string[]
 }
 
 function hasOddTrailingBackslashes(pattern: string): boolean {
-  const m = pattern.match(/(\\*)\$$/);
-  return ((m?.[1]?.length ?? 0) % 2) === 1;
+  if (!pattern.endsWith('$')) return false;
+  let slashes = 0;
+  for (let i = pattern.length - 2; i >= 0 && pattern[i] === '\\'; i--) slashes += 1;
+  return slashes % 2 === 1;
 }
 
 export function collectArgJsonValueIndices(cmd: string, args: readonly string[]): Set<number> {
@@ -310,7 +312,7 @@ export function wrapBuiltinOrShellCommand(
   console.error(`\n   💡 AGENT HINT: '${localCmd}' is a shell built-in or contains shell metacharacters.`);
   console.error(`   🛠️ AUTONOMOUS HEALING: Automatically routing through system shell to prevent execution failure...`);
   if (process.platform === 'win32' && target !== 'wsl2') return buildPwshWrapper(localCmd, localArgs);
-  const isCompoundCmd = /[|&;<>]/.test(localCmd) || (!isPlainSpacedPath && localCmd.includes(' '));
+  const isCompoundCmd = hasCmdMeta;
   const renderedArgs = localArgs.map((a, idx) => {
     const trimmed = a.trim();
     const skipOp = isShellWrapExemptArg(idx, trimmed, localBase, localArgs, exemptIndices);
@@ -341,6 +343,34 @@ function findEmbeddedShellInlineIdx(cmdBase: string, args: readonly string[]): n
   return -1;
 }
 
+function wrapTildeScriptArgs(
+  wslCmd: string,
+  wslArgs: readonly string[],
+  payload: ExecPayload,
+  tempScriptPath: string | null,
+): string[] {
+  const tildeScriptPath = payload.type === 'script' && tempScriptPath === null && payload.scriptPath.startsWith('~/')
+    ? payload.scriptPath
+    : undefined;
+  const tildeScriptIdx = tildeScriptPath !== undefined ? wslArgs.indexOf(tildeScriptPath) : -1;
+  if (tildeScriptPath === undefined || tildeScriptIdx === -1) return [wslCmd, ...wslArgs];
+  if (tildeScriptIdx === 0) {
+    return ['sh', '-c', 'c="$1"; s="$HOME/$2"; shift 2; exec "$c" "$s" "$@"', '_', wslCmd, tildeScriptPath.slice(2), ...wslArgs.slice(1)];
+  }
+  return [
+    'sh',
+    '-c',
+    'n="$1"; m="$2"; s="$HOME/$3"; shift 3; while [ "$n" -gt 0 ]; do set -- "$@" "$1"; shift; n=$((n - 1)); done; set -- "$@" "$s"; while [ "$m" -gt 0 ]; do set -- "$@" "$1"; shift; m=$((m - 1)); done; exec "$@"',
+    '_',
+    String(tildeScriptIdx + 1),
+    String(wslArgs.length - tildeScriptIdx - 1),
+    tildeScriptPath.slice(2),
+    wslCmd,
+    ...wslArgs.slice(0, tildeScriptIdx),
+    ...wslArgs.slice(tildeScriptIdx + 1),
+  ];
+}
+
 export function wrapFinalWslCommand(
   cmd: string,
   args: string[],
@@ -352,11 +382,13 @@ export function wrapFinalWslCommand(
   const trimmedPayloadCwd = typeof payload.cwd === 'string' ? payload.cwd.trim().replace(/^['"]|['"]$/g, '').trim() : undefined;
   const isPosixInternalCwd = trimmedPayloadCwd !== undefined &&
     (trimmedPayloadCwd.startsWith('/') || trimmedPayloadCwd.startsWith('~'));
-  const isTildeSubdir = isPosixInternalCwd && trimmedPayloadCwd.startsWith('~/') && trimmedPayloadCwd.length > 2;
+  const isTildePrefix = isPosixInternalCwd && trimmedPayloadCwd.startsWith('~/');
+  const tildeSubdirRel = isTildePrefix ? trimmedPayloadCwd.replace(/^~\/+/, '') : '';
+  const isTildeSubdir = tildeSubdirRel.length > 0;
   const resolvedHostCwd = trimmedPayloadCwd !== undefined && trimmedPayloadCwd.length > 0
     ? path.resolve(cwd, trimmedPayloadCwd)
     : cwd;
-  const wslCwd = isTildeSubdir
+  const wslCwd = isTildePrefix
     ? '~'
     : (isPosixInternalCwd ? (trimmedPayloadCwd ?? cwd) : convertToWslPath(resolvedHostCwd));
 
@@ -378,42 +410,30 @@ export function wrapFinalWslCommand(
   } else if (isPwsh(wslCmdBase) || isCmd(wslCmdBase)) {
     if (tempScriptPath !== null && tempScriptPath.length > 0) {
       wslCmd = 'bash';
-      const trailingScriptArgs = payload.type === 'script' && Array.isArray(payload.args)
+      const trailingScriptArgs = (payload.type === 'script' || payload.type === 'eval') && Array.isArray(payload.args)
         ? payload.args.map(a => convertToWslPath(a))
         : [];
       wslArgs = [convertToWslPath(tempScriptPath), ...trailingScriptArgs];
     } else {
       const inlineIdx = findEmbeddedShellInlineIdx(wslCmdBase, wslArgs);
-      if (inlineIdx !== -1 && inlineIdx + 1 < wslArgs.length) {
-        wslCmd = 'bash';
-        wslArgs = ['-c', wslArgs.slice(inlineIdx + 1).join(' ')];
+      if (inlineIdx !== -1) {
+        const flagTok = wslArgs[inlineIdx] ?? '';
+        const colonIdx = flagTok.indexOf(':');
+        const inlinePart = colonIdx !== -1 ? flagTok.slice(colonIdx + 1) : '';
+        const restPart = wslArgs.slice(inlineIdx + 1).join(' ');
+        const script = inlinePart.length > 0 ? (restPart.length > 0 ? `${inlinePart} ${restPart}` : inlinePart) : restPart;
+        if (script.length > 0) {
+          wslCmd = 'bash';
+          wslArgs = ['-c', script];
+        }
       }
     }
   }
 
-  const tildeScriptPath = payload.type === 'script' && tempScriptPath === null && payload.scriptPath.startsWith('~/')
-    ? payload.scriptPath
-    : undefined;
-  const tildeScriptIdx = tildeScriptPath !== undefined ? wslArgs.indexOf(tildeScriptPath) : -1;
-  const innerArgs: string[] = tildeScriptPath !== undefined && tildeScriptIdx !== -1
-    ? (tildeScriptIdx === 0
-      ? ['sh', '-c', 'c="$1"; s="$HOME/$2"; shift 2; exec "$c" "$s" "$@"', '_', wslCmd, tildeScriptPath.slice(2), ...wslArgs.slice(1)]
-      : [
-          'sh',
-          '-c',
-          'n="$1"; m="$2"; s="$HOME/$3"; shift 3; while [ "$n" -gt 0 ]; do set -- "$@" "$1"; shift; n=$((n - 1)); done; set -- "$@" "$s"; while [ "$m" -gt 0 ]; do set -- "$@" "$1"; shift; m=$((m - 1)); done; exec "$@"',
-          '_',
-          String(tildeScriptIdx + 1),
-          String(wslArgs.length - tildeScriptIdx - 1),
-          tildeScriptPath.slice(2),
-          wslCmd,
-          ...wslArgs.slice(0, tildeScriptIdx),
-          ...wslArgs.slice(tildeScriptIdx + 1),
-        ])
-    : [wslCmd, ...wslArgs];
+  const innerArgs = wrapTildeScriptArgs(wslCmd, wslArgs, payload, tempScriptPath);
 
   const execArgs = isTildeSubdir
-    ? ['sh', '-c', 'cd -- "$1" && shift && exec "$@"', '_', trimmedPayloadCwd.slice(2), 'env', ...wslEnvArgs, ...innerArgs]
+    ? ['sh', '-c', 'cd -- "$1" && shift && exec "$@"', '_', tildeSubdirRel, 'env', ...wslEnvArgs, ...innerArgs]
     : ['env', ...wslEnvArgs, ...innerArgs];
 
   return {

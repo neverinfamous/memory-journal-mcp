@@ -49,7 +49,10 @@ function toWslOrDisplay(absPath: string, display: string, ctx: EvalPathContext, 
 
 function healExistingEvalPath(ctx: EvalPathContext): string | null | undefined {
   if (!fs.existsSync(ctx.resolvedPath)) return undefined;
-  if (ctx.target === 'wsl2' && (ctx.isWindowsDrivePath || ctx.rawFilePath.includes('\\'))) return convertToWslPath(ctx.resolvedPath);
+  if (ctx.target === 'wsl2' && (ctx.isWindowsDrivePath || ctx.rawFilePath.includes('\\'))) {
+    const converted = convertToWslPath(ctx.resolvedPath);
+    return converted === ctx.rawFilePath ? null : converted;
+  }
   return null;
 }
 
@@ -109,7 +112,7 @@ function healEvalNeighbor(ctx: EvalPathContext): string | null {
     ?? findNeighborFilePath(ctx.resolvedPath, ctx.allowDirs);
   if (neighborFile === null) return null;
   if (/[\\/]$/.test(ctx.rawFilePath) && !isDirectoryPath(neighborFile)) return null;
-  const asWsl = ctx.rawFilePath.startsWith('/mnt/')
+  const asWsl = /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(ctx.rawFilePath)
     || (ctx.target === 'wsl2' && (ctx.isWindowsDrivePath || ctx.rawFilePath.includes('\\')));
   return formatHealedPath(ctx.rawFilePath, neighborFile, ctx.cwd, asWsl);
 }

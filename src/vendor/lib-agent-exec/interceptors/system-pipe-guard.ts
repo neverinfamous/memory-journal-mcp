@@ -1,11 +1,11 @@
 // @ts-nocheck
 import { match, P } from 'ts-pattern';
 import type { SystemCommandDerived } from './system-command-context.js';
-import { EXACT_SHELL_CHARS, INLINE_FLAGS, PATTERN_TOOLS } from './system-command-context.js';
+import { EXACT_SHELL_CHARS, INLINE_FLAGS, PATTERN_TOOLS, findPosixShellCAndBody } from './system-command-context.js';
 import { AGENT_EXEC_README_URL, getUnquoted } from './utils.js';
 
 const PKG_MANAGERS = ['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.exe', 'bunx', 'bunx.cmd', 'bunx.exe', 'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe'];
-const SHELL_CMDS = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'];
+const SHELL_CMDS = ['pwsh', 'powershell', 'bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'];
 const TEXT_DATA_FLAGS: readonly string[] = [
   '-m', '--message', '--msg',
   '--history', '--summary', '--reason', '--prompt', '--subject',
@@ -77,6 +77,8 @@ function isGitPatternOperand(derived: SystemCommandDerived): boolean {
   return sub === 'grep' || sub === 'log' || sub === 'diff';
 }
 
+const POSIX_SHELL_CMDS = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe']);
+
 export function blockUnsafePipes(derived: SystemCommandDerived): void {
   const cmdLower = derived.cmdBasename.toLowerCase();
   const isPkgMgr = PKG_MANAGERS.includes(cmdLower);
@@ -88,7 +90,8 @@ export function blockUnsafePipes(derived: SystemCommandDerived): void {
     .otherwise(() => false);
   if (!shouldCheckPipes) return;
   const isShell = SHELL_CMDS.includes(cmdLower);
-  const hasUnsafe = derived.args.some((arg, index) => argumentHasUnsafeShell(arg, index, derived.args, isShell, isPkgMgr));
+  const posixBodyIdx = POSIX_SHELL_CMDS.has(cmdLower) ? findPosixShellCAndBody(derived.args).bodyIdx : -1;
+  const hasUnsafe = derived.args.some((arg, index) => argumentHasUnsafeShell(arg, index, derived.args, isShell, isPkgMgr, cmdLower, posixBodyIdx));
   if (!hasUnsafe) return;
   console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
   console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings and will fail.`);
@@ -96,14 +99,20 @@ export function blockUnsafePipes(derived: SystemCommandDerived): void {
   process.exit(1);
 }
 
-function argumentHasUnsafeShell(arg: string, index: number, args: string[], isShell: boolean, isPkgMgr: boolean): boolean {
+function argumentHasUnsafeShell(arg: string, index: number, args: string[], isShell: boolean, isPkgMgr: boolean, cmdLower: string, posixBodyIdx = -1): boolean {
+  if (index === posixBodyIdx) return false;
   const previous = index > 0 ? args[index - 1] : undefined;
   if (previous !== undefined) {
     const prevLower = previous.toLowerCase();
     if (INLINE_FLAGS.includes(prevLower)) return false;
     if (isShell && /^-[a-z]+$/i.test(previous) && prevLower.includes('c')) return false;
   }
-  if (startsWithInlineFlag(arg)) return false;
+  const twoBack = index > 1 ? args[index - 2] : undefined;
+  if (isShell && twoBack !== undefined && /^-[a-z]+$/i.test(twoBack)) {
+    const twoBackLower = twoBack.toLowerCase();
+    if (twoBackLower.includes('c') && twoBackLower.includes('o')) return false;
+  }
+  if (startsWithInlineFlag(arg, isShell, cmdLower)) return false;
   if (previous !== undefined && (TEXT_DATA_FLAGS.includes(previous) || TEXT_DATA_FLAGS.includes(previous.toLowerCase()))) return false;
   if (TEXT_DATA_PREFIXES.some(prefix => arg.startsWith(prefix) || arg.toLowerCase().startsWith(prefix))) return false;
   return match(arg)
@@ -113,9 +122,20 @@ function argumentHasUnsafeShell(arg: string, index: number, args: string[], isSh
     .otherwise(() => false);
 }
 
-function startsWithInlineFlag(arg: string): boolean {
+function startsWithInlineFlag(arg: string, isShell: boolean, cmdLower: string): boolean {
   const lower = arg.toLowerCase();
-  return INLINE_FLAGS.some(flag => lower.startsWith(`${flag}=`) || (flag.length === 2 && lower.startsWith(flag) && arg.length > 2));
+  const isPwsh = cmdLower === 'pwsh' || cmdLower === 'pwsh.exe' || cmdLower === 'powershell' || cmdLower === 'powershell.exe';
+  if (INLINE_FLAGS.some(flag => lower.startsWith(`${flag}=`) || (isShell && isPwsh && lower.startsWith(`${flag}:`)))) {
+    return true;
+  }
+  if (!isShell) return false;
+  if (cmdLower === 'cmd' || cmdLower === 'cmd.exe') {
+    return (lower.startsWith('/c') || lower.startsWith('/k')) && arg.length > 2;
+  }
+  if (isPwsh) {
+    return (lower.startsWith('-c:') && arg.length > 3) || (lower.startsWith('-command:') && arg.length > 9);
+  }
+  return lower.startsWith('-c') && arg.length > 2;
 }
 
 const STANDALONE_REDIR_TOKENS = new Set(['>>', '<<', '<<<', '2>', '1>', '2>>', '1>>', '&>', '&>>', '2>&1', '1>&2', '|&']);
@@ -150,7 +170,7 @@ function unspacedOperatorIsUnsafe(op: string, checkStr: string): boolean {
   if (op === '|') return checkStr.includes('|&');
   if (op === '&&' || op === '||') return true;
   if (op === '>' || op === '<') {
-    return ATTACHED_REDIR_RE.test(checkStr) || (op === '>' && /[^\s=->]>[^\s=]/.test(checkStr));
+    return ATTACHED_REDIR_RE.test(checkStr) || (op === '>' && /[^\s=\->]>[^\s=]/.test(checkStr));
   }
   if (op === ';') {
     return checkStr.startsWith(';') || (!checkStr.startsWith('-') && !checkStr.startsWith('/') && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(checkStr));

@@ -217,7 +217,7 @@ export class StreamManager {
       if (!canWrite) streamsToDrain.push(targetStream);
     }
 
-    if (!this.truncateOutputLength) {
+    if (this.truncateOutputLength === undefined || this.truncateOutputLength <= 0) {
        if (!targetStream && !this.isJson && stdStream instanceof Writable && !stdStream.destroyed) {
          const canWriteStd = stdStream.write(str);
          if (!canWriteStd) streamsToDrain.push(stdStream);
@@ -253,7 +253,7 @@ export class StreamManager {
     return streamsToDrain;
   }
 
-  public addLength(isErr: boolean, length: number) {
+  public addLength(isErr: boolean, length: number): void {
     this.getState(isErr).length += length;
   }
 
@@ -269,7 +269,7 @@ export class StreamManager {
   public getBufferedLength(isErr: boolean): number {
     const rawLen = this.getRawBufferedLength(isErr);
     const targetStream = isErr ? this.errStream : this.outStream;
-    if (this.truncateOutputLength && !targetStream) {
+    if (this.truncateOutputLength !== undefined && this.truncateOutputLength > 0 && !targetStream) {
       return Math.min(rawLen, this.truncateOutputLength);
     }
     return rawLen;

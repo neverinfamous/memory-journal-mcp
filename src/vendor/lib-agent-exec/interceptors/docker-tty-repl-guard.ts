@@ -63,9 +63,27 @@ const ALL_CONTAINER_REPLS: ReadonlySet<string> = new Set([
   ...CONTAINER_DB_REPLS,
 ]);
 
-const DOCKER_SHORT_VALUE_FLAG_SET: ReadonlySet<string> = new Set(
-  DOCKER_VALUE_FLAGS.filter(f => f.length === 2 && f.startsWith('-') && !f.startsWith('--')),
-);
+const DOCKER_SHORT_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS.filter(f => f.length === 2 && f.startsWith('-') && !f.startsWith('--')));
+
+function stripLeadingDockerTtyShortFlags(arg: string, hasStdin: boolean): string | null {
+  if (arg.startsWith('--') || arg.length < 2 || !arg.startsWith('-')) return null;
+  let prefix = '';
+  for (let j = 1; j < arg.length; j++) {
+    const ch = arg[j] ?? '';
+    if (DOCKER_SHORT_VALUE_FLAG_SET.has(`-${ch}`)) return `${prefix}${arg.slice(j)}`;
+    if (ch === '=') {
+      const prev = j > 1 ? (arg[j - 1] ?? '') : '';
+      if (prev === '') return null;
+      const prevStripped = prev === 't' || (!hasStdin && prev === 'i');
+      if (!prevStripped) return `${prefix}${arg.slice(j)}`;
+      return /^(?:false|0)$/i.test(arg.slice(j + 1)) ? `${prefix}${prev}${arg.slice(j)}` : prefix;
+    }
+    if (!/[a-zA-Z]/.test(ch)) return null;
+    if (ch === 't' || (!hasStdin && ch === 'i')) continue;
+    prefix += ch;
+  }
+  return prefix;
+}
 
 export function stripDockerTtyFlags(
   args: string[],
@@ -75,6 +93,7 @@ export function stripDockerTtyFlags(
 ): void {
   let stopStripping = false;
   let seenRunOrExec = false;
+  let expectFlagValue = false;
   const newArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -82,40 +101,34 @@ export function stripDockerTtyFlags(
     if (arg === undefined) continue;
     if (stopStripping) { newArgs.push(arg); continue; }
     if (!seenRunOrExec) {
-      if (runExecIdx !== undefined ? i === runExecIdx : (arg === 'run' || arg === 'exec')) {
-        seenRunOrExec = true;
-      }
+      if (runExecIdx !== undefined ? i === runExecIdx : (arg === 'run' || arg === 'exec')) seenRunOrExec = true;
       newArgs.push(arg);
       continue;
     }
-    if (arg === '--') {
-      stopStripping = true;
-      newArgs.push(arg);
-      continue;
-    }
-    if (!arg.startsWith('-')) {
-      const prev = newArgs[newArgs.length - 1] ?? '';
-      const prevTakesVal = DOCKER_VALUE_FLAG_SET.has(prev) || (prev.length === 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(prev));
-      if (!prevTakesVal) stopStripping = true;
-      newArgs.push(arg);
-      continue;
-    }
-    if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.length > 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(arg.slice(0, 2)))) {
-      newArgs.push(arg);
-      continue;
-    }
-    if (arg === '--tty' || arg === '-t' || arg.startsWith('--tty=')) continue;
-    if (arg === '--interactive' || arg === '-i' || arg.startsWith('--interactive=')) {
+    if (expectFlagValue) { expectFlagValue = false; newArgs.push(arg); continue; }
+    if (arg === '--' || !arg.startsWith('-')) { stopStripping = true; newArgs.push(arg); continue; }
+    if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.length === 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(arg))) { expectFlagValue = true; newArgs.push(arg); continue; }
+    if (arg.length > 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(arg.slice(0, 2))) { newArgs.push(arg); continue; }
+    const lowArg = arg.toLowerCase();
+    const isFalsyEq = /=(?:false|0)$/.test(lowArg);
+    if (arg === '--tty' || arg === '-t' || ((lowArg.startsWith('--tty=') || arg.startsWith('-t=')) && !isFalsyEq)) continue;
+    if (arg === '--interactive' || arg === '-i' || ((lowArg.startsWith('--interactive=') || arg.startsWith('-i=')) && !isFalsyEq)) {
       if (hasStdin) newArgs.push(arg);
       continue;
     }
-    if (/^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg)) {
-      let newArg = arg.replace(/t/g, '');
-      if (!hasStdin) newArg = newArg.replace(/i/g, '');
-      if (newArg !== '-') newArgs.push(newArg);
-      continue;
+    if (/^-[a-zA-Z]/.test(arg)) {
+      const strippedShort = stripLeadingDockerTtyShortFlags(arg, hasStdin);
+      if (strippedShort !== null) {
+        if (strippedShort.length > 0) {
+          const kept = `-${strippedShort}`;
+          newArgs.push(kept);
+          expectFlagValue = (kept.length === 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(kept)) || absorbsNextDockerShortValue(kept);
+        }
+        continue;
+      }
     }
     newArgs.push(arg);
+    expectFlagValue = absorbsNextDockerShortValue(arg);
   }
 
   const changed = newArgs.length !== args.length || newArgs.some((v, idx) => v !== args[idx]);
@@ -151,7 +164,7 @@ function collectNonConnDbPositionals(baseCmd: string, args: readonly string[]): 
   return pos;
 }
 
-function absorbsNextDockerShortValue(arg: string): boolean {
+export function absorbsNextDockerShortValue(arg: string): boolean {
   if (arg.startsWith('--') || arg.length <= 2) return false;
   for (let j = 1; j < arg.length; j++) {
     if (DOCKER_SHORT_VALUE_FLAG_SET.has(`-${arg[j] ?? ''}`)) {
@@ -184,7 +197,7 @@ export function extractDockerRunExecCommand(args: readonly string[], runExecIdx?
       continue;
     }
     if (skipNextValue) { skipNextValue = false; continue; }
-    if (!pastDoubleDash && arg === '--') {
+    if (!pastDoubleDash && containerCmd === null && arg === '--') {
       pastDoubleDash = true;
       continue;
     }
@@ -275,15 +288,34 @@ function hasContainerScriptPositional(args: readonly string[], valueFlags: Reado
   return false;
 }
 
-function hasPythonInteractiveFlag(args: readonly string[]): boolean {
+function scanPythonPreScriptFlags(args: readonly string[]): { hasInteractive: boolean; hasPdb: boolean; hasExecOrScript: boolean } {
+  let hasInteractive = false;
+  let hasVersionOrHelp = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === undefined || a === '--' || a === '-c' || a === '-m' || a.startsWith('-c') || a.startsWith('-m')) break;
+    if (a === undefined) continue;
+    if (a === '--') return { hasInteractive, hasPdb: false, hasExecOrScript: i + 1 < args.length || hasVersionOrHelp };
     if (PYTHON_VALUE_FLAGS.has(a)) { i++; continue; }
-    if (!a.startsWith('-')) break;
-    if (!a.startsWith('--') && /^-[a-zA-Z]*i[a-zA-Z]*$/.test(a)) return true;
+    if (!a.startsWith('-')) return { hasInteractive, hasPdb: false, hasExecOrScript: true };
+    if (a === '--version' || a === '--help' || a.startsWith('--help=')) { hasVersionOrHelp = true; continue; }
+    if (a.startsWith('--')) continue;
+    for (let j = 1; j < a.length; j++) {
+      const ch = a[j] ?? '';
+      if (ch === 'c') return { hasInteractive, hasPdb: false, hasExecOrScript: j + 1 < a.length || i + 1 < args.length };
+      if (ch === 'm') {
+        const rest = a.slice(j + 1);
+        const mod = rest.length > 0 ? rest : (args[i + 1] ?? '');
+        return { hasInteractive, hasPdb: mod === 'pdb', hasExecOrScript: mod.length > 0 };
+      }
+      if (ch === 'W' || ch === 'X') {
+        if (j + 1 === a.length) i++;
+        break;
+      }
+      if (ch === 'i') hasInteractive = true;
+      if (ch === 'V' || ch === 'h') hasVersionOrHelp = true;
+    }
   }
-  return false;
+  return { hasInteractive, hasPdb: false, hasExecOrScript: hasVersionOrHelp };
 }
 
 function isContainerCmdNonInteractive(
@@ -294,7 +326,7 @@ function isContainerCmdNonInteractive(
   if (hasStdin) return true;
   if (containerCmdArgs.length === 0) return false;
   if (CONTAINER_SHELLS.has(baseCmd)) {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-c', '--command'])) || hasContainerScriptPositional(containerCmdArgs, SHELL_VALUE_FLAGS);
+    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-c', '--command']) || a === '--version' || a === '--help') || hasContainerScriptPositional(containerCmdArgs, SHELL_VALUE_FLAGS);
   }
   if (CONTAINER_JS_RUNTIMES.has(baseCmd)) {
     const ddIdx = containerCmdArgs.indexOf('--');
@@ -322,10 +354,8 @@ function isContainerCmdNonInteractive(
     return preDd.some(a => matchesContainerFlagOrPrefix(a, ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, JS_RUNTIME_VALUE_FLAGS);
   }
   if (CONTAINER_PYTHON.has(baseCmd)) {
-    const endIdx = containerCmdArgs.findIndex((a, i) => a === '--' || a === '-c' || a.startsWith('-c') || (a === '-m' && containerCmdArgs[i + 1] !== 'pdb'));
-    const pre = endIdx === -1 ? containerCmdArgs : containerCmdArgs.slice(0, endIdx);
-    if (hasPythonInteractiveFlag(containerCmdArgs) || pre.some((a, i) => a === '-mpdb' || (a === '-m' && pre[i + 1] === 'pdb'))) return false;
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-c', '-m', '-V', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, PYTHON_VALUE_FLAGS);
+    const pyFlags = scanPythonPreScriptFlags(containerCmdArgs);
+    return !pyFlags.hasInteractive && !pyFlags.hasPdb && pyFlags.hasExecOrScript;
   }
   if (CONTAINER_RUBY.has(baseCmd)) {
     return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-e', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, RUBY_VALUE_FLAGS);
@@ -348,7 +378,7 @@ function hasComposeNoTtyBeforeService(args: readonly string[], targetIdx: number
     if (a === undefined || a === '--') break;
     if (a === '-T' || a === '--no-TTY') return true;
     if (a.startsWith('-')) {
-      if (DOCKER_VALUE_FLAG_SET.has(a) && i + 1 < args.length) i++;
+      if ((DOCKER_VALUE_FLAG_SET.has(a) || absorbsNextDockerShortValue(a)) && i + 1 < args.length) i++;
       continue;
     }
     break;

@@ -10,11 +10,15 @@ const safeString = noNullString
   .refine(val => !val.includes('\r'), "Must not contain carriage returns")
   .refine(val => !val.includes('\uFEFF'), "Must not contain BOMs");
 
+function isUnknownArray(val: unknown): val is unknown[] {
+  return Array.isArray(val);
+}
+
 const safeStringArray = z.preprocess((val) => {
-  if (Array.isArray(val)) {
+  if (isUnknownArray(val)) {
     return val
-      .filter((item): item is NonNullable<typeof item> => item !== null && item !== undefined)
-      .map((item) => (typeof item === 'number' || typeof item === 'boolean') ? String(item) : item);
+      .filter((item): item is NonNullable<unknown> => item !== null && item !== undefined)
+      .map((item): unknown => (typeof item === 'number' || typeof item === 'boolean') ? String(item) : item);
   }
   return val;
 }, z.array(safeString).max(1000));
@@ -75,6 +79,24 @@ const envRecordSchema = z.unknown()
   )
   .pipe(z.record(envKeySchema, envValueSchema));
 
+const webhookHeaderKeySchema = safeString.min(1, 'webhook header name must not be empty')
+  .refine(val => !/[\r\n\0]/.test(val), 'webhook header name must not contain CR, LF, or null bytes')
+  .refine(val => !FORBIDDEN_ENV_KEYS.has(val), 'webhook header name must not be a reserved prototype property');
+const webhookHeaderValueSchema = envValueSchema.refine(
+  val => !val.includes('\n'),
+  'webhook header value must not contain LF',
+);
+const webhookHeaderRecordSchema = z.unknown()
+  .refine(
+    (raw): raw is Record<string, unknown> => typeof raw === 'object' && raw !== null && !Array.isArray(raw),
+    'webhookHeaders must be an object',
+  )
+  .refine(
+    (raw) => !Object.keys(raw).some(k => FORBIDDEN_ENV_KEYS.has(k)),
+    'webhook header name must not be a reserved prototype property',
+  )
+  .pipe(z.record(webhookHeaderKeySchema, webhookHeaderValueSchema));
+
 const basePayloadSchema = z.object({
   args: safeStringArray.optional(),
   cwd: safeString.max(1024).refine(val => val.trim().length > 0, "cwd must not be empty").optional(),
@@ -95,8 +117,21 @@ const basePayloadSchema = z.object({
   bypassInterceptors: lenientBoolean.optional(),
   onSuccess: z.union([safeString, safeStringArray]).optional(),
   onFailure: z.union([safeString, safeStringArray]).optional(),
-  webhookHeaders: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
-  webhookPayloadTemplate: z.unknown().transform(val => typeof val === 'string' ? val : JSON.stringify(val)).pipe(noNullString).optional(),
+  webhookHeaders: webhookHeaderRecordSchema.optional(),
+  webhookPayloadTemplate: z.unknown().transform((val, ctx) => {
+    if (typeof val === 'string') return val;
+    try {
+      const json = JSON.stringify(val);
+      if (json === undefined) {
+        ctx.addIssue({ code: 'custom', message: 'webhookPayloadTemplate must be JSON-serializable' });
+        return z.NEVER;
+      }
+      return json;
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'webhookPayloadTemplate must be JSON-serializable' });
+      return z.NEVER;
+    }
+  }).pipe(noNullString).optional(),
   webhookMethod: z.union([z.literal("GET"), z.literal("POST"), z.literal("PUT"), z.literal("PATCH"), z.literal("DELETE")]).optional(),
   webhookTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, INT32_MAX)).optional(),
   expectJsonEnvelope: lenientBoolean.optional(),
@@ -136,46 +171,52 @@ const EVAL_TYPE_SYNONYMS = ['eval_code', 'evaluation', 'evaluate'];
 const KNOWN_INTERPRETERS = ['bash', 'sh', 'pwsh', 'powershell', 'cmd', 'node', 'bun', 'python', 'python3', 'tsx', 'ts-node'];
 
 function isTruthyFlag(value: unknown): boolean {
-  return value === true || String(value).toLowerCase() === 'true';
+  return value === true || (typeof value === 'string' && value.toLowerCase() === 'true');
+}
+
+function coerceScalarString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
 }
 
 function stripMetadataAndWarnArgs(obj: Record<string, unknown>): void {
   for (const k of METADATA_KEYS) {
     if (Object.hasOwn(obj, k) && !KNOWN_PAYLOAD_KEYS.has(k)) delete obj[k];
   }
-  if (Object.hasOwn(obj, 'args') && Array.isArray(obj.args)) {
-    const hasInvalidItem = obj.args.some(
+  if (Object.hasOwn(obj, 'args') && isUnknownArray(obj['args'])) {
+    const hasInvalidItem = obj['args'].some(
       item => item === null || item === undefined || typeof item === 'number' || typeof item === 'boolean'
     );
     if (hasInvalidItem) {
       console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Sanitizing args array (filtering null/undefined and coercing primitives to strings)... (Frictionless Recovery)\x1b[0m`);
     }
   }
-  if (Object.hasOwn(obj, 'target') && typeof obj.target === 'string') {
-    const norm = normalizeTarget(obj.target);
-    if (norm !== null) obj.target = norm;
+  if (Object.hasOwn(obj, 'target') && typeof obj['target'] === 'string') {
+    const norm = normalizeTarget(obj['target']);
+    if (norm !== null) obj['target'] = norm;
   }
 }
 
 function tryTranslateSearchPayload(obj: Record<string, unknown>): void {
   const hasSearchKey = ['query', 'searchPattern', 'search_pattern', 'pattern'].some(k => Object.hasOwn(obj, k));
   const hasExplicitExec =
-    (typeof obj.command === 'string' && obj.command.length > 0) ||
-    (typeof obj.code === 'string' && obj.code.length > 0) ||
-    (typeof obj.scriptPath === 'string' && obj.scriptPath.length > 0);
+    (typeof obj['command'] === 'string' && obj['command'].length > 0) ||
+    (typeof obj['code'] === 'string' && obj['code'].length > 0) ||
+    (typeof obj['scriptPath'] === 'string' && obj['scriptPath'].length > 0);
   if (hasSearchKey && !hasExplicitExec) {
-    const patternVal = String(obj.query ?? obj.pattern ?? obj.searchPattern ?? obj.search_pattern ?? '');
-    const pathVal = String(obj.path ?? obj.searchPath ?? obj.search_path ?? obj.dir ?? '.');
+    const patternVal = coerceScalarString(obj['query'] ?? obj['pattern'] ?? obj['searchPattern'] ?? obj['search_pattern'], '');
+    const pathVal = coerceScalarString(obj['path'] ?? obj['searchPath'] ?? obj['search_path'] ?? obj['dir'], '.');
     const rgArgs = ['-n'];
-    if (isTruthyFlag(obj.case_insensitive) || isTruthyFlag(obj.caseInsensitive)) rgArgs.push('-i');
+    if (isTruthyFlag(obj['case_insensitive']) || isTruthyFlag(obj['caseInsensitive'])) rgArgs.push('-i');
     const hasRegexKey = Object.hasOwn(obj, 'regex') || Object.hasOwn(obj, 'isRegex');
-    if (hasRegexKey && !isTruthyFlag(obj.regex) && !isTruthyFlag(obj.isRegex)) rgArgs.push('-F');
-    if (isTruthyFlag(obj.word) || isTruthyFlag(obj.isWord)) rgArgs.push('-w');
+    if (hasRegexKey && !isTruthyFlag(obj['regex']) && !isTruthyFlag(obj['isRegex'])) rgArgs.push('-F');
+    if (isTruthyFlag(obj['word']) || isTruthyFlag(obj['isWord'])) rgArgs.push('-w');
     rgArgs.push('--', patternVal, pathVal);
-    obj.type = 'command';
-    obj.command = 'rg';
-    obj.target = 'wsl2';
-    obj.args = rgArgs;
+    obj['type'] = 'command';
+    obj['command'] = 'rg';
+    obj['target'] = 'wsl2';
+    obj['args'] = rgArgs;
     console.error(`\n   💡 AGENT HINT: Search parameters passed directly as JSON payload.`);
     console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating search payload to ripgrep (rg) command... (Frictionless Recovery)\x1b[0m`);
   }
@@ -245,38 +286,38 @@ function normalizeFieldSynonyms(obj: Record<string, unknown>): void {
   moveSynonymKey(obj, 'script_path', 'scriptPath');
   moveSynonymKey(obj, 'script_file', 'scriptPath');
   moveSynonymKey(obj, 'scriptFile', 'scriptPath');
-  if (Object.hasOwn(obj, 'command_line') && isUnsetField(obj, 'command') && typeof obj.command_line === 'string') {
-    const trimmed = obj.command_line.trim();
+  if (Object.hasOwn(obj, 'command_line') && isUnsetField(obj, 'command') && typeof obj['command_line'] === 'string') {
+    const trimmed = obj['command_line'].trim();
     const parts = tokenizeCommandLine(trimmed);
-    obj.command = parts[0] ?? trimmed;
+    obj['command'] = parts[0] ?? trimmed;
     if (parts.length > 1) {
-      const existingArgs = Array.isArray(obj.args) ? obj.args : [];
-      obj.args = [...parts.slice(1), ...existingArgs];
+      const existingArgs = isUnknownArray(obj['args']) ? obj['args'] : [];
+      obj['args'] = [...parts.slice(1), ...existingArgs];
     }
-    delete obj.command_line;
+    delete obj['command_line'];
   }
   moveSynonymKey(obj, 'script_code', 'code');
   moveSynonymKey(obj, 'scriptCode', 'code');
-  if (Object.hasOwn(obj, 'script') && isUnsetField(obj, 'scriptPath') && isUnsetField(obj, 'code') && typeof obj.script === 'string') {
-    if (obj.script.includes('\n') || obj.script.includes(';')) obj.code = obj.script;
-    else obj.scriptPath = obj.script;
-    delete obj.script;
+  if (Object.hasOwn(obj, 'script') && isUnsetField(obj, 'scriptPath') && isUnsetField(obj, 'code') && typeof obj['script'] === 'string') {
+    if (obj['script'].includes('\n') || obj['script'].includes(';')) obj['code'] = obj['script'];
+    else obj['scriptPath'] = obj['script'];
+    delete obj['script'];
   }
 }
 
 function resolveTypeByFieldPresence(obj: Record<string, unknown>, defaultToCommandFrom?: string): boolean {
-  if (typeof obj.code === 'string') { obj.type = 'eval'; return true; }
-  if (typeof obj.scriptPath === 'string') { obj.type = 'script'; return true; }
-  if (typeof obj.command === 'string') { obj.type = 'command'; return true; }
+  if (typeof obj['code'] === 'string') { obj['type'] = 'eval'; return true; }
+  if (typeof obj['scriptPath'] === 'string') { obj['type'] = 'script'; return true; }
+  if (typeof obj['command'] === 'string') { obj['type'] = 'command'; return true; }
   if (defaultToCommandFrom !== undefined && !Object.hasOwn(obj, 'code') && !Object.hasOwn(obj, 'scriptPath')) {
-    obj.command = defaultToCommandFrom;
-    obj.type = 'command';
+    obj['command'] = defaultToCommandFrom;
+    obj['type'] = 'command';
     return true;
   }
-  if (Array.isArray(obj.args) && obj.args.length > 0 && typeof obj.args[0] === 'string') {
-    obj.type = 'command';
-    obj.command = obj.args[0];
-    obj.args = obj.args.slice(1);
+  if (isUnknownArray(obj['args']) && obj['args'].length > 0 && typeof obj['args'][0] === 'string') {
+    obj['type'] = 'command';
+    obj['command'] = obj['args'][0];
+    obj['args'] = obj['args'].slice(1);
     return true;
   }
   return false;
@@ -284,19 +325,19 @@ function resolveTypeByFieldPresence(obj: Record<string, unknown>, defaultToComma
 
 function resolveExplicitTypeString(obj: Record<string, unknown>, rawType: string): void {
   const normalizedType = rawType.trim().toLowerCase();
-  if (KNOWN_TYPES.includes(normalizedType)) { obj.type = normalizedType; return; }
+  if (KNOWN_TYPES.includes(normalizedType)) { obj['type'] = normalizedType; return; }
   if (EXEC_TYPE_SYNONYMS.includes(normalizedType)) {
-    obj.type = typeof obj.code === 'string' ? 'eval' : (typeof obj.scriptPath === 'string' ? 'script' : 'command');
+    obj['type'] = typeof obj['code'] === 'string' ? 'eval' : (typeof obj['scriptPath'] === 'string' ? 'script' : 'command');
     return;
   }
-  if (EVAL_TYPE_SYNONYMS.includes(normalizedType)) { obj.type = 'eval'; return; }
+  if (EVAL_TYPE_SYNONYMS.includes(normalizedType)) { obj['type'] = 'eval'; return; }
   if (KNOWN_INTERPRETERS.includes(normalizedType)) {
-    if (isUnsetField(obj, 'interpreter')) obj.interpreter = normalizedType;
-    if (typeof obj.code === 'string') obj.type = 'eval';
-    else if (typeof obj.scriptPath === 'string') obj.type = 'script';
+    if (isUnsetField(obj, 'interpreter')) obj['interpreter'] = normalizedType;
+    if (typeof obj['code'] === 'string') obj['type'] = 'eval';
+    else if (typeof obj['scriptPath'] === 'string') obj['type'] = 'script';
     else {
-      obj.type = 'command';
-      if (isUnsetField(obj, 'command')) obj.command = normalizedType;
+      obj['type'] = 'command';
+      if (isUnsetField(obj, 'command')) obj['command'] = normalizedType;
     }
     return;
   }
@@ -304,32 +345,32 @@ function resolveExplicitTypeString(obj: Record<string, unknown>, rawType: string
 }
 
 function inferMissingPayloadType(obj: Record<string, unknown>): void {
-  if (typeof obj.command === 'string') { obj.type = 'command'; return; }
-  if (typeof obj.scriptPath === 'string') { obj.type = 'script'; return; }
-  if (typeof obj.code === 'string') { obj.type = 'eval'; return; }
-  if (Array.isArray(obj.args) && obj.args.length > 0 && typeof obj.args[0] === 'string') {
-    obj.type = 'command';
-    obj.command = obj.args[0];
-    obj.args = obj.args.slice(1);
+  if (typeof obj['command'] === 'string') { obj['type'] = 'command'; return; }
+  if (typeof obj['scriptPath'] === 'string') { obj['type'] = 'script'; return; }
+  if (typeof obj['code'] === 'string') { obj['type'] = 'eval'; return; }
+  if (isUnknownArray(obj['args']) && obj['args'].length > 0 && typeof obj['args'][0] === 'string') {
+    obj['type'] = 'command';
+    obj['command'] = obj['args'][0];
+    obj['args'] = obj['args'].slice(1);
     return;
   }
-  if (Object.hasOwn(obj, 'code')) obj.type = 'eval';
-  else if (Object.hasOwn(obj, 'scriptPath')) obj.type = 'script';
+  if (Object.hasOwn(obj, 'code')) obj['type'] = 'eval';
+  else if (Object.hasOwn(obj, 'scriptPath')) obj['type'] = 'script';
   else if (Object.hasOwn(obj, 'target')) {
-    obj.type = 'command';
-    if (!Object.hasOwn(obj, 'command')) obj.command = obj.target === 'wsl2' ? 'bash' : 'pwsh';
+    obj['type'] = 'command';
+    if (isUnsetField(obj, 'command')) obj['command'] = obj['target'] === 'wsl2' ? 'bash' : 'pwsh';
   }
 }
 
 function finalizeTypedPayloadFields(obj: Record<string, unknown>): void {
-  if (obj.type === 'command' && Object.hasOwn(obj, 'interpreter')) delete obj.interpreter;
-  if (obj.type === 'eval' && Object.hasOwn(obj, 'command')) {
-    if (!Object.hasOwn(obj, 'code')) obj.code = String(obj.command);
-    delete obj.command;
+  if (obj['type'] === 'command' && Object.hasOwn(obj, 'interpreter')) delete obj['interpreter'];
+  if (obj['type'] === 'eval' && Object.hasOwn(obj, 'command')) {
+    if (isUnsetField(obj, 'code')) obj['code'] = coerceScalarString(obj['command'], '');
+    delete obj['command'];
   }
-  if (obj.type === 'script' && Object.hasOwn(obj, 'command')) {
-    if (!Object.hasOwn(obj, 'scriptPath')) obj.scriptPath = String(obj.command);
-    delete obj.command;
+  if (obj['type'] === 'script' && Object.hasOwn(obj, 'command')) {
+    if (isUnsetField(obj, 'scriptPath')) obj['scriptPath'] = coerceScalarString(obj['command'], '');
+    delete obj['command'];
   }
 }
 
@@ -339,7 +380,7 @@ export const PayloadSchema = z.preprocess((val) => {
   stripMetadataAndWarnArgs(obj);
   normalizeFieldSynonyms(obj);
   tryTranslateSearchPayload(obj);
-  if (typeof obj.type === 'string') resolveExplicitTypeString(obj, obj.type);
+  if (typeof obj['type'] === 'string') resolveExplicitTypeString(obj, obj['type']);
   else inferMissingPayloadType(obj);
   finalizeTypedPayloadFields(obj);
   return obj;

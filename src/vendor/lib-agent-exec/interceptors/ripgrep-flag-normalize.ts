@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, extractLeadingShortFlags, healFragmentedQuotes, inspectCombinedShortFlag } from '../command-utils.js';
 import { unbundleSearchCommandArgs } from './search-flag-unpack.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 
 export const RG_KNOWN_ENCODINGS = new Set([
   'utf8', 'utf16', 'utf16le', 'utf16be', 'ascii', 'usascii', 'latin1',
@@ -126,7 +126,7 @@ function negatedGlob(pattern: string): string {
   return pattern.startsWith('!') ? pattern : `!${pattern}`;
 }
 
-function translateExtendedRegex(args: string[], index: number): FlagStep {
+function translateExtendedRegex(args: string[], index: number, forcePattern = false): FlagStep {
   if (index + 1 >= args.length) {
     return { handled: true, convertedGlob: false, convertedExtReason: 'strip', pushed: [], extra: 0 };
   }
@@ -134,7 +134,7 @@ function translateExtendedRegex(args: string[], index: number): FlagStep {
   if (nextArg !== undefined && nextArg.startsWith('-')) {
     return { handled: true, convertedGlob: false, convertedExtReason: 'strip', pushed: [], extra: 0 };
   }
-  if (nextArg !== undefined && !isKnownRgEncoding(nextArg)) {
+  if (nextArg !== undefined && (forcePattern || !isKnownRgEncoding(nextArg))) {
     return { handled: true, convertedGlob: false, convertedExtReason: 'pattern', pushed: ['-e', nextArg], extra: 1 };
   }
   if (nextArg !== undefined) {
@@ -151,13 +151,23 @@ const GREP_E_CLUSTER_BOOL_RE = /^[rRniIlLwFvcqHsSoxuPU]+$/;
 export function splitRgExtendedCluster(arg: string): { leadFlags: string; hadAttachedBoolSuffix: boolean } | null {
   if (arg === '-E') return { leadFlags: '', hadAttachedBoolSuffix: false };
   if (!arg.startsWith('-') || arg.startsWith('--')) return null;
-  const shortInfo = inspectCombinedShortFlag('rg', arg, RG_VALUE_FLAGS);
+  const hasRecursiveGrepCluster = /^-[rRniIlLwFvcqHsSoxuPU]*E[rRniIlLwFvcqHsSoxuPU]*$/.test(arg);
+  const candidate = hasRecursiveGrepCluster ? `-${arg.slice(1).replace(/[rR]/g, '')}` : arg;
+  const strippedR = candidate !== arg;
+  if (candidate === '-E') {
+    return { leadFlags: '', hadAttachedBoolSuffix: strippedR || arg.indexOf('E') < arg.length - 1 };
+  }
+  const shortInfo = inspectCombinedShortFlag('rg', candidate, RG_VALUE_FLAGS);
   if (shortInfo.tailChar !== 'E') return null;
   const prefixWithoutE = shortInfo.shortPrefix.slice(0, -1);
-  const afterE = arg.slice(shortInfo.shortPrefix.length);
-  if (afterE.length === 0) return { leadFlags: prefixWithoutE, hadAttachedBoolSuffix: false };
+  const afterE = candidate.slice(shortInfo.shortPrefix.length);
+  if (afterE.length === 0) {
+    const cleaned = prefixWithoutE.slice(1).replace(/[rR]/g, '');
+    return { leadFlags: cleaned.length > 0 ? `-${cleaned}` : '', hadAttachedBoolSuffix: strippedR };
+  }
   if (GREP_E_CLUSTER_BOOL_RE.test(afterE) && !isKnownRgEncoding(afterE)) {
-    return { leadFlags: `${prefixWithoutE}${afterE}`, hadAttachedBoolSuffix: true };
+    const cleaned = `${prefixWithoutE.slice(1)}${afterE}`.replace(/[rR]/g, '');
+    return { leadFlags: cleaned.length > 0 ? `-${cleaned}` : '', hadAttachedBoolSuffix: true };
   }
   return null;
 }
@@ -166,7 +176,7 @@ function translateGrepStyleArg(args: string[], index: number, arg: string): Flag
   const untouched: FlagStep = { handled: false, convertedGlob: false, convertedExtReason: null, pushed: [], extra: 0 };
   const eSplit = splitRgExtendedCluster(arg);
   if (eSplit !== null) {
-    const step = translateExtendedRegex(args, index);
+    const step = translateExtendedRegex(args, index, eSplit.hadAttachedBoolSuffix);
     return {
       ...step,
       handled: true,

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { match } from 'ts-pattern';
 import { type ExecPayload, tokenizeCommandLine } from './schema.js';
 import {
-  ExecutionContext,
+  type ExecutionContext,
   gitInterceptor,
   dockerInterceptor,
   packageManagerInterceptor,
@@ -16,6 +16,7 @@ import { BUILT_INS, replaceIntegrationContext, emitInterceptBanner, recordAgentI
 import { DEFAULT_ENV_VARS, IMMUTABLE_ENV_OVERRIDES } from './environment.js';
 import {
   isCmd,
+  isPwsh,
   buildPwshWrapper,
   applyTemplateOverride,
   convertToWindowsPath,
@@ -72,9 +73,9 @@ function expandIntegrationTemplates(
     payload.templateOverride = replaceTemplates(payload.templateOverride);
   }
   if (payload.webhookHeaders !== undefined) {
-    const newHeaders: Record<string, string> = {};
-    for (const [k, v] of Object.entries(payload.webhookHeaders)) newHeaders[k] = replaceTemplates(v);
-    payload.webhookHeaders = newHeaders;
+    payload.webhookHeaders = Object.fromEntries(
+      Object.entries(payload.webhookHeaders).map(([k, v]) => [k, replaceTemplates(v)]),
+    );
   }
 }
 
@@ -160,12 +161,30 @@ function runCommandInterceptors(
   for (const interceptor of customInterceptors) interceptor(ctx);
 }
 
-function stripRedundantArgQuotes(cmd: string, args: string[], payload?: ExecPayload): string[] {
+const PWSH_QUOTE_EXEMPT_BOUNDARY_FLAGS: ReadonlySet<string> = new Set([
+  '--', '-file', '-f', '-encodedcommand', '-ec', '-en',
+]);
+
+function findPwshInlineScriptStartIndex(cmd: string, args: readonly string[]): number {
+  if (!isPwsh(path.basename(cmd))) return -1;
+  for (let i = 0; i < args.length; i++) {
+    const low = (args[i] ?? '').toLowerCase();
+    const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
+    if (PWSH_QUOTE_EXEMPT_BOUNDARY_FLAGS.has(head)) return -1;
+    if (head === '-c' || head === '-command') return i + 1;
+  }
+  return -1;
+}
+
+export function stripRedundantArgQuotes(cmd: string, args: string[], payload?: ExecPayload): string[] {
   const exemptArgJson = collectArgJsonValueIndices(cmd, args);
   const inlineScriptIdx = findWslShellInlineScriptIndex(cmd, args);
+  const pwshInlineStart = findPwshInlineScriptStartIndex(cmd, args);
   let stripped = false;
   const cleaned = args.map((arg, idx) => {
-    if (exemptArgJson.has(idx) || idx === inlineScriptIdx) return arg;
+    if (exemptArgJson.has(idx) || idx === inlineScriptIdx || (pwshInlineStart !== -1 && idx >= pwshInlineStart)) {
+      return arg;
+    }
     if (arg.length >= 2 && ((arg.startsWith('"') && arg.endsWith('"') && !arg.slice(1, -1).includes('"')) ||
         (arg.startsWith("'") && arg.endsWith("'") && !arg.slice(1, -1).includes("'")))) {
       stripped = true;
@@ -261,13 +280,14 @@ const NESTED_CONFIG_C_RUNNERS = new Set(['bun', 'bun.exe', 'pnpm', 'pnpm.cmd', '
 
 function isNestedAgentExecArgs(cmdBasename: string, args: readonly string[]): boolean {
   let sawSubcmd = false;
+  let sawInnerRunner = false;
   const isJsRuntime = NESTED_JS_PRINT_RUNNERS.has(cmdBasename);
   const hasShortConfigC = NESTED_CONFIG_C_RUNNERS.has(cmdBasename);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') return false;
     const low = a.toLowerCase();
-    if (low === '-e' || low === '--eval' || low === '--print' || low.startsWith('--eval=') || low.startsWith('--print=') || (isJsRuntime && low === '-p')) {
+    if (low === '-e' || low === '--eval' || low === '--print' || low.startsWith('--eval=') || low.startsWith('--print=') || ((isJsRuntime || sawInnerRunner) && low === '-p')) {
       return false;
     }
     if (NESTED_RUNNER_VALUE_FLAGS.has(a) || (hasShortConfigC && a === '-c')) { i++; continue; }
@@ -276,7 +296,12 @@ function isNestedAgentExecArgs(cmdBasename: string, args: readonly string[]): bo
       sawSubcmd = true;
       continue;
     }
-    return path.basename(a).toLowerCase() === 'agent-exec.ts';
+    const base = path.basename(a).toLowerCase();
+    if (!sawInnerRunner && NESTED_JS_PRINT_RUNNERS.has(base)) {
+      sawInnerRunner = true;
+      continue;
+    }
+    return base === 'agent-exec.ts' || base === 'agent-exec.js';
   }
   return false;
 }
@@ -316,7 +341,7 @@ function finalizeBuiltCommand(params: FinalizedCommandParams): {
   const cmdBasename = path.basename(cmd).toLowerCase();
   const cmdRunners = new Set([
     'bun', 'bun.exe', 'node', 'node.exe', 'tsx', 'tsx.cmd', 'ts-node', 'ts-node.cmd',
-    'pnpm', 'pnpm.cmd', 'npm', 'npm.cmd', 'npx', 'npx.cmd', 'yarn', 'yarn.cmd',
+    'pnpm', 'pnpm.cmd', 'pnpm.exe', 'npm', 'npm.cmd', 'npm.exe', 'npx', 'npx.cmd', 'npx.exe', 'yarn', 'yarn.cmd', 'yarn.exe',
     'bunx', 'bunx.cmd', 'bunx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe',
   ]);
   const preInterceptorCmd = cmd;
@@ -329,7 +354,15 @@ function finalizeBuiltCommand(params: FinalizedCommandParams): {
 
   if (ctx.cmdBasename && ctx.cmdBasename !== path.basename(cmd).toLowerCase()) cmd = ctx.cmdBasename;
   if (cmd !== preInterceptorCmd || payload.target !== preInterceptorTarget) {
-    if (payload.target !== 'wsl2' && !BUILT_INS.includes(cmd.toLowerCase()) && cmd !== preInterceptorCmd) {
+    if (payload.target !== 'wsl2' && !BUILT_INS.includes(cmd.toLowerCase()) && (cmd !== preInterceptorCmd || preInterceptorTarget === 'wsl2')) {
+      if (['bunx', 'bunx.cmd', 'bunx.exe'].includes(path.basename(cmd).toLowerCase())) {
+        cmd = 'bun';
+        ctx.args = ['x', ...ctx.args];
+        if (payload.type === 'command') {
+          payload.command = cmd;
+          payload.args = ctx.args;
+        }
+      }
       const candidate = resolveWindowsCommand(cmd, cwd, payload.env);
       if (candidate !== cmd) {
         resolvedWinCmd = candidate;
@@ -362,7 +395,7 @@ export function buildCommand(
   const envOverrides: Record<string, string> = {};
   // [INVARIANT]: Preserve caller's explicit bypass flag separately from runtime stall-bypass mutations (`payload.bypassInterceptors = true`) set inside interceptors.
   const callerBypassedInterceptors = Boolean(payload.bypassInterceptors);
-  const replaceTemplates = (str: string) => replaceIntegrationContext(str, payload);
+  const replaceTemplates = (str: string): string => replaceIntegrationContext(str, payload);
 
   expandIntegrationTemplates(payload, replaceTemplates, exitWithError);
   splitEmbeddedCommandTokens(payload, cwd);

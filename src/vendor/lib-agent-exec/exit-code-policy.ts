@@ -30,7 +30,7 @@ const WRAPPER_BASENAMES = new Set([
   'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe',
 ]);
 
-const SHELL_EVAL_INTERPRETERS = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe']);
+const SHELL_EVAL_INTERPRETERS = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'ps1', 'cmd', 'cmd.exe', 'bat']);
 const GIT_GLOBAL_VALUE_FLAGS = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--config-env']);
 
 function commandBasename(command: string): string {
@@ -171,7 +171,7 @@ function extractFinalShellSegment(rawScript: string, isWindowsShell = false, imp
 }
 
 const POSIX_WRAPPER_SHELLS = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe']);
-const WIN_PWSH_SHELLS = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe']);
+const WIN_PWSH_SHELLS = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'ps1']);
 const PWSH_WRAPPER_VALUE_FLAGS = new Set([
   '-executionpolicy', '-ep', '-workingdirectory', '-wd', '-inputformat', '-if',
   '-outputformat', '-of', '-configurationname', '-settingsfile', '-custompipename',
@@ -183,12 +183,12 @@ function extractPosixShellScriptText(args: readonly string[]): string | null {
     const a = args[i];
     if (a === undefined || a === '--') return null;
     if (/^-[a-zA-Z]*[eu]/.test(a) && !a.startsWith('--')) return null;
-    if (a.startsWith('-') && !a.startsWith('--') && /^-[a-zA-Z]*o[a-zA-Z]*$/.test(a) && a.includes('c')) {
-      if (/^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
+    if (a.startsWith('-') && !a.startsWith('--') && /^-[a-zA-Z]*[oO][a-zA-Z]*$/.test(a) && a.includes('c')) {
+      if (a.includes('o') && /^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
       return args[i + 2] ?? '';
     }
-    if (/^[-+][a-zA-Z]*o$/.test(a)) {
-      if (a.startsWith('-') && /^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
+    if (/^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(a)) {
+      if (a.startsWith('-') && a.includes('o') && /^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
       i += 1;
       continue;
     }
@@ -205,12 +205,19 @@ function extractPwshScriptText(args: readonly string[]): string | null {
     const a = args[i];
     if (a === undefined) continue;
     const low = a.toLowerCase();
-    if (low === '--' || low === '-f' || low === '-file' || low === '-ec' || low === '-encodedcommand' || low === '-en') {
+    const colonIdx = low.indexOf(':');
+    const head = colonIdx === -1 ? low : low.slice(0, colonIdx);
+    if (head === '--' || head === '-f' || head === '-file' || head === '-ec' || head === '-encodedcommand' || head === '-en') {
       return null;
     }
-    if (low === '-version' && /^\d+(?:\.\d+)*$/.test(args[i + 1] ?? '')) { i += 1; continue; }
-    if (PWSH_WRAPPER_VALUE_FLAGS.has(low)) { i += 1; continue; }
-    if (low === '-c' || low === '-command') return args.slice(i + 1).join(' ');
+    if (colonIdx === -1 && head === '-version' && /^\d+(?:\.\d+)*$/.test(args[i + 1] ?? '')) { i += 1; continue; }
+    if (colonIdx === -1 && PWSH_WRAPPER_VALUE_FLAGS.has(head)) { i += 1; continue; }
+    if (head === '-c' || head === '-command') {
+      const rest = args.slice(i + 1).join(' ');
+      if (colonIdx === -1) return rest;
+      const inline = a.slice(colonIdx + 1);
+      return rest.length > 0 ? `${inline} ${rest}` : inline;
+    }
     if (!a.startsWith('-')) return null;
   }
   return null;
@@ -278,11 +285,12 @@ function extractGitSubcommand(args: readonly string[]): string | null {
 
 function extractFinalTokensFromPayload(payload: ExecPayload): { tool: string; args: string[] } | null {
   if (payload.type === 'eval') {
-    const interp = (payload.interpreter ?? (payload.target === 'wsl2' ? 'bash' : 'bun')).toLowerCase();
-    const baseInterp = path.basename(interp);
+    const rawInterp = (payload.interpreter ?? (payload.target === 'wsl2' ? 'bash' : 'bun')).toLowerCase();
+    const rawBase = path.basename(rawInterp);
+    const baseInterp = payload.target === 'wsl2' && (rawBase === 'ps1' || rawBase === 'bat') ? 'bash' : rawBase;
     if (!SHELL_EVAL_INTERPRETERS.has(baseInterp)) return null;
     const isPwshEval = WIN_PWSH_SHELLS.has(baseInterp);
-    const isWinShell = baseInterp === 'cmd' || baseInterp === 'cmd.exe' || isPwshEval;
+    const isWinShell = baseInterp === 'cmd' || baseInterp === 'cmd.exe' || baseInterp === 'bat' || isPwshEval;
     const tokens = splitUnquotedTokens(extractFinalShellSegment(payload.code, isWinShell, isPwshEval), isWinShell);
     if (tokens.length === 0) return null;
     const rawTool = tokens[0] ?? '';

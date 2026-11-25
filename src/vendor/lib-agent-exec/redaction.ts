@@ -74,7 +74,8 @@ export function redactPayloadForLog(value: unknown, depth = 0, ancestors = new W
         return redactPayloadForLog(v, depth + 1, ancestors);
       });
     }
-    const out = Object.create(null) as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    Object.setPrototypeOf(out, null);
     for (const [k, v] of Object.entries(value)) {
       out[k] = SECRET_FIELD_RE.test(k) && v !== null && v !== undefined && v !== '' ? '[REDACTED]' : redactPayloadForLog(v, depth + 1, ancestors);
     }
@@ -86,7 +87,7 @@ export function redactPayloadForLog(value: unknown, depth = 0, ancestors = new W
 
 export function sanitizeLoggedIssuePayload(payload: unknown, extra?: Record<string, unknown>): { safePayload: unknown; internalStallBypass: boolean } {
   const safePayload = redactPayloadForLog(payload);
-  const pre = extra?.preInterceptorPayload;
+  const pre = extra?.['preInterceptorPayload'];
   const callerSentBypass =
     pre !== null &&
     pre !== undefined &&
@@ -103,7 +104,8 @@ export function sanitizeLoggedIssuePayload(payload: unknown, extra?: Record<stri
     !callerSentBypass &&
     pre !== undefined
   ) {
-    const cleaned = Object.create(null) as Record<string, unknown>;
+    const cleaned: Record<string, unknown> = {};
+    Object.setPrototypeOf(cleaned, null);
     for (const [k, v] of Object.entries(safePayload)) {
       if (k !== 'bypassInterceptors') {
         cleaned[k] = v;

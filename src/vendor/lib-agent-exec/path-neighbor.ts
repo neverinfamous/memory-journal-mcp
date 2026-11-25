@@ -65,7 +65,7 @@ function matchInGrandparent(parentIsRoot: boolean, grandparentDir: string, filen
 }
 
 function matchInParentSubdirs(parentDir: string, filename: string, allowDirectories: boolean): string | null {
-  if (!isDirectoryPath(parentDir)) return null;
+  if (isFileSystemRoot(parentDir) || isTempRoot(parentDir) || !isDirectoryPath(parentDir)) return null;
   try {
     return pickUniqueMatch(collectChildMatches(parentDir, filename, allowDirectories), filename);
   } catch { /* ignore */ }
@@ -105,12 +105,7 @@ function existingAllowedPath(candidate: string, allowDirectories: boolean): stri
 
 function matchNestedSubdir(subDir: string, filename: string, allowDirectories: boolean): string | null {
   try {
-    const subEntries = fs.readdirSync(subDir, { withFileTypes: true });
-    for (const subEntry of subEntries) {
-      if (!subEntry.isDirectory() || isIgnoredEntryName(subEntry.name)) continue;
-      const nested = uniqueCandidate(getFileCandidates(path.join(subDir, subEntry.name), filename, allowDirectories));
-      if (nested !== null) return nested;
-    }
+    return pickUniqueMatch(collectChildMatches(subDir, filename, allowDirectories), filename);
   } catch { /* ignore */ }
   return null;
 }
@@ -148,7 +143,10 @@ function matchGreatGrandparent(parentIsRoot: boolean, grandparentIsRoot: boolean
     for (const entry of entries) {
       if (!entry.isDirectory() || isIgnoredEntryName(entry.name, true)) continue;
       const siblingModuleDir = path.join(greatGrandparentDir, entry.name);
-      if (siblingModuleDir.toLowerCase() === grandparentDir.toLowerCase()) continue;
+      const isSameParent = process.platform === 'win32'
+        ? siblingModuleDir.toLowerCase() === grandparentDir.toLowerCase()
+        : siblingModuleDir === grandparentDir;
+      if (isSameParent) continue;
       const subtreeFound = matchSiblingSubtree(siblingModuleDir, parentDir, filename, relFromGrandparent, allowDirectories);
       if (subtreeFound !== null) {
         subtreeMatches.push(subtreeFound);
@@ -179,7 +177,12 @@ function pushShallowFile(matches: string[], fullPath: string, entryName: string,
 
 function scanShallow(dir: string, depth: number, filename: string, normTarget: string, allowDirectories: boolean, matches: string[]): void {
   if (depth > 2) return;
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
   for (const entry of entries) {
     if (isIgnoredEntryName(entry.name, true)) continue;
     const fullPath = path.join(dir, entry.name);
@@ -208,7 +211,7 @@ function isBoundaryRoot(dir: string): boolean {
 function shallowSearchRoots(parentDir: string, grandparentDir: string, parentIsRoot: boolean, grandparentIsRoot: boolean): string[] {
   // [INVARIANT]: Never climb out of a top-level directory (e.g., src/) across the repository root into sibling trees (e.g., test-server/).
   const pending = [parentDir, parentIsRoot || grandparentIsRoot ? null : grandparentDir];
-  return pending.filter((dir): dir is string => dir !== null && !isTempRoot(dir) && !isIgnoredEntryName(path.basename(dir), true) && isDirectoryPath(dir));
+  return pending.filter((dir): dir is string => dir !== null && !isFileSystemRoot(dir) && !isTempRoot(dir) && !isIgnoredEntryName(path.basename(dir), true) && isDirectoryPath(dir));
 }
 
 function matchShallowScan(parentDir: string, grandparentDir: string, parentIsRoot: boolean, grandparentIsRoot: boolean, filename: string, allowDirectories: boolean): string | null {

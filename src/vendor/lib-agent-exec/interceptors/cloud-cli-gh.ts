@@ -23,18 +23,50 @@ const GH_LOWERCASE_JSON_FIELDS: ReadonlySet<string> = new Set([
   'visibility', 'watchers', 'workflow',
 ]);
 
-function isGhBooleanOverlap(arg: string, pos: readonly string[]): boolean {
+export function isGhHomepageShortFlag(flag: string, posArgs: readonly string[]): boolean {
+  return flag === '-h' && posArgs[0] === 'repo' && (posArgs[1] === 'create' || posArgs[1] === 'edit');
+}
+
+export function isGhBooleanOverlap(arg: string, pos: readonly string[]): boolean {
   const s1 = pos[0];
   const s2 = pos[1];
-  if (arg === '-d') return (s1 === 'run' && s2 === 'rerun') || (s1 === 'pr' && s2 === 'merge') || (s1 === 'release' && s2 === 'create');
+  if (arg === '-d') return (s1 === 'run' && s2 === 'rerun') || (s1 === 'pr' && (s2 === 'merge' || s2 === 'create' || s2 === 'list' || s2 === 'ls' || s2 === 'close')) || (s1 === 'release' && s2 === 'create');
+  if (arg === '-e') return (s1 === 'pr' || s1 === 'issue') && s2 === 'create';
   if (arg === '-p') return (s1 === 'gist' || s1 === 'release') && s2 === 'create';
-  if (arg === '-m') return s1 === 'pr' && s2 === 'merge';
-  if (s1 === 'pr' && s2 === 'review') return arg === '-a' || arg === '-r' || arg === '-c';
+  if (arg === '-m' || arg === '-r') return s1 === 'pr' && s2 === 'merge';
+  if (arg === '-v') return s1 === 'run' && s2 === 'view';
+  if (arg === '-c') return (s1 === 'pr' && (s2 === 'review' || s2 === 'view' || s2 === 'status')) || (s1 === 'issue' && s2 === 'view') || (s1 === 'repo' && s2 === 'create');
+  if (s1 === 'pr' && s2 === 'review') return arg === '-a' || arg === '-r';
   return false;
+}
+
+export function unpackGhShortCluster(
+  arg: string,
+  posArgs: readonly string[],
+): { flags: string[]; consumesNext: boolean } | null {
+  if (!arg.startsWith('-') || arg.startsWith('--') || arg.length < 3 || !/[a-zA-Z]/.test(arg[1] ?? '')) return null;
+  const flags: string[] = [];
+  for (let j = 1; j < arg.length; j++) {
+    const ch = arg[j] ?? '';
+    if (ch === '=' && j >= 2) {
+      if (/^(?:false|0)$/i.test(arg.slice(j + 1))) flags.pop();
+      return { flags, consumesNext: false };
+    }
+    if (!/[a-zA-Z]/.test(ch)) return null;
+    const flag = `-${ch}`;
+    flags.push(flag);
+    const isGistFile = posArgs[0] === 'gist' && posArgs[1] === 'create' && flag === '-f';
+    const isRepoHome = isGhHomepageShortFlag(flag, posArgs);
+    if ((GH_VALUE_FLAGS.has(flag) || isGistFile || isRepoHome) && !isGhBooleanOverlap(flag, posArgs)) {
+      return { flags, consumesNext: j === arg.length - 1 };
+    }
+  }
+  return { flags, consumesNext: false };
 }
 
 export function collectCliSubcommands(args: readonly string[], valueFlags: ReadonlySet<string>): string[] {
   const pos: string[] = [];
+  const isGhContext = valueFlags === GH_VALUE_FLAGS;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
@@ -42,16 +74,21 @@ export function collectCliSubcommands(args: readonly string[], valueFlags: Reado
       pos.push(...args.slice(i + 1));
       break;
     }
-    if (arg.startsWith('-')) {
-      const isGhContext = valueFlags === GH_VALUE_FLAGS;
-      const isGistFile = isGhContext && pos[0] === 'gist' && pos[1] === 'create' && arg === '-f';
-      const isBoolOverlap = isGhContext && isGhBooleanOverlap(arg, pos);
-      if (!isBoolOverlap && (valueFlags.has(arg) || isGistFile) && i + 1 < args.length && !(args[i + 1] ?? '').startsWith('-')) {
-        i++;
-      }
+    if (!arg.startsWith('-')) {
+      pos.push(arg);
       continue;
     }
-    pos.push(arg);
+    const cluster = isGhContext ? unpackGhShortCluster(arg, pos) : null;
+    if (cluster !== null) {
+      if (cluster.consumesNext && i + 1 < args.length) i++;
+      continue;
+    }
+    const isGistFile = isGhContext && pos[0] === 'gist' && pos[1] === 'create' && arg === '-f';
+    const isRepoHome = isGhContext && isGhHomepageShortFlag(arg, pos);
+    const isBoolOverlap = isGhContext && isGhBooleanOverlap(arg, pos);
+    if (!isBoolOverlap && (valueFlags.has(arg) || isGistFile || isRepoHome) && i + 1 < args.length && !(args[i + 1] ?? '').startsWith('-')) {
+      i++;
+    }
   }
   return pos;
 }
@@ -91,20 +128,32 @@ export const GH_SUBCMD_BOOL_OVERLAP: ReadonlySet<string> = new Set(['-d', '-e', 
 function hasGhSubcmdFlag(
   args: readonly string[],
   targets: ReadonlySet<string>,
-  matchPrefix = false,
+  matchPrefix: boolean | 'truthy-bool' = false,
   posArgs: readonly string[] = [],
 ): boolean {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
     if (targets.has(a)) return true;
-    if (matchPrefix) {
+    if (matchPrefix !== false) {
       const eqIdx = a.indexOf('=');
-      if (eqIdx > 0 && targets.has(a.slice(0, eqIdx))) return true;
+      if (eqIdx > 0) {
+        const key = a.slice(0, eqIdx);
+        const lowVal = a.slice(eqIdx + 1).toLowerCase();
+        if (matchPrefix === true && targets.has(key)) return true;
+        if (matchPrefix === 'truthy-bool' && targets.has(key.toLowerCase()) && lowVal !== 'false' && lowVal !== '0') return true;
+      }
     }
-    const next = args[i + 1] ?? '';
-    const isBoolOverlap = isGhBooleanOverlap(a, posArgs) || (GH_SUBCMD_BOOL_OVERLAP.has(a) && next.startsWith('-'));
-    if (a.startsWith('-') && GH_VALUE_FLAGS.has(a) && !isBoolOverlap) {
+    const cluster = unpackGhShortCluster(a, posArgs);
+    if (cluster !== null) {
+      if (cluster.flags.some(f => targets.has(f))) return true;
+      if (cluster.consumesNext) i++;
+      continue;
+    }
+    const isGistFile = posArgs[0] === 'gist' && posArgs[1] === 'create' && a === '-f';
+    const isRepoHome = isGhHomepageShortFlag(a, posArgs);
+    const isBoolOverlap = isGhBooleanOverlap(a, posArgs);
+    if (a.startsWith('-') && (GH_VALUE_FLAGS.has(a) || isGistFile || isRepoHome) && !isBoolOverlap) {
       i++;
     }
   }
@@ -185,10 +234,15 @@ export function normalizeGhJsonAndJqArgs(args: string[], onSync?: () => void): v
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Healing escaped quotes in gh --jq expression from '${jqVal}' to '${normalized}'... (Frictionless Recovery)`);
         }
       }
-    } else if (currentArg.startsWith('-') && GH_VALUE_FLAGS.has(currentArg) && i + 1 < limit) {
-      const nextTok = args[i + 1] ?? '';
-      const isBoolOverlap = isGhBooleanOverlap(currentArg, posArgs) || (GH_SUBCMD_BOOL_OVERLAP.has(currentArg) && nextTok.startsWith('-'));
-      if (!isBoolOverlap) i++;
+    } else if (currentArg.startsWith('-')) {
+      const cluster = unpackGhShortCluster(currentArg, posArgs);
+      if (cluster !== null) {
+        if (cluster.consumesNext && i + 1 < limit) i++;
+      } else if (GH_VALUE_FLAGS.has(currentArg) && i + 1 < limit) {
+        const nextTok = args[i + 1] ?? '';
+        const isBoolOverlap = isGhBooleanOverlap(currentArg, posArgs) || (GH_SUBCMD_BOOL_OVERLAP.has(currentArg) && nextTok.startsWith('-'));
+        if (!isBoolOverlap) i++;
+      }
     }
   }
 }
@@ -204,37 +258,41 @@ function handleGhPrAndRepoCreateGuards(
   preArgs: readonly string[],
   hasFlagWithPrefix: (flags: readonly string[]) => boolean,
 ): boolean {
+  const subPos = [subCmd1, subCmd2].filter((s): s is string => s !== undefined);
   return match([subCmd1, subCmd2])
     .with(['pr', 'create'], () => {
-      if (hasGhSubcmdFlag(preArgs, new Set(['-e', '--editor']))) {
+      if (hasGhSubcmdFlag(preArgs, new Set(['-e', '--editor']), 'truthy-bool', subPos)) {
         exitBlockedGh(`'gh pr create -e/--editor' opens an interactive editor and will hang. Blocking execution.`);
       }
-      const hasFill = hasGhSubcmdFlag(preArgs, new Set(['-f', '--fill', '--fill-first', '--fill-verbose']));
+      const hasFill = hasGhSubcmdFlag(preArgs, new Set(['-f', '--fill', '--fill-first', '--fill-verbose']), false, subPos);
       if (!hasFill && !(hasFlagWithPrefix(['--title', '-t']) && hasFlagWithPrefix(['--body', '-b', '--body-file', '-F']))) {
         exitBlockedGh(`'gh pr create' is interactive without '--fill' ('-f'), or BOTH '--title' and '--body'. Blocking execution to prevent hanging.`);
       }
       return true;
     })
     .with(['pr', 'merge'], () => {
-      if (!hasGhSubcmdFlag(preArgs, new Set(['--auto', '--merge', '-m', '--squash', '-s', '--rebase', '-r']))) {
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--auto', '--merge', '-m', '--squash', '-s', '--rebase', '-r']), false, subPos)) {
         exitBlockedGh(`'gh pr merge' requires a merge strategy (--merge, --squash, --rebase, --auto) to be non-interactive. Blocking execution.`);
       }
       return true;
     })
     .with(['issue', 'create'], () => {
+      if (hasGhSubcmdFlag(preArgs, new Set(['-e', '--editor']), 'truthy-bool', subPos)) {
+        exitBlockedGh(`'gh issue create -e/--editor' opens an interactive editor and will hang. Blocking execution.`);
+      }
       if (!(hasFlagWithPrefix(['--title', '-t']) && hasFlagWithPrefix(['--body', '-b', '--body-file', '-F']))) {
         exitBlockedGh(`'gh issue create' is interactive without BOTH '--title' and '--body'. Blocking execution to prevent hanging.`);
       }
       return true;
     })
     .with(['repo', 'create'], () => {
-      if (!preArgs.includes('--public') && !preArgs.includes('--private') && !preArgs.includes('--internal')) {
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--public', '--private', '--internal']), false, subPos)) {
         exitBlockedGh(`'gh repo create' is interactive without visibility flags (--public/--private). Blocking execution.`);
       }
       return true;
     })
     .with(['pr', 'review'], () => {
-      if (!hasGhSubcmdFlag(preArgs, new Set(['--approve', '-a', '--request-changes', '-r', '--comment', '-c']))) {
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--approve', '-a', '--request-changes', '-r', '--comment', '-c']), false, subPos)) {
         exitBlockedGh(`'gh pr review' is interactive without a review type flag (--approve/--request-changes/--comment). Blocking execution.`);
       }
       return true;
@@ -252,24 +310,24 @@ function handleGhReleaseRepoSecretGuards(
 ): boolean {
   return match([subCmd1, subCmd2])
     .with(['auth', P.union('login', 'refresh')], () => {
-      if (!preArgs.includes('--with-token')) {
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--with-token']), false, posArgs)) {
         exitBlockedGh(`'gh auth ${subCmd2}' is highly interactive. Provide a token via stdin and use '--with-token'.`);
       }
       return true;
     })
     .with(['release', 'create'], () => {
       const releaseFlags = ['--title', '-t', '--notes', '-n', '--notes-file', '-F'];
-      if (!hasFlagWithPrefix(releaseFlags) && !preArgs.includes('--generate-notes') && !preArgs.includes('--notes-from-tag')) {
+      if (!hasFlagWithPrefix(releaseFlags) && !hasGhSubcmdFlag(preArgs, new Set(['--generate-notes', '--notes-from-tag']), false, posArgs)) {
         exitBlockedGh(`'gh release create' is interactive without release notes flags (--title, --notes, --notes-file, -F, -t, -n, --generate-notes, --notes-from-tag). Blocking execution.`);
       }
       return true;
     })
     .with(['release', 'delete'], () => {
-      if (!preArgs.includes('-y') && !preArgs.includes('--yes')) exitBlockedGh(`'gh release delete' is interactive without '--yes'. Blocking execution.`);
+      if (!hasGhSubcmdFlag(preArgs, new Set(['-y', '--yes']), false, posArgs)) exitBlockedGh(`'gh release delete' is interactive without '--yes'. Blocking execution.`);
       return true;
     })
     .with(['repo', 'delete'], () => {
-      if (!preArgs.includes('--yes')) exitBlockedGh(`'gh repo delete' is interactive without '--yes'. Blocking execution.`);
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--yes']), false, posArgs)) exitBlockedGh(`'gh repo delete' is interactive without '--yes'. Blocking execution.`);
       return true;
     })
     .with([P.union('secret', 'variable'), 'set'], () => {
@@ -296,11 +354,11 @@ function handleGhEditAndRunGuards(
 ): boolean {
   return match([subCmd1, subCmd2])
     .with(['run', 'view'], () => {
-      if (preArgs.includes('--log')) {
+      if (hasGhSubcmdFlag(preArgs, new Set(['--log']), 'truthy-bool', posArgs)) {
         console.error(`\n   💡 AGENT HINT: If the job is still in progress, 'gh run view --log' will fail with code 1. Do NOT poll in a tight loop. Instead, use your 'schedule' tool to set a 60-second timer to wait asynchronously.\n`);
         process.exit(1);
       }
-      if (!preArgs.some((a) => a === '--json' || a.startsWith('--json=')) && !preArgs.includes('--log-failed') && !preArgs.includes('--exit-status') && !preArgs.some(a => a === '-v' || a.startsWith('--verbose'))) {
+      if (!hasFlagWithPrefix(['--json']) && !hasGhSubcmdFlag(preArgs, new Set(['--log-failed', '--exit-status', '-v', '--verbose']), true, posArgs)) {
         pushGhFlagsBeforeDash(args, '--json', 'databaseId,name,status,conclusion,url');
         onSync?.();
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh run view command to output structured data... (Frictionless Recovery)`);
@@ -353,12 +411,12 @@ function handleGhReadJsonGuards(
     })
     .with(['browse', P._], () => exitBlockedGh(`'gh browse' opens a browser window which is not available in headless mode. Blocking execution.`))
     .with(['label', 'create'], () => {
-      if (!preArgs.includes('--name') && !preArgs.some(a => a.startsWith('--name=')) && posArgs.length <= 2) {
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--name']), true, posArgs) && posArgs.length <= 2) {
         exitBlockedGh(`'gh label create' is interactive without a label name. Blocking execution.`);
       }
     })
     .with([P.union('pr', 'issue', 'repo', 'run', 'release'), P.union('list', 'status', 'view')], () => {
-      if (!preArgs.some(a => a === '--json' || a.startsWith('--json='))) {
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--json']), true, posArgs)) {
         let jsonFields = 'url';
         if (subCmd1 === 'pr' || subCmd1 === 'issue') jsonFields = 'number,title,state,url';
         if (subCmd1 === 'repo') jsonFields = 'name,owner,url';
@@ -370,7 +428,7 @@ function handleGhReadJsonGuards(
       }
     })
     .with(['search', P._], () => {
-      if (!preArgs.some(a => a === '--json' || a.startsWith('--json='))) {
+      if (!hasGhSubcmdFlag(preArgs, new Set(['--json']), true, posArgs)) {
         exitBlockedGh(`'gh search' requires '--json' to output structured data. Blocking execution.`);
       }
     })

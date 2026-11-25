@@ -4,7 +4,7 @@ import path from 'node:path';
 import { match, P } from 'ts-pattern';
 import { execFileSync } from 'node:child_process';
 import { convertToWindowsPath, convertToWslPath } from '../command-utils.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 import { AGENT_EXEC_README_URL, hasJournalctlFollowFlag } from './utils.js';
 import { sanitizeJqInvocation } from './jq-sanitizer.js';
 import {
@@ -248,7 +248,7 @@ function healRmCommand(ctx: ExecutionContext): void {
 export function runMutatingInterceptors(
   ctx: ExecutionContext,
   derived: { cmd: string; cmdBasename: string; args: string[] }
-) {
+): void {
   const { cmd, cmdBasename, args } = derived;
 
   match({ cmd, args })

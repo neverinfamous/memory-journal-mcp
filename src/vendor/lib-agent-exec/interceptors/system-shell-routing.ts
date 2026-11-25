@@ -15,13 +15,13 @@ const FS_LIST_ALIASES = ['ls', 'ls.exe', 'dir', 'dir.exe', 'tree', 'tree.com'];
 const SYSTEMD_ALIASES = ['journalctl', 'journalctl.exe'];
 const SHELL_PREFIX_KEYWORDS = new Set(['if', 'then', 'do', 'else', 'elif', 'while', 'until', '!', 'time', 'exec']);
 
-export function routeEmbeddedShellTools(payload: ExecPayload, baseCwd?: string): boolean {
+export function routeEmbeddedShellTools(payload: ExecPayload, baseCwd?: string): void {
   routeNetworkCommandString(payload);
-  return routeShellToolAliases(payload, baseCwd);
+  routeShellToolAliases(payload, baseCwd);
 }
 
 function routeNetworkCommandString(payload: ExecPayload): void {
-  if (payload.type !== 'command' || !payload.command.includes(' ')) return;
+  if (process.platform !== 'win32' || payload.type !== 'command' || !payload.command.includes(' ')) return;
   const firstToken = payload.command.trim().split(/\s+/)[0]?.toLowerCase();
   if (firstToken === undefined || firstToken.length === 0) return;
   const firstTokenBase = path.basename(firstToken).replace(/\.exe$/, '');
@@ -82,7 +82,7 @@ function extractShellCommandHeads(scriptContent: string): Array<{ head: string; 
       if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok)) {
         const subCmdMatch = tok.match(/^[A-Za-z_][A-Za-z0-9_]*=["']?(?:\$\(|`)([^\s`()]+)/);
         if (subCmdMatch?.[1] !== undefined) {
-          out.push({ head: subCmdMatch[1].toLowerCase(), segment: tok });
+          out.push({ head: subCmdMatch[1].toLowerCase(), segment });
           break;
         }
         idx++;
@@ -112,22 +112,21 @@ function detectShellToolAlias(scriptContent: string): string | undefined {
   return undefined;
 }
 
-function routeShellToolAliases(payload: ExecPayload, baseCwd?: string): boolean {
-  if ((payload.type !== 'eval' && payload.type !== 'script') || payload.target === 'wsl2') return false;
-  if (!isShellPayload(payload)) return false;
+function routeShellToolAliases(payload: ExecPayload, baseCwd?: string): void {
+  if ((payload.type !== 'eval' && payload.type !== 'script') || payload.target === 'wsl2') return;
+  if (!isShellPayload(payload)) return;
   const scriptContent = readShellScriptContent(payload, baseCwd);
-  // [INTENT]: PowerShell cmdlets stay on Windows pwsh and skip the rest of system interception.
+  // [INTENT]: PowerShell cmdlets stay on Windows pwsh rather than routing to WSL2.
   if (isPowerShellCode(scriptContent)) {
     const interpLower = payload.interpreter?.toLowerCase();
     const shouldSwitchToPwsh = interpLower === undefined || interpLower.length === 0 || interpLower === 'bash' || interpLower === 'sh';
     if (shouldSwitchToPwsh && (payload.type === 'eval' || (interpLower !== undefined && interpLower.length > 0))) {
       payload.interpreter = 'pwsh';
-      payload.target = 'windows';
+      if (process.platform === 'win32') payload.target = 'windows';
     }
-    return true;
+    return;
   }
   switchShellToolTarget(payload, scriptContent);
-  return false;
 }
 
 function isShellPayload(payload: ExecPayload): boolean {
@@ -135,7 +134,7 @@ function isShellPayload(payload: ExecPayload): boolean {
     if (payload.interpreter !== undefined && payload.interpreter.length > 0) {
       return SHELL_INTERPRETERS.includes(payload.interpreter.toLowerCase());
     }
-    return !isJavaScriptOrTypeScriptCode(payload.code)
+    return (isShellCommandScript(payload.code) || !isJavaScriptOrTypeScriptCode(payload.code))
       && !isPythonCode(payload.code)
       && (isShellCommandScript(payload.code) || isPowerShellCode(payload.code) || detectShellToolAlias(payload.code) !== undefined);
   }
@@ -176,8 +175,9 @@ function readShellScriptContent(payload: ExecPayload, baseCwd?: string): string 
 }
 
 function switchShellToolTarget(payload: ExecPayload, scriptContent: string): void {
+  if (process.platform !== 'win32') return;
   if (payload.type !== 'eval' && payload.type !== 'script') return;
-  if (payload.type === 'eval' && (isJavaScriptOrTypeScriptCode(scriptContent) || isPythonCode(scriptContent))) return;
+  if (payload.type === 'eval' && !isShellCommandScript(scriptContent) && (isJavaScriptOrTypeScriptCode(scriptContent) || isPythonCode(scriptContent))) return;
   const detected = detectShellToolAlias(scriptContent);
   if (detected === undefined) return;
   payload.target = 'wsl2';

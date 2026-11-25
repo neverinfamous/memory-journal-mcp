@@ -21,20 +21,28 @@ export function isPathContainedInRoot(candidatePath: string, rootPath: string): 
   }
 }
 
+function isUnknownArray(val: unknown): val is unknown[] {
+  return Array.isArray(val);
+}
+
 function registerPluginExports(plugin: unknown): void {
   if (plugin === null || typeof plugin !== 'object') return;
   const interceptorsExport = 'interceptors' in plugin ? plugin.interceptors : undefined;
   const defaultExport = 'default' in plugin ? plugin.default : undefined;
+  const seen = new Set<unknown>();
+  const registerFn = (fn: unknown): void => {
+    if (typeof fn !== 'function' || seen.has(fn)) return;
+    seen.add(fn);
+    customInterceptors.push((ctx: ExecutionContext) => { Reflect.apply(fn, undefined, [ctx]); });
+  };
   for (const candidate of [interceptorsExport, defaultExport]) {
     if (typeof candidate === 'function') {
-      customInterceptors.push((ctx: ExecutionContext) => { Reflect.apply(candidate, undefined, [ctx]); });
+      registerFn(candidate);
       continue;
     }
-    if (!Array.isArray(candidate)) continue;
+    if (!isUnknownArray(candidate)) continue;
     for (const fn of candidate) {
-      if (typeof fn === 'function') {
-        customInterceptors.push((ctx: ExecutionContext) => { Reflect.apply(fn, undefined, [ctx]); });
-      }
+      registerFn(fn);
     }
   }
 }
@@ -45,7 +53,8 @@ export async function loadWorkspacePlugins(
   onContainmentError: (absPluginPath: string) => never,
   onLoadError?: (absPluginPath: string, err: unknown) => never,
 ): Promise<void> {
-  for (const pluginPath of pluginPaths) {
+  await pluginPaths.reduce<Promise<void>>(async (prevPromise, pluginPath) => {
+    await prevPromise;
     const absPluginPath = path.resolve(pluginPath);
     if (!allowedRoots.some((root) => isPathContainedInRoot(absPluginPath, root))) {
       onContainmentError(absPluginPath);
@@ -59,7 +68,7 @@ export async function loadWorkspacePlugins(
       }
       throw err instanceof Error ? err : new Error(String(err));
     }
-  }
+  }, Promise.resolve());
 }
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
@@ -238,10 +247,9 @@ export function mergeFinalEnvironment(
   payloadEnv: ExecPayload['env'],
   envOverrides: Record<string, string> | undefined,
 ): Record<string, string | undefined> {
-  const finalEnv = Object.assign(
-    Object.create(null) as Record<string, string | undefined>,
-    buildEnvironment(payloadEnv),
-  );
+  const finalEnv: Record<string, string | undefined> = {};
+  Object.setPrototypeOf(finalEnv, null);
+  Object.assign(finalEnv, buildEnvironment(payloadEnv));
   if (!envOverrides) return finalEnv;
 
   const explicitKeys = new Set(

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, convertToWindowsPath, extractLeadingShortFlags, findPatternExprIndex } from '../command-utils.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 import {
   KNOWN_POSIX_ROOT_DIRS_REGEX,
   existsOnDisk,
@@ -259,7 +259,7 @@ function recombineRipgrepPositionalPattern(
   if (lastArg === undefined || !isRipgrepPathLike(lastArg, cwd)) return;
   if (intermediateArgs.some((arg) => isRipgrepPathLike(arg, cwd))) return;
   const patternParts = positionalArgs.slice(0, -1);
-  const candidateIdxs = collectNonFlagIndices(ctx.args).slice(0, patternParts.length);
+  const candidateIdxs = collectRgPositionalIndices(ctx.args).slice(0, patternParts.length);
   if (candidateIdxs.length !== patternParts.length) return;
   recombineIndexedPattern(ctx, candidateIdxs, patternParts);
 }

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { convertToWindowsPath } from '../command-utils.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 import { findFirstPkgSubcmdIndex, getPkgNonFlagArgs } from './utils.js';
 
 const LOCKFILE_DIR_FLAGS = new Set(['--dir', '-C', '--cwd', '--prefix']);
@@ -174,6 +174,29 @@ export function rewriteJsPackageManager(
   return { cmdBasename: nextCmd, isYarn, isPnpm };
 }
 
+const PKG_SHORT_VALUE_CHARS = new Set(['C', 'F', 'c', 'w']);
+
+function stripInteractiveArg(arg: string, isYarnOrPnpm: boolean): string | null {
+  if (arg === '--interactive') return null;
+  if (arg.startsWith('--interactive=')) {
+    const lowVal = arg.slice('--interactive='.length).toLowerCase();
+    return lowVal !== 'false' && lowVal !== '0' ? null : arg;
+  }
+  if (!isYarnOrPnpm || arg.startsWith('--') || !arg.startsWith('-')) return arg;
+  if (arg === '-i') return null;
+  if (!/^-[a-zA-Z]*i[a-zA-Z]*$/.test(arg)) return arg;
+  let kept = '';
+  for (let i = 1; i < arg.length; i++) {
+    const ch = arg[i] ?? '';
+    if (PKG_SHORT_VALUE_CHARS.has(ch)) {
+      kept += arg.slice(i);
+      break;
+    }
+    if (ch !== 'i') kept += ch;
+  }
+  return kept.length > 0 ? `-${kept}` : null;
+}
+
 export function stripScopedInteractiveFlags(
   args: string[],
   cmdBasename: string,
@@ -193,16 +216,17 @@ export function stripScopedInteractiveFlags(
     }
   }
 
-  const hasFlagToStrip = args.slice(0, stopIdx).some(
-    a => a === '--interactive' || (isYarnOrPnpm && a === '-i')
-  );
-  if (!hasFlagToStrip) return;
-
-  for (let i = stopIdx - 1; i >= 0; i--) {
-    if (args[i] === '--interactive' || (isYarnOrPnpm && args[i] === '-i')) {
-      args.splice(i, 1);
-    }
+  let changed = false;
+  const rewritten: string[] = [];
+  for (let i = 0; i < stopIdx; i++) {
+    const orig = args[i] ?? '';
+    const next = stripInteractiveArg(orig, isYarnOrPnpm);
+    if (next !== orig) changed = true;
+    if (next !== null) rewritten.push(next);
   }
+  if (!changed) return;
+
+  args.splice(0, stopIdx, ...rewritten);
   if (ctx?.payload.type === 'command') ctx.payload.args = args;
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripping interactive flag from ${cmdBasename} command... (Frictionless Recovery)`);
 }

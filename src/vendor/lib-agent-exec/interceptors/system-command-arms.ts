@@ -5,12 +5,12 @@ import { collectWslPathExemptIndices } from '../wsl-command-wrapper.js';
 import { emitInterceptBanner, resolveNativeBinary } from '../utils.js';
 import { handleGrepInterception, handleRipgrepInterception, handleFindInterception } from './search-interceptor.js';
 import type { SystemCommandDerived } from './system-command-context.js';
+import { isPwshFileFlag, isPwshInlineStopFlag } from './system-command-context.js';
 import { handleListArm } from './system-list-arm.js';
 import type { ExecutionContext } from './types.js';
 import { collectJqLibraryPaths, hasPreDoubleDashHelpOrVersion, scanJqFromFiles } from './utils.js';
 
 const WRAPPER_SHELLS = ['sh', 'bash', 'pwsh', 'powershell', 'cmd'];
-const PWSH_SCRIPT_FLAGS = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-file', '-f'];
 const ATTACHED_JQ_MNT_RE = /^(-[a-zA-Z]*[fL])(\/mnt\/[a-zA-Z](?:\/.*|$))/;
 
 export function runSystemCommandArms(ctx: ExecutionContext, derived: SystemCommandDerived, activePositionalArgs: string[]): void {
@@ -192,7 +192,7 @@ function handlePwshArm(ctx: ExecutionContext, cmdBasename: string, matchedArgs: 
   const scriptFlagIdx = matchedArgs.findIndex((arg) => {
     const low = arg.toLowerCase();
     const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
-    return PWSH_SCRIPT_FLAGS.includes(head);
+    return head === '/c' || isPwshInlineStopFlag(head) || isPwshFileFlag(head);
   });
   const searchArgs = scriptFlagIdx === -1 ? matchedArgs : matchedArgs.slice(0, scriptFlagIdx);
   const headArgs = searchArgs.map((arg) => {

@@ -123,7 +123,7 @@ export function resolveFreshCompiledCommitBundle(
     path.basename(scriptDir).toLowerCase() === 'scripts'
       ? path.dirname(scriptDir)
       : projectDir;
-  const norm = (p: string) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const norm = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
   const validTargets = new Set([
     norm(path.join(repoRoot, 'scripts', 'commit.ts')),
     norm(path.join(repoRoot, 'src', 'vendor', 'commit', 'commit.ts')),

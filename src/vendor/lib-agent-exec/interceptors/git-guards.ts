@@ -15,7 +15,7 @@ interface GitScope {
 }
 
 const EDITOR_CAPABLE_GIT_SUBCMDS: ReadonlySet<string> = new Set([
-  'commit', 'merge', 'tag', 'notes', 'config', 'rebase', 'cherry-pick', 'revert',
+  'add', 'commit', 'merge', 'tag', 'notes', 'config', 'rebase', 'cherry-pick', 'revert',
 ]);
 
 const GIT_GLOBAL_VALUE_FLAGS: ReadonlySet<string> = new Set([
@@ -45,6 +45,11 @@ function findGitSubcmdFlagStart(args: readonly string[], expectedCmd?: string): 
 }
 
 const GIT_BOOLEAN_M_CMDS: ReadonlySet<string> = new Set(['checkout', 'restore', 'rebase', 'reset', 'add']);
+const INLINE_VAL_RE_BY_CMD = new Map<string, RegExp>([
+  ['merge', /[mFs]/],
+  ['tag', /[mFu]/],
+  ['commit', /[mFCct]/],
+]);
 
 function hasGitSubcmdFlag(args: readonly string[], shortChars: string, longFlags: readonly string[], expectedCmd?: string): boolean {
   const shortRe = shortChars.length > 0 ? (SHORT_FLAG_RE_BY_CHARS[shortChars] ?? null) : null;
@@ -57,16 +62,17 @@ function hasGitSubcmdFlag(args: readonly string[], shortChars: string, longFlags
     if (!a.startsWith('-')) continue;
     if (longFlags.includes(a)) return true;
     if (a.startsWith('--')) continue;
-    const inlineValIdx = booleanM ? a.search(/F/) : a.search(/[mF]/);
+    const inlineValIdx = a.search(booleanM ? /F/ : (INLINE_VAL_RE_BY_CMD.get(expectedCmd ?? '') ?? /[mF]/));
     const shortCluster = inlineValIdx === -1 ? a : a.slice(0, inlineValIdx);
     if (shortCluster.length > 1 && shortRe !== null && shortRe.test(shortCluster)) return true;
+    if (inlineValIdx === a.length - 1) i++;
   }
   return false;
 }
 
 function hasEditFlag(cmd: string | undefined, args: readonly string[]): boolean {
   if (cmd === undefined || !EDITOR_CAPABLE_GIT_SUBCMDS.has(cmd)) return false;
-  return hasGitSubcmdFlag(args, (cmd === 'commit' || cmd === 'tag' || cmd === 'config' || cmd === 'cherry-pick' || cmd === 'revert') ? 'e' : '', ['-e', '--edit'], cmd);
+  return hasGitSubcmdFlag(args, (cmd === 'add' || cmd === 'commit' || cmd === 'merge' || cmd === 'tag' || cmd === 'config' || cmd === 'cherry-pick' || cmd === 'revert') ? 'e' : '', ['-e', '--edit'], cmd);
 }
 
 function getStashSubaction(args: readonly string[]): { action: string | undefined; ref: string } {
@@ -104,11 +110,28 @@ function hasTagAnnotationValue(args: readonly string[]): boolean {
     if (
       a === '-m' || a.startsWith('--message=') || a === '--message' ||
       a === '-F' || a.startsWith('--file=') || a === '--file' ||
-      (!a.startsWith('--') && /^-[a-zA-Z]*[mF]/.test(a))
+      (!a.startsWith('--') && /^-[a-tv-zA-Z]*[mF]/.test(a))
     ) {
       return true;
     }
-    if (GIT_GUARD_VALUE_FLAGS.has(a) || a === '-t') { i += 1; }
+    if (GIT_GUARD_VALUE_FLAGS.has(a) || a === '-t' || a === '-u' || a === '--local-user') { i += 1; }
+  }
+  return false;
+}
+
+function tagNeedsAnnotationMessage(args: readonly string[]): boolean {
+  if (hasTagAnnotationValue(args)) return false;
+  const startIdx = findGitSubcmdFlagStart(args, 'tag');
+  for (let i = startIdx; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (a === '--annotate' || a === '--sign' || a === '-u' || a === '--local-user' || a.startsWith('--local-user=')) {
+      return true;
+    }
+    if (!a.startsWith('--') && a.startsWith('-')) {
+      if (/^-[a-zA-Z]*[asu]/.test(a)) return true;
+    }
+    if (GIT_GUARD_VALUE_FLAGS.has(a) || a === '-t') i += 1;
   }
   return false;
 }
@@ -161,8 +184,8 @@ export function applyInteractiveGitBlocks(scope: GitScope): boolean {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git stash show' to non-interactive 'git diff ${ref} --stat'... (Frictionless Recovery)`);
       return true;
     })
-    .with({ cmd: 'tag', args: P.when((list: string[]) => hasGitSubcmdFlag(list, 'a', ['--annotate'], 'tag') && !hasTagAnnotationValue(list)) }, () => {
-      console.error(`\n   💡 AGENT HINT: 'git tag -a' requires an interactive editor without '-m' or '-F'. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
+    .with({ cmd: 'tag', args: P.when((list: string[]) => tagNeedsAnnotationMessage(list)) }, () => {
+      console.error(`\n   💡 AGENT HINT: 'git tag -a / -s / -u' requires an interactive editor without '-m' or '-F'. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
     })
     .with({ cmd: 'clean', args: P.when((list: string[]) => hasInteractiveFlag(list, 'clean')) }, () => {

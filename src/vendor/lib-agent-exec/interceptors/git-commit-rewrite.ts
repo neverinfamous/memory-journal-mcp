@@ -18,7 +18,7 @@ const GIT_TOP_VALUE_FLAGS = new Set([
   '-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
 ]);
 const SHORT_MSG_CLUSTER_RE = /^-[asnqvoiep]+m$/;
-const SHORT_ATTACHED_MSG_RE = /^-[asnqvoiep]*m(.+)$/;
+const SHORT_ATTACHED_MSG_RE = /^-[asnqvoiep]*m([\s\S]+)$/;
 const SHORT_VALUE_CLUSTER_RE = /^-[asnqvoiep]+[FCct]$/;
 
 interface GitTopLevelPrefix {
@@ -45,8 +45,8 @@ const SHORT_ALL_CLUSTER_RE = /^-[snqvoiep]*a[snqvoiep]*$/;
 const SHORT_ALL_MSG_CLUSTER_RE = /^-[snqvoiep]*a[snqvoiep]*m/;
 const SHORT_FILE_CLUSTER_RE = /^-[asnqvoiep]*F/;
 const SHORT_PATCH_OR_INTERACTIVE_RE = /^-[asnqvoiep]*(?:p|i)[asnqvoiep]*(?:$|[FCctm])/;
-const COMMIT_REUSE_VALUE_FLAGS = new Set(['-C', '--reuse-message', '-c', '--reedit-message', '--fixup', '--squash']);
-const COMMIT_REUSE_EQ_RE = /^(?:--reuse-message|--reedit-message|--fixup|--squash)=/;
+const COMMIT_REUSE_VALUE_FLAGS = new Set(['-C', '--reuse-message', '--fixup']);
+const COMMIT_REUSE_EQ_RE = /^(?:--reuse-message=|(?!--fixup=(?:amend|reword):)--fixup=)/;
 
 function isPathspecFromFileFlag(arg: string): boolean {
   const eqIdx = arg.indexOf('=');
@@ -122,7 +122,9 @@ function parseCommitMessageOrValueFlag(
     if (attachedMatch?.[1] !== undefined) {
       state.messages.push(attachedMatch[1]);
     } else if (COMMIT_VALUE_FLAGS.has(arg) || SHORT_VALUE_CLUSTER_RE.test(arg)) {
-      if (COMMIT_REUSE_VALUE_FLAGS.has(arg) || (!arg.startsWith('--') && /C$/.test(arg))) state.hasNonInteractiveMsgSource = true;
+      if (COMMIT_REUSE_VALUE_FLAGS.has(arg) || /C$/.test(arg)) {
+        state.hasNonInteractiveMsgSource = true;
+      }
       return idx + 1;
     } else if (!arg.startsWith('-')) {
       state.pathspecs.push(arg);
@@ -130,7 +132,9 @@ function parseCommitMessageOrValueFlag(
     return idx;
   }
   if (COMMIT_VALUE_FLAGS.has(arg)) {
-    if (COMMIT_REUSE_VALUE_FLAGS.has(arg)) state.hasNonInteractiveMsgSource = true;
+    const nextVal = args[idx + 1] ?? '';
+    const isInteractiveFixup = arg === '--fixup' && /^(?:amend|reword):/.test(nextVal);
+    if (COMMIT_REUSE_VALUE_FLAGS.has(arg) && !isInteractiveFixup) state.hasNonInteractiveMsgSource = true;
     return idx + 1;
   }
   return idx;
@@ -327,7 +331,11 @@ function applyCommitWrapper(
   ignoredFlags: { hasAll: boolean; hasMessageFile: boolean },
 ): void {
   const compiledCommit = ctx.payload.target !== 'wsl2' ? resolveFreshCompiledCommitBundle(script, targetCwd) : null;
-  const entryScript = compiledCommit ?? script;
+  const rawEntryScript = compiledCommit ?? script;
+  const entryScript =
+    ctx.payload.target === 'wsl2' && path.win32.isAbsolute(rawEntryScript)
+      ? convertToWslPath(rawEntryScript)
+      : rawEntryScript;
   ctx.cmdBasename = resolveCommitRunnerBasename(entryScript, ctx.payload.target);
   const msgArgs = message.startsWith('-') ? [`--msg=${message}`] : ['--msg', message];
   const addArgs: string[] = [];
@@ -368,6 +376,11 @@ export function rewriteGitCommit(
 ): void {
   const spawnCwd = ctx.payload.cwd || ctx.cwd || process.cwd();
   const parsed = parseGitCommitArgs(args);
+  if (parsed.hasInteractiveOrPatch) {
+    console.error(`\n   💡 AGENT HINT: 'git commit -p'/'-i' (interactive patch commit) will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, interactive commit flags are blocked.`);
+    process.exit(1);
+  }
   if (parsed.isDryRun) return;
   const isWsl2 = ctx.payload.target === 'wsl2';
   const effectiveWorkTree = parsed.workTree !== undefined ? resolvePrefixPath(targetCwd, parsed.workTree, isWsl2) : undefined;
@@ -381,11 +394,6 @@ export function rewriteGitCommit(
   if (parsed.hasAmend && commitScript !== null) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: 'git commit --amend' is forbidden when using the commit.ts wrapper because it breaks the Memory Journal tracking.`);
     console.error(`   Because 'agent-exec.ts' requires strict tracking, this is blocked. Please create a new commit or bypass the interceptor if you must amend.`);
-    process.exit(1);
-  }
-  if (parsed.hasInteractiveOrPatch) {
-    console.error(`\n   💡 AGENT HINT: 'git commit -p'/'-i' (interactive patch commit) will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-    console.error(`   Because 'agent-exec.ts' is non-interactive, interactive commit flags are blocked.`);
     process.exit(1);
   }
   if (parsed.hasPathspecFromFile && commitScript !== null) {

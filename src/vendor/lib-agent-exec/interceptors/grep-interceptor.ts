@@ -15,18 +15,15 @@ import {
   isLikelyDirectoryArg,
   isSecondExistingTargetOnly,
 } from './search-path-utils.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 
 function routeGrepToWsl(ctx: ExecutionContext, hasStdin: boolean): void {
-  if (hasStdin) {
-    ctx.payload.target = 'wsl2';
-    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-    return;
-  }
-  if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
-    ctx.payload.target = 'wsl2';
-    emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${ctx.cmdBasename}' search command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-  }
+  if (process.platform !== 'win32' || ctx.payload.target === 'wsl2') return;
+  ctx.payload.target = 'wsl2';
+  const msg = hasStdin
+    ? `\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`
+    : `\n   💡 AGENT INTERCEPT: '${ctx.cmdBasename}' search command detected. Switching execution target to WSL2... (Frictionless Recovery)`;
+  emitInterceptBanner(msg);
 }
 
 function collectGrepPositionalIndices(cmdBasename: string, args: readonly string[]): number[] {
@@ -216,7 +213,7 @@ function detectGrepRecursive(args: readonly string[], cmdBasename: string): bool
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
-    if (arg === '-r' || arg === '-R' || arg === '--recursive') return true;
+    if (arg === '-r' || arg === '-R' || arg === '--recursive' || arg === '--dereference-recursive') return true;
     const shortInfo = isGrepShortValueCluster(base, arg, valueFlags);
     if (shortInfo.isRecursive) return true;
     if (valueFlags.has(arg) || shortInfo.consumesNext) i++;

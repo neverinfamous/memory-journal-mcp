@@ -68,7 +68,7 @@ function isPathWithTrailingSlash(s: string, cwd?: string): boolean {
       && ((cwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(cwd)) || cwd.startsWith('~'));
     if (isNonHostPosixCwd) return false;
     const baseCwd = cwd !== undefined && cwd.length > 0
-      ? (/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(cwd) ? convertToWindowsPath(cwd) : cwd)
+      ? (process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(cwd) ? convertToWindowsPath(cwd) : cwd)
       : process.cwd();
     try {
       const candidate = path.resolve(baseCwd, withoutTrailing);

@@ -131,18 +131,19 @@ export const IMMUTABLE_ENV_OVERRIDES: ReadonlySet<string> = new Set([
   'POETRY_INTERACTIVE', 'PIP_NO_INPUT', 'PYTHON_TEST_NO_INPUT'
 ]);
 
-export function buildEnvironment(payloadEnv?: Record<string, string | number | boolean | undefined>) {
-  const env: Record<string, string | undefined> = Object.create(null);
+export function buildEnvironment(payloadEnv?: Record<string, string | number | boolean | undefined>): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {};
+  Object.setPrototypeOf(env, null);
   const isWin = process.platform === 'win32';
   const upperKeysMap = new Map<string, string>();
 
-  const findKey = (key: string) => {
+  const findKey = (key: string): string => {
     if (!isWin) return key;
     const upper = key.toUpperCase();
     return upperKeysMap.get(upper) || key;
   };
 
-  const setEnv = (key: string, value: string | undefined) => {
+  const setEnv = (key: string, value: string | undefined): string => {
     const actualKey = findKey(key);
     env[actualKey] = value;
     if (isWin) upperKeysMap.set(actualKey.toUpperCase(), actualKey);

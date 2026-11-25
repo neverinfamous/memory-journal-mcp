@@ -2,14 +2,10 @@
 import { escapePwshSingleQuoted } from '../command-utils.js';
 import { match, P } from 'ts-pattern';
 import {
-  NODE_VALUE_FLAGS,
-  PWSH_UI_REGEX,
-  REDIS_OPTION_WITH_ARG,
-  REPL_COMMANDS,
-  SSH_VALUE_FLAGS,
-  TUI_COMMANDS,
-  collectSshPositionals,
-  isDbNonInteractive,
+  NODE_VALUE_FLAGS, PWSH_EXEC_FLAGS, PWSH_UI_REGEX, PY_VALUE_FLAGS, REDIS_OPTION_WITH_ARG, REPL_COMMANDS,
+  SSH_VALUE_FLAGS, TUI_COMMANDS, collectSshPositionals, findPwshCommandIndex, hasCmdInteractiveKSwitch,
+  hasNodeDebuggerArg, hasPythonPdbArg, isDbNonInteractive, isPythonValueShortCluster,
+  isSshConsumingShortArg, isWslNonInteractive,
 } from './repl-tui-constants.js';
 import { stripCommentAndQuoteSpansForShellScan } from './repl-script-scanner.js';
 import type { ExecutionContext } from './types.js';
@@ -55,70 +51,105 @@ function resolveHelpValueFlags(lowerCmd: string): ReadonlySet<string> {
     return NODE_HELP_VALUE_FLAGS;
   }
   if (['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lowerCmd)) return PYTHON_HELP_VALUE_FLAGS;
-  if (['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'].includes(lowerCmd)) return SHELL_HELP_VALUE_FLAGS;
+  if (['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lowerCmd)) return SHELL_HELP_VALUE_FLAGS;
   if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lowerCmd)) return PWSH_HELP_VALUE_FLAGS;
   return OTHER_REPL_HELP_VALUE_FLAGS;
 }
 
 function isShellOptionWithArg(lowerCmd: string, arg: string): boolean {
-  return ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'].includes(lowerCmd) && /^[-+][a-zA-Z]*[oO]$/.test(arg);
+  return ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lowerCmd) && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(arg);
 }
 
 function isHelpOrVersion(cmdBasename: string, args: readonly string[]): boolean {
   const lowerCmd = cmdBasename.toLowerCase();
   const isDb = DB_CLIENTS.has(lowerCmd);
+  const isCmdShell = lowerCmd === 'cmd' || lowerCmd === 'cmd.exe';
   const isPwshCmd = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lowerCmd);
+  const isPosixShell = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lowerCmd);
   const valueFlags = resolveHelpValueFlags(lowerCmd);
-  const vMeansVersion = !['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'].includes(lowerCmd)
+  const vMeansVersion = !isPosixShell && !['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lowerCmd)
     && !SSH_TELNET_CLIENTS.has(lowerCmd)
     && !NON_V_DB_CLIENTS.has(lowerCmd);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
     const lower = arg.toLowerCase();
-    if (isPwshCmd && lower === '-version' && /^\d+(?:\.\d+)*$/.test(args[i + 1] ?? '')) { i++; continue; }
-    if (['--version', '-version', '--help', '-help', '-?', '/?'].includes(lower) || ['-V', '-VV'].includes(arg)) return true;
-    if (arg === '-h' && !isDb) return true;
-    if (lower === '-v' && vMeansVersion) return true;
-    const checkArg = isPwshCmd ? lower : arg;
-    if (valueFlags.has(checkArg) || isShellOptionWithArg(lowerCmd, arg) || (isDb && arg === '-h') || ((lowerCmd === 'psql' || lowerCmd === 'psql.exe') && arg === '-v')) i++;
-  }
-  return false;
-}
-
-function hasNodeDebuggerArg(args: readonly string[], allowInspectSubcmd = true): boolean {
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === undefined || arg === '--') return false;
-    if (arg === '-e' || arg === '--eval' || arg === '-p' || arg === '--print') return false;
-    if (
-      arg === '--inspect' || arg.startsWith('--inspect=') ||
-      arg === '--inspect-brk' || arg.startsWith('--inspect-brk=') ||
-      arg === '--inspect-wait' || arg.startsWith('--inspect-wait=')
-    ) return true;
-    if (arg.startsWith('-')) {
-      if (NODE_VALUE_FLAGS.has(arg)) i++;
+    if (isCmdShell) {
+      if (/^\/[ck](?:$|[=:])/.test(lower)) break;
+      if (lower === '/?') return true;
       continue;
     }
-    return allowInspectSubcmd && arg === 'inspect';
+    if (isPwshCmd && lower === '-version' && /^\d+(?:\.\d+)*$/.test(args[i + 1] ?? '')) { i++; continue; }
+    if (['--version', '-version', '--help', '-help', '-?', '/?'].includes(lower) || ['-V', '-VV'].includes(arg)) return true;
+    if (arg === '-h' && !isDb && !isPosixShell) return true;
+    if (lower === '-v' && vMeansVersion) return true;
+    const checkArg = isPwshCmd ? lower : arg;
+    if (
+      valueFlags.has(checkArg) ||
+      isShellOptionWithArg(lowerCmd, arg) ||
+      (isDb && arg === '-h') ||
+      ((lowerCmd === 'psql' || lowerCmd === 'psql.exe') && arg === '-v') ||
+      (lowerCmd.startsWith('python') && isPythonValueShortCluster(arg)) ||
+      (SSH_TELNET_CLIENTS.has(lowerCmd) && isSshConsumingShortArg(arg))
+    ) {
+      i++;
+    }
   }
   return false;
 }
 
 const SKIP_INTERACTIVE_STRIP_SET: ReadonlySet<string> = new Set([
   ...SSH_CLIENT_SET, 'perl', 'perl.exe', 'perl.cmd', 'redis-cli', 'redis-cli.exe',
+  'ruby', 'ruby.exe', 'ruby.cmd', 'mysql', 'mysql.exe',
 ]);
 const INTERP_VALUE_FLAGS_STRIP: ReadonlySet<string> = new Set([
-  ...NODE_VALUE_FLAGS, '-W', '-X',
+  ...NODE_VALUE_FLAGS, '-W', '-X', '--rcfile', '--init-file',
 ]);
+
+function stripPythonShortFlag(arg: string): { nextArg: string | null; stopAfter: boolean; stripped: boolean; consumesNext: boolean } {
+  let prefix = '';
+  let stripped = false;
+  for (let j = 1; j < arg.length; j++) {
+    const ch = arg[j] ?? '';
+    if (ch === 'c' || ch === 'm' || ch === 'W' || ch === 'X') {
+      return {
+        nextArg: `-${prefix}${arg.slice(j)}`,
+        stopAfter: ch === 'c' || ch === 'm',
+        stripped,
+        consumesNext: (ch === 'W' || ch === 'X') && j + 1 === arg.length,
+      };
+    }
+    if (ch === 'i' || ch === 't') {
+      stripped = true;
+      continue;
+    }
+    prefix += ch;
+  }
+  return { nextArg: prefix.length > 0 ? `-${prefix}` : null, stopAfter: false, stripped, consumesNext: false };
+}
+
+function isStopFlagForRuntime(lower: string, isPosixShell: boolean, arg: string): boolean {
+  if (arg === '--') return true;
+  if (!arg.startsWith('-')) return !(isPosixShell && arg.startsWith('+') && arg.length > 1);
+  if (isPosixShell) return arg === '-c' || arg === '--command';
+  if (lower.startsWith('python')) return arg === '-c' || arg === '-m';
+  if (lower === 'php' || lower === 'php.exe') return arg === '-r';
+  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lower)) {
+    const low = arg.toLowerCase();
+    const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
+    return ['-c', '-command', '-f', '-file', '-ec', '-encodedcommand', '-en'].includes(head);
+  }
+  if ((lower === 'perl' || lower === 'perl.exe') && arg === '-E') return true;
+  return arg === '-e' || arg === '-p' || arg === '--eval' || arg === '--print' || arg === '-c' || arg === '--command';
+}
 
 function stripNonSshInteractiveFlags(cmdBasename: string, args: string[]): void {
   const lower = cmdBasename.toLowerCase();
   if (SKIP_INTERACTIVE_STRIP_SET.has(lower)) return;
   const usesPosixShortFlags = !['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(lower);
-  const isInteractiveTarget = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lower);
+  const isInteractiveTarget = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lower);
 
-  const isPosixShell = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'].includes(lower);
+  const isPosixShell = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lower);
   let stripped = false;
   const newArgs: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -136,12 +167,26 @@ function stripNonSshInteractiveFlags(cmdBasename: string, args: string[]): void 
       }
       continue;
     }
-    if (arg === '--' || ['-c', '-e', '-m', '-p', '--command', '--eval', '--print'].includes(arg.toLowerCase()) || !arg.startsWith('-')) {
+    if (isStopFlagForRuntime(lower, isPosixShell, arg)) {
       newArgs.push(...args.slice(i));
       break;
     }
-    if (arg === '-i' || arg === '--interactive' || (lower === 'php' && arg === '-a')) {
+    if (arg === '-i' || arg === '--interactive' || ((lower === 'php' || lower === 'php.exe') && arg === '-a')) {
       stripped = true;
+      continue;
+    }
+    if (lower.startsWith('python') && arg.startsWith('-') && !arg.startsWith('--') && arg.length > 1) {
+      const pyRes = stripPythonShortFlag(arg);
+      if (pyRes.stripped) stripped = true;
+      if (pyRes.nextArg !== null) newArgs.push(pyRes.nextArg);
+      if (pyRes.stopAfter) {
+        newArgs.push(...args.slice(i + 1));
+        break;
+      }
+      if (pyRes.consumesNext && i + 1 < args.length) {
+        const valArg = args[++i];
+        if (valArg !== undefined) newArgs.push(valArg);
+      }
       continue;
     }
     if (isInteractiveTarget && usesPosixShortFlags && /^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg)) {
@@ -175,33 +220,42 @@ function hasRuntimeExecutionArg(
   args: readonly string[],
   valueFlags: ReadonlySet<string>,
   execFlags: readonly string[],
-  options: { isSlashSwitch?: boolean; caseSensitiveShort?: boolean; useColonBoundary?: boolean } = {},
+  options: { isSlashSwitch?: boolean; caseSensitiveShort?: boolean; useColonBoundary?: boolean; requireExecFlag?: boolean } = {},
 ): boolean {
-  const { isSlashSwitch = false, caseSensitiveShort = false, useColonBoundary = false } = options;
+  const { isSlashSwitch = false, caseSensitiveShort = false, useColonBoundary = false, requireExecFlag = false } = options;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
-    if (arg === '--') return i + 1 < args.length;
+    if (arg === '--') return !requireExecFlag && i + 1 < args.length;
     const eq = arg.indexOf('=');
     const key = eq === -1 ? arg : arg.slice(0, eq);
-    const isCombinedShellO = valueFlags === SHELL_VALUE_FLAGS && /^[-+][a-zA-Z]*[oO]$/.test(arg);
-    if ((eq === -1 && (valueFlags.has(key) || valueFlags.has(key.toLowerCase()))) || isCombinedShellO) {
+    const isCombinedShellO = valueFlags === SHELL_VALUE_FLAGS
+      && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(arg)
+      && !(arg.startsWith('-') && arg.slice(1).includes('c'));
+    if (
+      (eq === -1 && (valueFlags.has(key) || (!caseSensitiveShort && valueFlags.has(key.toLowerCase())))) ||
+      isCombinedShellO ||
+      (valueFlags === PY_VALUE_FLAGS && isPythonValueShortCluster(arg))
+    ) {
       i++;
       continue;
     }
     const candidate = caseSensitiveShort ? arg : arg.toLowerCase();
+    if (valueFlags === PY_VALUE_FLAGS && !arg.startsWith('--') && /^-[a-bd-ln-zA-VY-Z]*[cm]/.test(arg)) return true;
     if (matchesAttachedRuntimeExec(candidate, execFlags, useColonBoundary)) return true;
-    if (!arg.startsWith('-') && !(isSlashSwitch && arg.startsWith('/'))) return true;
+    if (
+      !requireExecFlag &&
+      !arg.startsWith('-') &&
+      !(isSlashSwitch && arg.startsWith('/')) &&
+      !(valueFlags === SHELL_VALUE_FLAGS && arg.startsWith('+') && arg.length > 1)
+    ) {
+      return true;
+    }
   }
   return false;
 }
 
-const PY_VALUE_FLAGS: ReadonlySet<string> = new Set(['-W', '-X', '--check-hash-based-pycs']);
 const SHELL_VALUE_FLAGS: ReadonlySet<string> = new Set(['-o', '+o', '-O', '+O', '--rcfile', '--init-file']);
-const PWSH_EXEC_FLAGS: ReadonlySet<string> = new Set([
-  '-executionpolicy', '-ep', '-workingdirectory', '-wd', '-inputformat', '-if',
-  '-outputformat', '-of', '-configurationname', '-settingsfile', '-custompipename', '-version',
-]);
 const RUBY_PERL_VALUE_FLAGS: ReadonlySet<string> = new Set(['-r', '-I', '-F', '-C', '-K', '-x']);
 const PHP_VALUE_FLAGS: ReadonlySet<string> = new Set(['-d', '-c', '-z']);
 
@@ -216,12 +270,13 @@ function getReplBlockReason(cmdBasename: string, args: readonly string[]): strin
     .with({ lower: P.union('ftp', 'ftp.exe', 'telnet', 'telnet.exe'), args: P.when(() => !helpOrVer) }, () => 'as a naked shell/connection without commands')
     .with({ lower: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, NODE_VALUE_FLAGS, ['-e', '--eval', '-p', '--print'])) }, () => 'with only flags and no script execution flags')
     .with({ lower: P.union('python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, PY_VALUE_FLAGS, ['-c', '-m'])) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, SHELL_VALUE_FLAGS, ['-c'], { caseSensitiveShort: true })) }, () => 'with only flags and no script execution flags')
+    .with({ lower: P.union('bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, SHELL_VALUE_FLAGS, ['-c'], { caseSensitiveShort: true })) }, () => 'with only flags and no script execution flags')
     .with({ lower: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, PWSH_EXEC_FLAGS, ['-c', '-command', '-file', '-f', '-ec', '-encodedcommand', '-en'], { useColonBoundary: true })) }, () => 'with only flags and no script execution flags')
     .with({ lower: P.union('ruby', 'ruby.exe', 'ruby.cmd', 'perl', 'perl.exe', 'perl.cmd'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, RUBY_PERL_VALUE_FLAGS, ['-e', '-E'], { caseSensitiveShort: true })) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('php', 'php.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, PHP_VALUE_FLAGS, ['-r'])) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && a.some(arg => arg.toLowerCase() === '/k')) }, () => 'with interactive /k switch')
-    .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, new Set(), ['/c'], { isSlashSwitch: true, useColonBoundary: true })) }, () => 'with only flags and no script execution flags')
+    .with({ lower: P.union('php', 'php.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, PHP_VALUE_FLAGS, ['-r'], { caseSensitiveShort: true })) }, () => 'with only flags and no script execution flags')
+    .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && hasCmdInteractiveKSwitch(a)) }, () => 'with interactive /k switch')
+    .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, new Set(), ['/c'], { isSlashSwitch: true, useColonBoundary: true, requireExecFlag: true })) }, () => 'with only flags and no script execution flags')
+    .with({ lower: P.union('wsl', 'wsl.exe'), args: P.when(a => !helpOrVer && !isWslNonInteractive(a)) }, () => 'with only session flags and no command')
     .otherwise(() => null);
 }
 
@@ -235,6 +290,8 @@ function scanRunnerWatchContext(baseNoExt: string, args: readonly string[]): { p
   let pastDoubleDash = false;
   const isDirectTestRunner = baseNoExt === 'vitest' || baseNoExt === 'jest';
   const isExecRunner = ['npx', 'pnpx', 'bunx'].includes(baseNoExt);
+  const isJsRuntime = baseNoExt === 'node' || baseNoExt === 'bun' || baseNoExt === 'deno';
+  const isPkgRunner = ['npx', 'pnpx', 'bunx', 'npm', 'pnpm', 'yarn'].includes(baseNoExt);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined) continue;
@@ -252,8 +309,8 @@ function scanRunnerWatchContext(baseNoExt: string, args: readonly string[]): { p
     if (a.startsWith('-')) {
       const low = a.toLowerCase();
       if (low === '--watch' || low === '--watch=true' || low === '--watch-path' || low.startsWith('--watch-path=')) sawPreWatch = true;
-      if (low === '-e' || low === '--eval' || low === '-p' || low === '--print' || /^--(?:eval|print)=/.test(low)) break;
-      if (!a.includes('=') && RUNNER_PRE_FLAGS.has(a)) i++;
+      if (isJsRuntime && (low === '-e' || low === '--eval' || low === '-p' || low === '--print' || /^--(?:eval|print)=/.test(low))) break;
+      if (!a.includes('=') && (RUNNER_PRE_FLAGS.has(a) || (isPkgRunner && (a === '-p' || a === '--package')))) i++;
       continue;
     }
     positionals.push(a);
@@ -289,9 +346,6 @@ function checkPriorityWatchAndShellGuards(ctx: ExecutionContext): void {
     }
     if ((baseNoExt === 'bun' || baseNoExt === 'deno') && pos0 === 'repl') blockExecution(`'${baseNoExt} repl' is interactive and will hang indefinitely. Blocking execution.`);
   }
-  if (['cmd', 'cmd.exe'].includes(lower) && args.some(a => a.toLowerCase() === 'pause')) {
-    blockExecution(`'pause' in cmd.exe waits for a keypress and will hang indefinitely. Blocking execution.`);
-  }
   if (baseNoExt === 'pm2') {
     const ddIdx = args.indexOf('--');
     const pre = ddIdx === -1 ? args : args.slice(0, ddIdx);
@@ -315,32 +369,6 @@ function checkPriorityWatchAndShellGuards(ctx: ExecutionContext): void {
       if (inlineBody.length > 0 && PWSH_UI_REGEX.test(stripCommentAndQuoteSpansForShellScan(inlineBody))) blockExecution(`PowerShell UI cmdlets like Get-Credential or Out-GridView will hang headlessly. Blocking execution.`);
     }
   }
-}
-
-const PWSH_BOUNDARY_FLAGS = new Set(['--', '-file', '-f', '-encodedcommand', '-ec', '-en']);
-
-function findPwshCommandIndex(args: readonly string[]): { cmdIdx: number; boundary: number } {
-  for (let i = 0; i < args.length; i++) {
-    const low = (args[i] ?? '').toLowerCase();
-    const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
-    if (PWSH_BOUNDARY_FLAGS.has(head)) return { cmdIdx: -1, boundary: i };
-    if (head === '-c' || head === '-command') return { cmdIdx: i, boundary: i };
-    if (!low.includes(':') && PWSH_EXEC_FLAGS.has(low)) i++;
-  }
-  return { cmdIdx: -1, boundary: args.length };
-}
-
-function hasPythonPdbArg(args: readonly string[]): boolean {
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === undefined || a === '--' || a === '-c' || (a.startsWith('-c') && !a.startsWith('--'))) return false;
-    if (!a.startsWith('--') && (/^-[a-zA-Z]*mpdb$/i.test(a) || (/^-[a-zA-Z]*m$/.test(a) && args[i + 1] === 'pdb'))) {
-      return true;
-    }
-    if (PY_VALUE_FLAGS.has(a)) { i++; continue; }
-    if (!a.startsWith('-')) return false;
-  }
-  return false;
 }
 
 export function guardDirectCommandMode(ctx: ExecutionContext): void {
@@ -382,7 +410,8 @@ export function encodeInlinePwshInvocation(ctx: ExecutionContext): void {
   const { cmdIdx: cIndex } = findPwshCommandIndex(args);
   const cmdTok = cIndex !== -1 ? (args[cIndex] ?? '') : '';
   const colonBody = cmdTok.includes(':') ? cmdTok.slice(cmdTok.indexOf(':') + 1) : '';
-  if (cIndex !== -1 && (colonBody.length > 0 || cIndex + 1 < args.length)) {
+  const isStdinDashCommand = colonBody.length === 0 && args[cIndex + 1] === '-' && cIndex + 2 === args.length;
+  if (cIndex !== -1 && !isStdinDashCommand && (colonBody.length > 0 || cIndex + 1 < args.length)) {
     const scriptArgs = colonBody.length > 0 ? [colonBody, ...args.slice(cIndex + 1)] : args.slice(cIndex + 1);
     const safeArgs = scriptArgs.map((a) => (!/[ \t]/.test(a) || (a.startsWith("'") && a.endsWith("'")) || (a.startsWith('"') && a.endsWith('"')) || a.startsWith('$(') || a.startsWith('@(') ? a : `'${escapePwshSingleQuoted(a)}'`));
     const scriptBody = scriptArgs.length === 1 ? (scriptArgs[0] ?? '') : safeArgs.join(' ');

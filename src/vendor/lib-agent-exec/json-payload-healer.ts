@@ -12,9 +12,9 @@ const KNOWN_PAYLOAD_KEYS = [
 ];
 
 interface RepairChain {
-  withoutTrailingCommas: () => unknown | undefined;
-  withQuotedKeys: () => unknown | undefined;
-  withSingleQuotes: () => unknown | undefined;
+  withoutTrailingCommas: () => unknown;
+  withQuotedKeys: () => unknown;
+  withSingleQuotes: () => unknown;
 }
 
 function stripMarkdownFence(trimmed: string): string {
@@ -23,7 +23,7 @@ function stripMarkdownFence(trimmed: string): string {
   return (body.endsWith('```') ? body.slice(0, -3) : body).trim();
 }
 
-function tryStripOuterQuotes(trimmed: string, depth: number): unknown | undefined {
+function tryStripOuterQuotes(trimmed: string, depth: number): unknown {
   const singleQuoted = trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2;
   const doubleQuoted = trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2;
   if (!singleQuoted && !doubleQuoted) return undefined;
@@ -31,7 +31,7 @@ function tryStripOuterQuotes(trimmed: string, depth: number): unknown | undefine
   return tryParse(inner) ?? (depth < 2 ? (tryHealJsonPayload(inner, depth + 1) ?? undefined) : undefined);
 }
 
-function tryUnescapeQuotes(trimmed: string): unknown | undefined {
+function tryUnescapeQuotes(trimmed: string): unknown {
   if (!trimmed.includes('\\"')) return undefined;
   return tryParse(trimmed.replace(/\\"/g, '"'));
 }
@@ -51,6 +51,8 @@ function scanQuotedString(source: string, start: number, quote: string): { chunk
   }
   return { chunk: source.slice(start), nextIdx: source.length - 1 };
 }
+
+const UNQUOTED_KEY_STICKY_RE = /([a-zA-Z0-9_]+)(\s*:)/y;
 
 // [INVARIANT]: Only quote bare JS object keys outside quoted strings so embedded TS/Python syntax in `code` stays intact.
 function quoteUnquotedObjectKeys(source: string): string {
@@ -76,8 +78,8 @@ function quoteUnquotedObjectKeys(source: string): string {
       continue;
     }
     if (expectKey) {
-      const rest = source.slice(i);
-      const keyMatch = /^([a-zA-Z0-9_]+)(\s*:)/.exec(rest);
+      UNQUOTED_KEY_STICKY_RE.lastIndex = i;
+      const keyMatch = UNQUOTED_KEY_STICKY_RE.exec(source);
       if (keyMatch?.[1] !== undefined && keyMatch[2] !== undefined) {
         out += `"${keyMatch[1]}"${keyMatch[2]}`;
         i += keyMatch[0].length - 1;
@@ -117,12 +119,20 @@ function convertSingleQuotedTokens(source: string): string {
 
 // [INVARIANT]: Each repair strategy derives from the immutable comma-stripped string rather than mutating shared state across strategies.
 function createRepairChain(trimmed: string): RepairChain {
-  const commaStripped = stripTrailingCommasOutsideStrings(trimmed);
-  const keyQuoted = quoteUnquotedObjectKeys(commaStripped);
+  let commaStripped: string | undefined;
+  let keyQuoted: string | undefined;
+  const getCommaStripped = (): string => {
+    commaStripped ??= stripTrailingCommasOutsideStrings(trimmed);
+    return commaStripped;
+  };
+  const getKeyQuoted = (): string => {
+    keyQuoted ??= quoteUnquotedObjectKeys(getCommaStripped());
+    return keyQuoted;
+  };
   return {
-    withoutTrailingCommas: () => tryParse(commaStripped),
-    withQuotedKeys: () => tryParse(keyQuoted),
-    withSingleQuotes: () => tryParse(convertSingleQuotedTokens(keyQuoted)) ?? tryParse(convertSingleQuotedTokens(commaStripped)),
+    withoutTrailingCommas: () => tryParse(getCommaStripped()),
+    withQuotedKeys: () => tryParse(getKeyQuoted()),
+    withSingleQuotes: () => tryParse(convertSingleQuotedTokens(getKeyQuoted())) ?? tryParse(convertSingleQuotedTokens(getCommaStripped())),
   };
 }
 
@@ -155,15 +165,15 @@ function healQuotedJsonStrings(source: string): string {
   return source.replace(/"((?:[^"\\]|\\.)*)"/gs, (_match, inner: string) => `"${healJsonStringInner(inner)}"`);
 }
 
-function tryHealedQuotedStrings(trimmed: string): unknown | undefined {
+function tryHealedQuotedStrings(trimmed: string): unknown {
   return tryParse(healQuotedJsonStrings(trimmed));
 }
 
-function tryHealedQuotedStringsWithoutTrailingCommas(trimmed: string): unknown | undefined {
+function tryHealedQuotedStringsWithoutTrailingCommas(trimmed: string): unknown {
   return tryParse(stripTrailingCommasOutsideStrings(healQuotedJsonStrings(trimmed)));
 }
 
-function tryHealLooseEscapes(trimmed: string): unknown | undefined {
+function tryHealLooseEscapes(trimmed: string): unknown {
   const healedEscapes = stripTrailingCommasOutsideStrings(
     escapeStrayBackslashes(
       trimmed.replace(/\\\\|\\x([0-9a-fA-F]{2})/g, (m, hex: string | undefined) => (
@@ -174,24 +184,24 @@ function tryHealLooseEscapes(trimmed: string): unknown | undefined {
   return tryParse(healedEscapes);
 }
 
-function tryPowershellStrippedQuotes(trimmed: string): unknown | undefined {
+function tryPowershellStrippedQuotes(trimmed: string): unknown {
   if (!trimmed.startsWith('{')) return undefined;
   if (!trimmed.includes('\\ ') && !trimmed.includes('\\:') && !trimmed.includes('\\,')) return undefined;
   let psHealed = trimmed
     .replace(/^\{\s*\\?\s*/, '{"')
     .replace(/\\\s*:\s*\\/g, '":"')
     .replace(/\\\s*:\s*/g, '":"')
-    .replace(/\\+\s*,\s*\\+/g, '","')
-    .replace(/\\+\s*,\s*/g, '",')
+    .replace(/(?<!\\)\\+\s*,\s*\\+/g, '","')
+    .replace(/(?<!\\)\\+\s*,\s*/g, '",')
     .replace(/,\s*\\+/g, ',"')
-    .replace(/\\+\s*\}$/, '"}');
+    .replace(/(?<!\\)\\+\s*\}$/, '"}');
   if (!psHealed.endsWith('}')) {
     psHealed += psHealed.endsWith('"') ? '}' : '"}';
   }
   return tryParse(psHealed);
 }
 
-function tryCloseTrailingBrace(trimmed: string): unknown | undefined {
+function tryCloseTrailingBrace(trimmed: string): unknown {
   if (!trimmed.startsWith('{') || trimmed.endsWith('}')) return undefined;
   const closed = tryParse(trimmed + '}');
   if (closed !== undefined) return closed;
@@ -201,7 +211,7 @@ function tryCloseTrailingBrace(trimmed: string): unknown | undefined {
 const KNOWN_KEYS_PATTERN = KNOWN_PAYLOAD_KEYS.join('|');
 const TEMPLATE_BACKTICK_COMMA_RE = new RegExp(`(\`)\\s*,\\s*(("?)(${KNOWN_KEYS_PATTERN})("?)\\s*:)`, 'g');
 
-function tryHealTemplateBackticks(trimmed: string): unknown | undefined {
+function tryHealTemplateBackticks(trimmed: string): unknown {
   if (!trimmed.includes('`')) return undefined;
   try {
     const candidate = trimmed
@@ -213,10 +223,10 @@ function tryHealTemplateBackticks(trimmed: string): unknown | undefined {
   }
 }
 
-export function tryHealJsonPayload(rawJson: string, depth = 0): unknown | null {
+export function tryHealJsonPayload(rawJson: string, depth = 0): unknown {
   const trimmed = stripMarkdownFence(rawJson.trim());
   const chain = createRepairChain(trimmed);
-  const steps: Array<() => unknown | undefined> = [
+  const steps: Array<() => unknown> = [
     () => tryParse(trimmed),
     () => tryStripOuterQuotes(trimmed, depth),
     () => tryUnescapeQuotes(trimmed),

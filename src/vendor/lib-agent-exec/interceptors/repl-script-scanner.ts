@@ -2,30 +2,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { convertToWindowsPath } from '../command-utils.js';
-import { isJavaScriptOrTypeScriptCode, isPythonCode } from '../eval-healer.js';
+import { isJavaScriptOrTypeScriptCode, isPythonCode, isShellCommandScript } from '../eval-healer.js';
 import { buildNonCodeSpans } from '../quote-spans.js';
-import { DOCKER_VALUE_FLAGS } from './docker-tty-repl-guard.js';
+import { absorbsNextDockerShortValue, DOCKER_VALUE_FLAGS } from './docker-tty-repl-guard.js';
 import {
-  BUN_REPL_REGEX,
-  CMD_PAUSE_REGEX,
-  DOCKER_LOGS_REGEX,
-  IMPLICIT_PWSH_REGEX,
-  INLINE_SHELL_REGEX,
-  INTERACTIVE_FLAG_REGEX,
-  JOURNALCTL_FOLLOW_REGEX,
-  NODE_INSPECT_SUBCMD_REGEX,
-  NODE_WATCH_REGEX,
-  PM2_INTERACTIVE_REGEX,
-  PWSH_NO_EXIT_REGEX,
-  PWSH_UI_REGEX,
-  REPL_REGEX,
-  TAIL_F_REGEX,
-  TSX_WATCH_REGEX,
-  TUI_REGEX,
-  WATCH_REGEX,
-  WATCH_TOOL_REGEX,
-  findInteractiveDbOrSshInBody,
+  BUN_REPL_REGEX, CMD_PAUSE_REGEX, DOCKER_LOGS_REGEX, IMPLICIT_PWSH_REGEX, INLINE_SHELL_REGEX, JOURNALCTL_FOLLOW_REGEX,
+  NODE_INSPECT_SUBCMD_REGEX, NODE_WATCH_REGEX, PM2_INTERACTIVE_REGEX, PWSH_NO_EXIT_REGEX, PWSH_UI_REGEX, REPL_REGEX,
+  SHELL_BODY_WRAPPER_VALUE_FLAGS, TAIL_F_REGEX, TSX_WATCH_REGEX, TUI_REGEX, WATCH_REGEX, WATCH_TOOL_REGEX,
+  expandAttachedWrapperTokens, findInteractiveDbOrSshInBody, findPwshCommandIndex, findUnwrappedBodyCmdIndex, hasPreDashSuCommand,
+  isSuOrEnvCommandPrefix, isSudoConsumingShortCluster, isSudoInteractiveFlag, matchInteractiveFlagInBody, parseEnvSplitShortFlag, parseSuCommandShortFlag,
 } from './repl-tui-constants.js';
+import { findPosixShellCAndBody, isPwshCommandFlag } from './system-command-context.js';
 import type { ExecutionContext } from './types.js';
 import { AGENT_EXEC_README_URL } from './utils.js';
 
@@ -34,28 +21,38 @@ const CODE_INTERPRETERS = new Set(['node', 'nodejs', 'bun', 'tsx', 'ts-node', 'j
 const CODE_FILE_EXTS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.py']);
 const GLOBAL_REPL_REGEX = new RegExp(REPL_REGEX.source, `${REPL_REGEX.flags.replace(/g/g, '')}g`);
 
-const WRAPPER_ASSIGN_OR_CMD = `(?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+|(?:sudo|env|su|doas|time|timeout|stdbuf|nohup|exec)(?:\\s+(?:-[^\\s;|&]+|\\d+(?:\\.\\d+)?[smhd]?))*\\s+)*`;
-const SHELL_HEAD_WRAPPER_RE = new RegExp(`(?:^|[;\\n&|{\`]|\\$\\()\\s*${WRAPPER_ASSIGN_OR_CMD}$`);
-const NESTED_POSIX_SHELL_C_RE = new RegExp(
-  `(?:^|[;\\n&|{\`]|\\$\\()\\s*${WRAPPER_ASSIGN_OR_CMD}['"]?(?:[^\\s;|&\`'"]*[\\\\/])?(?:bash|sh|zsh)(?:\\.exe)?['"]?(?:\\s+(?:--(?:rcfile|init-file)(?:=\\S+|\\s+\\S+)|--[a-zA-Z0-9-]+(?:=\\S+)?|[-+][a-zA-Z]*[oO]\\s+\\S+|[-+][a-zA-Z]+))*\\s+(?:-[a-zA-Z]*(?:[oO][a-zA-Z]*c|c[a-zA-Z]*[oO])\\s+\\S+|(?:-[a-zA-Z]*c|-c|--command)(?:\\s+[-+][oO]\\s+\\S+)?)\\s*$`,
-  'i',
-);
+function isShellHeadWrapperPrefix(prefix: string): boolean {
+  if (prefix.length > 0 && !/\s$/.test(prefix)) return false;
+  const trimmed = prefix.trim();
+  if (trimmed.length === 0) return true;
+  const tokens = trimmed.split(/\s+/);
+  return findUnwrappedBodyCmdIndex([...tokens, '__CMD__']) === tokens.length;
+}
+
+function isNestedPosixShellCPrefix(prefix: string): boolean {
+  const trimmed = prefix.trim();
+  if (trimmed.length === 0) return false;
+  const tokens = trimmed.split(/\s+/);
+  const cmdIdx = findUnwrappedBodyCmdIndex(tokens);
+  const rawCmd = tokens[cmdIdx];
+  const lastTok = tokens[tokens.length - 1];
+  if (rawCmd === undefined) return isSuOrEnvCommandPrefix(tokens, lastTok);
+  const cleanCmd = rawCmd.replace(/^['"]|['"]$/g, '');
+  const base = path.posix.basename(cleanCmd.replace(/\\/g, '/')).toLowerCase().replace(/\.exe$/, '');
+  if (base === 'docker' || base === 'docker-compose') return extractDockerContainerBody([...tokens.slice(cmdIdx + 1), '__BODY__']) === '__BODY__';
+  if (base !== 'bash' && base !== 'sh' && base !== 'zsh' && base !== 'ash' && base !== 'dash') return false;
+  const remaining = tokens.slice(cmdIdx + 1);
+  const { flagIdx, bodyIdx } = findPosixShellCAndBody([...remaining, '__BODY__']);
+  return flagIdx !== -1 && bodyIdx === remaining.length;
+}
 
 function unescapeDoubleQuotedInner(raw: string): string {
   return raw.replace(/\\(["\\$`])/g, '$1');
 }
 
 function findSegmentStartBefore(body: string, pos: number): number {
-  const dollarParenIdx = body.lastIndexOf('$(', pos - 1);
-  return Math.max(
-    body.lastIndexOf('\n', pos - 1),
-    body.lastIndexOf(';', pos - 1),
-    body.lastIndexOf('&', pos - 1),
-    body.lastIndexOf('|', pos - 1),
-    body.lastIndexOf('{', pos - 1),
-    body.lastIndexOf('`', pos - 1),
-    dollarParenIdx === -1 ? -1 : dollarParenIdx + 1,
-  ) + 1;
+  const prev = Math.max(body.lastIndexOf('\n', pos - 1), body.lastIndexOf(';', pos - 1), body.lastIndexOf('&', pos - 1));
+  return Math.max(prev, body.lastIndexOf('|', pos - 1), body.lastIndexOf('{', pos - 1), body.lastIndexOf('`', pos - 1), body.lastIndexOf('(', pos - 1)) + 1;
 }
 
 function inspectShellQuoteSpans(body: string): { sanitized: string; dbSanitized: string; nestedBodies: string[] } {
@@ -66,25 +63,37 @@ function inspectShellQuoteSpans(body: string): { sanitized: string; dbSanitized:
   let last = 0;
   const nestedBodies: string[] = [];
   for (const span of spans) {
-    const segStart = findSegmentStartBefore(body, span.start);
-    const prefix = body.slice(segStart, span.start);
-    const quote = body[span.start];
-    const hasClosed = span.end - span.start >= 2 && body[span.end - 1] === quote;
-    const inner = hasClosed ? body.slice(span.start + 1, span.end - 1) : body.slice(span.start + 1);
     const plainChunk = body.slice(last, span.start);
     sanitized += plainChunk;
     dbSanitized += plainChunk;
+    const segStart = findSegmentStartBefore(dbSanitized, dbSanitized.length);
+    const prefix = dbSanitized.slice(segStart);
+    const quote = body[span.start];
+    const hasClosed = span.end - span.start >= 2 && body[span.end - 1] === quote;
+    const inner = hasClosed ? body.slice(span.start + 1, span.end - 1) : body.slice(span.start + 1);
     const blank = ' '.repeat(span.end - span.start);
-    if ((quote === '"' || quote === "'") && NESTED_POSIX_SHELL_C_RE.test(prefix)) {
+    if ((quote === '"' || quote === "'") && isNestedPosixShellCPrefix(prefix)) {
       nestedBodies.push(quote === '"' ? unescapeDoubleQuotedInner(inner) : inner);
       sanitized += blank;
       dbSanitized += blank;
-    } else if ((quote === '"' || quote === "'") && SHELL_HEAD_WRAPPER_RE.test(prefix) && !inner.includes('\n')) {
+    } else if (quote === '`') {
+      if (inner.trim().length > 0) nestedBodies.push(inner);
+      sanitized += blank;
+      const prevCh = span.start > 0 ? body[span.start - 1] : ' ';
+      const hasGlue = prevCh !== undefined && !/\s/.test(prevCh);
+      dbSanitized += hasGlue ? '__arg__' : ' __arg__ ';
+    } else if ((quote === '"' || quote === "'") && isShellHeadWrapperPrefix(prefix) && !inner.includes('\n')) {
       sanitized += ` ${inner} `;
       dbSanitized += ` ${inner} `;
     } else {
       sanitized += blank;
-      dbSanitized += (quote === '"' || quote === "'") && span.end - span.start >= 3 ? ' __arg__ ' : blank;
+      if ((quote === '"' || quote === "'") && !/(?:^|\s)(?:pwsh|powershell)(?:\.exe)?\s+$/i.test(prefix)) {
+        const prevCh = span.start > 0 ? body[span.start - 1] : ' ';
+        const hasGlue = prevCh !== undefined && !/\s/.test(prevCh);
+        dbSanitized += hasGlue ? '__arg__' : ' __arg__ ';
+      } else {
+        dbSanitized += blank;
+      }
     }
     last = span.end;
   }
@@ -109,7 +118,7 @@ function isNonShellCodeBody(
       const baseInterp = path.basename(interp).replace(/\.(?:exe|cmd|bat)$/i, '');
       if (baseInterp.length > 0 && CODE_INTERPRETERS.has(baseInterp)) return true;
     }
-    return isJavaScriptOrTypeScriptCode(rawBody) || isPythonCode(rawBody);
+    return !isShellCommandScript(rawBody) && (isJavaScriptOrTypeScriptCode(rawBody) || isPythonCode(rawBody));
   }
   if (payload.type === 'script') {
     const interp = (payload.interpreter ?? '').toLowerCase();
@@ -117,7 +126,7 @@ function isNonShellCodeBody(
     if (CODE_INTERPRETERS.has(baseInterp)) return true;
     const ext = path.extname(payload.scriptPath).toLowerCase();
     if (CODE_FILE_EXTS.has(ext)) return true;
-    return isJavaScriptOrTypeScriptCode(rawBody) || isPythonCode(rawBody);
+    return !isShellCommandScript(rawBody) && (isJavaScriptOrTypeScriptCode(rawBody) || isPythonCode(rawBody));
   }
   return false;
 }
@@ -161,7 +170,7 @@ function extractDockerContainerBody(cmdArgs: readonly string[]): string | null {
       } else if (arg.startsWith('--entrypoint=')) {
         const val = arg.slice('--entrypoint='.length);
         if (val.trim().length > 0) capturedEntrypoint = val;
-      } else if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.startsWith('--') && arg.includes('='))) {
+      } else if (DOCKER_VALUE_FLAG_SET.has(arg) || absorbsNextDockerShortValue(arg) || (arg.startsWith('--') && arg.includes('='))) {
         if (!arg.includes('=')) skipNextValue = true;
       }
       continue;
@@ -177,60 +186,22 @@ function extractDockerContainerBody(cmdArgs: readonly string[]): string | null {
 
   if (containerCmd === null) return null;
   const baseCmd = path.posix.basename(containerCmd.replace(/\\/g, '/')).toLowerCase().replace(/\.exe$/, '');
-  if (['sh', 'bash', 'zsh'].includes(baseCmd)) {
-    const cIdx = findPosixShellCIndex(containerCmdArgs);
-    return cIdx !== -1 && cIdx + 1 < containerCmdArgs.length ? (containerCmdArgs[cIdx + 1] ?? null) : null;
+  if (['sh', 'bash', 'zsh', 'ash', 'dash'].includes(baseCmd)) {
+    const { bodyIdx } = findPosixShellCAndBody(containerCmdArgs);
+    return bodyIdx !== -1 ? (containerCmdArgs[bodyIdx] ?? null) : null;
   }
   if (['pwsh', 'powershell', 'cmd'].includes(baseCmd)) {
-    const cIdx = containerCmdArgs.findIndex(a => ['-c', '-command', '/c'].includes(a.toLowerCase()));
-    if (cIdx !== -1 && cIdx + 1 < containerCmdArgs.length) {
-      return unwrapBalancedOuterQuotes(containerCmdArgs.slice(cIdx + 1).join(' ').trim());
+    const cIdx = containerCmdArgs.findIndex(a => (baseCmd === 'cmd' ? /^\/c(?:$|[=:])/i.test(a) : isPwshCommandFlag((a.toLowerCase().split(':')[0] ?? a.toLowerCase()))));
+    if (cIdx !== -1) {
+      const first = containerCmdArgs[cIdx] ?? '';
+      const tail = baseCmd !== 'cmd' && first.includes(':') ? [first.slice(first.indexOf(':') + 1), ...containerCmdArgs.slice(cIdx + 1)] : containerCmdArgs.slice(cIdx + 1);
+      if (tail.length > 0) return unwrapBalancedOuterQuotes(tail.join(' ').trim());
     }
   }
   return [containerCmd, ...containerCmdArgs].join(' ');
 }
 
-const WRAPPER_VALUE_FLAGS_BY_CMD: Readonly<Record<string, ReadonlySet<string>>> = {
-  sudo: new Set(['-u', '--user', '-g', '--group', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-C', '--close-from', '-D', '--chdir', '-T', '--command-timeout', '-U', '--other-user']),
-  env: new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string', '--argv0']),
-  su: new Set(['-c', '--command', '-s', '--shell', '-g', '--group', '-G', '--supp-group', '-w', '--whitelist-environment']),
-  doas: new Set(['-u', '-C']),
-  time: new Set(['-o', '--output', '-f', '--format']),
-  timeout: new Set(['-k', '--kill-after', '-s', '--signal']),
-  stdbuf: new Set(['-i', '--input', '-o', '--output', '-e', '--error']),
-};
 const PM_WRAPPER_VALUE_FLAGS = new Set(['-C', '--dir', '--cwd', '--prefix', '--filter', '-F', '-p', '--package', '-c', '--call', '--userconfig', '-w', '--workspace']);
-
-const PWSH_SCAN_BOUNDARY_FLAGS = new Set(['--', '-file', '-f', '-encodedcommand', '-ec', '-en']);
-
-function findPwshCommandFlagIndex(args: readonly string[]): number {
-  for (let i = 0; i < args.length; i++) {
-    const low = (args[i] ?? '').toLowerCase();
-    const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
-    if (PWSH_SCAN_BOUNDARY_FLAGS.has(head)) return -1;
-    if (head === '-c' || head === '-command') return i;
-  }
-  return -1;
-}
-
-function findPosixShellCIndex(args: readonly string[]): number {
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i] ?? '';
-    if (a === '--') return -1;
-    if (a === '--rcfile' || a === '--init-file') {
-      i++;
-      continue;
-    }
-    if (!a.startsWith('--') && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(a)) {
-      if (a.startsWith('-') && a.slice(1).includes('c')) return i + 1;
-      i++;
-      continue;
-    }
-    if (a === '-c' || a === '--command' || (/^-[a-zA-Z]+$/.test(a) && a.includes('c'))) return i;
-    if (!a.startsWith('-') && !a.startsWith('+')) return -1;
-  }
-  return -1;
-}
 
 function extractScriptFileBody(payload: Extract<ExecutionContext['payload'], { type: 'script' }>, fallbackCwd?: string): string | null {
   try {
@@ -253,57 +224,114 @@ function extractScriptFileBody(payload: Extract<ExecutionContext['payload'], { t
   }
 }
 
+function quoteArgvToken(token: string): string {
+  if (token.length === 0) return "''";
+  if (/[\s"'`|&;<>()$]/.test(token)) return `'${token.replace(/'/g, "'\\''")}'`;
+  return token;
+}
+
+function joinArgvPreservingQuotes(rawTokens: readonly string[]): string {
+  const tokens = expandAttachedWrapperTokens(rawTokens);
+  const out: string[] = [];
+  const shellStartIdx = findUnwrappedBodyCmdIndex(tokens);
+  let posixBodyIdx = shellStartIdx > 0 && isSuOrEnvCommandPrefix(tokens.slice(0, shellStartIdx), tokens[shellStartIdx - 1]) ? shellStartIdx : -1;
+  let winBodyStartIdx = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i] ?? '';
+    if (i === posixBodyIdx) {
+      out.push(tok.includes("'") ? `"${tok.replace(/([\\"$`])/g, '\\$1')}"` : `'${tok}'`);
+      posixBodyIdx = -1;
+      continue;
+    }
+    if (winBodyStartIdx !== -1 && i >= winBodyStartIdx) { out.push(tok); continue; }
+    if (i === shellStartIdx && posixBodyIdx === -1 && winBodyStartIdx === -1) {
+      const base = path.basename(tok).toLowerCase().replace(/\.(?:exe|cmd|bat)$/, '');
+      if (['bash', 'sh', 'zsh', 'ash', 'dash'].includes(base)) {
+        const { bodyIdx } = findPosixShellCAndBody(tokens.slice(i + 1));
+        if (bodyIdx !== -1) posixBodyIdx = i + 1 + bodyIdx;
+      } else if (base === 'pwsh' || base === 'powershell') {
+        const { cmdIdx } = findPwshCommandIndex(tokens.slice(i + 1));
+        if (cmdIdx !== -1) {
+          const cmdTok = tokens[i + 1 + cmdIdx] ?? '';
+          winBodyStartIdx = cmdTok.includes(':') ? i + 1 + cmdIdx : i + 1 + cmdIdx + 1;
+        }
+      } else if (base === 'cmd') {
+        const cOff = tokens.slice(i + 1).findIndex(a => /^\/c(?:$|[=:])/i.test(a));
+        if (cOff !== -1 && tokens.slice(i + 1, i + 1 + cOff).every(a => a.startsWith('/'))) {
+          winBodyStartIdx = (tokens[i + 1 + cOff] ?? '').length > 2 ? i + 1 + cOff : i + 1 + cOff + 1;
+        }
+      }
+    }
+    out.push(quoteArgvToken(tok));
+  }
+  return out.join(' ');
+}
+
 function extractWrapperScriptBody(baseNoExt: string, args: readonly string[]): string | null {
   if (baseNoExt === 'vitest' || baseNoExt === 'jest') {
-    return `${baseNoExt} ${args.join(' ')}`.trim();
+    return `${baseNoExt} ${joinArgvPreservingQuotes(args)}`.trim();
   }
   if (baseNoExt === 'wsl') {
     const WSL_VALUE_FLAGS = new Set(['-d', '--distribution', '-u', '--user', '--cd', '--shell-type']);
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
       if (a === undefined) continue;
-      if (a === '--' || a === '-e' || a === '--exec') {
-        return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
-      }
-      if (WSL_VALUE_FLAGS.has(a)) { i++; continue; }
-      if (!a.startsWith('-')) return args.slice(i).join(' ');
+      const low = a.toLowerCase();
+      if (low === '--' || low === '-e' || low === '--exec') return i + 1 < args.length ? joinArgvPreservingQuotes(args.slice(i + 1)) : null;
+      if (WSL_VALUE_FLAGS.has(low)) { i++; continue; }
+      if (!a.startsWith('-')) return joinArgvPreservingQuotes(args.slice(i));
     }
     return null;
   }
   if (['npx', 'pnpx', 'bunx', 'yarn', 'pnpm', 'npm', 'bun'].includes(baseNoExt)) {
-    const isSubcmdRunner = baseNoExt === 'pnpm' || baseNoExt === 'npm' || baseNoExt === 'bun';
-    let sawDelegateSub = !isSubcmdRunner;
+    let sawDelegateSub = !(baseNoExt === 'pnpm' || baseNoExt === 'npm' || baseNoExt === 'bun');
+    let skippedYarnSub = false;
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
       if (a === undefined) continue;
-      if (a === '--') return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
+      if (a === '--') return i + 1 < args.length ? joinArgvPreservingQuotes(args.slice(i + 1)) : null;
       if (PM_WRAPPER_VALUE_FLAGS.has(a)) { i++; continue; }
       if (a.startsWith('-')) continue;
       const low = a.toLowerCase();
       if (!sawDelegateSub) {
-        if (low === 'test') return `${baseNoExt} ${args.slice(i).join(' ')}`;
+        if (low === 'test') return `${baseNoExt} ${joinArgvPreservingQuotes(args.slice(i))}`;
         if (['exec', 'x', 'dlx', 'run'].includes(low)) { sawDelegateSub = true; continue; }
         return null;
       }
-      if (low === 'test') return `${baseNoExt} ${args.slice(i).join(' ')}`;
-      return args.slice(i).join(' ');
+      if (baseNoExt === 'yarn' && !skippedYarnSub && ['exec', 'x', 'dlx', 'run'].includes(low)) { skippedYarnSub = true; continue; }
+      if (low === 'test') return `${baseNoExt} ${joinArgvPreservingQuotes(args.slice(i))}`;
+      return joinArgvPreservingQuotes(args.slice(i));
     }
     return null;
   }
-  if (Object.hasOwn(WRAPPER_VALUE_FLAGS_BY_CMD, baseNoExt)) {
-    const valueFlags = WRAPPER_VALUE_FLAGS_BY_CMD[baseNoExt];
-    const isTimeout = baseNoExt === 'timeout';
-    let skippedTimeoutDuration = false;
+  if (Object.hasOwn(SHELL_BODY_WRAPPER_VALUE_FLAGS, baseNoExt)) {
+    const valueFlags = SHELL_BODY_WRAPPER_VALUE_FLAGS[baseNoExt];
+    let skippedWrapperPositional = false;
+    let sawSuHelp = false;
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
       if (a === undefined) continue;
-      if (a === '--') return i + 1 < args.length ? args.slice(i + 1).join(' ') : null;
-      if (valueFlags !== undefined && valueFlags.has(a)) { i++; continue; }
-      if (baseNoExt === 'sudo' && (a === '-i' || a === '-s' || a === '--login' || a === '--shell')) return 'bash';
+      if (a === '--') return baseNoExt === 'su' ? (sawSuHelp ? null : 'bash') : ((baseNoExt === 'timeout' && !skippedWrapperPositional ? i + 2 : i + 1) < args.length ? joinArgvPreservingQuotes(args.slice(i + (baseNoExt === 'timeout' && !skippedWrapperPositional ? 2 : 1))) : null);
+      if (baseNoExt === 'su') {
+        if (a === '--help' || a === '--version' || a === '-h' || a === '-V') sawSuHelp = true;
+        if ((a === '--command') && i + 1 < args.length) return args[i + 1] ?? null;
+        if (a.startsWith('--command=')) return a.slice('--command='.length);
+        const suFlag = parseSuCommandShortFlag(a);
+        if (suFlag !== null) return suFlag.attached.length > 0 ? suFlag.attached : (i + 1 < args.length ? args[i + 1] ?? null : null);
+      }
+      if (baseNoExt === 'env') {
+        const envFlag = parseEnvSplitShortFlag(a);
+        const takesNext = a === '--split-string' || (envFlag !== null && envFlag.attached.length === 0);
+        const splitVal = takesNext ? (args[i + 1] ?? null) : (a.startsWith('--split-string=') ? a.slice(15) : (envFlag !== null ? envFlag.attached : null));
+        if (splitVal !== null) return [splitVal, ...(i + (takesNext ? 2 : 1) < args.length ? [joinArgvPreservingQuotes(args.slice(i + (takesNext ? 2 : 1)))] : [])].join(' ');
+      }
+      if (baseNoExt === 'sudo' && isSudoInteractiveFlag(a)) return 'bash';
+      if ((valueFlags !== undefined && valueFlags.has(a)) || (baseNoExt === 'sudo' && isSudoConsumingShortCluster(a))) { i++; continue; }
       if (a.startsWith('-') || a.includes('=')) continue;
-      if (isTimeout && !skippedTimeoutDuration) { skippedTimeoutDuration = true; continue; }
-      return args.slice(i).join(' ');
+      if (!skippedWrapperPositional && (baseNoExt === 'timeout' || (baseNoExt === 'su' && hasPreDashSuCommand(args.slice(i + 1))))) { skippedWrapperPositional = true; continue; }
+      return baseNoExt === 'su' ? (sawSuHelp ? null : 'bash') : joinArgvPreservingQuotes(args.slice(i));
     }
+    if (baseNoExt === 'su' && !sawSuHelp) return 'bash';
   }
   return null;
 }
@@ -314,34 +342,41 @@ export function extractRawScriptBody(ctx: ExecutionContext): string | null {
   if (payload.type === 'script') return extractScriptFileBody(payload, ctx.cwd);
   const baseNoExt = cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/, '');
   if (baseNoExt === 'pwsh' || baseNoExt === 'powershell') {
-    const idx = findPwshCommandFlagIndex(args);
+    const { cmdIdx: idx } = findPwshCommandIndex(args);
     if (idx === -1) return null;
     const tok = args[idx] ?? '';
     const colonBody = tok.includes(':') ? tok.slice(tok.indexOf(':') + 1) : '';
     const parts = colonBody.length > 0 ? [colonBody, ...args.slice(idx + 1)] : args.slice(idx + 1);
     return parts.length > 0 ? unwrapBalancedOuterQuotes(parts.join(' ').trim()) : null;
   }
-  if (baseNoExt === 'sh' || baseNoExt === 'bash' || baseNoExt === 'zsh') {
-    const idx = findPosixShellCIndex(args);
-    return idx !== -1 && idx + 1 < args.length ? (args[idx + 1] ?? null) : null;
+  if (baseNoExt === 'sh' || baseNoExt === 'bash' || baseNoExt === 'zsh' || baseNoExt === 'ash' || baseNoExt === 'dash') {
+    const { bodyIdx } = findPosixShellCAndBody(args);
+    return bodyIdx !== -1 ? (args[bodyIdx] ?? null) : null;
   }
   if (baseNoExt === 'cmd') {
-    const idx = args.findIndex(a => a.toLowerCase() === '/c');
-    return idx !== -1 && idx + 1 < args.length ? args.slice(idx + 1).join(' ') : null;
+    const idx = args.findIndex(a => /^\/c(?:$|[=:])/i.test(a));
+    if (idx === -1) return null;
+    const tok = args[idx] ?? '';
+    const parts = tok.length > 2 ? [tok.slice(3), ...args.slice(idx + 1)] : args.slice(idx + 1);
+    return parts.filter(p => p.length > 0).length > 0 ? parts.join(' ').trim() : null;
   }
   if (['docker', 'docker-compose'].includes(baseNoExt)) return extractDockerContainerBody(args);
   return extractWrapperScriptBody(baseNoExt, args);
 }
 
 function findBlockedReplMatch(body: string): RegExpExecArray | null {
-  const interactive = INTERACTIVE_FLAG_REGEX.exec(body) ?? NODE_INSPECT_SUBCMD_REGEX.exec(body);
+  const interactive = matchInteractiveFlagInBody(body) ?? NODE_INSPECT_SUBCMD_REGEX.exec(body);
   if (interactive !== null) return interactive;
   GLOBAL_REPL_REGEX.lastIndex = 0;
   for (const m of body.matchAll(GLOBAL_REPL_REGEX)) {
     const delimiter = (m[1] ?? '').trim();
-    if (delimiter.startsWith('|') || delimiter.startsWith('<')) continue;
-    const before = body.slice(0, m.index ?? 0).trim();
-    if (!before.endsWith('|') && !before.endsWith('<')) return m;
+    const matchIdx = m.index ?? 0;
+    const isLogicalOr = delimiter === '|' && (body[matchIdx - 1] === '|' || body[matchIdx + 1] === '|');
+    if (isLogicalOr) return m;
+    if ((delimiter.startsWith('|') && !delimiter.startsWith('||')) || delimiter.startsWith('<')) continue;
+    const before = body.slice(0, matchIdx).trim();
+    const endsWithPipe = before.endsWith('|') && !before.endsWith('||');
+    if (!endsWithPipe && !before.endsWith('<')) return m;
   }
   return null;
 }
@@ -353,13 +388,24 @@ function blockScriptPattern(hint: string, detail?: string): never {
   process.exit(1);
 }
 
+function unwrapSegmentPrefixes(text: string): string {
+  return text.replace(/(^|[;\n&|{}()`])([^;\n&|{}()`]+)/g, (full, sep: string, seg: string) => {
+    const lead = /^[ \t]*/.exec(seg)?.[0] ?? '';
+    const tokens = expandAttachedWrapperTokens(seg.trim().split(/\s+/).filter(Boolean));
+    const cmdIdx = findUnwrappedBodyCmdIndex(tokens);
+    return cmdIdx === 0 || cmdIdx >= tokens.length ? full : `${sep}${lead}${tokens.slice(cmdIdx).join(' ')}`;
+  });
+}
+
 function scanShellBody(ctx: ExecutionContext, rawBody: string, label: string, depth = 0): void {
-  const { sanitized: body, dbSanitized, nestedBodies } = inspectShellQuoteSpans(rawBody);
+  const { sanitized, dbSanitized, nestedBodies } = inspectShellQuoteSpans(rawBody);
+  const body = unwrapSegmentPrefixes(sanitized);
+  const unwrappedDb = unwrapSegmentPrefixes(dbSanitized);
   if (TUI_REGEX.test(body)) {
     const m = TUI_REGEX.exec(body);
     blockScriptPattern(`You passed '${m?.[3]?.toLowerCase() ?? 'tui-app'}' inside ${label}.`, `Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications will hang indefinitely.`);
   }
-  const replMatch = findBlockedReplMatch(body);
+  const replMatch = findBlockedReplMatch(unwrappedDb);
   if (replMatch !== null) {
     const matchedCmd = (replMatch[3] ?? replMatch[4] ?? 'repl-app').toLowerCase();
     blockScriptPattern(`You passed '${matchedCmd}' inside ${label}.`, `Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications will hang indefinitely.`);
@@ -384,18 +430,13 @@ function scanShellBody(ctx: ExecutionContext, rawBody: string, label: string, de
       blockScriptPattern(`PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.`);
     }
     if (INLINE_SHELL_REGEX.test(body)) {
-      blockScriptPattern(
-        `You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.`,
-        `Please use the proper execution payloads (type: "command" or type: "eval" with target: "wsl2") instead of nesting shell wrappers.`,
-      );
+      blockScriptPattern(`You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.`, `Please use the proper execution payloads (type: "command" or type: "eval" with target: "wsl2") instead of nesting shell wrappers.`);
     }
-    if (IMPLICIT_PWSH_REGEX.test(body)) {
+    if (IMPLICIT_PWSH_REGEX.test(unwrappedDb)) {
       blockScriptPattern(`You attempted to run an inline shell command implicitly via powershell.`, `This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
     }
   }
-  if (depth < 3) {
-    for (const nested of nestedBodies) scanShellBody(ctx, nested, label, depth + 1);
-  }
+  if (depth < 3) for (const nested of nestedBodies) scanShellBody(ctx, nested, label, depth + 1);
 }
 
 export function scanExtractedScriptBody(ctx: ExecutionContext): void {

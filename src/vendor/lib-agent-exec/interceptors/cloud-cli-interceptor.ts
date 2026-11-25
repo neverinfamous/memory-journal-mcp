@@ -1,13 +1,14 @@
 // @ts-nocheck
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import {
-  GH_SUBCMD_BOOL_OVERLAP,
   GH_VALUE_FLAGS,
   collectCliSubcommands,
   handleGhCommandGuards,
+  isGhBooleanOverlap,
   normalizeGhJsonAndJqArgs,
+  unpackGhShortCluster,
 } from './cloud-cli-gh.js';
-import { ExecutionContext } from './types.js';
+import { type ExecutionContext } from './types.js';
 
 const CLOUD_VALUE_FLAGS: ReadonlySet<string> = new Set([
   '--config', '-c', '--cwd', '--env', '--profile', '--project', '--token', '--api-key', '--team',
@@ -132,19 +133,30 @@ function resolveValueFlagsForHelp(cmdBasename: string): ReadonlySet<string> {
 }
 
 function hasPreDashHelpFlag(args: readonly string[], valueFlags: ReadonlySet<string>): boolean {
+  const isGh = valueFlags === GH_VALUE_FLAGS;
+  const posArgs = isGh ? collectCliSubcommands(args, GH_VALUE_FLAGS) : [];
+  const isRepoHomepage = isGh && posArgs[0] === 'repo' && (posArgs[1] === 'create' || posArgs[1] === 'edit');
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
-    if (arg === '--help' || arg === '-h') return true;
-    const next = args[i + 1] ?? '';
-    const isBoolOverlap = valueFlags === GH_VALUE_FLAGS && GH_SUBCMD_BOOL_OVERLAP.has(arg) && next.startsWith('-');
-    if (arg.startsWith('-') && valueFlags.has(arg) && !isBoolOverlap) i++;
+    if (arg === '--help' || (arg === '-h' && !isRepoHomepage)) return true;
+    if (isGh) {
+      const cluster = unpackGhShortCluster(arg, posArgs);
+      if (cluster !== null) {
+        if (!isRepoHomepage && cluster.flags.includes('-h')) return true;
+        if (cluster.consumesNext) i++;
+        continue;
+      }
+    }
+    const isBoolOverlap = isGh && isGhBooleanOverlap(arg, posArgs);
+    if (arg.startsWith('-') && (valueFlags.has(arg) || (isRepoHomepage && arg === '-h')) && !isBoolOverlap) i++;
   }
   return false;
 }
 
 function handleInfraAuthGuards(cmdBasename: string, args: readonly string[], envOverrides: Record<string, string>): void {
-  if (['az', 'az.cmd', 'az.exe'].includes(cmdBasename)) {
+  const baseCmd = normalizeCloudBaseCmd(cmdBasename);
+  if (baseCmd === 'az') {
     envOverrides['AZURE_CORE_NO_COLOR'] = '1';
     envOverrides['AZURE_CORE_COLLECT_TELEMETRY'] = '0';
     const subCmd = collectCliSubcommands(args, AZ_VALUE_FLAGS)[0];
@@ -157,16 +169,19 @@ function handleInfraAuthGuards(cmdBasename: string, args: readonly string[], env
     }
   }
 
-  if (['ansible-vault', 'ansible-vault.exe'].includes(cmdBasename)) {
+  if (baseCmd === 'ansible-vault') {
     const avFlags = sliceBeforeDoubleDash(args);
     if (avFlags.includes('--version')) return;
-    if (avFlags.some(a => a === '--ask-vault-pass' || a === '--ask-vault-password' || a === '-J')) {
+    if (avFlags.some(a => a === '--ask-vault-pass' || a === '--ask-vault-password' || a === '-J' || (!a.startsWith('--') && /^-[v]*J[v]*$/.test(a)))) {
       exitBlocked(`'ansible-vault --ask-vault-pass/-J' prompts interactively for a password. Use '--vault-password-file' or '--vault-id'.`);
     }
     if (!hasAnyFlagOrPrefix(avFlags, ['--vault-password-file', '--vault-id'])) {
       exitBlocked(`'ansible-vault' without --vault-password-file or --vault-id will prompt for a password. Blocking execution.`);
     }
     const avPos = collectCliSubcommands(args, ANSIBLE_VAULT_VALUE_FLAGS);
+    if (avPos[0] === 'edit' || avPos[0] === 'create') {
+      exitBlocked(`'ansible-vault ${avPos[0]}' opens an interactive editor ($EDITOR) and will hang headlessly. Blocking execution.`);
+    }
     if (avPos[0] === 'rekey' && !hasAnyFlagOrPrefix(avFlags, ['--new-vault-password-file', '--new-vault-id'])) {
       exitBlocked(`'ansible-vault rekey' without --new-vault-password-file or --new-vault-id will prompt for the new password. Blocking execution.`);
     }
@@ -178,13 +193,24 @@ function hasPreDashGhWebFlag(args: readonly string[], posArgs: readonly string[]
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
-    if (arg === '--web' || (arg === '-w' && !isRunListWorkflow)) return true;
+    const lowArg = arg.toLowerCase();
+    const isTruthyWebEq = (lowArg.startsWith('--web=') && lowArg !== '--web=false' && lowArg !== '--web=0')
+      || (!isRunListWorkflow && arg.startsWith('-w=') && lowArg !== '-w=false' && lowArg !== '-w=0');
+    if (arg === '--web' || isTruthyWebEq || (arg === '-w' && !isRunListWorkflow)) return true;
     const next = args[i + 1] ?? '';
+    const cluster = unpackGhShortCluster(arg, posArgs);
+    if (cluster !== null) {
+      if (!isRunListWorkflow && cluster.flags.includes('-w')) return true;
+      if (cluster.consumesNext || (isRunListWorkflow && cluster.flags[cluster.flags.length - 1] === '-w' && !next.startsWith('-'))) {
+        i++;
+      }
+      continue;
+    }
     if (isRunListWorkflow && arg === '-w' && !next.startsWith('-')) {
       i++;
       continue;
     }
-    const isBoolOverlap = GH_SUBCMD_BOOL_OVERLAP.has(arg) && next.startsWith('-');
+    const isBoolOverlap = isGhBooleanOverlap(arg, posArgs);
     if (arg.startsWith('-') && GH_VALUE_FLAGS.has(arg) && !isBoolOverlap) i++;
   }
   return false;
@@ -197,8 +223,7 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
 
   handleCloudAndPackageAuth(cmdBasename, safeArgs, syncArgs);
 
-  const ghCmds = ['gh', 'gh.exe', 'gh.cmd'];
-  if (ghCmds.includes(cmdBasename) && payload.type === 'command') {
+  if (normalizeCloudBaseCmd(cmdBasename) === 'gh' && payload.type === 'command') {
     envOverrides['GH_PROMPT_DISABLED'] = '1';
     envOverrides['GH_NO_UPDATE_NOTIFIER'] = '1';
     envOverrides['NO_COLOR'] = '1';

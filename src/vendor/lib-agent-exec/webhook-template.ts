@@ -23,6 +23,13 @@ function formatJsonStringFragment(value: string, escapeForRawJson: boolean): str
   return escapeForRawJson ? JSON.stringify(value).slice(1, -1) : value;
 }
 
+function scalarToString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value === null || value === undefined) return fallback;
+  return JSON.stringify(value) ?? fallback;
+}
+
 function resolveContextToken(match: string, pathStr: string | undefined, integrationContext: unknown, escapeForRawJson: boolean): string {
   if (integrationContext === undefined) return match;
   const current = safeGet(integrationContext, typeof pathStr === 'string' ? pathStr : '');
@@ -31,16 +38,16 @@ function resolveContextToken(match: string, pathStr: string | undefined, integra
     const serialized = JSON.stringify(current);
     return escapeForRawJson ? formatJsonStringFragment(serialized, true) : serialized;
   }
-  return typeof current === 'string' ? formatJsonStringFragment(current, escapeForRawJson) : String(current);
+  return typeof current === 'string' ? formatJsonStringFragment(current, escapeForRawJson) : scalarToString(current);
 }
 
 function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escapeForRawJson: boolean): string | null {
-  if (key === 'stdout') return formatJsonStringFragment(String(vars['stdout'] ?? ''), escapeForRawJson);
-  if (key === 'stderr') return formatJsonStringFragment(String(vars['stderr'] ?? ''), escapeForRawJson);
-  if (key === 'code') return String(vars['code'] ?? 'null');
+  if (key === 'stdout') return formatJsonStringFragment(scalarToString(vars['stdout']), escapeForRawJson);
+  if (key === 'stderr') return formatJsonStringFragment(scalarToString(vars['stderr']), escapeForRawJson);
+  if (key === 'code') return scalarToString(vars['code'], 'null');
   if (key === 'signal') {
     const sig = vars['signal'];
-    return typeof sig === 'string' ? formatJsonStringFragment(sig, escapeForRawJson) : (sig !== undefined && sig !== null ? String(sig) : 'null');
+    return typeof sig === 'string' ? formatJsonStringFragment(sig, escapeForRawJson) : scalarToString(sig, 'null');
   }
   if (key === 'success') return vars['success'] === true ? 'true' : 'false';
   if (key === 'envelope.data') {
@@ -52,7 +59,7 @@ function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escap
   if (key === 'envelope.status') {
     const status = safeGet(vars['envData'], 'status');
     if (status === undefined || status === null) return 'null';
-    return typeof status === 'string' ? formatJsonStringFragment(status, escapeForRawJson) : String(status);
+    return typeof status === 'string' ? formatJsonStringFragment(status, escapeForRawJson) : scalarToString(status);
   }
   return null;
 }
@@ -92,7 +99,8 @@ function walkTemplateNode(node: unknown, integrationContext: unknown, vars: Reco
   if (typeof node === 'string') return substituteTemplateString(node, integrationContext, vars);
   if (Array.isArray(node)) return node.map((item) => walkTemplateNode(item, integrationContext, vars));
   if (node !== null && typeof node === 'object') {
-    const out = Object.create(null) as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    Object.setPrototypeOf(out, null);
     for (const [k, v] of Object.entries(node)) {
       out[k] = walkTemplateNode(v, integrationContext, vars);
     }

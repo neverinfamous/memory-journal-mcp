@@ -30,6 +30,7 @@
         "agent-exec.ts",
         "cli-loader.ts",
         "command-builder.ts",
+        "command-env-utils.ts",
         "command-payload-builders.ts",
         "command-utils.ts",
         "commit-script-resolver.ts",
@@ -52,6 +53,7 @@
         "interceptors/git-guards.ts",
         "interceptors/git-history-rewrite.ts",
         "interceptors/git-interceptor.ts",
+        "interceptors/git-staged-deletions.ts",
         "interceptors/grep-arg-parser.ts",
         "interceptors/grep-exclusions.ts",
         "interceptors/grep-interceptor.ts",
@@ -93,6 +95,7 @@
         "json-powershell-object.ts",
         "json-token-scan.ts",
         "path-argv-healer.ts",
+        "path-argv-utils.ts",
         "path-convert.ts",
         "path-eval-healer.ts",
         "path-eval-path.ts",
@@ -102,6 +105,7 @@
         "path-neighbor.ts",
         "path-synonym.ts",
         "process-controller.ts",
+        "process-exit-helpers.ts",
         "process-manager.ts",
         "prompt-detector.ts",
         "quote-healer.ts",
@@ -112,12 +116,13 @@
         "stream-manager.ts",
         "utils.ts",
         "validation-lock.ts",
+        "webhook-client.ts",
         "webhook-template.ts",
         "windows-wrapper-utils.ts",
         "wsl-command-wrapper.ts"
       ],
-      "syncedAt": "2026-11-24T08:36:04.343Z",
-      "syncedFromCommit": "83cbfe6a3557738d7686f6da7c84acaa9105a6d6"
+      "syncedAt": "2026-11-25T04:48:51.240Z",
+      "syncedFromCommit": "5d8f286f024ac87733af1461f59c74b85f8684b1"
     },
     "commit": {
       "source": ".agents/scripts",

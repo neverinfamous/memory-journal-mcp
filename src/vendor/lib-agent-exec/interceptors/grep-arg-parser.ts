@@ -1,7 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import { tokenizeArgs } from '../command-utils.js';
+import { FLAGS_WITH_ARG_BY_TOOL, inspectCombinedShortFlag, tokenizeArgs } from '../command-utils.js';
 import { hasBackslashRegexEscape, hasUriOrNonDriveColon, isSecondExistingTargetOnly } from './search-path-utils.js';
 
 export interface ParsedGrepSearchArgs {
@@ -145,6 +145,16 @@ function applyGrepSearchFlag(state: GrepScanState, args: string[], index: number
     }
   }
   const lower = arg.toLowerCase();
+  if (!arg.startsWith('--') && arg.length > 2 && arg.length <= 5 && /^-[rnwivclLqhHsoEFGP]+$/.test(arg)) {
+    if (arg.includes('i')) state.isCaseInsensitive = true;
+    if (arg.includes('w')) state.isWord = true;
+    if (arg.includes('E') || arg.includes('P') || arg.includes('G')) state.isRegex = true;
+    return index;
+  }
+  if (arg === '-E' || arg === '-P' || arg === '-G') {
+    state.isRegex = true;
+    return index;
+  }
   if (isCaseInsensitiveFlag(arg, lower)) {
     state.isCaseInsensitive = true;
     return index;
@@ -153,12 +163,12 @@ function applyGrepSearchFlag(state: GrepScanState, args: string[], index: number
     state.isWord = true;
     return index;
   }
-  if (lower === '-e' || lower === '--regexp' || lower === '--is-regex') {
+  if (arg === '-e' || lower === '--regexp' || lower === '--is-regex') {
     return consumeRegexFlag(state, args, index, lower);
   }
   if (GREP_PATTERN_VALUE_FLAGS.includes(lower)) return consumeValueInto(state, args, index, 'pattern');
   if (GREP_DIR_VALUE_FLAGS.includes(lower)) return consumeValueInto(state, args, index, 'searchPath');
-  if (lower === '-p') return consumeAmbiguousP(state, args, index);
+  if (arg === '-p') return consumeAmbiguousP(state, args, index);
   if (!arg.startsWith('-')) state.nonFlagArgs.push(arg);
   return index;
 }
@@ -231,4 +241,26 @@ export function parseGrepSearchArgs(args: string[], cwd?: string): ParsedGrepSea
     isWord: state.isWord,
     isRegex: state.isRegex,
   };
+}
+
+export function isGrepMissingInputTarget(args: readonly string[], positionalArgs: readonly string[]): boolean {
+  const valueFlags = FLAGS_WITH_ARG_BY_TOOL['grep'];
+  let hasPattern = false;
+  let hasRecursive = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (a === '--regexp' || a.startsWith('--regexp=') || a === '--file' || a.startsWith('--file=')) {
+      hasPattern = true;
+    } else if (a === '--recursive' || a === '--dereference-recursive') {
+      hasRecursive = true;
+    }
+    const info = inspectCombinedShortFlag('grep', a, valueFlags);
+    if (info.shortPrefix.length > 1) {
+      if (info.shortPrefix.includes('e') || info.shortPrefix.includes('f')) hasPattern = true;
+      if (info.shortPrefix.includes('r') || info.shortPrefix.includes('R')) hasRecursive = true;
+    }
+    if (info.takesSeparateValue) i++;
+  }
+  return (!hasPattern && positionalArgs.length === 0) || (!hasRecursive && (hasPattern ? positionalArgs.length === 0 : positionalArgs.length < 2));
 }

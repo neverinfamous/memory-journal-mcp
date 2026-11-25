@@ -2,9 +2,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Writable } from 'node:stream';
-import { ExecPayload, JsonEnvelopeSchema } from './schema.js';
+import { type ExecPayload, JsonEnvelopeSchema } from './schema.js';
 import { renderWebhookTemplate } from './webhook-template.js';
-import { recordAgentIssue, redactTelemetryText, replaceIntegrationContext, resolveAndValidateWebhookUrl, validateWebhookUrl } from './utils.js';
+import {
+  recordAgentIssue,
+  redactTelemetryText,
+  replaceIntegrationContext,
+  resolvePinnedWebhookTarget,
+  sendPinnedWebhookRequest,
+  validateWebhookUrl,
+  type PinnedWebhookRequestInit,
+} from './utils.js';
 
 export function hasWebhookStream(payload: ExecPayload): boolean {
   return [payload.stdoutFile, payload.stderrFile].some((f) => {
@@ -34,9 +42,10 @@ export function createConfiguredOutputStream(
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       stream = fs.createWriteStream(outPath);
     }
-    stream.on('error', (err) => {
-      if (isJson) recordAgentIssue('IO_STREAM_ERROR', `${kind} File Stream Error: ${err.message}`, payload, { file: safeFileForLog });
-      else console.error(`❌ ${kind} File Stream Error: ${err.message}. Agent execution will continue, but output capturing to file may be incomplete.`);
+    stream.on('error', (err: unknown) => {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (isJson) recordAgentIssue('IO_STREAM_ERROR', `${kind} File Stream Error: ${errMsg}`, payload, { file: safeFileForLog });
+      else console.error(`❌ ${kind} File Stream Error: ${errMsg}. Agent execution will continue, but output capturing to file may be incomplete.`);
       stream.destroy();
     });
     if (!isJson) console.error(`\n✅ ${kind} successfully streaming to ${redactTelemetryText(expanded)}`);
@@ -90,7 +99,7 @@ export function pauseStreamUntilDrained(
   let drainCount = activeTargets.length;
   activeTargets.forEach((target) => {
     let handled = false;
-    const resumeIfDone = () => {
+    const resumeIfDone = (): void => {
       if (handled) return;
       handled = true;
       target.removeListener('drain', resumeIfDone);
@@ -174,7 +183,7 @@ function dispatchWebhookChunk(
 ): Promise<void> {
   const method = payload.webhookMethod || 'POST';
   const headers: Record<string, string> = { ...payload.webhookHeaders };
-  let bodyPayload: BodyInit = new Blob([new Uint8Array(data)]);
+  let bodyPayload: string | Uint8Array = data;
 
   if (payload.webhookPayloadTemplate) {
     if (!Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
@@ -187,19 +196,17 @@ function dispatchWebhookChunk(
       { stdout: chunkStr, stderr: chunkStr, success: true, code: null, signal: null },
     );
   }
-  const fetchOptions: RequestInit = { method, headers, redirect: 'error' };
-  if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') fetchOptions.body = bodyPayload;
   const timeoutMs = payload.webhookTimeoutMs ?? 5000;
-  if (timeoutMs > 0) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+  const reqInit: PinnedWebhookRequestInit = { method, headers, timeoutMs };
+  if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') reqInit.body = bodyPayload;
 
   const req = (async (): Promise<void> => {
-    const validated = await resolveAndValidateWebhookUrl(filePath);
-    if (validated === null) {
+    const pinnedTarget = await resolvePinnedWebhookTarget(filePath);
+    if (pinnedTarget === null) {
       recordAgentIssue('WEBHOOK_DELIVERY_FAILED', 'Invalid or unsafe webhook stream URL', payload, { targetUrl: filePath, method });
       return;
     }
-    const res = await fetch(validated.href, fetchOptions);
-    await res.arrayBuffer();
+    const res = await sendPinnedWebhookRequest(pinnedTarget, reqInit);
     if (!res.ok) {
       recordAgentIssue('WEBHOOK_DELIVERY_FAILED', `Webhook stream returned HTTP ${res.status}`, payload, { targetUrl: filePath, method });
     }
@@ -217,13 +224,13 @@ export function createWebhookStream(filePath: string, payload: ExecPayload): Wri
   let timer: NodeJS.Timeout | null = null;
   const inFlightReqs = new Set<Promise<void>>();
 
-  const clearFlushTimer = () => {
+  const clearFlushTimer = (): void => {
     if (timer) {
       clearTimeout(timer);
       timer = null;
     }
   };
-  const sendChunk = (data: Buffer) => dispatchWebhookChunk(filePath, payload, data, inFlightReqs);
+  const sendChunk = (data: Buffer): Promise<void> => dispatchWebhookChunk(filePath, payload, data, inFlightReqs);
 
   return new Writable({
     write(chunk: Buffer, _encoding: string, callback: (error?: Error | null) => void) {
@@ -233,23 +240,23 @@ export function createWebhookStream(filePath: string, payload: ExecPayload): Wri
           const data = Buffer.concat(buffer);
           buffer = [];
           timer = null;
-          sendChunk(data);
+          void sendChunk(data);
         }, WEBHOOK_FLUSH_INTERVAL_MS);
       }
       callback();
     },
     final(callback) {
       clearFlushTimer();
-      const finish = () => {
+      const finish = (): void => {
         if (buffer.length > 0) {
           const data = Buffer.concat(buffer);
           buffer = [];
-          sendChunk(data).finally(() => callback());
+          void sendChunk(data).finally(() => callback());
           return;
         }
         callback();
       };
-      if (inFlightReqs.size > 0) Promise.all(Array.from(inFlightReqs)).finally(finish);
+      if (inFlightReqs.size > 0) void Promise.all(Array.from(inFlightReqs)).finally(finish);
       else finish();
     },
     destroy(err, callback) {
@@ -265,7 +272,7 @@ export async function closeStreamsWithTimeout(streams: readonly (Writable | unde
   if (active.length === 0) return;
   const closePromises = active.map((stream) => (
     new Promise<void>((resolve) => {
-      const done = () => {
+      const done = (): void => {
         stream.off('finish', done);
         stream.off('error', done);
         stream.off('close', done);

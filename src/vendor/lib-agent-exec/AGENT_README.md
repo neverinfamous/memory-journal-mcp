@@ -189,9 +189,7 @@ The bridge standardizes the environment to enforce non-interactive behaviors. Ke
 
 ## 🧪 Usability & Hallucination Testing
 
-If you modify interceptors or execution logic, programmatic `bun test` passes are **not enough**. You MUST run the usability testing suite to ensure actual agents don't get trapped by false positives (e.g. `&&` chains or pipeline character bugs).
-- **Run the Fuzzing Suite:** In the upstream host workspace, follow the usability audit guide or manually trigger the subagents defined in the host's `usability/coordinator-workflow.md`.
-- **Test Auto-Generation:** The tests in `test-usability-*.md` are **auto-generated**. Do not edit them directly. Update the host's `usability/scripts/test-manifest.ts` or the `content/` partials instead, then run the host's `usability/scripts/generate-tests.ts` wrapper.
+If you modify interceptors or execution logic, programmatic `bun test` passes alone are **not enough**. Always verify real-world tool invocations against common agent failure modes (for example, `&&` chains, embedded pipelines, and quote stripping) using end-to-end usability tests alongside the unit suite.
 
 ---
 

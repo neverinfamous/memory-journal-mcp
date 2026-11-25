@@ -136,7 +136,7 @@ export function scanJqFromFiles(args: readonly string[]): { hasFromFile: boolean
     } else if (JQ_ONE_ARG_FLAGS.has(a)) {
       i++;
     } else if (!a.startsWith('--') && /^-[a-zA-Z]*L/.test(a) && (!a.includes('f') || a.indexOf('L') < a.indexOf('f'))) {
-      if (a.endsWith('L')) i++;
+      if (/^-[a-zA-Z]*L$/.test(a)) i++;
     } else if (a === '-f' || a === '--from-file') {
       hasFromFile = true;
       const next = args[i + 1];
@@ -325,7 +325,7 @@ export function hasXargsArgFile(args: readonly string[]): boolean {
   return false;
 }
 
-const SSH_KEYGEN_OTHER_VALUE_FLAGS = new Set(['-b', '-C', '-D', '-E', '-F', '-I', '-M', '-m', '-n', '-O', '-P', '-R', '-r', '-t', '-V', '-Z', '-z']);
+const SSH_KEYGEN_OTHER_VALUE_CHARS: ReadonlySet<string> = new Set(['b', 'C', 'D', 'E', 'F', 'I', 'M', 'm', 'n', 'O', 'P', 'R', 'r', 't', 'V', 'Z', 'z']);
 
 /** [INTENT]: Verify `ssh-keygen` has both `-f` (file) and `-N` (passphrase) before `--` without counting operands as flags. */
 export function hasSshKeygenNonInteractiveFlags(args: readonly string[]): boolean {
@@ -334,11 +334,21 @@ export function hasSshKeygenNonInteractiveFlags(args: readonly string[]): boolea
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
-    if (a === '-f') { hasF = true; i++; continue; }
-    if (a.startsWith('-f')) { hasF = true; continue; }
-    if (a === '-N') { hasN = true; i++; continue; }
-    if (a.startsWith('-N')) { hasN = true; continue; }
-    if (SSH_KEYGEN_OTHER_VALUE_FLAGS.has(a)) i++;
+    if (!a.startsWith('-') || a.startsWith('--')) continue;
+    const shortBody = a.slice(1);
+    for (let k = 0; k < shortBody.length; k++) {
+      const ch = shortBody[k] ?? '';
+      if (ch === 'f' || ch === 'N') {
+        if (ch === 'f') hasF = true;
+        else hasN = true;
+        if (k === shortBody.length - 1) i++;
+        break;
+      }
+      if (SSH_KEYGEN_OTHER_VALUE_CHARS.has(ch)) {
+        if (k === shortBody.length - 1) i++;
+        break;
+      }
+    }
   }
   return hasF && hasN;
 }

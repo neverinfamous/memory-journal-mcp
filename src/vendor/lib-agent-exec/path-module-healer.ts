@@ -87,7 +87,7 @@ function normalizeModuleInput(rawPath: string): { normalizedInput: string; force
 
 function healModulePathDetailed(rawPath: string, cwd: string, isEsm = false, target?: HealTarget): { healed: string; wasExactFile: boolean } {
   const { normalizedInput, forcedWsl } = normalizeModuleInput(rawPath);
-  const isWsl = target === 'wsl2' || forcedWsl || normalizedInput.startsWith('/mnt/');
+  const isWsl = target === 'wsl2' || forcedWsl || /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(normalizedInput);
   const wslNormalized = normalizeMntPathForHost(normalizedInput);
   const windowsCwd = normalizeMntPathForHost(cwd);
   const resolvedPath = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(windowsCwd, wslNormalized);
@@ -163,7 +163,7 @@ function healDynamicImports(code: string, cwd: string, target: HealTarget | unde
   });
 }
 
-const STATIC_IMPORT_REGEX = /\b(import|export)\s+((?:[\w{},*$][\w\s{},*$]*from\s+)?)(['"])(\.[^'"]+)\3/g;
+const STATIC_IMPORT_REGEX = /\b(import|export)\s+((?:[\w{},*$][\w\s{},*$]{0,512}from\s+)?)(['"])(\.[^'"]+)\3/g;
 
 function healStaticImports(code: string, cwd: string, target: HealTarget | undefined, skipValid: boolean, state: ModuleHealState, spans: NonCodeSpans, cache: ModuleDetailCache): string {
   STATIC_IMPORT_REGEX.lastIndex = 0;
