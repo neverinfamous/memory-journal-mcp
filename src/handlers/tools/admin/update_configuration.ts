@@ -43,8 +43,10 @@ function preprocessUpdateConfig(val: unknown): unknown {
         if ('filter' in obj) {
             if (obj['tool_filter'] === undefined) {
                 obj['tool_filter'] = obj['filter']
+                delete obj['filter']
+            } else if (obj['filter'] === undefined || obj['tool_filter'] === obj['filter']) {
+                delete obj['filter']
             }
-            delete obj['filter']
         }
 
         if ('project_number' in obj) {

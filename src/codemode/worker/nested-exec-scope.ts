@@ -8,6 +8,7 @@ import type * as vm from 'node:vm'
 import { transformAutoReturn } from '../auto-return.js'
 import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { validateSandboxCode } from '../security.js'
+import { DEFAULT_SECURITY_CONFIG } from '../types.js'
 import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from '../security-stripper.js'
 import { parseStringContextPayload } from '../shared-context-parsers.js'
 import { runWithNestedRpcOverrides, type ScopedRpcOverrides } from './nested-exec-runner.js'
@@ -278,7 +279,10 @@ function validateAndWrapNestedCode(
     isQueryOnlyArg: boolean
 ): { ok: true; wrapped: string } | { ok: false; errorResult: Record<string, unknown> } {
     const transformedCode = transformAutoReturn(codeToExec)
-    const validation = validateSandboxCode(transformedCode)
+    const validation = validateSandboxCode(transformedCode, {
+        ...DEFAULT_SECURITY_CONFIG,
+        maxCodeLength: DEFAULT_SECURITY_CONFIG.maxCodeLength + 32,
+    })
     if (!validation.valid) {
         return {
             ok: false,

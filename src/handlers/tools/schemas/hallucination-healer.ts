@@ -84,6 +84,9 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
 
     for (const extraKey of ['date', 'created_at', 'updated_at', 'type', 'status']) {
         if (extraKey in obj && extraKey !== 'entry_type') {
+            if (extraKey === 'type' && obj['entry_type'] !== undefined && obj['type'] !== undefined) {
+                if (!aliasValuesEquivalent(obj['entry_type'], obj['type'])) continue
+            }
             if (extraKey === 'type' && obj['entry_type'] === undefined && obj['type'] !== undefined) {
                 obj['entry_type'] = obj['type']
             }
@@ -320,20 +323,24 @@ function synthesizeFallbackAnchorContent(obj: Record<string, unknown>): boolean 
     return true
 }
 
+function aliasValuesEquivalent(a: unknown, b: unknown): boolean {
+    if (Object.is(a, b)) return true
+    if (typeof a === 'string' && typeof b === 'string') return a.trim() === b.trim()
+    if (Array.isArray(a) && Array.isArray(b)) {
+        return a.length === b.length && a.every((item, idx) => aliasValuesEquivalent(item, b[idx]))
+    }
+    return false
+}
+
 function remapAgentKeyAliases(obj: Record<string, unknown>): boolean {
     let modified = false
     for (const [badKey, goodKey] of Object.entries(KEY_ALIAS_MAP)) {
         if (badKey in obj) {
-            const isScopeAlias =
-                badKey === 'project_id' ||
-                badKey === 'projectId' ||
-                badKey === 'projectNumber' ||
-                badKey === 'targetWorkspaceId'
             if (
-                isScopeAlias &&
                 goodKey in obj &&
                 obj[goodKey] !== undefined &&
-                obj[goodKey] !== obj[badKey]
+                obj[badKey] !== undefined &&
+                !aliasValuesEquivalent(obj[goodKey], obj[badKey])
             ) {
                 continue
             }
@@ -363,12 +370,14 @@ export function healAgentHallucinations(val: unknown): unknown {
     if (healValidationAndScoreFields(obj)) modified = true
 
     for (const key of CONTENT_ALIASES) {
-        if (key in obj && obj['content'] === undefined) {
+        if (!(key in obj)) continue
+        if (obj['content'] === undefined && obj[key] !== undefined) {
             obj['content'] = obj[key]
             Reflect.deleteProperty(obj, key)
             modified = true
-            break
-        } else if (key in obj) {
+            continue
+        }
+        if (obj[key] === undefined || aliasValuesEquivalent(obj['content'], obj[key])) {
             Reflect.deleteProperty(obj, key)
             modified = true
         }

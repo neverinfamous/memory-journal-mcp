@@ -223,7 +223,7 @@ export function checkToolSpecificRpcBounds(
     }
     if (IO_DIR_TOOL_NAMES.has(toolName)) {
         for (const dirKey of ['output_dir', 'source_dir', 'target_dir', 'path', 'filepath', 'dir'] as const) {
-            const dirErr = checkDirectoryBoundsForScope(rec[dirKey], dirKey, effectivePinnedWs, pinnedProj, registry, false)
+            const dirErr = checkDirectoryBoundsForScope(rec[dirKey], dirKey, effectivePinnedWs, pinnedProj, registry, true)
             if (dirErr !== undefined) return dirErr
         }
     }

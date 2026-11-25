@@ -251,8 +251,19 @@ function coerceRecentCursorToOffset(obj: Record<string, unknown>): void {
     if (!/^(?:0|[1-9]\d*)$/.test(trimmed)) return
     const parsed = Number(trimmed)
     if (!Number.isSafeInteger(parsed) || String(parsed) !== trimmed) return
-    if (obj['offset'] === undefined) obj['offset'] = parsed
-    delete obj['cursor']
+    const existingOffset = obj['offset']
+    if (existingOffset === undefined) {
+        obj['offset'] = parsed
+        Reflect.deleteProperty(obj, 'cursor')
+        return
+    }
+    const offsetStr =
+        typeof existingOffset === 'string' || typeof existingOffset === 'number'
+            ? String(existingOffset).trim()
+            : undefined
+    if (offsetStr === trimmed) {
+        Reflect.deleteProperty(obj, 'cursor')
+    }
 }
 
 function applyEntryLinkRecentTagInterceptions(
@@ -359,6 +370,31 @@ function applyAuditMergeTestGetByIdInterceptions(
 
 const ALIAS_SYNONYMS = ['text', 'message', 'description', 'name', 'from', 'source']
 const CANONICAL_ALIAS_SYNONYMS = ['target', 'to', 'canonical', 'dest']
+const SEARCH_ALIAS_SYNONYMS = ['q', 'query', 'search']
+
+function aliasInterceptionValuesMatch(a: unknown, b: unknown): boolean {
+    if (Object.is(a, b)) return true
+    if (typeof a === 'string' && typeof b === 'string') return a.trim() === b.trim()
+    return false
+}
+
+function remapAuthorAliasKeys(
+    obj: Record<string, unknown>,
+    fromKeys: readonly string[],
+    targetKey: string
+): void {
+    for (const k of fromKeys) {
+        if (obj[k] === undefined) continue
+        if (obj[targetKey] === undefined) {
+            obj[targetKey] = obj[k]
+            Reflect.deleteProperty(obj, k)
+            continue
+        }
+        if (aliasInterceptionValuesMatch(obj[targetKey], obj[k])) {
+            Reflect.deleteProperty(obj, k)
+        }
+    }
+}
 
 function applyAuthorAliasInterception(methodName: string, obj: Record<string, unknown>): void {
     const isResolve = methodName === 'team_resolve_author' || methodName === 'teamResolveAuthor'
@@ -366,28 +402,20 @@ function applyAuthorAliasInterception(methodName: string, obj: Record<string, un
     const isAdd = methodName === 'team_add_author_alias' || methodName === 'teamAddAuthorAlias'
     const searchTarget = isResolve ? 'author' : isRemove ? 'alias' : 'canonical_author'
 
-    for (const key of ['q', 'query', 'search']) {
-        if (obj[key] !== undefined) {
-            if (obj[searchTarget] === undefined) obj[searchTarget] = obj[key]
-            Reflect.deleteProperty(obj, key)
-        }
-    }
+    remapAuthorAliasKeys(obj, SEARCH_ALIAS_SYNONYMS, searchTarget)
     if (isResolve) {
-        remapKeys(obj, ALIAS_SYNONYMS, 'author')
+        remapAuthorAliasKeys(obj, ALIAS_SYNONYMS, 'author')
         return
     }
     if (isRemove) {
-        remapKeys(obj, ALIAS_SYNONYMS, 'alias')
+        remapAuthorAliasKeys(obj, ALIAS_SYNONYMS, 'alias')
         return
     }
     if (isAdd) {
-        remapKeys(obj, ALIAS_SYNONYMS, 'alias')
+        remapAuthorAliasKeys(obj, ALIAS_SYNONYMS, 'alias')
     }
-    remapKeys(obj, CANONICAL_ALIAS_SYNONYMS, 'canonical_author')
-    if (obj['author'] !== undefined) {
-        if (obj['canonical_author'] === undefined) obj['canonical_author'] = obj['author']
-        Reflect.deleteProperty(obj, 'author')
-    }
+    remapAuthorAliasKeys(obj, CANONICAL_ALIAS_SYNONYMS, 'canonical_author')
+    remapAuthorAliasKeys(obj, ['author'], 'canonical_author')
 }
 
 function applyTeamMemberAndAliasInterceptions(

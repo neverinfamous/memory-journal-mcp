@@ -91,7 +91,8 @@ async function resolveToolGitHubInstance(
     inputWorkspaceId: string | undefined,
     inputProjectNumber: number | undefined,
     scopeRes: RegistryScopeResolution,
-    parsedOwner?: string
+    parsedOwner?: string,
+    requireRepo = false
 ): Promise<
     | { github: GitHubIntegration; usedRegistryGithub: boolean }
     | { error: true; response: Record<string, unknown> }
@@ -134,7 +135,7 @@ async function resolveToolGitHubInstance(
             matchedRegistryKey === undefined &&
             inputProjectNumber !== undefined &&
             hasRegistry &&
-            (parsedOwner === undefined || parsedOwner.trim() === '')
+            (requireRepo || parsedOwner === undefined || parsedOwner.trim() === '')
         ) {
             return githubScopeValidationError(
                 `project_number ${String(inputProjectNumber)} is not registered in projectRegistry. Provide repo (owner/repo) or a registered workspace_id.`
@@ -155,7 +156,8 @@ async function resolveScopeAndGithub(
     inputOwner: string | undefined,
     inputRepo: string | undefined,
     inputWorkspaceId: string | undefined,
-    inputProjectNumber: number | undefined
+    inputProjectNumber: number | undefined,
+    requireRepo = false
 ): Promise<
     | {
           parsedOwner: string | undefined
@@ -189,7 +191,8 @@ async function resolveScopeAndGithub(
         inputWorkspaceId,
         inputProjectNumber,
         scopeRes,
-        parsedOwner
+        parsedOwner,
+        requireRepo
     )
     if ('error' in ghRes) return ghRes
     return {
@@ -250,7 +253,8 @@ export async function resolveOwner(
         inputOwner,
         inputRepo,
         inputWorkspaceId,
-        inputProjectNumber
+        inputProjectNumber,
+        false
     )
     if ('error' in resolvedScope) return resolvedScope
     const { parsedOwner, effectiveRepo, scopeRes, github: toolGithub } = resolvedScope
@@ -324,16 +328,11 @@ export async function resolveOwnerRepo(
         input.owner,
         input.repo,
         input.workspace_id,
-        input.project_number
+        input.project_number,
+        true
     )
     if ('error' in resolvedScope) return resolvedScope
-    const {
-        parsedOwner,
-        effectiveRepo,
-        scopeRes,
-        github: toolGithub,
-        usedRegistryGithub,
-    } = resolvedScope
+    const { parsedOwner, effectiveRepo, scopeRes, github: toolGithub, usedRegistryGithub } = resolvedScope
 
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner

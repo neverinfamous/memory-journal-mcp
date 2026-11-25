@@ -9,6 +9,40 @@ const searchNames = ['q', 'query', 'search']
 
 type AliasPreprocessTarget = 'add' | 'remove' | 'list' | 'resolve' | 'consolidate'
 
+function aliasStringValuesMatch(a: unknown, b: unknown): boolean {
+    if (Object.is(a, b)) return true
+    if (typeof a === 'string' && typeof b === 'string') return a.trim() === b.trim()
+    return false
+}
+
+function applyAuthorAliasGroup(
+    obj: Record<string, unknown>,
+    aliasKeys: readonly string[],
+    targetKey: string,
+    deleteExplicitUndefined = false
+): boolean {
+    let modified = false
+    for (const key of aliasKeys) {
+        if (deleteExplicitUndefined ? !(key in obj) : obj[key] === undefined) continue
+        if (obj[key] === undefined) {
+            Reflect.deleteProperty(obj, key)
+            modified = true
+            continue
+        }
+        if (obj[targetKey] === undefined) {
+            obj[targetKey] = obj[key]
+            Reflect.deleteProperty(obj, key)
+            modified = true
+            continue
+        }
+        if (aliasStringValuesMatch(obj[targetKey], obj[key])) {
+            Reflect.deleteProperty(obj, key)
+            modified = true
+        }
+    }
+    return modified
+}
+
 const createAliasPreprocessor =
     (target: AliasPreprocessTarget) =>
     (val: unknown): unknown => {
@@ -17,44 +51,16 @@ const createAliasPreprocessor =
         let modified = false
 
         if (target === 'add' || target === 'remove') {
-            for (const key of aliasNames) {
-                if (obj[key] !== undefined) {
-                    if (obj['alias'] === undefined) obj['alias'] = obj[key]
-                    Reflect.deleteProperty(obj, key)
-                    modified = true
-                    break
-                }
-            }
+            if (applyAuthorAliasGroup(obj, aliasNames, 'alias')) modified = true
         }
         if (target === 'add' || target === 'list' || target === 'consolidate') {
-            for (const key of canonicalNames) {
-                if (obj[key] !== undefined) {
-                    if (obj['canonical_author'] === undefined) obj['canonical_author'] = obj[key]
-                    Reflect.deleteProperty(obj, key)
-                    modified = true
-                    break
-                }
-            }
+            if (applyAuthorAliasGroup(obj, canonicalNames, 'canonical_author')) modified = true
         }
-        for (const key of searchNames) {
-            if (obj[key] === undefined) continue
-            const targetKey =
-                target === 'resolve'
-                    ? 'author'
-                    : target === 'remove'
-                      ? 'alias'
-                      : 'canonical_author'
-            if (obj[targetKey] === undefined) obj[targetKey] = obj[key]
-            Reflect.deleteProperty(obj, key)
-            modified = true
-            break
-        }
-        if ((target === 'add' || target === 'list' || target === 'consolidate') && 'author' in obj) {
-            if (obj['canonical_author'] === undefined && obj['author'] !== undefined) {
-                obj['canonical_author'] = obj['author']
-            }
-            Reflect.deleteProperty(obj, 'author')
-            modified = true
+        const searchTarget =
+            target === 'resolve' ? 'author' : target === 'remove' ? 'alias' : 'canonical_author'
+        if (applyAuthorAliasGroup(obj, searchNames, searchTarget)) modified = true
+        if (target === 'add' || target === 'list' || target === 'consolidate') {
+            if (applyAuthorAliasGroup(obj, ['author'], 'canonical_author', true)) modified = true
         }
         return modified ? obj : val
     }
@@ -101,7 +107,7 @@ export const AddAuthorAliasSchemaMcp = z.preprocess(
             .describe('The canonical author identity to map the alias to (e.g., "alex-dev")'),
         project_number: relaxedNumber().optional().describe('GitHub Project number'),
         workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-    })
+    }).strict()
 )
 
 export const AddAuthorAliasOutputSchema = z
@@ -137,7 +143,7 @@ export const RemoveAuthorAliasSchemaMcp = z.preprocess(
         alias: z.string().min(1).max(255).optional().describe('The alias mapping to remove'),
         project_number: relaxedNumber().optional().describe('GitHub Project number'),
         workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-    })
+    }).strict()
 )
 
 export const RemoveAuthorAliasOutputSchema = z
@@ -169,7 +175,7 @@ export const ListAuthorAliasesSchemaMcp = z.preprocess(
         canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
         project_number: relaxedNumber().optional().describe('GitHub Project number'),
         workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-    })
+    }).strict()
 )
 
 export const ListAuthorAliasesOutputSchema = z
@@ -212,7 +218,7 @@ export const ResolveAuthorSchemaMcp = z.preprocess(
         author: z.string().min(1).optional().describe('The raw author name to resolve'),
         project_number: relaxedNumber().optional().describe('GitHub Project number'),
         workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-    })
+    }).strict()
 )
 
 export const ResolveAuthorOutputSchema = z
@@ -256,7 +262,7 @@ export const ConsolidateAuthorsSchemaMcp = z.preprocess(
             ),
         project_number: relaxedNumber().optional().describe('GitHub Project number'),
         workspace_id: z.string().optional().describe(WORKSPACE_FIELD_DESC),
-    })
+    }).strict()
 )
 
 export const ConsolidateAuthorsOutputSchema = z

@@ -1,11 +1,10 @@
 import type { Command } from 'commander'
 import { initializeDependencies } from '../../server/mcp-server/initialization.js'
-import { closeServerResources, teardownVectorManagers } from '../../server/mcp-server/core-helpers.js'
+import { buildBaseToolConfig, closeServerResources, teardownVectorManagers } from '../../server/mcp-server/core-helpers.js'
 import { resolveActiveBriefingConfig } from '../../server/mcp-server/tool-registration/register-tools-helpers.js'
 import { callTool } from '../../handlers/tools/index.js'
 import { disposeCodemodeResources } from '../../handlers/tools/codemode/singleton-state.js'
 import { closeCrossTeamAdapters } from '../../handlers/tools/search/cross-team.js'
-import { globalSubscriptionManager } from '../../server/subscription-manager.js'
 import { flushAgentIssues } from '../../utils/issue-logger.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import type { ServerContext } from '../../server/mcp-server/types.js'
@@ -140,23 +139,17 @@ function buildExecToolConfig(
         }
     }
     const customToolHandlerConfig: ToolHandlerConfig = {
+        ...buildBaseToolConfig(
+            serverOptions,
+            context.runtime,
+            context.allowedIoRoots,
+            currentConfig.toolFilterConfig
+        ),
         defaultProjectNumber: resolvedDefaultProj,
         defaultWorkspaceId:
             execWorkspaceId ?? serverOptions.defaultWorkspaceId ?? briefingConfig.defaultWorkspaceId,
         projectRegistry: effectiveRegistry,
-        additionalTeamDbs: serverOptions.additionalTeamDbs,
-        allowedIoRoots: context.allowedIoRoots,
-        filterConfig: currentConfig.toolFilterConfig,
-        authEnabled: Boolean(serverOptions.authToken ?? process.env['MCP_AUTH_TOKEN']),
-        oauthEnabled: serverOptions.oauthEnabled,
-        codemodeEnabled: true, // Force enabled for the exec command
-        codemodeInternalFullAccess: serverOptions.codemodeInternalFullAccess,
-        agentHealing: serverOptions.agentHealing,
-        teamDefaultRole: serverOptions.teamDefaultRole,
-        teamAdmin: serverOptions.teamAdmin,
         briefingConfig,
-        runtime: context.runtime,
-        subscriptionManager: globalSubscriptionManager,
     }
     return customToolHandlerConfig
 }

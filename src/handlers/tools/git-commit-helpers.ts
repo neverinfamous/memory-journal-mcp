@@ -144,7 +144,7 @@ export async function fetchCommits(
         input.techDebtAudit === true ||
         input.scope !== undefined
     const maxCount = input.maxCount ?? 50
-    const fetchLimit = needsPostProcessing ? 500 : maxCount
+    const fetchLimit = needsPostProcessing ? Math.max(500, maxCount) : maxCount
     const useInlineNumstat = input.summary !== true
     const cliArgs: CliArgs = {
         limit: fetchLimit,
@@ -179,7 +179,7 @@ export async function fetchCommits(
             )
         }
         if (
-            /unknown revision|bad revision|ambiguous argument|does not have any commits yet/i.test(
+            /unknown revision|bad revision|ambiguous argument|does not have any commits yet|regular expression|invalid .*reg(?:ex|ular)|unmatched\s+\[|unmatched\s+\(|unmatched\s+\\?\{|trailing backslash|invalid range end|invalid preceding|premature end of|command line, .*:/i.test(
                 msg
             )
         ) {

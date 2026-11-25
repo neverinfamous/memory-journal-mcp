@@ -460,7 +460,7 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
             expect(p['workspace_id']).toBeUndefined()
         }
 
-        // 2. Cross-project batch_update_entries with explicit workspace_id: '*' inside a project #5 session
+        // 2. Cross-project batch_update_entries with workspace_id: '*' in unpinned vs project-pinned sessions
         const e5 = db.createEntry({ content: 'Entry in MJ', workspaceId: 'memory-journal-mcp', projectNumber: 5 })
         const e15 = db.createEntry({ content: 'Entry in DB', workspaceId: 'db-mcp', projectNumber: 15 })
         const e16 = db.createEntry({ content: 'Entry in Gamma', workspaceId: 'workspace-gamma', projectNumber: 16 })
@@ -468,31 +468,28 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
         const batchUpdateTool = getBatchTools(sessionCtx).find((t) => t.name === 'batch_update_entries')!
         const batchNorm = await normalizeDispatchParams(
             batchUpdateTool,
-            {
-                workspace_id: '*',
-                entries: [
-                    { id: e5.id, significance_type: 'architecture' },
-                    { id: e15.id, significance_type: 'blocker_resolved' },
-                    { id: e16.id, significance_type: 'milestone' },
-                ],
-            },
-            {
-                sessionContext: sessionCtx,
-                projectId: 5,
-                workspaceId: 'memory-journal-mcp',
-                explicitWorkspace: true,
-            }
+            { workspace_id: '*', entries: [{ id: e5.id, significance_type: 'architecture' }, { id: e15.id, significance_type: 'blocker_resolved' }, { id: e16.id, significance_type: 'milestone' }] },
+            { sessionContext: sessionCtx, projectId: undefined, workspaceId: '*', explicitWorkspace: true }
         )
         expect('params' in batchNorm).toBe(true)
         if ('params' in batchNorm) {
             const p = batchNorm.params as Record<string, unknown>
             expect(p['project_number']).toBeUndefined()
-            const updates = p['entries'] as Array<Record<string, unknown>>
+            const updates = p['updates'] as Array<Record<string, unknown>>
             expect(updates.every((u) => u['project_number'] === undefined)).toBe(true)
-
             const execRes = (await batchUpdateTool.handler(p)) as { success: boolean; count: number }
-            expect(execRes.success).toBe(true)
-            expect(execRes.count).toBe(3)
+            expect(execRes).toMatchObject({ success: true, count: 3 })
+        }
+        const pinnedRes = await normalizeDispatchParams(
+            batchUpdateTool,
+            { workspace_id: '*', entries: [{ id: e15.id, significance_type: 'milestone' }] },
+            { sessionContext: sessionCtx, projectId: 5, workspaceId: 'memory-journal-mcp', explicitWorkspace: true }
+        )
+        expect('params' in pinnedRes).toBe(true)
+        if ('params' in pinnedRes) {
+            expect((pinnedRes.params as Record<string, unknown>)['project_number']).toBe(5)
+            const pinnedExec = (await batchUpdateTool.handler(pinnedRes.params)) as { success: boolean }
+            expect(pinnedExec.success).toBe(false)
         }
     })
 })

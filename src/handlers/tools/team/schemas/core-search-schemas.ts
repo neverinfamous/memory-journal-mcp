@@ -281,6 +281,15 @@ export const TeamGetRecentSchema = z.preprocess(
             include_archived: z.boolean().optional().default(false),
         })
         .strict()
+        .superRefine((data, ctx) => {
+            if (data.cursor !== undefined && /^(?:0|[1-9]\d*)$/.test(data.cursor.trim())) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: 'Conflicting cursor and offset values specified',
+                    path: ['cursor'],
+                })
+            }
+        })
 )
 
 /** team_get_recent — relaxed */

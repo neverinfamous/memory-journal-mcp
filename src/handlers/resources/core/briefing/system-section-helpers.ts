@@ -17,6 +17,7 @@ const execFileAsync = promisify(execFile)
 import { fenceNonCanonicalRefOrKey } from '../../../../utils/security-utils.js'
 import { isRecord } from '../../../../utils/type-guards.js'
 import { sliceUntrustedInline } from '../../fencing-helpers.js'
+import { getSanitizedGitEnv } from '../../../tools/git-workdir.js'
 import type { GitHistorySummary } from './system-section.js'
 
 const MAX_COMMIT_SUBJECT_LEN = 120
@@ -132,6 +133,7 @@ export async function fetchGitHistoryFromRepoAsync(
             encoding: 'utf-8',
             timeout: 3000,
             windowsHide: true,
+            env: getSanitizedGitEnv(),
         }
     )
     return parseGitCommitLines(stdout, commitCount)

@@ -26,6 +26,7 @@ import {
 
 export { stalenessFailure, type PrefetchedCommitFiles, type StalenessCheckRow } from './git-staleness-prefetch.js'
 export { resolveGitWorkingDir, type GitWorkingDirInput } from './git-workdir.js'
+import { getSanitizedGitEnv } from './git-workdir.js'
 
 function stderrText(err: unknown): string {
     if (typeof err !== 'object' || err === null || !('stderr' in err)) return ''
@@ -43,6 +44,7 @@ export async function readLatestGitTag(cwd: string): Promise<string | null> {
             encoding: 'utf-8',
             windowsHide: true,
             timeout: 5000,
+            env: getSanitizedGitEnv(),
         })
         const described = stdout.trim()
         return described === '' || described.startsWith('-') ? null : described

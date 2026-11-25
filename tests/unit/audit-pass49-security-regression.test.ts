@@ -200,7 +200,7 @@ describe('Pass 49 Security Audit Regressions', () => {
 
     describe('AP1–AP3: Audit prompt revision & portable controls', () => {
         it('bumps AUDIT_PROMPT_REVISION to 2026-11-20-audit-pass49 and includes Pass 49 guidance', async () => {
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass90')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass91')
             const def = getSecurityAuditPromptDefinition()
             const mockDb = {
                 searchEntries: vi.fn().mockReturnValue([]),
@@ -211,7 +211,7 @@ describe('Pass 49 Security Audit Regressions', () => {
                 mockDb
             )
             const text = rendered.messages[0]?.content.text ?? ''
-            expect(text).toContain('Prompt revision: 2026-11-24-audit-pass90')
+            expect(text).toContain('Prompt revision: 2026-11-24-audit-pass91')
             expect(text).toContain('spread 3-char tokenization')
             expect(text).toContain('sentinel identifier')
             expect(text).toContain('non-canonical status/enum')

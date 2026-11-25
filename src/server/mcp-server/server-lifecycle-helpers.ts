@@ -164,6 +164,7 @@ export async function startSelectedTransport(params: {
         }
 
         await server.connect(stdioTransport)
+        globalSubscriptionManager.registerServer('stdio', server)
         logger.info('MCP server started on stdio', { module: 'McpServer' })
 
         process.on('SIGINT', handleStdioShutdown)

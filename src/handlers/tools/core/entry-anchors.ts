@@ -14,6 +14,7 @@ import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
 } from '../../../utils/workspace-resolver.js'
+import { getSanitizedGitEnv } from '../git-workdir.js'
 
 const execFileAsync = promisify(execFile)
 const MAX_AUTO_ANCHORS = 25
@@ -81,7 +82,7 @@ async function fetchRepoCommitFilesBatch(
         const { stdout } = await execFileAsync(
             'git',
             ['show', '--name-only', '-z', `--pretty=format:${COMMIT_MARKER_PREFIX}%H%x00`, ...shas],
-            { cwd: repoPath, encoding: 'utf-8', timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 }
+            { cwd: repoPath, encoding: 'utf-8', timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024, env: getSanitizedGitEnv() }
         )
         return parseGitShowPerCommitFiles(stdout, shas)
     } catch {
@@ -98,7 +99,7 @@ async function fetchRepoCommitFilesBatch(
                     const { stdout } = await execFileAsync(
                         'git',
                         ['show', '--name-only', '-z', '--pretty=format:', sha],
-                        { cwd: repoPath, encoding: 'utf-8', timeout: 5000, windowsHide: true }
+                        { cwd: repoPath, encoding: 'utf-8', timeout: 5000, windowsHide: true, env: getSanitizedGitEnv() }
                     )
                     return {
                         sha: sha.toLowerCase(),

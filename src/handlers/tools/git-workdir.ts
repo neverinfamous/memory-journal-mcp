@@ -195,8 +195,68 @@ export function resolveFallbackGitCwd(
     )
 }
 
+const GIT_OVERRIDE_ENV_KEYS = [
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_COMMON_DIR',
+    'GIT_INDEX_FILE',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+] as const
+
+/** Clone `process.env` with git repo-override variables stripped so `{ cwd }` controls repo discovery. */
+export function getSanitizedGitEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env }
+    for (const key of GIT_OVERRIDE_ENV_KEYS) {
+        Reflect.deleteProperty(env, key)
+    }
+    return env
+}
+
+function normalizeGitTargetIdentity(
+    raw: string,
+    registry: ToolHandlerConfig['projectRegistry']
+): string {
+    const trimmed = raw.trim()
+    if (registry !== undefined) {
+        const matched = findMatchedRegistryKey(registry, trimmed)
+        if (matched !== undefined) return matched.toLowerCase()
+    }
+    const slug = trimmed.split(/[/\\]/).filter(Boolean).pop() ?? trimmed
+    if (registry !== undefined) {
+        const slugMatched = findCanonicalRegistryKey(slug, registry)
+        if (slugMatched !== undefined) return slugMatched.toLowerCase()
+    }
+    return slug.toLowerCase()
+}
+
+function assertNoConflictingGitTargets(
+    input: GitWorkingDirInput,
+    registry: ToolHandlerConfig['projectRegistry']
+): void {
+    const repoVal = input.repo?.trim()
+    const repoNameVal = input.repo_name?.trim()
+    if (repoVal !== undefined && repoNameVal !== undefined && repoVal.toLowerCase() !== repoNameVal.toLowerCase()) {
+        throw new ValidationError("Conflicting values provided for 'repo' and 'repo_name'.")
+    }
+    const wsVal = input.workspace_id?.trim()
+    const wsAliasVal = input.workspaceId?.trim()
+    if (wsVal !== undefined && wsAliasVal !== undefined && wsVal.toLowerCase() !== wsAliasVal.toLowerCase()) {
+        throw new ValidationError("Conflicting values provided for 'workspace_id' and 'workspaceId'.")
+    }
+    const concreteIdentities = [input.repo, input.repo_name, input.workspace_id, input.workspaceId]
+        .filter((v): v is string => typeof v === 'string')
+        .map((v) => v.trim())
+        .filter((v) => v !== '' && v !== '*' && v.toLowerCase() !== 'default')
+        .map((v) => normalizeGitTargetIdentity(v, registry))
+    if (concreteIdentities.length > 1 && concreteIdentities.some((id) => id !== concreteIdentities[0])) {
+        throw new ValidationError('Conflicting repository/workspace target aliases were provided.')
+    }
+}
+
 export function resolveGitWorkingDir(input: GitWorkingDirInput, config?: ToolHandlerConfig): string {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    assertNoConflictingGitTargets(input, registry)
     const rawTarget = input.repo ?? input.repo_name ?? input.workspace_id ?? input.workspaceId
     const trimmedRawTarget = rawTarget?.trim()
     // [INVARIANT] Sentinel workspaces ('default', '*') never name a repository; fall through to project_number.

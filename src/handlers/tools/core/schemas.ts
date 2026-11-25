@@ -290,9 +290,19 @@ function preprocessSortByOnly(val: unknown): unknown {
         if (/^(?:0|[1-9]\d*)$/.test(trimmed)) {
             const parsed = Number(trimmed)
             if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
-                if (obj['offset'] === undefined) obj['offset'] = parsed
-                delete obj['cursor']
-                modified = true
+                const existingOffset = obj['offset']
+                const offsetStr =
+                    typeof existingOffset === 'string' || typeof existingOffset === 'number'
+                        ? String(existingOffset).trim()
+                        : undefined
+                if (existingOffset === undefined) {
+                    obj['offset'] = parsed
+                    Reflect.deleteProperty(obj, 'cursor')
+                    modified = true
+                } else if (offsetStr === trimmed) {
+                    Reflect.deleteProperty(obj, 'cursor')
+                    modified = true
+                }
             }
         }
     }
@@ -314,7 +324,17 @@ export const GetRecentEntriesSchema = z.preprocess(
         cursor: z.string().optional(),
         offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
         include_archived: z.boolean().optional().default(false),
-    }).strict()
+    })
+        .strict()
+        .superRefine((data, ctx) => {
+            if (data.cursor !== undefined && /^(?:0|[1-9]\d*)$/.test(data.cursor.trim())) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: 'Conflicting cursor and offset values specified',
+                    path: ['cursor'],
+                })
+            }
+        })
 )
 
 export const GetRecentEntriesSchemaMcp = z.preprocess(

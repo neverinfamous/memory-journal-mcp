@@ -123,7 +123,14 @@ function withInjectedGithubContext(context: ToolContext, injectedGithub: NonNull
     }
     let derived = byGithub.get(injectedGithub)
     if (derived === undefined) {
-        derived = { ...context, github: injectedGithub }
+        const descriptors = Object.getOwnPropertyDescriptors(context)
+        descriptors.github = { value: injectedGithub, enumerable: true, writable: true, configurable: true }
+        const baseTarget: ToolContext = {
+            db: context.db,
+            vectorManager: undefined,
+            github: injectedGithub,
+        }
+        derived = Object.defineProperties(baseTarget, descriptors)
         byGithub.set(injectedGithub, derived)
     }
     return derived

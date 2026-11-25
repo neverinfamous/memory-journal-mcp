@@ -2,7 +2,7 @@
  * Monotonic nested RPC override scope-bound validation for Code Mode `secure-dispatcher.ts`.
  */
 
-import type { ToolContext, ToolDefinition } from '../../../types/index.js'
+import type { ToolDefinition } from '../../../types/index.js'
 import type { RpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { pairStoredScope, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
@@ -81,6 +81,25 @@ function checkRecordWorkspaceAgainstPinnedProj(
     return undefined
 }
 
+function checkProjectNumAgainstPinnedWorkspace(
+    num: number,
+    fieldName: string,
+    effectivePinnedWs: string,
+    registry: RegistryMap
+): Record<string, unknown> | undefined {
+    if (!Number.isSafeInteger(num) || num <= 0) {
+        return validationErrResult(
+            `${fieldName} ${String(num)} conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+        )
+    }
+    try {
+        pairStoredScope(effectivePinnedWs, num, registry)
+        return undefined
+    } catch (err) {
+        return validationErrResult(err instanceof Error ? err.message : String(err))
+    }
+}
+
 function checkRecordProjectAliasAgainstBounds(
     rawProject: unknown,
     effectivePinnedWs: string | undefined,
@@ -88,10 +107,15 @@ function checkRecordProjectAliasAgainstBounds(
     registry: RegistryMap
 ): Record<string, unknown> | undefined {
     if (typeof rawProject === 'number') {
-        if (Number.isFinite(rawProject) && pinnedProj !== undefined && rawProject !== pinnedProj) {
-            return validationErrResult(
-                `project ${String(rawProject)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
-            )
+        if (Number.isFinite(rawProject)) {
+            if (pinnedProj !== undefined && rawProject !== pinnedProj) {
+                return validationErrResult(
+                    `project ${String(rawProject)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+                )
+            }
+            if (effectivePinnedWs !== undefined && pinnedProj === undefined) {
+                return checkProjectNumAgainstPinnedWorkspace(rawProject, 'project', effectivePinnedWs, registry)
+            }
         }
         return undefined
     }
@@ -109,6 +133,14 @@ function checkRecordProjectAliasAgainstBounds(
             return validationErrResult(
                 `project '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
             )
+        }
+        if (effectivePinnedWs !== undefined && pinnedProj === undefined) {
+            if (parsed === undefined) {
+                return validationErrResult(
+                    `project '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+                )
+            }
+            return checkProjectNumAgainstPinnedWorkspace(parsed, 'project', effectivePinnedWs, registry)
         }
         return undefined
     }
@@ -185,6 +217,34 @@ function checkPinnedProjectNumberField(
     return undefined
 }
 
+function checkPinnedWorkspaceProjectNumberField(
+    rawProj: unknown,
+    effectivePinnedWs: string,
+    registry: RegistryMap
+): Record<string, unknown> | undefined {
+    if (typeof rawProj === 'number' && Number.isFinite(rawProj)) {
+        return checkProjectNumAgainstPinnedWorkspace(rawProj, 'project_number', effectivePinnedWs, registry)
+    }
+    if (typeof rawProj !== 'string') return undefined
+    const trimmed = rawProj.trim()
+    if (trimmed === '') return undefined
+    if (/^[+-]?\d+$/.test(trimmed) || /^[p#]-?\d+$/i.test(trimmed)) {
+        const parsedInt = parsePrefixedProjectInt(trimmed)
+        if (parsedInt === undefined) {
+            return validationErrResult(
+                `project_number '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+            )
+        }
+        return checkProjectNumAgainstPinnedWorkspace(parsedInt, 'project_number', effectivePinnedWs, registry)
+    }
+    if (trimmed !== '*' && workspacesConflict(trimmed, effectivePinnedWs, registry)) {
+        return validationErrResult(
+            `project_number '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+        )
+    }
+    return undefined
+}
+
 function checkRecordAgainstRpcBounds(
     rec: Record<string, unknown>,
     pinnedWs: string | undefined,
@@ -222,6 +282,9 @@ function checkRecordAgainstRpcBounds(
         if (wsProjErr !== undefined) return wsProjErr
         const pnErr = checkPinnedProjectNumberField(rec, pinnedProj, registry)
         if (pnErr !== undefined) return pnErr
+    } else if (effectivePinnedWs !== undefined) {
+        const wsProjErr = checkPinnedWorkspaceProjectNumberField(rec['project_number'], effectivePinnedWs, registry)
+        if (wsProjErr !== undefined) return wsProjErr
     }
     return undefined
 }
@@ -230,7 +293,7 @@ function checkRecordAgainstRpcBounds(
 export function resolveEffectiveRpcScope(
     outer: { workspaceId: string | undefined; projectId: number | string | undefined; explicitWorkspace?: boolean | undefined; sessionId?: string | undefined },
     rpcOverrides: RpcExecutionOverrides | undefined,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
+    registry: RegistryMap
 ):
     | { effectiveWorkspaceId: string | undefined; effectiveProjectId: number | string | undefined; effectiveExplicitWorkspace: boolean | undefined; effectiveSessionId: string | undefined; effectiveUseSessionIdInCtx: string | undefined }
     | { errorResult: Record<string, unknown> } {
@@ -272,7 +335,7 @@ export function resolveEffectiveRpcScope(
             return { errorResult: validationErrResult(err instanceof Error ? err.message : String(err)) }
         }
     }
-    const effectiveExplicitWorkspace = effectiveWorkspaceId !== workspaceId ? true : explicitWorkspace
+    const effectiveExplicitWorkspace = hasConcreteOverrideWs || effectiveWorkspaceId !== workspaceId ? true : explicitWorkspace
     const effectiveSessionId =
         rpcOverrides?.sessionId !== undefined && rpcOverrides.sessionId.trim() !== ''
             ? rpcOverrides.sessionId.trim()

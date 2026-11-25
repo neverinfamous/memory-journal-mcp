@@ -42,7 +42,7 @@ function checkMaxCountConflicts(
     ctx: z.RefinementCtx
 ): void {
     const defined = [d.maxCount, d.max_count, d.limit]
-        .filter((v): v is number | string => v !== undefined && v !== '')
+        .filter((v): v is number | string => v !== undefined)
         .map((v) => coerceRelaxed(v))
     if (defined.length > 1 && defined.some((v) => !Object.is(v, defined[0]))) {
         ctx.addIssue({
@@ -176,13 +176,13 @@ export const GitSearchOptionsSchemaMcp = z
 
 export const GitReleaseInfoOptionsSchema = z
     .object({
-        ref: z.string().optional(),
-        repo: z.string().optional(),
-        repo_name: z.string().optional(),
+        ref: z.string().max(255).optional(),
+        repo: z.string().max(255).optional(),
+        repo_name: z.string().max(255).optional(),
         workspace_id: z.string().max(255).optional(),
         workspaceId: z.string().max(255).optional(),
         project_number: StrictProjectNumberSchema.optional(),
-        cwd: z.string().optional(),
+        cwd: z.string().max(500).optional(),
     })
     .strict()
 

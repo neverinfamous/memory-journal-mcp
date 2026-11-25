@@ -24,9 +24,19 @@ export function preprocessTeamSortByOnly(val: unknown): unknown {
         if (/^(?:0|[1-9]\d*)$/.test(trimmed)) {
             const parsed = Number(trimmed)
             if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
-                if (obj['offset'] === undefined) obj['offset'] = parsed
-                delete obj['cursor']
-                modified = true
+                const existingOffset = obj['offset']
+                const offsetStr =
+                    typeof existingOffset === 'string' || typeof existingOffset === 'number'
+                        ? String(existingOffset).trim()
+                        : undefined
+                if (existingOffset === undefined) {
+                    obj['offset'] = parsed
+                    Reflect.deleteProperty(obj, 'cursor')
+                    modified = true
+                } else if (offsetStr === trimmed) {
+                    Reflect.deleteProperty(obj, 'cursor')
+                    modified = true
+                }
             }
         }
     }
