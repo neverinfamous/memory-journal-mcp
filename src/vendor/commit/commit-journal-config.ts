@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
-import { redactSensitiveText } from './commit-security.js';
+import { assertSafeCliPath, redactSensitiveText } from './commit-security.js';
 
 const FORBIDDEN_REGISTRY_KEYS: ReadonlySet<string> = new Set([
   '__proto__',
@@ -28,6 +28,7 @@ export type ProjectRegistry = Record<string, ProjectRegistryEntry>;
 export interface NormalizedRegistryEntry {
   workspaceId: string;
   normalizedPath: string;
+  canonicalNormalizedPath?: string;
   projectNumber?: number;
 }
 
@@ -42,13 +43,44 @@ const MAX_CONFIG_CACHE_ENTRIES = 16;
 const configCache = new Map<string, CachedConfigEntry>();
 const WIN32_DRIVE_PATH_RE = /^[a-zA-Z]:[\\/]/;
 
-export function normalizeRegistryPath(targetPath: string): string {
-  const isWinSyntax = process.platform === 'win32' || WIN32_DRIVE_PATH_RE.test(targetPath);
-  const resolved = WIN32_DRIVE_PATH_RE.test(targetPath)
+function tryRealpathForRegistry(resolvedPath: string): string | null {
+  try {
+    return fs.realpathSync.native(resolvedPath);
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeRegistryPath(targetPath: string, baseDir?: string): string {
+  const isWinDrive = WIN32_DRIVE_PATH_RE.test(targetPath);
+  const isWinSyntax = process.platform === 'win32' || isWinDrive;
+  const resolved = isWinDrive
     ? path.win32.resolve(targetPath)
-    : path.resolve(targetPath);
+    : baseDir !== undefined && !path.isAbsolute(targetPath)
+      ? path.resolve(baseDir, targetPath)
+      : path.resolve(targetPath);
   const slashed = resolved.replace(/\\/g, '/').replace(/\/+$/, '');
   return isWinSyntax ? slashed.toLowerCase() : slashed;
+}
+
+function normalizeRegistryEntryPaths(
+  rawEntryPath: string,
+  configDir: string
+): { normalizedPath: string; canonicalNormalizedPath?: string } {
+  const normalizedPath = normalizeRegistryPath(rawEntryPath, configDir);
+  const isCrossOsWinPath = process.platform !== 'win32' && WIN32_DRIVE_PATH_RE.test(rawEntryPath);
+  if (isCrossOsWinPath) {
+    return { normalizedPath };
+  }
+  const absPath = path.isAbsolute(rawEntryPath) ? path.resolve(rawEntryPath) : path.resolve(configDir, rawEntryPath);
+  const realPath = tryRealpathForRegistry(absPath);
+  if (realPath === null) {
+    return { normalizedPath };
+  }
+  const canonicalNormalizedPath = normalizeRegistryPath(realPath);
+  return canonicalNormalizedPath !== normalizedPath
+    ? { normalizedPath, canonicalNormalizedPath }
+    : { normalizedPath };
 }
 
 export function getDefaultConfigPath(): string {
@@ -86,14 +118,31 @@ function sanitizeProjectRegistry(raw: unknown, configPath: string): ProjectRegis
   return Object.keys(clean).length > 0 ? clean : undefined;
 }
 
+const MAX_CONFIG_FILE_BYTES = 5 * 1024 * 1024;
+
 function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefined {
+  const trimmedConfigPath = configPath?.trim();
   const effectiveConfigPath =
-    configPath !== undefined && configPath.length > 0
-      ? path.resolve(configPath)
+    trimmedConfigPath !== undefined && trimmedConfigPath.length > 0
+      ? path.resolve(trimmedConfigPath)
       : getDefaultConfigPath();
 
-  const stats = fs.statSync(effectiveConfigPath, { throwIfNoEntry: false });
-  if (stats === undefined || !stats.isFile()) {
+  try {
+    assertSafeCliPath(effectiveConfigPath, 'config');
+  } catch (err: unknown) {
+    configCache.delete(effectiveConfigPath);
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`⚠️ Ignoring unsafe memory-journal config path: ${redactSensitiveText(rawMsg)}`);
+    return undefined;
+  }
+
+  const stats = fs.lstatSync(effectiveConfigPath, { throwIfNoEntry: false });
+  if (stats === undefined || stats.isSymbolicLink() || !stats.isFile() || stats.size > MAX_CONFIG_FILE_BYTES) {
+    if (stats !== undefined && (stats.isSymbolicLink() || stats.size > MAX_CONFIG_FILE_BYTES)) {
+      console.warn(
+        `⚠️ Ignoring unsafe memory-journal config at ${effectiveConfigPath} (symlink or exceeds 5 MiB limit).`
+      );
+    }
     configCache.delete(effectiveConfigPath);
     return undefined;
   }
@@ -112,13 +161,20 @@ function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefin
         ? parsedJson.projectRegistry
         : undefined;
     const projectRegistry = sanitizeProjectRegistry(rawRegistry, effectiveConfigPath);
+    const configDir = path.dirname(effectiveConfigPath);
     const normalizedEntries =
       projectRegistry !== undefined
-        ? Object.entries(projectRegistry).map(([workspaceId, entry]) => ({
-            workspaceId,
-            normalizedPath: normalizeRegistryPath(entry.path),
-            ...(entry.project_number !== undefined ? { projectNumber: entry.project_number } : {}),
-          }))
+        ? Object.entries(projectRegistry).map(([workspaceId, entry]) => {
+            const paths = normalizeRegistryEntryPaths(entry.path, configDir);
+            return {
+              workspaceId,
+              normalizedPath: paths.normalizedPath,
+              ...(paths.canonicalNormalizedPath !== undefined
+                ? { canonicalNormalizedPath: paths.canonicalNormalizedPath }
+                : {}),
+              ...(entry.project_number !== undefined ? { projectNumber: entry.project_number } : {}),
+            };
+          })
         : undefined;
     if (configCache.size >= MAX_CONFIG_CACHE_ENTRIES && !configCache.has(effectiveConfigPath)) {
       const oldestKey = configCache.keys().next().value;

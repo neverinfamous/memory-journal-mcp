@@ -248,8 +248,8 @@ describe('Pass 94 Adversarial Performance Regressions', () => {
         }
     })
 
-    it('AP1-AP4: bumps AUDIT_PROMPT_REVISION to 2026-11-25-audit-pass94 with updated gates', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
+    it('AP1-AP4: bumps AUDIT_PROMPT_REVISION to 2026-11-25-audit-pass96 with updated gates', () => {
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass96')
         const def = getPerformanceAuditPromptDefinition()
         expect(def.description).toContain('adversarial')
     })

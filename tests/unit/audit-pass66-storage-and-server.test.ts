@@ -425,11 +425,11 @@ describe('Pass 66 Audit — Storage, Lock, Server, CLI, RBAC & Prompts', () => {
             expect(authErr.success).toBe(false)
             expect(authErr.error).toMatch(/Access denied|permission|viewer/i)
 
-            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
+            expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass96')
             const cqText =
                 getCodeQualityAuditPromptDefinition().handler({ target: 'src', copilot: 'false' }, db)
                     .messages[0]?.content.text ?? ''
-            expect(cqText).toContain('Prompt revision: 2026-11-25-audit-pass95')
+            expect(cqText).toContain('Prompt revision: 2026-11-25-audit-pass96')
             expect(cqText).toContain('relaxedNumber()')
             expect(cqText).toContain('detaching `this.worker = null`')
             expect(cqText).toContain('`unwrapNestedExecuteCode`')

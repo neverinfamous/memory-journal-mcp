@@ -74,6 +74,16 @@ function parseGitShowPerCommitFiles(
     return mapped
 }
 
+function isRepoLevelGitFailure(err: unknown): boolean {
+    if (err === null || typeof err !== 'object') return false
+    if ('killed' in err && err.killed === true) return true
+    const code = 'code' in err && typeof err.code === 'string' ? err.code : ''
+    if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'EACCES') return true
+    const stderr = 'stderr' in err && typeof err.stderr === 'string' ? err.stderr : ''
+    const msg = err instanceof Error ? err.message : ''
+    return /not a git repository/i.test(stderr) || /not a git repository/i.test(msg)
+}
+
 async function fetchRepoCommitFilesBatch(
     repoPath: string,
     shas: readonly string[]
@@ -85,8 +95,8 @@ async function fetchRepoCommitFilesBatch(
             { cwd: repoPath, encoding: 'utf-8', timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024, env: getSanitizedGitEnv() }
         )
         return parseGitShowPerCommitFiles(stdout, shas)
-    } catch {
-        if (shas.length <= 1) return new Map()
+    } catch (err: unknown) {
+        if (shas.length <= 1 || isRepoLevelGitFailure(err)) return new Map()
         const mapped = new Map<string, string[]>()
         const shaChunks: (readonly string[])[] = []
         for (let i = 0; i < shas.length; i += GIT_SHOW_BATCH_CONCURRENCY) {

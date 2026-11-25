@@ -46,6 +46,7 @@ interface CachedPackageCheck {
 }
 
 const MAX_PKG_CACHE_ENTRIES = 32;
+const MAX_PACKAGE_JSON_BYTES = 1 * 1024 * 1024;
 const packageDirCache = new Map<string, CachedPackageCheck>();
 
 const MEMORY_JOURNAL_CLI_SEGMENTS: readonly (readonly string[])[] = [
@@ -81,7 +82,7 @@ function findCliInNodeModules(nodeModulesDir: string): string | null {
 function isMemoryJournalPackageDir(dirPath: string): boolean {
   const pkgPath = path.join(dirPath, 'package.json');
   const stats = fs.lstatSync(pkgPath, { throwIfNoEntry: false });
-  if (stats === undefined || stats.isSymbolicLink() || !stats.isFile()) {
+  if (stats === undefined || stats.isSymbolicLink() || !stats.isFile() || stats.size > MAX_PACKAGE_JSON_BYTES) {
     packageDirCache.delete(pkgPath);
     return false;
   }
@@ -268,7 +269,7 @@ export function resolveInProcessEntryModule(
   }
   const distDir = path.dirname(cliScriptPath);
   const pkgDir = path.dirname(distDir);
-  if (!isNonSymlinkDir(distDir) || !isContainedInRealDir(cliScriptPath, pkgDir)) {
+  if (!isTrustedPackageCli(cliScriptPath, pkgDir)) {
     return null;
   }
   const cliDir = path.join(distDir, 'cli');
@@ -304,7 +305,8 @@ export async function tryCreateJournalEntryInProcess(
   entryModulePath: string,
   journalFile: string,
   cwd: string,
-  dryRunLinks?: boolean
+  dryRunLinks?: boolean,
+  configPath?: string
 ): Promise<boolean> {
   // [INVARIANT]: Never import Node's native SQLCipher/sqlite-vec addon inside Bun runtime.
   if (typeof process.versions['bun'] !== 'undefined') {
@@ -328,6 +330,10 @@ export async function tryCreateJournalEntryInProcess(
   }
   const prevCwd = process.cwd();
   const prevExitCode = process.exitCode;
+  const trimmedConfig = configPath?.trim();
+  const hasExplicitConfig = trimmedConfig !== undefined && trimmedConfig.length > 0;
+  const prevConfigEnv = process.env['MEMORY_JOURNAL_CONFIG'];
+  const prevRegistryEnv = process.env['PROJECT_REGISTRY'];
   const targetCwd = path.resolve(cwd);
   const resolvedPrevCwd = path.resolve(prevCwd);
   const sameCwd =
@@ -338,6 +344,10 @@ export async function tryCreateJournalEntryInProcess(
   const shouldChdir = targetStats !== undefined && targetStats.isDirectory() && !sameCwd;
   if (shouldChdir) {
     process.chdir(targetCwd);
+  }
+  if (hasExplicitConfig) {
+    process.env['MEMORY_JOURNAL_CONFIG'] = path.resolve(trimmedConfig);
+    delete process.env['PROJECT_REGISTRY'];
   }
   try {
     const exitCode = await createInProcess({
@@ -350,6 +360,12 @@ export async function tryCreateJournalEntryInProcess(
     return true;
   } finally {
     process.exitCode = prevExitCode;
+    if (hasExplicitConfig) {
+      if (prevConfigEnv !== undefined) process.env['MEMORY_JOURNAL_CONFIG'] = prevConfigEnv;
+      else delete process.env['MEMORY_JOURNAL_CONFIG'];
+      if (prevRegistryEnv !== undefined) process.env['PROJECT_REGISTRY'] = prevRegistryEnv;
+      else delete process.env['PROJECT_REGISTRY'];
+    }
     if (shouldChdir) {
       try {
         process.chdir(prevCwd);
@@ -362,7 +378,14 @@ export async function tryCreateJournalEntryInProcess(
 
 const CMD_META_RE = /[\s&|<>^()%!;,=\r\n]/;
 
-function buildWinCmdExeLine(command: string, cliArgs: readonly string[]): string {
+function escapeCmdPercent(cmdLine: string, inQuotes: boolean): string {
+  if (!inQuotes) return `${cmdLine}^%`;
+  let bs = 0;
+  while (bs < cmdLine.length && cmdLine[cmdLine.length - 1 - bs] === '\\') bs++;
+  return `${cmdLine}${bs > 0 ? '\\'.repeat(bs) : ''}"^%"`;
+}
+
+export function buildWinCmdExeLine(command: string, cliArgs: readonly string[]): string {
   const tokens = [command, ...cliArgs];
   for (const raw of tokens) {
     if (raw.includes('"') || raw.includes('\0') || raw.includes('\r') || raw.includes('\n')) {
@@ -379,7 +402,7 @@ function buildWinCmdExeLine(command: string, cliArgs: readonly string[]): string
   for (let i = 0; i < crtJoined.length; i++) {
     const ch = crtJoined[i] ?? '';
     if (ch === '"') { inQuotes = !inQuotes; cmdLine += ch; }
-    else if (ch === '%') { cmdLine += inQuotes ? '"^%"' : '^%'; }
+    else if (ch === '%') { cmdLine = escapeCmdPercent(cmdLine, inQuotes); }
     else if (!inQuotes && /[&|<>^();!]/.test(ch)) { cmdLine += `^${ch}`; }
     else { cmdLine += ch; }
   }
@@ -389,23 +412,34 @@ function buildWinCmdExeLine(command: string, cliArgs: readonly string[]): string
 export async function persistJournalEntryFile(
   journalFile: string,
   cwd: string,
-  dryRunLinks?: boolean
+  dryRunLinks?: boolean,
+  configPath?: string
 ): Promise<void> {
-  const resolvedCli = resolveMemoryJournalCli(cwd);
+  const trimmedConfig = configPath?.trim();
+  const effectiveConfig = trimmedConfig !== undefined && trimmedConfig.length > 0 ? path.resolve(trimmedConfig) : undefined;
+  const resolvedCli = resolveMemoryJournalCli(cwd, effectiveConfig);
   const inProcessModule = typeof process.versions['bun'] === 'undefined' ? resolveInProcessEntryModule(resolvedCli) : null;
-  const ranInProcess = inProcessModule !== null ? await tryCreateJournalEntryInProcess(inProcessModule, journalFile, cwd, dryRunLinks) : false;
+  const ranInProcess =
+    inProcessModule !== null
+      ? await tryCreateJournalEntryInProcess(inProcessModule, journalFile, cwd, dryRunLinks, effectiveConfig)
+      : false;
   if (!ranInProcess) {
     const cliArgs = [...resolvedCli.prefixArgs, 'entry', 'create', '--file', journalFile, ...(dryRunLinks === true ? ['--dry-run-links'] : [])];
+    let childEnv: NodeJS.ProcessEnv = process.env;
+    if (effectiveConfig !== undefined) {
+      childEnv = { ...process.env, MEMORY_JOURNAL_CONFIG: effectiveConfig };
+      delete childEnv['PROJECT_REGISTRY'];
+    }
     if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(resolvedCli.command)) {
       const rawComSpec = process.env['ComSpec']?.trim();
       const cmdExe = rawComSpec !== undefined && rawComSpec.length > 0 ? rawComSpec : 'cmd.exe';
       const res = spawnSync(cmdExe, ['/d', '/v:off', '/s', '/c', buildWinCmdExeLine(resolvedCli.command, cliArgs)], {
-        stdio: 'inherit', shell: false, windowsVerbatimArguments: true, windowsHide: true, cwd,
+        stdio: 'inherit', shell: false, windowsVerbatimArguments: true, windowsHide: true, cwd, env: childEnv,
       });
       if (res.error !== undefined) throw res.error;
       if (res.status !== 0) throw new Error(`Windows batch runner exited with status ${String(res.status)}`);
       return;
     }
-    execFileSync(resolvedCli.command, cliArgs, { stdio: 'inherit', shell: false, windowsHide: true, cwd });
+    execFileSync(resolvedCli.command, cliArgs, { stdio: 'inherit', shell: false, windowsHide: true, cwd, env: childEnv });
   }
 }

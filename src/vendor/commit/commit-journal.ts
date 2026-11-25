@@ -75,36 +75,54 @@ export function isValidCategory(cat: string): cat is CommitCategory {
   return VALID_CATEGORY_SET.has(cat);
 }
 
+function getCandidateRegistryPaths(cwd: string): string[] {
+  const logical = normalizeRegistryPath(cwd);
+  try {
+    const real = fs.realpathSync.native(cwd);
+    const canonical = normalizeRegistryPath(real);
+    return canonical !== logical ? [logical, canonical] : [logical];
+  } catch {
+    return [logical];
+  }
+}
+
 function findLongestRegistryPathMatch(
   entries: readonly NormalizedRegistryEntry[],
-  normalizedCwd: string
+  candidatePaths: readonly string[]
 ): { workspaceId: string; projectNumber?: number; matchLen: number } | undefined {
   let best: { workspaceId: string; projectNumber?: number; matchLen: number } | undefined;
   for (const entry of entries) {
-    const isMatch =
-      normalizedCwd === entry.normalizedPath ||
-      normalizedCwd.startsWith(`${entry.normalizedPath}/`);
-    if (isMatch && (best === undefined || entry.normalizedPath.length > best.matchLen)) {
-      best = {
-        workspaceId: entry.workspaceId,
-        ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
-        matchLen: entry.normalizedPath.length,
-      };
+    const entryPaths =
+      entry.canonicalNormalizedPath !== undefined
+        ? [entry.normalizedPath, entry.canonicalNormalizedPath]
+        : [entry.normalizedPath];
+    for (const cwdPath of candidatePaths) {
+      for (const entryPath of entryPaths) {
+        const isMatch = cwdPath === entryPath || cwdPath.startsWith(`${entryPath}/`);
+        if (isMatch && (best === undefined || entryPath.length > best.matchLen)) {
+          best = {
+            workspaceId: entry.workspaceId,
+            ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
+            matchLen: entryPath.length,
+          };
+        }
+      }
     }
   }
   return best;
 }
 
-function findWorkspaceByProjectNumber(
+function findWorkspacesByProjectNumber(
   entries: readonly NormalizedRegistryEntry[],
   projectNumber: number
-): string | undefined {
+): string[] {
+  const matches: string[] = [];
   for (const entry of entries) {
     if (entry.projectNumber === projectNumber) {
-      return entry.workspaceId;
+      matches.push(entry.workspaceId);
     }
   }
-  return undefined;
+  return matches;
 }
 
 const BOM_RE = /^\uFEFF/;
@@ -129,7 +147,7 @@ export function resolveJournalTarget(
     return result;
   }
 
-  const bestPathMatch = findLongestRegistryPathMatch(entries, normalizeRegistryPath(cwd));
+  const bestPathMatch = findLongestRegistryPathMatch(entries, getCandidateRegistryPaths(cwd));
   if (explicitProjectNumber !== undefined) {
     if (bestPathMatch !== undefined && bestPathMatch.projectNumber === explicitProjectNumber) {
       result.workspaceId = bestPathMatch.workspaceId;
@@ -142,9 +160,16 @@ export function resolveJournalTarget(
       result.conflictReason = conflictReason;
       console.warn(`⚠️ AUTONOMOUS HEALING: ${conflictReason}`);
     } else {
-      const matchedWorkspace = findWorkspaceByProjectNumber(entries, explicitProjectNumber);
-      if (matchedWorkspace !== undefined) {
-        result.workspaceId = matchedWorkspace;
+      const matchedWorkspaces = findWorkspacesByProjectNumber(entries, explicitProjectNumber);
+      if (matchedWorkspaces.length === 1) {
+        const onlyWorkspace = matchedWorkspaces[0];
+        if (onlyWorkspace !== undefined) {
+          result.workspaceId = onlyWorkspace;
+        }
+      } else if (matchedWorkspaces.length > 1) {
+        const conflictReason = `--journal-project ${String(explicitProjectNumber)} matches multiple registered workspaces (${matchedWorkspaces.join(', ')}). Refusing ambiguous journal write.`;
+        result.conflictReason = conflictReason;
+        console.warn(`⚠️ AUTONOMOUS HEALING: ${conflictReason}`);
       }
     }
   } else if (bestPathMatch !== undefined) {
@@ -191,7 +216,8 @@ export function generateHistoryEntry(
   type: string,
   historyContent: string,
   cwd?: string,
-  resolvedTarget?: ResolvedJournalTarget
+  resolvedTarget?: ResolvedJournalTarget,
+  configPath?: string
 ): string {
   const parsedCategory = parseCategory(historyContent, type);
   const category = args.category ?? parsedCategory.category;
@@ -226,15 +252,12 @@ export function generateHistoryEntry(
   body += `\nHistory-Validation: ${args.validation}`;
   if (args.journal) {
     body += `\nHistory-Journal: true`;
+    const effectiveTarget =
+      resolvedTarget ?? (cwd !== undefined ? resolveJournalTarget(cwd, args['journal-project'], configPath) : undefined);
     const journalProject =
-      resolvedTarget?.conflictReason !== undefined
+      effectiveTarget?.conflictReason !== undefined
         ? undefined
-        : args['journal-project'] ??
-          (resolvedTarget !== undefined
-            ? resolvedTarget.projectNumber
-            : cwd !== undefined
-              ? resolveJournalTarget(cwd).projectNumber
-              : undefined);
+        : args['journal-project'] ?? effectiveTarget?.projectNumber;
     if (journalProject !== undefined) {
       body += `\nHistory-Journal-Project: ${journalProject}`;
     }
@@ -370,7 +393,7 @@ export async function createJournalEntry(
     );
 
     try {
-      await persistJournalEntryFile(journalFile, cwd, args['dry-run-links']);
+      await persistJournalEntryFile(journalFile, cwd, args['dry-run-links'], configPath);
     } finally {
       cleanupPrivateTempDir(journalDir);
     }

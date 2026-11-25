@@ -52,6 +52,7 @@
         "interceptors/docker-tty-repl-guard.ts",
         "interceptors/find-interceptor.ts",
         "interceptors/git-add-broad-scan.ts",
+        "interceptors/git-commit-args.ts",
         "interceptors/git-commit-rewrite.ts",
         "interceptors/git-add-guards.ts",
         "interceptors/git-guards.ts",
@@ -68,10 +69,12 @@
         "interceptors/package-manager-js-rewrites.ts",
         "interceptors/package-manager-timeouts.ts",
         "interceptors/package-manager-tool-rewrites.ts",
+        "interceptors/repl-body-parsers.ts",
         "interceptors/repl-command-guards.ts",
         "interceptors/repl-script-scanner.ts",
         "interceptors/repl-tui-constants.ts",
         "interceptors/repl-tui-interceptor.ts",
+        "interceptors/repl-watch-pwsh-guards.ts",
         "interceptors/ripgrep-flag-normalize.ts",
         "interceptors/ripgrep-interceptor.ts",
         "interceptors/ripgrep-pattern-heal.ts",
@@ -140,8 +143,8 @@
         "commit-journal-config.ts",
         "commit-security.ts"
       ],
-      "syncedAt": "2026-11-25T05:26:27.695Z",
-      "syncedFromCommit": "8da1916bf3cf1e1092e5579ba5bbbc29f6131916"
+      "syncedAt": "2026-11-25T12:03:29.549Z",
+      "syncedFromCommit": "9fde26dfa1d2480b4556ead2d85fb6934cf0d282"
     }
   }
 }

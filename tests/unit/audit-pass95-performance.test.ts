@@ -347,7 +347,7 @@ describe('Pass 95 Adversarial Performance Remediations', () => {
         expect(getTeamVectorTools(ctx)[1]?.inputSchema).toBe(getTeamVectorTools(ctx)[1]?.inputSchema)
         expect(getKanbanTools(ctx)[0]?.inputSchema).toBe(getKanbanTools(ctx)[0]?.inputSchema)
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass96')
         const promptText =
             getPerformanceAuditPromptDefinition().handler(
                 { target: 'memory-journal-mcp' },

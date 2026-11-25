@@ -179,6 +179,34 @@ describe('update-badges script helpers', () => {
                 expect(inv.args[1]).toBe(commitScript)
             }
         })
+
+        it('falls back to tsx + scripts/commit.ts when intermediate src/vendor or dist directory is a symlink (SEC-M6)', () => {
+            const compiledCommit = path.join(tempDir, 'dist', 'vendor', 'commit', 'commit.js')
+            const commitScript = path.join(tempDir, 'scripts', 'commit.ts')
+            const outsideVendor = path.join(tempDir, 'outside-vendor')
+            fs.mkdirSync(path.dirname(compiledCommit), { recursive: true })
+            fs.mkdirSync(path.dirname(commitScript), { recursive: true })
+            fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+            fs.mkdirSync(path.join(outsideVendor, 'commit'), { recursive: true })
+            fs.writeFileSync(compiledCommit, 'export {}\n', 'utf-8')
+            fs.writeFileSync(commitScript, 'export {}\n', 'utf-8')
+            const oldDate = new Date(Date.now() - 60_000)
+            fs.utimesSync(commitScript, oldDate, oldDate)
+
+            const linkType: 'junction' | 'dir' = process.platform === 'win32' ? 'junction' : 'dir'
+            let linked = false
+            try {
+                fs.symlinkSync(outsideVendor, path.join(tempDir, 'src', 'vendor'), linkType)
+                linked = true
+            } catch {
+                // Directory symlink/junction creation may require Developer Mode
+            }
+            if (linked) {
+                const inv = buildCommitInvocation(tempDir, ['README.md'])
+                expect(inv.args[0]).toBe(path.join(tempDir, 'node_modules', 'tsx', 'dist', 'cli.mjs'))
+                expect(inv.args[1]).toBe(commitScript)
+            }
+        })
     })
 
     describe('countE2eSpecFiles & isPartialPlaywrightRun', () => {

@@ -5,7 +5,7 @@ import { getCodeQualityAuditPromptDefinition } from '../../src/handlers/prompts/
 
 describe('audit pass69 portable detectors', () => {
     it('exports updated revision and includes AP1-AP4 portable detectors without repo-specific leakage', async () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass96')
 
         const promptDb = new DatabaseAdapter(':memory:')
         await promptDb.initialize()
@@ -20,7 +20,7 @@ describe('audit pass69 portable detectors', () => {
             promptDb.close()
         }
 
-        expect(text).toContain('Prompt revision: 2026-11-25-audit-pass95')
+        expect(text).toContain('Prompt revision: 2026-11-25-audit-pass96')
 
         // AP1: HTTP batch scope & session isolation + requiredScopes parity
         expect(text).toContain('Array.isArray(body)')

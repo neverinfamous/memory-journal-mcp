@@ -1073,6 +1073,26 @@ describe('CLI Entry & Exec Commands', () => {
                 )
             ).rejects.toThrow('PROCESS_EXIT_1')
             expect(stderrOutput.join('')).toContain('exceeds maximum length')
+
+            // CQ-L4: validate metadata.tags as non-blank strings and reject blank CLI --session-id
+            expect(() =>
+                buildEntryPayload({}, { tags: 'not-an-array' }, { projectRegistry: {} })
+            ).toThrow(ValidationError)
+            expect(() =>
+                buildEntryPayload({}, { tags: ['ok', 123] }, { projectRegistry: {} })
+            ).toThrow(ValidationError)
+            expect(() =>
+                buildEntryPayload({}, { tags: ['ok', '   '] }, { projectRegistry: {} })
+            ).toThrow(ValidationError)
+            expect(() =>
+                buildEntryPayload({ sessionId: '   ' }, {}, { projectRegistry: {} })
+            ).toThrow(ValidationError)
+            const sessionFallback = buildEntryPayload(
+                {},
+                { session_id: '   ', sessionId: 'sess-valid' },
+                { projectRegistry: {} }
+            )
+            expect(sessionFallback.sessionId).toBe('sess-valid')
         })
     })
 })

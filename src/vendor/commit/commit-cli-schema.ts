@@ -166,16 +166,17 @@ function normalizeRelateSpecs(val: unknown): unknown {
   const specs: unknown[] = [];
   for (const item of rawItems) {
     if (typeof item !== 'string') {
+      if (specs.length >= MAX_ARRAY_ITEMS) return [...specs, item];
       specs.push(item);
       continue;
     }
     for (const token of item.split(',')) {
-      if (specs.length >= MAX_ARRAY_ITEMS) {
-        specs.push({ targetId: Number.NaN, relationType: 'references' });
-        return specs;
-      }
       const clean = token.trim();
       if (clean.length === 0) continue;
+      if (specs.length >= MAX_ARRAY_ITEMS) {
+        specs.push({ targetId: 1, relationType: 'references' });
+        return specs;
+      }
       const colonIdx = clean.indexOf(':');
       const idStr = colonIdx === -1 ? clean : clean.slice(0, colonIdx).trim();
       const rawRel = (colonIdx === -1 ? 'references' : clean.slice(colonIdx + 1).trim()).toLowerCase();
@@ -321,14 +322,10 @@ export type CliArgs = z.infer<typeof cliSchema>;
 function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
   for (let i = 0; i < rawArgs.length; i++) {
     const currentArg = rawArgs[i];
-    if (currentArg === undefined || currentArg === '--') {
-      break;
-    }
+    if (currentArg === undefined || currentArg === '--') break;
     const nextArg = rawArgs[i + 1];
     if (currentArg === '--history') {
-      const nextFlagName = nextArg !== undefined && nextArg.startsWith('--')
-        ? (nextArg.slice(2).split('=')[0] ?? '')
-        : '';
+      const nextFlagName = nextArg !== undefined && nextArg.startsWith('--') ? (nextArg.slice(2).split('=')[0] ?? '') : '';
       const isNextKnownFlag = nextArg === '--' || nextArg === '-m' || (nextFlagName.length > 0 && Object.hasOwn(CLI_OPTIONS, nextFlagName));
       if (nextArg === undefined || isNextKnownFlag) {
         console.warn("⚠️ AUTONOMOUS HEALING: Bare '--history' passed without text; ignoring bare flag (pass '--history \"summary\"' or '--no-history').");
@@ -337,25 +334,27 @@ function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
         continue;
       }
     }
-    if (nextArg === undefined) {
-      continue;
-    }
+    if (nextArg === undefined) continue;
     const isNegativeNumericValue = nextArg.startsWith('-') && !Number.isNaN(Number(nextArg));
-    if (currentArg === '-m' && (BULLET_PREFIX_RE.test(nextArg) || isNegativeNumericValue)) {
-      rawArgs[i] = `--msg=${nextArg}`;
-      rawArgs.splice(i + 1, 1);
+    if (currentArg === '-m') {
+      if (BULLET_PREFIX_RE.test(nextArg) || isNegativeNumericValue) {
+        rawArgs[i] = `--msg=${nextArg}`;
+        rawArgs.splice(i + 1, 1);
+      } else {
+        i++;
+      }
       continue;
     }
-    if (!currentArg.startsWith('--') || currentArg.includes('=')) {
-      continue;
-    }
+    if (!currentArg.startsWith('--') || currentArg.includes('=')) continue;
+    if (!STRING_CLI_FLAGS.has(currentArg.slice(2))) continue;
     const isMarkdownBulletHistoryOrMsg =
       (currentArg === '--history' || currentArg === '--msg' || currentArg === '--message') &&
       BULLET_PREFIX_RE.test(nextArg);
-    const isNegForStringFlag = isNegativeNumericValue && STRING_CLI_FLAGS.has(currentArg.slice(2));
-    if (isNegForStringFlag || isMarkdownBulletHistoryOrMsg) {
+    if (isNegativeNumericValue || isMarkdownBulletHistoryOrMsg) {
       rawArgs[i] = `${currentArg}=${nextArg}`;
       rawArgs.splice(i + 1, 1);
+    } else {
+      i++;
     }
   }
 }

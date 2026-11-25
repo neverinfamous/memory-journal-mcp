@@ -24,7 +24,7 @@ const BEARER_TOKEN_RE = /\b(?:Bearer|Basic|ApiKey)[ \t]+(?:"[^"\r\n]+"|'[^'\r\n]
 const URL_CREDENTIAL_RE = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/(?:[^:@\s/]*:)?)[^@\s/]+(@)/gi;
 const GITHUB_TOKEN_RE = /\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]+\b/g;
 const CLI_FLAG_SECRET_RE = /((?:^|[\s;|&(])--(?:[a-z0-9]+[-_])*(?:auth[_-]?token|token|api[_-]?key|passw(?:or)?d|secret|encryption[_-]?key|sqlcipher[_-]?key|dd[_-]?api[_-]?key|dd[_-]?app[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|github[_-]?token|npm[_-]?token|webhook[_-]?secret|key)(?:=|[ \t]+))(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s;|&()'"<>]+)/gi;
-const KEY_SECRET_RE = /(?<![A-Za-z0-9_-])((?:PRAGMA[ \t]+key|(?:[A-Za-z0-9]+[_-])*(?:token|secret|passw(?:or)?d|api[_-]?key|auth[_-]?token|encryption[_-]?key|sqlcipher[_-]?key|dd[_-]?api[_-]?key|dd[_-]?app[_-]?key)|(?:access|refresh|id|session|bearer)[_-]?token|(?:client|webhook|signing)[_-]?secret)(?:[_-][A-Za-z0-9]+)*)(["']?[ \t]*[:=][ \t]*)(?:"([^"\r\n]*)"|'([^'\r\n]*)'|[^\s"',;}{]+)/gi;
+const KEY_SECRET_RE = /(?<![A-Za-z0-9_-])((?:PRAGMA[ \t]+key|(?:[A-Za-z0-9]+[_-])*(?:token|secret|passw(?:or)?d|api[_-]?key|auth[_-]?token|encryption[_-]?key|sqlcipher[_-]?key|dd[_-]?api[_-]?key|dd[_-]?app[_-]?key|private[_-]?key|signing[_-]?key)|(?:access|refresh|id|session|bearer)[_-]?token|(?:client|webhook|signing)[_-]?secret)(?:[_-][A-Za-z0-9]+)*)(["']?[ \t]*[:=][ \t]*)(?:"([^"\r\n]*)"|'([^'\r\n]*)'|[^\s"',;}{]+)/gi;
 
 export function hasDisallowedControlChars(text: string): boolean {
   for (let i = 0; i < text.length; i++) {

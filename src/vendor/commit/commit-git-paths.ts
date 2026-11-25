@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fatalError } from './commit-cli-schema.js';
-import { isSensitiveRepoPath, stripWin32TrailingDotsAndSpaces } from './commit-security.js';
+import { isSensitiveRepoPath, redactSensitiveText, stripWin32TrailingDotsAndSpaces } from './commit-security.js';
 
 const SCRATCH_SEGMENT_RE = /(?:^|\/)scratch(?:\/|$)/;
 const SCRATCH_FILE_RE = /(?:^|\/)[^/]*scratch\.[cm]?[jt]s$/;
@@ -13,11 +13,7 @@ export function normalizeRelGitPath(relPath: string): string {
 }
 
 function tryRealpath(p: string): string | null {
-  try {
-    return fs.realpathSync.native(p);
-  } catch {
-    return null;
-  }
+  try { return fs.realpathSync.native(p); } catch { return null; }
 }
 
 export function resolveCanonicalPath(targetPath: string): string | null {
@@ -88,11 +84,24 @@ export function getValidatedRepoRelPath(baseDir: string, targetPath: string): st
   return null;
 }
 
-function resolveWindowsDiskCasing(absPath: string, normRoot: string, precomputedCanonRoot?: string | null): string {
+export interface AddPathProbe {
+  lstat?: fs.Stats | undefined;
+  hasLstat?: boolean;
+  realPath?: string | null;
+}
+
+function resolveWindowsDiskCasing(
+  absPath: string,
+  normRoot: string,
+  precomputedCanonRoot?: string | null,
+  probeOut?: AddPathProbe
+): string {
   if (process.platform !== 'win32') return absPath;
   const st = fs.lstatSync(absPath, { throwIfNoEntry: false });
+  if (probeOut !== undefined) { probeOut.lstat = st; probeOut.hasLstat = true; }
   if (st === undefined || st.isSymbolicLink()) return absPath;
   const realAbs = tryRealpath(absPath);
+  if (probeOut !== undefined && realAbs !== null) probeOut.realPath = realAbs;
   if (realAbs === null) return absPath;
   if (foldPathForCompare(realAbs) === foldPathForCompare(absPath)) return realAbs;
   const canonRoot = precomputedCanonRoot !== undefined ? precomputedCanonRoot : resolveCanonicalPath(normRoot);
@@ -105,16 +114,17 @@ export function normalizeAddPathForGit(
   cwd: string,
   repoRoot: string,
   rawPath: string,
-  precomputedCanonRoot?: string | null
+  precomputedCanonRoot?: string | null,
+  probeOut?: AddPathProbe
 ): string {
   const abs = path.resolve(cwd, rawPath);
   const normRoot = path.resolve(repoRoot);
   if (foldPathForCompare(abs) === foldPathForCompare(normRoot)) return normRoot;
-  if (isStrictlyUnderLexicalDir(normRoot, abs)) return resolveWindowsDiskCasing(abs, normRoot, precomputedCanonRoot);
+  if (isStrictlyUnderLexicalDir(normRoot, abs)) return resolveWindowsDiskCasing(abs, normRoot, precomputedCanonRoot, probeOut);
   if (isSameResolvedPath(abs, normRoot)) return normRoot;
   const relFromRoot = getValidatedRepoRelPath(normRoot, abs);
   return relFromRoot !== null
-    ? resolveWindowsDiskCasing(path.resolve(normRoot, relFromRoot), normRoot, precomputedCanonRoot)
+    ? resolveWindowsDiskCasing(path.resolve(normRoot, relFromRoot), normRoot, precomputedCanonRoot, probeOut)
     : abs;
 }
 
@@ -135,11 +145,9 @@ export function anyPathTargetsDir(baseDir: string, paths: readonly string[], tar
 }
 
 export function hasGitDirEnvOverride(): boolean {
-  return (
-    (process.env['GIT_DIR'] !== undefined && process.env['GIT_DIR'].length > 0) ||
-    (process.env['GIT_WORK_TREE'] !== undefined && process.env['GIT_WORK_TREE'].length > 0) ||
-    (process.env['GIT_COMMON_DIR'] !== undefined && process.env['GIT_COMMON_DIR'].length > 0)
-  );
+  return Boolean(process.env['GIT_DIR']?.length) ||
+    Boolean(process.env['GIT_WORK_TREE']?.length) ||
+    Boolean(process.env['GIT_COMMON_DIR']?.length);
 }
 
 /**
@@ -279,7 +287,8 @@ function queryMatchingGitRelPathMap(
         matched.set(item.original, path.resolve(cwd, canonicalRel));
       }
     }
-  } catch {
+  } catch (err: unknown) {
+    console.warn(`⚠️ Git pathspec lookup failed: ${redactSensitiveText(err instanceof Error ? err.message : String(err))}`);
     return matched;
   }
   return matched;
@@ -295,31 +304,20 @@ function resolveTargetsForGitQuery(
   const cwdCandidates: Array<{ original: string; relPosix: string }> = [];
   let hasEscapedTarget = false;
   for (const targetPath of targetPaths) {
-    if (onlyMissing && fs.lstatSync(path.resolve(cwd, targetPath), { throwIfNoEntry: false }) !== undefined) {
-      continue;
-    }
+    if (onlyMissing && fs.lstatSync(path.resolve(cwd, targetPath), { throwIfNoEntry: false }) !== undefined) continue;
     filtered.push(targetPath);
     const relPosix = getValidatedRepoRelPath(cwd, targetPath);
-    if (relPosix !== null) {
-      cwdCandidates.push({ original: targetPath, relPosix });
-    } else {
-      hasEscapedTarget = true;
-    }
+    if (relPosix !== null) cwdCandidates.push({ original: targetPath, relPosix });
+    else hasEscapedTarget = true;
   }
-  if (!hasEscapedTarget) {
-    return { queryCwd: cwd, candidates: cwdCandidates };
-  }
+  if (!hasEscapedTarget) return { queryCwd: cwd, candidates: cwdCandidates };
   const gitDir = resolvedGitDir !== undefined ? resolvedGitDir : resolveGitDir(cwd);
   const repoRoot = resolveRepoRootForGuard(cwd, gitDir);
-  if (isSameResolvedPath(repoRoot, cwd)) {
-    return { queryCwd: cwd, candidates: cwdCandidates };
-  }
+  if (isSameResolvedPath(repoRoot, cwd)) return { queryCwd: cwd, candidates: cwdCandidates };
   const repoCandidates: Array<{ original: string; relPosix: string }> = [];
   for (const targetPath of filtered) {
     const relPosix = getValidatedRepoRelPath(repoRoot, path.resolve(cwd, targetPath));
-    if (relPosix !== null) {
-      repoCandidates.push({ original: targetPath, relPosix });
-    }
+    if (relPosix !== null) repoCandidates.push({ original: targetPath, relPosix });
   }
   return { queryCwd: repoRoot, candidates: repoCandidates };
 }
@@ -331,9 +329,10 @@ function resolveTargetsForGitQuery(
 export function findAlreadyStagedDeletionMap(
   cwd: string,
   targetPaths: readonly string[],
-  resolvedGitDir?: string | null
+  resolvedGitDir?: string | null,
+  assumeMissing = false
 ): Map<string, string> {
-  const { queryCwd, candidates } = resolveTargetsForGitQuery(cwd, targetPaths, true, resolvedGitDir);
+  const { queryCwd, candidates } = resolveTargetsForGitQuery(cwd, targetPaths, !assumeMissing, resolvedGitDir);
   return queryMatchingGitRelPathMap(queryCwd, candidates, ['diff', '--cached', '--relative', '--name-only', '--diff-filter=D', '-z']);
 }
 
@@ -382,10 +381,7 @@ export function isGlobTarget(p: string): boolean {
 export function findScratchInDirOrGlobTargets(cwd: string, targetPaths: readonly string[]): string[] {
   const targets: string[] = [];
   for (const p of targetPaths) {
-    if (GLOB_META_RE.test(p)) {
-      targets.push(p);
-      continue;
-    }
+    if (GLOB_META_RE.test(p)) { targets.push(p); continue; }
     const st = fs.statSync(path.resolve(cwd, p), { throwIfNoEntry: false });
     if (st !== undefined && st.isDirectory()) targets.push(p);
   }
@@ -406,10 +402,7 @@ export function findScratchInDirOrGlobTargets(cwd: string, targetPaths: readonly
   let i = 0;
   while (i < parts.length) {
     const part = parts[i];
-    if (!part) {
-      i++;
-      continue;
-    }
+    if (!part) { i++; continue; }
     const indexStatus = part[0];
     const workTreeStatus = part[1];
     const filepath = part.substring(3);

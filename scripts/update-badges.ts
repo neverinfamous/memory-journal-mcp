@@ -144,7 +144,8 @@ export function isPartialPlaywrightRun(
 
 function readOptionalJsonFile(filePath: string): string | null {
   try {
-    return fs.readFileSync(filePath, "utf-8");
+    const raw = fs.readFileSync(filePath, "utf-8");
+    return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
   } catch (err: unknown) {
     const code = typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
     if (code === "ENOENT") return null;
@@ -209,8 +210,7 @@ export function loadBadgeMetrics(options: LoadBadgeMetricsOptions = {}): BadgeMe
     !hasE2e &&
     (Boolean(process.env['GITHUB_ACTIONS']) || argv.includes("--strict"))
   ) {
-    console.error("Strict mode active: Failing because neither coverage nor E2E results were found.");
-    process.exit(1);
+    throw new Error("Strict mode active: Failing because neither coverage nor E2E results were found.");
   }
 
   return {
@@ -322,9 +322,29 @@ function isContainedInRealRoot(targetPath: string, realRoot: string): boolean {
   }
 }
 
+function isNonSymlinkDir(dirPath: string): boolean {
+  const st = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isDirectory();
+}
+
+function isAbsentOrNonSymlinkDir(dirPath: string): boolean {
+  const st = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  return st === undefined || (!st.isSymbolicLink() && st.isDirectory());
+}
+
 function isCompiledCommitFresh(rootDir: string): boolean {
   try {
     const realRoot = fs.realpathSync.native(rootDir);
+    if (
+      !isNonSymlinkDir(path.join(rootDir, "dist")) ||
+      !isNonSymlinkDir(path.join(rootDir, "dist", "vendor")) ||
+      !isNonSymlinkDir(path.join(rootDir, "dist", "vendor", "commit")) ||
+      !isAbsentOrNonSymlinkDir(path.join(rootDir, "scripts")) ||
+      !isAbsentOrNonSymlinkDir(path.join(rootDir, "src")) ||
+      !isAbsentOrNonSymlinkDir(path.join(rootDir, "src", "vendor"))
+    ) {
+      return false;
+    }
     const compiledCommit = path.join(rootDir, "dist", "vendor", "commit", "commit.js");
     const compiledStat = fs.lstatSync(compiledCommit, { throwIfNoEntry: false });
     if (!compiledStat || compiledStat.isSymbolicLink() || !compiledStat.isFile()) return false;
@@ -436,5 +456,10 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
-  updateBadges();
+  try {
+    updateBadges();
+  } catch (err: unknown) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
 }

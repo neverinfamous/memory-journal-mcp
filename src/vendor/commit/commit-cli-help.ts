@@ -44,20 +44,24 @@ export function fatalError(msg: string): never {
   process.exit(1);
 }
 
+function formatUnknownStderr(rawStderr: unknown): string {
+  if (typeof rawStderr === 'string') return rawStderr;
+  if (Buffer.isBuffer(rawStderr)) return rawStderr.toString('utf8');
+  if (typeof rawStderr === 'number' || typeof rawStderr === 'boolean' || typeof rawStderr === 'bigint') {
+    return String(rawStderr);
+  }
+  try {
+    return JSON.stringify(rawStderr) ?? String(rawStderr);
+  } catch {
+    return String(rawStderr);
+  }
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     let msg = error.message;
     if ('stderr' in error && error.stderr !== null && error.stderr !== undefined) {
-      const rawStderr = error.stderr;
-      const stderrText =
-        typeof rawStderr === 'string'
-          ? rawStderr
-          : Buffer.isBuffer(rawStderr)
-            ? rawStderr.toString('utf8')
-            : typeof rawStderr === 'number' || typeof rawStderr === 'boolean'
-              ? String(rawStderr)
-              : JSON.stringify(rawStderr);
-      msg += '\nSTDERR:\n' + stderrText;
+      msg += '\nSTDERR:\n' + formatUnknownStderr(error.stderr);
     }
     return redactSensitiveText(msg);
   }

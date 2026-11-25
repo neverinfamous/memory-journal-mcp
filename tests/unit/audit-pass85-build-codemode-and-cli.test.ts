@@ -453,7 +453,7 @@ describe('Pass 85 Audit — Build, Code Mode, Worker, Vector & CLI Hardening', (
     })
 
     it('bumps AUDIT_PROMPT_REVISION to Pass 85', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass95')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-25-audit-pass96')
         const def = getCodeQualityAuditPromptDefinition()
         expect(def.name).toBe('adversarial-audit-code-quality')
     })
