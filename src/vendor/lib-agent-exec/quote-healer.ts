@@ -73,26 +73,14 @@ function isPathWithTrailingSlash(s: string, cwd?: string): boolean {
     try {
       const candidate = path.resolve(baseCwd, withoutTrailing);
       return fs.statSync(candidate, { throwIfNoEntry: false })?.isDirectory() === true;
-    } catch {
-      // Ignore missing/inaccessible candidate paths
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'ENAMETOOLONG' && code !== 'EINVAL' && code !== 'EACCES') {
+        console.error(`⚠️ Quote healer path probe error: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
   return false;
-}
-
-function isPureWordWithTrailingSlash(s: string, cwd?: string): boolean {
-  if (!endsWithUnescapedBackslash(s) || s.startsWith('-') || s.includes('/')) {
-    return false;
-  }
-  if (isPathWithTrailingSlash(s, cwd)) {
-    return false;
-  }
-  // Avoid treating Windows paths (e.g. C:\..., .\..., ..\..., or paths with directory separators) as fragmented words
-  if (/^[a-zA-Z]:\\/i.test(s) || /^\.\.?\\/.test(s) || /^\\\\/.test(s)) {
-    return false;
-  }
-  // Strip common escape sequences used in regex or quoted patterns (e.g. \., \*, \+, \?, \(, \), \[, \], \w, \d, \s, etc.)
-  return !strippedPathSeparators(s).includes('\\');
 }
 
 function countUnescapedQuotes(s: string, target: '"' | "'"): number {
@@ -168,18 +156,21 @@ function normalizeJoinedQuotes(joined: string): string {
 }
 
 function mergeSplitQuotes(currentArgs: string[]): void {
+  const unclosedKinds = new Set<QuoteKind>();
   let quoteIdx = 0;
   while (quoteIdx < currentArgs.length) {
     const current = currentArgs[quoteIdx];
     const kind = current === undefined ? null : quoteKind(current);
-    if (kind !== null) {
+    if (kind !== null && !unclosedKinds.has(kind)) {
       const matchingIdx = findClosingQuoteIndex(currentArgs, quoteIdx, kind);
       if (matchingIdx !== -1) {
         const joined = normalizeJoinedQuotes(currentArgs.slice(quoteIdx, matchingIdx + 1).join(' '));
         currentArgs.splice(quoteIdx, matchingIdx - quoteIdx + 1, joined);
+        unclosedKinds.clear();
         quoteIdx++;
         continue;
       }
+      unclosedKinds.add(kind);
     }
     quoteIdx++;
   }
@@ -191,16 +182,25 @@ function captureInnerSplit(next: string, matchedType: FragmentKind, pattern: Reg
   return { matchedType, internalWord: matched[1], internalRest: matched[2] };
 }
 
-function matchNextFragment(next: string, cwd?: string): FragmentBody | null {
-  if (isPureWordWithTrailingSlash(next, cwd)) {
-    return { matchedType: 'pure-slash', internalWord: '', internalRest: '' };
+const MULTI_QUOTE_RE = /^([^\\]+)\\(.+)$/;
+const INTERNAL_CLOSE_RE = /^([^\\]+)\\(\).*|[:;,\]].*)$/;
+
+const DRIVE_SLASH_PREFIX_RE = /^[a-zA-Z]:\\/i;
+const REL_SLASH_PREFIX_RE = /^\.\.?\\/;
+
+function matchNextFragment(
+  next: string,
+  checkIsPath: (candidate: string) => boolean,
+): FragmentBody | null {
+  if (endsWithUnescapedBackslash(next) && !next.startsWith('-') && !next.includes('/')) {
+    if (!DRIVE_SLASH_PREFIX_RE.test(next) && !REL_SLASH_PREFIX_RE.test(next) && !next.startsWith('\\\\') && !strippedPathSeparators(next).includes('\\') && !checkIsPath(next)) {
+      return { matchedType: 'pure-slash', internalWord: '', internalRest: '' };
+    }
+    const multi = captureInnerSplit(next, 'multi-quote', MULTI_QUOTE_RE);
+    if (multi !== null && !checkIsPath(next)) return multi;
   }
-  if (endsWithUnescapedBackslash(next) && !isPathWithTrailingSlash(next, cwd) && /^([^\\]+)\\(.+)$/.test(next)) {
-    return captureInnerSplit(next, 'multi-quote', /^([^\\]+)\\(.+)$/);
-  }
-  if (!isPathWithTrailingSlash(next, cwd) && /^([^\\]+)\\(\).*|[:;,\]].*)$/.test(next)) {
-    return captureInnerSplit(next, 'internal-close', /^([^\\]+)\\(\).*|[:;,\]].*)$/);
-  }
+  const internalClose = next.includes('\\') ? captureInnerSplit(next, 'internal-close', INTERNAL_CLOSE_RE) : null;
+  if (internalClose !== null && !checkIsPath(next)) return internalClose;
   if (next.endsWith('\\)') && endsWithUnescapedBackslash(next.slice(0, -1))) {
     return { matchedType: 'escaped-paren', internalWord: '', internalRest: '' };
   }
@@ -230,7 +230,11 @@ function matchHyphenClosingFragment(next: string): FragmentBody | null {
   return captureInnerSplit(next, 'internal-close', HYPHEN_INTERNAL_CLOSE_RE);
 }
 
-function findFragmentEnd(currentArgs: readonly string[], start: number, cwd?: string): FragmentMatch | null {
+function findFragmentEnd(
+  currentArgs: readonly string[],
+  start: number,
+  checkIsPath: (candidate: string) => boolean,
+): FragmentMatch | null {
   for (let j = start + 1; j < currentArgs.length; j++) {
     const next = currentArgs[j];
     if (next === undefined) break;
@@ -239,9 +243,9 @@ function findFragmentEnd(currentArgs: readonly string[], start: number, cwd?: st
         const hyphenMatch = matchHyphenClosingFragment(next);
         if (hyphenMatch !== null) return { endIdx: j, ...hyphenMatch };
       }
-      break;
+      return null;
     }
-    const matched = matchNextFragment(next, cwd);
+    const matched = matchNextFragment(next, checkIsPath);
     if (matched !== null) return { endIdx: j, ...matched };
   }
   return null;
@@ -325,25 +329,34 @@ function reassembleFragment(first: string, rawMiddle: string[], lastArg: string,
   return `${first}"${[...rawMiddle, lastArg].join(' ')}"`;
 }
 
-function isFragmentStart(current: string | undefined, cwd?: string): current is string {
-  return current !== undefined
-    && !current.startsWith('-')
-    && !/^[A-Za-z0-9_.-]+(?:\\[A-Za-z0-9_.-]+)*\\$/.test(current)
-    && endsWithUnescapedBackslash(current)
-    && !isPathWithTrailingSlash(current, cwd);
-}
-
 function healBackslashFragments(currentArgs: string[], cwd?: string): void {
+  const pathCache = new Map<string, boolean>();
+  const checkIsPath = (candidate: string): boolean => {
+    const hit = pathCache.get(candidate);
+    if (hit !== undefined) return hit;
+    const val = isPathWithTrailingSlash(candidate, cwd);
+    pathCache.set(candidate, val);
+    return val;
+  };
+  let deadScanHorizon = -1;
   let i = 0;
   while (i < currentArgs.length) {
     const current = currentArgs[i];
-    if (!isFragmentStart(current, cwd)) {
+    if (current === undefined || current.startsWith('-') || /^[A-Za-z0-9_.-]+(?:\\[A-Za-z0-9_.-]+)*\\$/.test(current) || !endsWithUnescapedBackslash(current) || checkIsPath(current)) {
       i++;
       continue;
     }
-    const match = findFragmentEnd(currentArgs, i, cwd);
+    if (i <= deadScanHorizon) {
+      i++;
+      continue;
+    }
+    const match = findFragmentEnd(currentArgs, i, checkIsPath);
     const lastArg = match === null ? undefined : currentArgs[match.endIdx];
     if (match === null || lastArg === undefined) {
+      // [INTENT]: All following non-hyphen tokens before the barrier lacked a closing fragment, so skip re-scanning them from later trailing-`\` tokens.
+      let horizon = i + 1;
+      while (horizon < currentArgs.length && !(currentArgs[horizon]?.startsWith('-') ?? true)) horizon++;
+      deadScanHorizon = horizon - 1;
       i++;
       continue;
     }
@@ -354,8 +367,9 @@ function healBackslashFragments(currentArgs: string[], cwd?: string): void {
       match,
     );
     currentArgs.splice(i, match.endIdx - i + 1, reassembled);
+    deadScanHorizon = -1;
     // If reassembled still ends with an unescaped backslash (e.g. chained quotes), do not advance i
-    if (endsWithUnescapedBackslash(reassembled) && !isPathWithTrailingSlash(reassembled, cwd)) {
+    if (endsWithUnescapedBackslash(reassembled) && !checkIsPath(reassembled)) {
       continue;
     }
     i++;

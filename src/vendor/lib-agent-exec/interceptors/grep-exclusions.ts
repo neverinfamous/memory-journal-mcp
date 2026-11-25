@@ -30,20 +30,45 @@ export const GREP_EXCLUDE_DIRS = [
   'releases',
 ];
 
-export function isGrepTargetExplicitlyIncluded(targetPaths: readonly string[], dir: string): boolean {
-  const dirLower = dir.toLowerCase();
-  return targetPaths.some((target) => {
+const BINARY_EXCLUDE_PATTERNS = ['*.db', '*.sqlite', '*.sqlite3', '*.lock'] as const;
+
+export function collectTargetPathSegments(targetPaths: readonly string[]): Set<string> {
+  const segments = new Set<string>();
+  for (const target of targetPaths) {
     const clean = target.trim().replace(/^['"`]|['"`]$/g, '').replace(/\\/g, '/').toLowerCase();
-    return clean.split('/').filter(Boolean).includes(dirLower);
-  });
+    for (const seg of clean.split('/')) {
+      if (seg.length > 0) segments.add(seg);
+    }
+  }
+  return segments;
 }
 
-function hasExcludeDir(args: string[], dir: string): boolean {
-  return args.some((arg) => arg === `--exclude-dir=${dir}` || arg === `'--exclude-dir=${dir}'` || arg === `"--exclude-dir=${dir}"`);
+export function isGrepTargetExplicitlyIncluded(targetPaths: readonly string[], dir: string): boolean {
+  return collectTargetPathSegments(targetPaths).has(dir.toLowerCase());
 }
 
-function hasExcludePattern(args: string[], pattern: string): boolean {
-  return args.some((arg) => arg === `--exclude=${pattern}` || arg === `'--exclude=${pattern}'` || arg === `"--exclude=${pattern}"`);
+function unquoteShellFlagArg(arg: string): string {
+  if ((arg.startsWith("'") && arg.endsWith("'")) || (arg.startsWith('"') && arg.endsWith('"'))) {
+    return arg.slice(1, -1);
+  }
+  return arg;
+}
+
+function collectExistingGrepFlags(args: readonly string[]): {
+  excludeDirs: Set<string>;
+  excludePatterns: Set<string>;
+  hasBinaryFilesFlag: boolean;
+} {
+  const excludeDirs = new Set<string>();
+  const excludePatterns = new Set<string>();
+  let hasBinaryFilesFlag = false;
+  for (const rawArg of args) {
+    if (!hasBinaryFilesFlag && rawArg.startsWith('--binary-files=')) hasBinaryFilesFlag = true;
+    const arg = unquoteShellFlagArg(rawArg);
+    if (arg.startsWith('--exclude-dir=')) excludeDirs.add(arg.slice('--exclude-dir='.length));
+    else if (arg.startsWith('--exclude=')) excludePatterns.add(arg.slice('--exclude='.length));
+  }
+  return { excludeDirs, excludePatterns, hasBinaryFilesFlag };
 }
 
 export function injectRecursiveGrepExclusions(
@@ -51,25 +76,23 @@ export function injectRecursiveGrepExclusions(
   targetPaths: readonly string[] = [],
   onSync?: () => void,
 ): void {
+  const targetSegments = collectTargetPathSegments(targetPaths);
+  const { excludeDirs, excludePatterns, hasBinaryFilesFlag } = collectExistingGrepFlags(args);
   const missingExcludes = GREP_EXCLUDE_DIRS.filter(
-    (dir) => !isGrepTargetExplicitlyIncluded(targetPaths, dir) && !hasExcludeDir(args, dir),
+    (dir) => !targetSegments.has(dir.toLowerCase()) && !excludeDirs.has(dir),
   );
-  if (missingExcludes.length > 0) {
-    args.unshift(...missingExcludes.map((dir) => `--exclude-dir=${dir}`));
+  const prependFlags: string[] = [];
+  for (let i = BINARY_EXCLUDE_PATTERNS.length - 1; i >= 0; i--) {
+    const pat = BINARY_EXCLUDE_PATTERNS[i];
+    if (pat !== undefined && !excludePatterns.has(pat)) prependFlags.push(`--exclude=${pat}`);
   }
-  if (!args.some((arg) => arg.startsWith('--binary-files='))) {
-    args.unshift('--binary-files=without-match');
-    onSync?.();
+  const addedBinaryPat = prependFlags.length > 0;
+  if (!hasBinaryFilesFlag) prependFlags.push('--binary-files=without-match');
+  for (const dir of missingExcludes) prependFlags.push(`--exclude-dir=${dir}`);
+  if (prependFlags.length > 0) {
+    args.unshift(...prependFlags);
   }
-  const binaryPatterns = ['*.db', '*.sqlite', '*.sqlite3', '*.lock'];
-  let addedBinaryPat = false;
-  for (const pat of binaryPatterns) {
-    if (!hasExcludePattern(args, pat)) {
-      args.unshift(`--exclude=${pat}`);
-      addedBinaryPat = true;
-    }
-  }
-  if (missingExcludes.length > 0 || addedBinaryPat) {
+  if (!hasBinaryFilesFlag || missingExcludes.length > 0 || addedBinaryPat) {
     onSync?.();
   }
   if (missingExcludes.length > 0) {

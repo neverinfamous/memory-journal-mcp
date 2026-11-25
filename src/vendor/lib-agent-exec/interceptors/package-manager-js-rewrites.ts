@@ -62,8 +62,7 @@ function hasFlagBeforeDash(args: readonly string[], flag: string): boolean {
   return slice.includes(flag);
 }
 
-function translateToBunArgs(args: string[], subCmd: string | undefined, isNpm: boolean, isYarn: boolean): void {
-  const firstPosIdx = findFirstPkgSubcmdIndex(args);
+function translateToBunArgs(args: string[], subCmd: string | undefined, firstPosIdx: number, isNpm: boolean, isYarn: boolean): void {
   const flagScanLimit = firstPosIdx === -1 ? args.length : firstPosIdx;
   for (let i = 0; i < flagScanLimit; i++) {
     const a = args[i];
@@ -89,8 +88,7 @@ function platformPmBinary(base: 'pnpm' | 'bun', target: ExecutionContext['payloa
   return base;
 }
 
-function normalizeCwdFlagForPnpm(args: string[]): void {
-  const firstPosIdx = findFirstPkgSubcmdIndex(args);
+function normalizeCwdFlagForPnpm(args: string[], firstPosIdx: number): void {
   const scanLimit = firstPosIdx === -1 ? args.length : firstPosIdx;
   for (let i = 0; i < scanLimit; i++) {
     const a = args[i];
@@ -99,6 +97,9 @@ function normalizeCwdFlagForPnpm(args: string[]): void {
     else if (a.startsWith('--cwd=')) args[i] = `--dir=${a.slice('--cwd='.length)}`;
   }
 }
+
+const PNPM_COMPAT_SUBCMD_SET: ReadonlySet<string> = new Set(['run', 'test', 'start']);
+const YARN_ADD_RM_SET: ReadonlySet<string> = new Set(['add', 'remove']);
 
 function applyNpmOrYarnToPnpm(
   args: string[],
@@ -113,7 +114,7 @@ function applyNpmOrYarnToPnpm(
     if (subCmd === 'install' && nonFlagArgs.length === 1) converted = true;
     else if (subCmd === 'install' && nonFlagArgs.length > 1 && firstPosIdx !== -1) { args[firstPosIdx] = 'add'; converted = true; }
     else if (subCmd === 'uninstall' && nonFlagArgs.length > 1 && firstPosIdx !== -1) { args[firstPosIdx] = 'remove'; converted = true; }
-    else if (subCmd !== undefined && ['run', 'test', 'start'].includes(subCmd)) converted = true;
+    else if (subCmd !== undefined && PNPM_COMPAT_SUBCMD_SET.has(subCmd)) converted = true;
     else if (subCmd === 'ci' && firstPosIdx !== -1) {
       args[firstPosIdx] = 'install';
       if (!hasFlagBeforeDash(args, '--frozen-lockfile')) pushFlagBeforeDash(args, '--frozen-lockfile');
@@ -121,14 +122,17 @@ function applyNpmOrYarnToPnpm(
     }
   } else if (isYarn) {
     if (!subCmd && args.length === 0) { args.push('install'); converted = true; }
-    else if (subCmd !== undefined && ['add', 'remove'].includes(subCmd) && nonFlagArgs.length > 1) converted = true;
+    else if (subCmd !== undefined && YARN_ADD_RM_SET.has(subCmd) && nonFlagArgs.length > 1) converted = true;
   }
-  if (converted) normalizeCwdFlagForPnpm(args);
+  if (converted) normalizeCwdFlagForPnpm(args, firstPosIdx);
   return converted;
 }
 
+const MNT_DRIVE_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/i;
+const INTERACTIVE_SHORT_I_RE = /^-[a-zA-Z]*i[a-zA-Z]*$/;
+
 function toHostFsPath(p: string): string {
-  return process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(p) ? convertToWindowsPath(p) : p;
+  return process.platform === 'win32' && MNT_DRIVE_RE.test(p) ? convertToWindowsPath(p) : p;
 }
 
 export function rewriteJsPackageManager(
@@ -136,18 +140,30 @@ export function rewriteJsPackageManager(
   cmdBasename: string,
   args: string[],
   projectDir: string,
-): { cmdBasename: string; isYarn: boolean; isPnpm: boolean } {
-  const effectiveDir = resolvePackageProjectDir(args, projectDir);
-  const hostEffectiveDir = toHostFsPath(effectiveDir);
-  // [INVARIANT]: Detect both modern text lockfile ('bun.lock') and legacy binary lockfile ('bun.lockb').
-  const isBunProject = fs.existsSync(path.join(hostEffectiveDir, 'bun.lock')) || fs.existsSync(path.join(hostEffectiveDir, 'bun.lockb'));
+  preResolvedHostDir?: string,
+  preNonFlagArgs?: readonly string[],
+  preFirstPosIdx?: number,
+): { cmdBasename: string; isYarn: boolean; isPnpm: boolean; hostEffectiveDir: string; nonFlagArgs: readonly string[]; firstPosIdx: number } {
+  const hostEffectiveDir = preResolvedHostDir ?? toHostFsPath(resolvePackageProjectDir(args, projectDir));
   const isNpm = cmdBasename.startsWith('npm');
   const isYarn = cmdBasename.startsWith('yarn');
   const isPnpm = cmdBasename.startsWith('pnpm');
+  if (!isNpm && !isYarn && !isPnpm) {
+    return {
+      cmdBasename,
+      isYarn: false,
+      isPnpm: false,
+      hostEffectiveDir,
+      nonFlagArgs: preNonFlagArgs ?? [],
+      firstPosIdx: preFirstPosIdx ?? -1,
+    };
+  }
+  // [INVARIANT]: Detect both modern text lockfile ('bun.lock') and legacy binary lockfile ('bun.lockb').
+  const isBunProject = fs.existsSync(path.join(hostEffectiveDir, 'bun.lock')) || fs.existsSync(path.join(hostEffectiveDir, 'bun.lockb'));
 
   let nextCmd = cmdBasename;
-  const nonFlagArgs = getPkgNonFlagArgs(args);
-  const firstPosIdx = findFirstPkgSubcmdIndex(args);
+  const nonFlagArgs = preNonFlagArgs ?? getPkgNonFlagArgs(args);
+  const firstPosIdx = preFirstPosIdx ?? findFirstPkgSubcmdIndex(args);
   const subCmd = nonFlagArgs[0];
 
   if (!isBunProject && (isNpm || isYarn)) {
@@ -161,7 +177,7 @@ export function rewriteJsPackageManager(
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting '${`${cmdBasename} ${subCmd ?? ''}`.trim()}' to pnpm... (Frictionless Recovery)`);
     }
   } else if (isBunProject && (isNpm || isYarn || isPnpm)) {
-    translateToBunArgs(args, subCmd, isNpm, isYarn);
+    translateToBunArgs(args, subCmd, firstPosIdx, isNpm, isYarn);
     nextCmd = platformPmBinary('bun', ctx.payload.target);
     ctx.cmdBasename = nextCmd;
     if ('command' in ctx.payload) {
@@ -171,7 +187,7 @@ export function rewriteJsPackageManager(
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Bun project detected. Transparently rewriting '${`${cmdBasename} ${subCmd ?? ''}`.trim()}' to bun... (Frictionless Recovery)`);
   }
 
-  return { cmdBasename: nextCmd, isYarn, isPnpm };
+  return { cmdBasename: nextCmd, isYarn, isPnpm, hostEffectiveDir, nonFlagArgs, firstPosIdx };
 }
 
 const PKG_SHORT_VALUE_CHARS = new Set(['C', 'F', 'c', 'w']);
@@ -184,7 +200,7 @@ function stripInteractiveArg(arg: string, isYarnOrPnpm: boolean): string | null 
   }
   if (!isYarnOrPnpm || arg.startsWith('--') || !arg.startsWith('-')) return arg;
   if (arg === '-i') return null;
-  if (!/^-[a-zA-Z]*i[a-zA-Z]*$/.test(arg)) return arg;
+  if (!INTERACTIVE_SHORT_I_RE.test(arg)) return arg;
   let kept = '';
   for (let i = 1; i < arg.length; i++) {
     const ch = arg[i] ?? '';
@@ -202,8 +218,9 @@ export function stripScopedInteractiveFlags(
   cmdBasename: string,
   isYarnOrPnpm: boolean,
   ctx?: ExecutionContext,
+  preNonFlagArgs?: readonly string[],
 ): void {
-  const nonFlagArgs = getPkgNonFlagArgs(args);
+  const nonFlagArgs = preNonFlagArgs ?? getPkgNonFlagArgs(args);
   const subCmd = nonFlagArgs[0]?.toLowerCase() ?? '';
   if (!INTERACTIVE_STRIP_SUBCMDS.has(subCmd)) return;
 

@@ -25,23 +25,31 @@ function extractKubectlSubcommand(args: readonly string[]): { subCmd: string; id
   return undefined;
 }
 
+const KUBECTL_INTERACTIVE_SUBCMDS: ReadonlySet<string> = new Set(['edit', 'attach', 'debug']);
+const KUBECTL_FOLLOW_EQ_FALSY_RE = /^-f=(?:false|0)$/i;
+const KUBECTL_FOLLOW_CLUSTER_RE = /^-[fpti]*f[fpti]*$/;
+const KUBECTL_FOLLOW_CLUSTER_EQ_RE = /^(-[fpti]+)f=(.*)$/;
+const KUBECTL_FALSY_VAL_RE = /^(?:false|0)$/i;
+const DOCKER_MULTI_TARGET_UNWRAP_RE = /^(["'])([\s\S]*)\1$/;
+const DOCKER_MULTI_TARGET_PARTS_RE = /^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*(?:\s+[a-zA-Z0-9][a-zA-Z0-9_./:@-]*)+$/;
+
 function stripFollowFlag(args: string[], startIdx: number, endIdx: number): boolean {
   let stripped = false;
   for (let i = endIdx - 1; i >= startIdx; i--) {
     const a = args[i];
     if (a === undefined) continue;
-    if (a === '-f' || a === '--follow' || (a.startsWith('--follow=') && a.toLowerCase() !== '--follow=false' && a !== '--follow=0') || (a.startsWith('-f=') && !/^-f=(?:false|0)$/i.test(a))) {
+    if (a === '-f' || a === '--follow' || (a.startsWith('--follow=') && a.toLowerCase() !== '--follow=false' && a !== '--follow=0') || (a.startsWith('-f=') && !KUBECTL_FOLLOW_EQ_FALSY_RE.test(a))) {
       args.splice(i, 1);
       stripped = true;
-    } else if (/^-[fpti]*f[fpti]*$/.test(a)) {
-      const rest = a.replace(/f/g, '');
+    } else if (KUBECTL_FOLLOW_CLUSTER_RE.test(a)) {
+      const rest = a.replaceAll('f', '');
       if (rest === '-') args.splice(i, 1);
       else args[i] = rest;
       stripped = true;
     } else {
-      const m = /^(-[fpti]+)f=(.*)$/.exec(a);
-      if (m !== null && !/^(?:false|0)$/i.test(m[2] ?? '')) {
-        const rest = (m[1] ?? '').replace(/f/g, '');
+      const m = KUBECTL_FOLLOW_CLUSTER_EQ_RE.exec(a);
+      if (m !== null && !KUBECTL_FALSY_VAL_RE.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replaceAll('f', '');
         if (rest === '-') args.splice(i, 1);
         else args[i] = rest;
         stripped = true;
@@ -57,7 +65,7 @@ export function handleKubectlInterception(args: string[], ctx?: ExecutionContext
     if (a === '--help' || a === '-h') return;
   }
   const sub = extractKubectlSubcommand(args);
-  if (sub !== undefined && ['edit', 'attach', 'debug'].includes(sub.subCmd)) {
+  if (sub !== undefined && KUBECTL_INTERACTIVE_SUBCMDS.has(sub.subCmd)) {
     console.error(`\n   💡 AGENT HINT: 'kubectl ${sub.subCmd}' is highly interactive and will hang. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
@@ -156,6 +164,9 @@ const MULTI_TARGET_VALUE_FLAGS: ReadonlySet<string> = new Set([
   '-H', '--host', '-l', '--log-level', '--config',
 ]);
 
+const DOCKER_TARGET_WS_RE = /\s/;
+const DOCKER_TARGET_SPLIT_RE = /\s+/;
+
 export function splitDockerMultiTargets(args: string[], subCmd: string, ctx?: ExecutionContext, resolvedSubIdx?: number): void {
   const subCmdIdx = resolvedSubIdx !== undefined && resolvedSubIdx >= 0 ? resolvedSubIdx : args.indexOf(subCmd);
   if (subCmdIdx === -1) return;
@@ -172,9 +183,9 @@ export function splitDockerMultiTargets(args: string[], subCmd: string, ctx?: Ex
       expandedArgs.push(arg);
       continue;
     }
-    const unquoted = arg.replace(/^(["'])([\s\S]*)\1$/, '$2').trim();
-    if (/\s/.test(unquoted) && /^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*(?:\s+[a-zA-Z0-9][a-zA-Z0-9_./:@-]*)+$/.test(unquoted)) {
-      const parts = unquoted.split(/\s+/).filter(Boolean);
+    const unquoted = arg.replace(DOCKER_MULTI_TARGET_UNWRAP_RE, '$2').trim();
+    if (DOCKER_TARGET_WS_RE.test(unquoted) && DOCKER_MULTI_TARGET_PARTS_RE.test(unquoted)) {
+      const parts = unquoted.split(DOCKER_TARGET_SPLIT_RE).filter(Boolean);
       expandedArgs.push(...parts);
       splitCount += parts.length;
       continue;

@@ -1,10 +1,9 @@
 // @ts-nocheck
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { convertToWslPath } from './command-utils.js';
 import { emitInterceptBanner } from './utils.js';
-import { BARREL_CANDIDATES, CANDIDATE_EXTENSIONS, isDirectoryPath, isFilePath, logPathHeal, normalizeMntPathForHost } from './path-healer.js';
+import { BARREL_CANDIDATES, CANDIDATE_EXTENSIONS, createPathProbeCache, isFilePath, logPathHeal, normalizeMntPathForHost, statPathKind, type PathProbeCache } from './path-healer.js';
 import { findNeighborFilePath } from './path-neighbor.js';
 import { resolveBuildSrcSwap } from './path-synonym.js';
 import { buildNonCodeSpans, isIndexInSpans } from './quote-spans.js';
@@ -26,30 +25,30 @@ interface ModuleHealState {
 
 type HealTarget = 'windows' | 'wsl2';
 
-function firstNonDirectoryBarrel(dirPath: string): string | null {
+function firstNonDirectoryBarrel(dirPath: string, cache?: PathProbeCache): string | null {
   for (const barrel of BARREL_CANDIDATES) {
     const barrelPath = path.join(dirPath, barrel);
-    if (isFilePath(barrelPath)) return barrelPath;
+    if (isFilePath(barrelPath, cache)) return barrelPath;
   }
   return null;
 }
 
-function firstExtensionFile(targetPath: string): string | null {
+function firstExtensionFile(targetPath: string, cache?: PathProbeCache): string | null {
   for (const ext of CANDIDATE_EXTENSIONS) {
     const candidate = targetPath + ext;
-    if (isFilePath(candidate)) return candidate;
+    if (isFilePath(candidate, cache)) return candidate;
   }
   return null;
 }
 
-function resolveMissingModule(targetPath: string): string {
+function resolveMissingModule(targetPath: string, cache?: PathProbeCache): string {
   const asTs = targetPath.replace(/\.([mc]?)js$/i, '.$1ts');
   const asTsx = targetPath.replace(/\.([mc]?)js$/i, '.$1tsx');
-  if (isFilePath(asTs)) return asTs;
-  if (isFilePath(asTsx)) return asTsx;
-  const withExt = firstExtensionFile(targetPath);
+  if (isFilePath(asTs, cache)) return asTs;
+  if (isFilePath(asTsx, cache)) return asTsx;
+  const withExt = firstExtensionFile(targetPath, cache);
   if (withExt !== null) return withExt;
-  return resolveBuildSrcSwap(targetPath, false) ?? findNeighborFilePath(targetPath) ?? targetPath;
+  return resolveBuildSrcSwap(targetPath, false, cache) ?? findNeighborFilePath(targetPath, false, cache) ?? targetPath;
 }
 
 function encodePosixFileUrl(wslPath: string): string {
@@ -85,7 +84,13 @@ function normalizeModuleInput(rawPath: string): { normalizedInput: string; force
   return { normalizedInput: rawPath, forcedWsl: false };
 }
 
-function healModulePathDetailed(rawPath: string, cwd: string, isEsm = false, target?: HealTarget): { healed: string; wasExactFile: boolean } {
+function healModulePathDetailed(
+  rawPath: string,
+  cwd: string,
+  isEsm = false,
+  target?: HealTarget,
+  probeCache: PathProbeCache = createPathProbeCache(),
+): { healed: string; wasExactFile: boolean } {
   const { normalizedInput, forcedWsl } = normalizeModuleInput(rawPath);
   const isWsl = target === 'wsl2' || forcedWsl || /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(normalizedInput);
   const wslNormalized = normalizeMntPathForHost(normalizedInput);
@@ -93,10 +98,11 @@ function healModulePathDetailed(rawPath: string, cwd: string, isEsm = false, tar
   const resolvedPath = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(windowsCwd, wslNormalized);
   let targetPath = resolvedPath;
   let wasExactFile = false;
-  if (!fs.existsSync(targetPath)) {
-    targetPath = resolveMissingModule(targetPath);
-  } else if (isDirectoryPath(targetPath)) {
-    targetPath = firstNonDirectoryBarrel(targetPath) ?? targetPath;
+  const kind = statPathKind(targetPath, probeCache);
+  if (kind === null) {
+    targetPath = resolveMissingModule(targetPath, probeCache);
+  } else if (kind === 'dir') {
+    targetPath = firstNonDirectoryBarrel(targetPath, probeCache) ?? targetPath;
   } else {
     wasExactFile = true;
   }
@@ -124,7 +130,10 @@ function rewrittenModule(relPath: string, healed: string, wasExactFile: boolean,
   return healed;
 }
 
-type ModuleDetailCache = Map<string, { healed: string; wasExactFile: boolean }>;
+interface ModuleDetailCache {
+  details: Map<string, { healed: string; wasExactFile: boolean }>;
+  probeCache: PathProbeCache;
+}
 
 function cachedModuleDetail(
   cache: ModuleDetailCache,
@@ -134,16 +143,19 @@ function cachedModuleDetail(
   target: HealTarget | undefined,
 ): { healed: string; wasExactFile: boolean } {
   const key = `${isEsm ? 'esm' : 'cjs'}\0${relPath}`;
-  const cached = cache.get(key);
+  const cached = cache.details.get(key);
   if (cached !== undefined) return cached;
-  const resolved = healModulePathDetailed(relPath, cwd, isEsm, target);
-  cache.set(key, resolved);
+  const resolved = healModulePathDetailed(relPath, cwd, isEsm, target, cache.probeCache);
+  cache.details.set(key, resolved);
   return resolved;
 }
 
+const REQUIRE_CALL_RE = /\brequire\s*\(\s*(['"])(\.[^'"]+)\1\s*\)/g;
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*(['"])(\.[^'"]+)\1((?:\s*,[^)]*)?)\)/g;
+
 function healRequireCalls(code: string, cwd: string, target: HealTarget | undefined, skipValid: boolean, state: ModuleHealState, spans: NonCodeSpans, cache: ModuleDetailCache): string {
-  const requireRegex = /\brequire\s*\(\s*(['"])(\.[^'"]+)\1\s*\)/g;
-  return code.replace(requireRegex, (fullMatch: string, quote: string, relPath: string, offset: number) => {
+  REQUIRE_CALL_RE.lastIndex = 0;
+  return code.replace(REQUIRE_CALL_RE, (fullMatch: string, quote: string, relPath: string, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
     const detailed = cachedModuleDetail(cache, relPath, cwd, false, target);
     const healed = rewrittenModule(relPath, detailed.healed, detailed.wasExactFile, skipValid, state, 'require');
@@ -153,8 +165,8 @@ function healRequireCalls(code: string, cwd: string, target: HealTarget | undefi
 }
 
 function healDynamicImports(code: string, cwd: string, target: HealTarget | undefined, skipValid: boolean, state: ModuleHealState, spans: NonCodeSpans, cache: ModuleDetailCache): string {
-  const dynamicImportRegex = /\bimport\s*\(\s*(['"])(\.[^'"]+)\1((?:\s*,[^)]*)?)\)/g;
-  return code.replace(dynamicImportRegex, (fullMatch: string, quote: string, relPath: string, extraArgs: string | undefined, offset: number) => {
+  DYNAMIC_IMPORT_RE.lastIndex = 0;
+  return code.replace(DYNAMIC_IMPORT_RE, (fullMatch: string, quote: string, relPath: string, extraArgs: string | undefined, offset: number) => {
     if (isIndexInSpans(spans, offset)) return fullMatch;
     const detailed = cachedModuleDetail(cache, relPath, cwd, true, target);
     const healed = rewrittenModule(relPath, detailed.healed, detailed.wasExactFile, skipValid, state, 'import');
@@ -199,9 +211,10 @@ export function healModuleImports(code: string, cwd: string, target?: HealTarget
     const baseInterp = path.basename(options.interpreter.trim().toLowerCase()).replace(/\.(?:exe|cmd|bat)$/i, '');
     if (!JS_TS_INTERPRETERS.has(baseInterp)) return code;
   }
+  if (!code.includes("'.") && !code.includes('".')) return code;
   let spans = buildNonCodeSpans(code);
   const state: ModuleHealState = { routineRelocated: 0, healedRequires: [], healedImports: [] };
-  const detailCache: ModuleDetailCache = new Map();
+  const detailCache: ModuleDetailCache = { details: new Map(), probeCache: createPathProbeCache() };
   const skipValid = options?.skipValidFileRewrite === true;
   let updated = healRequireCalls(code, cwd, target, skipValid, state, spans, detailCache);
   if (updated !== code) spans = buildNonCodeSpans(updated);

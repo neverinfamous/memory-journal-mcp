@@ -1,10 +1,15 @@
 // @ts-nocheck
+const RUST_BRACE_ESCAPE_BASE = new Set(['p', 'P', 'u', 'x', 'k']);
+const RUST_BRACE_ESCAPE_PCRE2 = new Set(['p', 'P', 'u', 'x', 'k', 'g', 'N', 'o']);
+const NON_ATOM_PREV_CHARS = new Set(['(', '|', '^', '*', '+', '?', '{']);
+const QUANTIFIER_STICKY_RE = /\{\d+(?:,\d*)?\}/y;
+
 function isRustBraceEscapePrefix(pattern: string, braceIdx: number, pcre2 = false): boolean {
   if (braceIdx < 2) return false;
   const letter = pattern[braceIdx - 1];
   if (letter === undefined) return false;
-  const validLetters = pcre2 ? ['p', 'P', 'u', 'x', 'k', 'g', 'N', 'o'] : ['p', 'P', 'u', 'x', 'k'];
-  if (!validLetters.includes(letter)) return false;
+  const validLetters = pcre2 ? RUST_BRACE_ESCAPE_PCRE2 : RUST_BRACE_ESCAPE_BASE;
+  if (!validLetters.has(letter)) return false;
   let slashCount = 0;
   for (let idx = braceIdx - 2; idx >= 0 && pattern[idx] === '\\'; idx--) slashCount++;
   return slashCount % 2 === 1;
@@ -50,14 +55,14 @@ function escapeUnescapedLiteralBraces(pattern: string, pcre2 = false): string {
       continue;
     }
     if (ch === '{' && !inCharClass) {
-      const rest = pattern.slice(i);
-      const isQuantifierSyntax = /^\{\d+(?:,\d*)?\}/.test(rest);
+      QUANTIFIER_STICKY_RE.lastIndex = i;
+      const isQuantifierSyntax = QUANTIFIER_STICKY_RE.test(pattern);
       const prevChar = i > 0 ? pattern[i - 1] : undefined;
       let backslashes = 0;
       for (let b = i - 2; b >= 0 && pattern[b] === '\\'; b--) backslashes++;
       const prevIsNonAtom =
         prevChar === undefined ||
-        (['(', '|', '^', '*', '+', '?', '{'].includes(prevChar) && backslashes % 2 === 0);
+        (NON_ATOM_PREV_CHARS.has(prevChar) && backslashes % 2 === 0);
       if (!isRustBraceEscapePrefix(pattern, i, pcre2) && (!isQuantifierSyntax || prevIsNonAtom)) {
         out += '\\{';
         continue;

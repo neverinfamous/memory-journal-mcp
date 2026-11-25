@@ -28,29 +28,40 @@ const PAIRED_FLAGS: readonly FlagRule[] = [
   { names: ['-U', '--diff-context'], dest: '--diff-context', equalsPrefix: '--diff-context=', attachedPrefix: '-U' },
 ];
 
-const VALUE_FLAGS = [
+const VALUE_FLAG_SET: ReadonlySet<string> = new Set([
   '-n', '--max-count', '--skip', '--author', '--committer', '--grep',
   '--since', '--after', '--until', '--before', '-S', '--pickaxe', '-G', '--patch-search',
   '-L', '--format', '--pretty', '-U', '--diff-context', '--diff-filter',
-];
+]);
+const PAIRED_FLAG_NAME_SET: ReadonlySet<string> = new Set(PAIRED_FLAGS.flatMap(rule => rule.names));
+const ANY_VALUE_FLAG_SET: ReadonlySet<string> = new Set([...VALUE_FLAG_SET, ...PAIRED_FLAG_NAME_SET]);
+const HISTORY_RANGE_CMD_SET: ReadonlySet<string> = new Set(['diff', 'log', 'show', 'shortlog']);
 
 function resolveHistoryScript(targetCwd: string, rawCwd: string, cwd: string): string | null {
+  const checked = new Set<string>();
+  for (const dir of [targetCwd, rawCwd, cwd]) {
+    if (checked.has(dir)) continue;
+    checked.add(dir);
+    const found = findEcosystemScript(dir, 'get-git-history-json.ts');
+    if (found !== null) return found;
+  }
   const fallbackScript = path.resolve(HISTORY_DIR, '../../get-git-history-json.ts');
-  return findEcosystemScript(targetCwd, 'get-git-history-json.ts')
-    || findEcosystemScript(rawCwd, 'get-git-history-json.ts')
-    || findEcosystemScript(cwd, 'get-git-history-json.ts')
-    || (fs.existsSync(fallbackScript) ? fallbackScript : null);
+  return fs.existsSync(fallbackScript) ? fallbackScript : null;
 }
 
 const SEMVER_TAG_RE = /^v?\d+\.\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:[~^]\d*|@\{[^}]+\})*$/i;
 const REMOTE_OR_REF_PREFIX_RE = /^(?:origin|upstream|refs\/(?:heads|tags|remotes))\//i;
+const EXTENSIONLESS_REPO_DOC_RE = /^(?:Dockerfile|Makefile|Containerfile|Procfile|LICENSE|README|AUTHORS|NOTICE|Brewfile|Vagrantfile|Gemfile)$/i;
+const GIT_DIGITS_RE = /^\d+$/;
+const GIT_N_ATTACHED_RE = /^-n(\d+)$/;
+const GIT_MAX_COUNT_EQ_RE = /^--max-count=(\d+)$/;
+const GIT_SHORT_COUNT_RE = /^-(\d+)$/;
+const WIN_DRIVE_COLON_RE = /^[a-zA-Z]:[\\/]/;
+const REL_DOTDOT_PATH_RE = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
+const DOTS_ONLY_RE = /^\.\.?$/;
 
-function resolvesAsGitRef(argStr: string, targetCwd: string, cwd: string): boolean {
-  if (argStr.startsWith('-') || argStr.includes('\\')) return false;
-  const probeCwd = fs.statSync(targetCwd, { throwIfNoEntry: false })?.isDirectory() === true
-    ? targetCwd
-    : (fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory() === true ? cwd : undefined);
-  if (probeCwd === undefined) return false;
+function resolvesAsGitRef(argStr: string, probeCwd: string | undefined): boolean {
+  if (argStr.startsWith('-') || argStr.includes('\\') || probeCwd === undefined) return false;
   try {
     const res = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${argStr}^{commit}`], {
       cwd: probeCwd,
@@ -58,22 +69,30 @@ function resolvesAsGitRef(argStr: string, targetCwd: string, cwd: string): boole
       timeout: 3000,
     });
     return res.status === 0;
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT') console.error(`⚠️ git rev-parse probe warning: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
 
-function isKnownGitPath(argStr: string, targetCwd: string, cwd: string): boolean {
+function isKnownGitPath(argStr: string, targetCwd: string, cwd: string, getProbeCwd: () => string | undefined): boolean {
   try {
-    if (fs.existsSync(path.resolve(targetCwd, argStr)) || fs.existsSync(path.resolve(cwd, argStr))) return true;
-  } catch {
-    // fallback to syntactic path heuristics below
+    const p1 = path.resolve(targetCwd, argStr);
+    if (fs.existsSync(p1)) return true;
+    const p2 = path.resolve(cwd, argStr);
+    if (p2 !== p1 && fs.existsSync(p2)) return true;
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENAMETOOLONG' && code !== 'EINVAL') {
+      console.error(`⚠️ git path probe warning: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
   if (SEMVER_TAG_RE.test(argStr) || REMOTE_OR_REF_PREFIX_RE.test(argStr)) return false;
   if (argStr.includes('/') || argStr.includes('\\') || argStr.includes('.')) {
-    return !resolvesAsGitRef(argStr, targetCwd, cwd);
+    return !resolvesAsGitRef(argStr, getProbeCwd());
   }
-  if (/^(?:Dockerfile|Makefile|Containerfile|Procfile|LICENSE|README|AUTHORS|NOTICE|Brewfile|Vagrantfile|Gemfile)$/i.test(argStr)) return true;
+  if (EXTENSIONLESS_REPO_DOC_RE.test(argStr)) return true;
   return false;
 }
 
@@ -86,9 +105,9 @@ function hasMultiplePathArgsWithoutDash(
   for (let i = startIdx + 1; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
-    if (arg === '--') return args.slice(i + 1).length > 1;
+    if (arg === '--') return args.length - (i + 1) > 1;
     if (arg.startsWith('-')) {
-      if (PAIRED_FLAGS.some(rule => rule.names.includes(arg)) || VALUE_FLAGS.includes(arg)) i += 1;
+      if (ANY_VALUE_FLAG_SET.has(arg)) i += 1;
       continue;
     }
     if (classifyPositional(arg, knownPath) === 'path') {
@@ -111,7 +130,7 @@ function hasIncompatibleRangeArgs(
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
     if (arg.startsWith('-')) {
-      if (PAIRED_FLAGS.some(rule => rule.names.includes(arg)) || VALUE_FLAGS.includes(arg)) i += 1;
+      if (ANY_VALUE_FLAG_SET.has(arg)) i += 1;
       continue;
     }
     if (classifyPositional(arg, knownPath) !== 'range') continue;
@@ -148,8 +167,8 @@ const NATIVE_GIT_DIFF_FLAGS: ReadonlySet<string> = new Set([
 
 function shouldLeaveNative(cmd: string, args: string[], subIdx: number, ctx: ExecutionContext, knownPath: (value: string) => boolean): boolean {
   if (ctx.payload.target === 'wsl2') return true;
+  const ddIdx = args.indexOf('--');
   if (cmd === 'diff') {
-    const ddIdx = args.indexOf('--');
     const diffScanEnd = ddIdx === -1 ? args.length : ddIdx;
     const diffPreDd = args.slice(subIdx === -1 ? 0 : subIdx + 1, diffScanEnd);
     if (diffPreDd.some(a => NATIVE_GIT_DIFF_FLAGS.has(a))) return true;
@@ -160,24 +179,23 @@ function shouldLeaveNative(cmd: string, args: string[], subIdx: number, ctx: Exe
       const arg = revArgs[i];
       if (arg === undefined || arg === '--') break;
       if (arg.startsWith('-')) {
-        if (PAIRED_FLAGS.some(rule => rule.names.includes(arg)) || VALUE_FLAGS.includes(arg)) i += 1;
+        if (ANY_VALUE_FLAG_SET.has(arg)) i += 1;
         continue;
       }
-      if (arg.includes(':') && !/^[a-zA-Z]:[\\/]/.test(arg)) return true;
+      if (arg.includes(':') && !WIN_DRIVE_COLON_RE.test(arg)) return true;
     }
   }
-  if (['diff', 'log', 'show', 'shortlog'].includes(cmd)) {
-    const ddIdx = args.indexOf('--');
+  if (HISTORY_RANGE_CMD_SET.has(cmd)) {
     if (cmd === 'log' && subIdx !== -1) {
       const scanEnd = ddIdx === -1 ? args.length : ddIdx;
       for (let i = subIdx + 1; i < scanEnd; i++) {
         const a = args[i];
         if (a === undefined) continue;
         if (a === '-L' || a.startsWith('-L')) return true;
-        if (VALUE_FLAGS.includes(a)) { i += 1; }
+        if (VALUE_FLAG_SET.has(a)) { i += 1; }
       }
     }
-    if (ddIdx !== -1 && args.slice(ddIdx + 1).length > 1) return true;
+    if (ddIdx !== -1 && args.length - (ddIdx + 1) > 1) return true;
     if (subIdx !== -1 && hasMultiplePathArgsWithoutDash(args, subIdx, knownPath)) return true;
     if (hasIncompatibleRangeArgs(args, cmd, subIdx, knownPath)) return true;
   }
@@ -240,18 +258,18 @@ function applyHistoryLimit(ctx: ExecutionContext, args: string[], cmd: string, s
     if (arg === undefined || arg === '--') break;
     if (arg === '-n' || arg === '--max-count') {
       const next = args[i + 1];
-      if (next !== undefined && /^\d+$/.test(next)) {
+      if (next !== undefined && GIT_DIGITS_RE.test(next)) {
         limit = next;
         hasExplicitLimit = true;
         i += 1;
       }
       continue;
     }
-    if (VALUE_FLAGS.includes(arg)) {
+    if (VALUE_FLAG_SET.has(arg)) {
       i += 1;
       continue;
     }
-    const attached = /^-n(\d+)$/.exec(arg) ?? /^--max-count=(\d+)$/.exec(arg) ?? /^-(\d+)$/.exec(arg);
+    const attached = GIT_N_ATTACHED_RE.exec(arg) ?? GIT_MAX_COUNT_EQ_RE.exec(arg) ?? GIT_SHORT_COUNT_RE.exec(arg);
     if (attached !== null && attached[1] !== undefined) {
       limit = attached[1];
       hasExplicitLimit = true;
@@ -269,7 +287,7 @@ function applyPatchFlag(ctx: ExecutionContext, args: string[], startIdx = 0): vo
       ctx.args.push('--include-patch');
       return;
     }
-    if (VALUE_FLAGS.includes(a) || PAIRED_FLAGS.some(rule => rule.names.includes(a))) {
+    if (ANY_VALUE_FLAG_SET.has(a)) {
       i += 1;
     }
   }
@@ -303,7 +321,7 @@ function consumePairedFlag(args: string[], index: number, out: string[]): number
 
 function classifyPositional(arg: string, knownPath: (value: string) => boolean): 'range' | 'path' | 'skip' {
   if (arg.startsWith('-')) return 'skip';
-  if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(arg) || /^\.\.?$/.test(arg)) return 'path';
+  if (REL_DOTDOT_PATH_RE.test(arg) || DOTS_ONLY_RE.test(arg)) return 'path';
   if (arg.includes('..')) return 'range';
   return knownPath(arg) ? 'path' : 'range';
 }
@@ -334,7 +352,7 @@ function forwardHistoryArgs(
       ctx.args.push(arg);
       continue;
     }
-    if (VALUE_FLAGS.includes(arg)) {
+    if (VALUE_FLAG_SET.has(arg)) {
       i += 1;
       continue;
     }
@@ -365,7 +383,7 @@ function injectDiffPathSeparator(
   for (let i = startIdx; i < ctx.args.length; i++) {
     const arg = ctx.args[i];
     if (arg === undefined) continue;
-    if (VALUE_FLAGS.includes(arg)) { i++; continue; }
+    if (VALUE_FLAG_SET.has(arg)) { i++; continue; }
     if (arg.startsWith('-')) continue;
     posItems.push({ idx: i, arg });
   }
@@ -385,36 +403,33 @@ function injectDiffPathSeparator(
 }
 
 export function rewriteGitInspection(
-  ctx: ExecutionContext,
-  args: string[],
-  cmd: string,
-  targetCwd: string,
-  rawCwd: string,
-  explicitCwd: string | undefined,
+  ctx: ExecutionContext, args: string[], cmd: string, targetCwd: string, rawCwd: string, explicitCwd: string | undefined,
 ): void {
   if (cmd === 'diff' && args.includes('--no-index')) return;
-  const cwd = ctx.payload.cwd || ctx.cwd || process.cwd();
-  const scriptCandidate = resolveHistoryScript(targetCwd, rawCwd, cwd);
-  const knownPathCache = new Map<string, boolean>();
-  const knownPath = (argStr: string): boolean => {
-    const cached = knownPathCache.get(argStr);
-    if (cached !== undefined) return cached;
-    const resolved = isKnownGitPath(argStr, targetCwd, cwd);
-    knownPathCache.set(argStr, resolved);
-    return resolved;
-  };
   const subcmdIdx = findGitSubcommandIndex(args, cmd);
   if (hasCustomGitTreeFlags(args, subcmdIdx)) return;
-  if (scriptCandidate === null) {
-    injectDiffPathSeparator(ctx, cmd, knownPath, subcmdIdx);
-    return;
-  }
+  if (ctx.payload.target === 'wsl2' && (cmd !== 'diff' || args.includes('--'))) return;
+  const cwd = ctx.payload.cwd || ctx.cwd || process.cwd();
+  const scriptCandidate = resolveHistoryScript(targetCwd, rawCwd, cwd);
+  let probeCwdChecked = false;
+  let probeCwdVal: string | undefined;
+  const getProbeCwd = (): string | undefined => {
+    if (!probeCwdChecked) {
+      probeCwdChecked = true;
+      probeCwdVal = fs.statSync(targetCwd, { throwIfNoEntry: false })?.isDirectory() === true ? targetCwd : (fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory() === true ? cwd : undefined);
+    }
+    return probeCwdVal;
+  };
+  const knownPathCache = new Map<string, boolean>();
+  const knownPath = (argStr: string): boolean => {
+    let resolved = knownPathCache.get(argStr);
+    if (resolved === undefined) { resolved = isKnownGitPath(argStr, targetCwd, cwd, getProbeCwd); knownPathCache.set(argStr, resolved); }
+    return resolved;
+  };
+  if (scriptCandidate === null) { injectDiffPathSeparator(ctx, cmd, knownPath, subcmdIdx); return; }
   if (shouldLeaveNative(cmd, args, subcmdIdx, ctx, knownPath)) return;
   if (process.platform === 'win32') ctx.payload.target = 'windows';
-  if (cmd === 'status') {
-    rewriteStatus(ctx, scriptCandidate, targetCwd, explicitCwd);
-    return;
-  }
+  if (cmd === 'status') { rewriteStatus(ctx, scriptCandidate, targetCwd, explicitCwd); return; }
   seedHistoryArgs(ctx, cmd, scriptCandidate, targetCwd, explicitCwd);
   const startIdx = subcmdIdx !== -1 ? subcmdIdx + 1 : 0;
   applyHistoryLimit(ctx, args, cmd, startIdx);

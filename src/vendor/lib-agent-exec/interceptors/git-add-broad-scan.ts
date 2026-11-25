@@ -27,7 +27,11 @@ export function blockGitAdd(hint: string, fix: string): void {
 export function tryRealpath(p: string): string | null {
   try {
     return fs.realpathSync.native(p);
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      console.error(`⚠️ Realpath probe warning (${p}): ${err instanceof Error ? err.message : String(err)}`);
+    }
     return null;
   }
 }
@@ -76,6 +80,8 @@ function stripWin32TrailingDotsAndSpaces(seg: string): string {
 }
 
 export function isPrivateRuntimePath(rawPath: string): boolean {
+  const lowerRaw = rawPath.toLowerCase();
+  if (!lowerRaw.includes('.agents') && !lowerRaw.includes('issues.jsonl')) return false;
   const normalized = rawPath
     .replace(/\\/g, '/')
     .split('/')
@@ -85,12 +91,11 @@ export function isPrivateRuntimePath(rawPath: string): boolean {
 }
 
 export function isSensitiveSecretPath(rawPath: string): boolean {
-  const segments = rawPath
-    .replace(/\\/g, '/')
-    .replace(/\/+$/, '')
-    .split('/')
-    .map((seg) => stripWin32TrailingDotsAndSpaces(seg).toLowerCase());
-  const basename = segments[segments.length - 1] ?? '';
+  let end = rawPath.length;
+  while (end > 0 && (rawPath[end - 1] === '/' || rawPath[end - 1] === '\\')) end--;
+  const lastSlash = Math.max(rawPath.lastIndexOf('/', end - 1), rawPath.lastIndexOf('\\', end - 1));
+  const rawSeg = rawPath.slice(lastSlash + 1, end);
+  const basename = stripWin32TrailingDotsAndSpaces(rawSeg).toLowerCase();
   if (basename === 'secrets.env' || SECRET_GLOB_RE.test(basename)) return true;
   if ((basename === '.env' || basename.startsWith('.env.')) && !SAFE_ENV_BASENAMES.has(basename)) {
     return true;
@@ -141,6 +146,16 @@ export function extractGitDirWorkTreeFlags(
         if (arg === '--work-tree' && resolvedNext.length > 0) workTreeOverride = resolvedNext;
         i++;
       }
+    } else if (
+      arg === '-C' ||
+      arg === '-c' ||
+      arg === '--attr-source' ||
+      arg === '--namespace' ||
+      arg === '--exec-path' ||
+      arg === '--config-env' ||
+      arg === '--super-prefix'
+    ) {
+      i++;
     } else if (arg.startsWith('--git-dir=') || arg.startsWith('--work-tree=')) {
       const eqIdx = arg.indexOf('=');
       const key = arg.slice(0, eqIdx);

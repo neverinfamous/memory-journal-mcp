@@ -27,11 +27,14 @@ const RG_NON_PATH_ATTACHED_PREFIXES = [
   '--path-separator=', '--context-separator=', '--field-context-separator=', '--field-match-separator=',
 ];
 
+const RG_SHORT_ERG_RE = /^-[a-zA-Z]*[erg]$/;
+const WIN_MNT_PREFIX_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/i;
+
 function isAttachedRgNonPathFlag(arg: string): boolean {
   if (RG_NON_PATH_ATTACHED_PREFIXES.some(p => arg.startsWith(p))) return true;
   if (arg.startsWith('--') || !arg.startsWith('-') || arg.length <= 2) return false;
   const shortPrefix = extractLeadingShortFlags('rg', arg);
-  return arg.length > shortPrefix.length && /^-[a-zA-Z]*[erg]$/.test(shortPrefix);
+  return arg.length > shortPrefix.length && RG_SHORT_ERG_RE.test(shortPrefix);
 }
 
 function collectRgNonPathIndices(args: readonly string[], patternIdx: number): Set<number> {
@@ -42,7 +45,8 @@ function collectRgNonPathIndices(args: readonly string[], patternIdx: number): S
     if (arg === undefined) continue;
     if (arg === '--') break;
     const shortInfo = inspectCombinedShortFlag('rg', arg, RG_VALUE_FLAGS);
-    const isCombinedNonPath = shortInfo.takesSeparateValue && ['e', 'r', 'g'].includes(shortInfo.tailChar);
+    const tail = shortInfo.tailChar;
+    const isCombinedNonPath = shortInfo.takesSeparateValue && (tail === 'e' || tail === 'r' || tail === 'g');
     if ((RG_NON_PATH_VALUE_FLAGS.has(arg) || isCombinedNonPath) && i + 1 < args.length) {
       exempt.add(i + 1);
       i++;
@@ -64,37 +68,36 @@ function splitAttachedRgPathFlag(arg: string): { prefix: string; val: string } |
   return null;
 }
 
-function ripgrepTargetsLinuxOnlyPath(args: string[], patternIdx: number): boolean {
-  const exempt = collectRgNonPathIndices(args, patternIdx);
+function ripgrepTargetsLinuxOnlyPath(args: string[], exempt: ReadonlySet<number>): boolean {
   return args.some((arg, idx) => {
     if (exempt.has(idx)) return false;
     const attached = splitAttachedRgPathFlag(arg);
     const candidate = attached !== null ? attached.val : arg;
-    return candidate.startsWith('/') && !candidate.startsWith('//') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(candidate);
+    return candidate.startsWith('/') && !candidate.startsWith('//') && !WIN_MNT_PREFIX_RE.test(candidate);
   });
 }
 
 function preferNativeOrWslRipgrep(ctx: ExecutionContext): void {
   if (process.platform !== 'win32' || ctx.payload.target === 'wsl2') return;
-  const patternIdx = findPatternExprIndex(ctx.cmdBasename, ctx.args);
   if (resolveNativeBinary('rg') === null) {
     ctx.payload.target = 'wsl2';
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: No native 'rg' binary on PATH. Switching execution target to WSL2... (Frictionless Recovery)`);
     return;
   }
-  if (ripgrepTargetsLinuxOnlyPath(ctx.args, patternIdx)) {
+  const patternIdx = findPatternExprIndex(ctx.cmdBasename, ctx.args);
+  const exempt = collectRgNonPathIndices(ctx.args, patternIdx);
+  if (ripgrepTargetsLinuxOnlyPath(ctx.args, exempt)) {
     ctx.payload.target = 'wsl2';
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'rg' targets a Linux-only POSIX path. Switching execution target to WSL2... (Frictionless Recovery)`);
     return;
   }
-  const exempt = collectRgNonPathIndices(ctx.args, patternIdx);
   ctx.args = ctx.args.map((arg, idx) => {
     if (exempt.has(idx)) return arg;
     const attached = splitAttachedRgPathFlag(arg);
-    if (attached !== null && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(attached.val)) {
+    if (attached !== null && WIN_MNT_PREFIX_RE.test(attached.val)) {
       return `${attached.prefix}${convertToWindowsPath(attached.val)}`;
     }
-    return /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(arg) ? convertToWindowsPath(arg) : arg;
+    return WIN_MNT_PREFIX_RE.test(arg) ? convertToWindowsPath(arg) : arg;
   });
 }
 
@@ -274,10 +277,14 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   const hasHelpOrVersion = healRipgrepPatternShape(ctx, hasStdin, flags);
   const postShapeFlags = readRipgrepSearchFlags(ctx);
   healRipgrepPcre2Lookarounds(ctx, postShapeFlags.hasPatternFlag, postShapeFlags.hasFiles, hasHelpOrVersion);
+  const preRouteArgs = ctx.args;
+  const preRouteLen = ctx.args.length;
   preferNativeOrWslRipgrep(ctx);
-  const postRouteFlags = readRipgrepSearchFlags(ctx);
-  pruneNonExistentMultiTargets(ctx, hasHelpOrVersion, postRouteFlags.hasPatternFlag, postRouteFlags.hasFiles);
-  const updatedFlags = readRipgrepSearchFlags(ctx);
+  const prePruneLen = ctx.args.length;
+  pruneNonExistentMultiTargets(ctx, hasHelpOrVersion, postShapeFlags.hasPatternFlag, postShapeFlags.hasFiles);
+  const updatedFlags = (ctx.args === preRouteArgs && ctx.args.length === preRouteLen && ctx.args.length === prePruneLen)
+    ? postShapeFlags
+    : readRipgrepSearchFlags(ctx);
   appendRipgrepDefaultTarget(ctx, hasStdin, hasHelpOrVersion, updatedFlags.hasPatternFlag, updatedFlags.hasFiles, updatedFlags.positionalArgs);
   finalizeRipgrepArgs(ctx, unbundledFlags, hasHelpOrVersion);
 }

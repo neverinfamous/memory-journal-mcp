@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  FLAGS_WITH_ARG_BY_TOOL,
+  FLAGS_WITH_ARG_SET_BY_TOOL,
   convertToWindowsPath,
   convertToWslPath,
   escapeUnixArg,
@@ -55,7 +55,7 @@ function rewriteUnmatchedRgWinGlobs(
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
   if (base !== 'rg') return { args, rewrittenCount: 0, droppedCount: 0, needsShellFallback: false };
   const patternIdx = findPatternExprIndex(cmd, args);
-  const toolFlags = FLAGS_WITH_ARG_BY_TOOL['rg'] ?? [];
+  const toolFlags = FLAGS_WITH_ARG_SET_BY_TOOL['rg'];
   const nextArgs: string[] = [];
   const unmatchedEntries: Array<{ raw: string; overflowed: boolean }> = [];
   let hasTargetPath = false;
@@ -134,7 +134,7 @@ const GLOB_FILTER_PREV_FLAGS = new Set([
 function collectPatternOrFilterIndices(cmdBase: string, args: readonly string[], patternExprIdx: number): Set<number> {
   const skip = new Set<number>();
   if (patternExprIdx !== -1) skip.add(patternExprIdx);
-  const toolFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, cmdBase) ? FLAGS_WITH_ARG_BY_TOOL[cmdBase] : undefined;
+  const toolFlags = Object.hasOwn(FLAGS_WITH_ARG_SET_BY_TOOL, cmdBase) ? FLAGS_WITH_ARG_SET_BY_TOOL[cmdBase] : undefined;
   let seenDoubleDash = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -362,7 +362,11 @@ export function expandGlobArgsInProcess(
         cwd,
         exclude: (entryPath: string) => shouldExcludeGlobEntry(entryPath, pattern),
       }).map(m => m.replace(/\\/g, '/')).sort();
-    } catch {
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        console.error(`⚠️ Glob expansion warning (${pattern}): ${err instanceof Error ? err.message : String(err)}`);
+      }
       matches = [];
     }
     if (matches.length === 0) {

@@ -4,228 +4,23 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUTONOMOUS_HEALING_MSG, findEcosystemScript, resolveFreshCompiledCommitBundle } from '../utils.js';
 import { convertToWindowsPath, convertToWslPath } from '../command-utils.js';
+import { tryRealpath } from './git-add-broad-scan.js';
+import { parseGitCommitArgs, readCommitMessage } from './git-commit-args.js';
 import type { ExecutionContext } from './types.js';
 
+export { readCommitMessage };
+
 const COMMIT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const MAX_ANCESTOR_WALK_DEPTH = 12;
 
-const COMMIT_VALUE_FLAGS = new Set([
-  '-F', '--file', '-C', '--reuse-message', '-c', '--reedit-message',
-  '--fixup', '--squash', '--author', '--date', '-t', '--template',
-  '--cleanup', '--trailer', '--pathspec-from-file',
-]);
-const COMMIT_READONLY_FLAGS = new Set(['--dry-run', '--short', '--porcelain', '--long']);
-const GIT_TOP_VALUE_FLAGS = new Set([
-  '-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
-]);
-const SHORT_MSG_CLUSTER_RE = /^-[asnqvoiep]+m$/;
-const SHORT_ATTACHED_MSG_RE = /^-[asnqvoiep]*m([\s\S]+)$/;
-const SHORT_VALUE_CLUSTER_RE = /^-[asnqvoiep]+[FCct]$/;
-
-interface GitTopLevelPrefix {
-  commitStartIdx: number;
-  gitDir: string | undefined;
-  workTree: string | undefined;
+function isRegularNonSymlinkFile(filePath: string): boolean {
+  const st = fs.lstatSync(filePath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isFile();
 }
 
-interface ParsedGitCommitArgs {
-  message: string | undefined;
-  hasAmend: boolean;
-  hasAll: boolean;
-  hasMessageFile: boolean;
-  hasInteractiveOrPatch: boolean;
-  hasNonInteractiveMsgSource: boolean;
-  isDryRun: boolean;
-  hasPathspecFromFile: boolean;
-  pathspecs: string[];
-  gitDir: string | undefined;
-  workTree: string | undefined;
-}
-
-const SHORT_ALL_CLUSTER_RE = /^-[snqvoiep]*a[snqvoiep]*$/;
-const SHORT_ALL_MSG_CLUSTER_RE = /^-[snqvoiep]*a[snqvoiep]*m/;
-const SHORT_FILE_CLUSTER_RE = /^-[asnqvoiep]*F/;
-const SHORT_PATCH_OR_INTERACTIVE_RE = /^-[asnqvoiep]*(?:p|i)[asnqvoiep]*(?:$|[FCctm])/;
-const COMMIT_REUSE_VALUE_FLAGS = new Set(['-C', '--reuse-message', '--fixup']);
-const COMMIT_REUSE_EQ_RE = /^(?:--reuse-message=|(?!--fixup=(?:amend|reword):)--fixup=)/;
-
-function isNegatedDryRunFlag(arg: string): boolean {
-  return arg.startsWith('--no-dr') && '--no-dry-run'.startsWith(arg);
-}
-
-function isNegatedStatusFormatFlag(arg: string): boolean {
-  return (
-    (arg.startsWith('--no-sh') && '--no-short'.startsWith(arg)) ||
-    (arg.startsWith('--no-por') && '--no-porcelain'.startsWith(arg)) ||
-    (arg.startsWith('--no-l') && '--no-long'.startsWith(arg))
-  );
-}
-
-function isLongMessageFlag(arg: string): boolean {
-  return arg.length >= 3 && arg.startsWith('--m') && !arg.includes('=') && '--message'.startsWith(arg);
-}
-
-function isPathspecFromFileFlag(arg: string): boolean {
-  const eqIdx = arg.indexOf('=');
-  const flagPart = eqIdx === -1 ? arg : arg.slice(0, eqIdx);
-  return flagPart.startsWith('--pathspec-fr') && '--pathspec-from-file'.startsWith(flagPart);
-}
-
-function parseGitTopLevelPrefix(args: readonly string[]): GitTopLevelPrefix {
-  let gitDir: string | undefined;
-  let workTree: string | undefined;
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === undefined || arg === '--') return { commitStartIdx: 0, gitDir: undefined, workTree: undefined };
-    if (arg === '--git-dir' && args[i + 1] !== undefined) {
-      gitDir = args[i + 1];
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith('--git-dir=')) {
-      gitDir = arg.slice(10);
-      continue;
-    }
-    if (arg === '--work-tree' && args[i + 1] !== undefined) {
-      workTree = args[i + 1];
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith('--work-tree=')) {
-      workTree = arg.slice(12);
-      continue;
-    }
-    if (GIT_TOP_VALUE_FLAGS.has(arg)) {
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith('-')) continue;
-    return arg === 'commit' ? { commitStartIdx: i + 1, gitDir, workTree } : { commitStartIdx: 0, gitDir: undefined, workTree: undefined };
-  }
-  return { commitStartIdx: 0, gitDir: undefined, workTree: undefined };
-}
-
-interface CommitParseState {
-  messages: string[];
-  pathspecs: string[];
-  hasAll: boolean;
-  hasNonInteractiveMsgSource: boolean;
-}
-
-function parseCommitMessageOrValueFlag(
-  arg: string,
-  args: readonly string[],
-  idx: number,
-  state: CommitParseState,
-): number {
-  if (arg === '-m' || arg === '--message' || isLongMessageFlag(arg) || arg === '-am' || SHORT_MSG_CLUSTER_RE.test(arg)) {
-    if (arg === '-am' || SHORT_ALL_MSG_CLUSTER_RE.test(arg)) state.hasAll = true;
-    const nextMsg = args[idx + 1];
-    if (nextMsg !== undefined) state.messages.push(nextMsg);
-    return idx + 1;
-  }
-  if (arg.startsWith('-am') && arg.length > 3) {
-    state.hasAll = true;
-    state.messages.push(arg.slice(3));
-    return idx;
-  }
-  if (arg.startsWith('--message=')) {
-    state.messages.push(arg.slice(10));
-    return idx;
-  }
-  if (!arg.startsWith('--')) {
-    if (SHORT_ALL_MSG_CLUSTER_RE.test(arg)) state.hasAll = true;
-    const attachedMatch = SHORT_ATTACHED_MSG_RE.exec(arg);
-    if (attachedMatch?.[1] !== undefined) {
-      state.messages.push(attachedMatch[1]);
-    } else if (COMMIT_VALUE_FLAGS.has(arg) || SHORT_VALUE_CLUSTER_RE.test(arg)) {
-      if (COMMIT_REUSE_VALUE_FLAGS.has(arg) || /C$/.test(arg)) {
-        state.hasNonInteractiveMsgSource = true;
-      }
-      return idx + 1;
-    } else if (!arg.startsWith('-')) {
-      state.pathspecs.push(arg);
-    }
-    return idx;
-  }
-  if (COMMIT_VALUE_FLAGS.has(arg)) {
-    const nextVal = args[idx + 1] ?? '';
-    const isInteractiveFixup = arg === '--fixup' && /^(?:amend|reword):/.test(nextVal);
-    if (COMMIT_REUSE_VALUE_FLAGS.has(arg) && !isInteractiveFixup) state.hasNonInteractiveMsgSource = true;
-    return idx + 1;
-  }
-  return idx;
-}
-
-function parseGitCommitArgs(args: readonly string[]): ParsedGitCommitArgs {
-  const prefix = parseGitTopLevelPrefix(args);
-  const state: CommitParseState = { messages: [], pathspecs: [], hasAll: false, hasNonInteractiveMsgSource: false };
-  let hasAmend = false;
-  let hasMessageFile = false;
-  let hasInteractiveOrPatch = false;
-  let hasDryRunFlag = false;
-  let hasStatusFormatFlag = false;
-  let hasPathspecFromFile = false;
-  let pastDoubleDash = false;
-  for (let i = prefix.commitStartIdx; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === undefined) continue;
-    if (pastDoubleDash) {
-      state.pathspecs.push(arg);
-      continue;
-    }
-    if (arg === '--') {
-      pastDoubleDash = true;
-      continue;
-    }
-    if (arg === '-p' || arg === '--patch' || arg === '-i' || arg === '--interactive' || SHORT_PATCH_OR_INTERACTIVE_RE.test(arg)) {
-      hasInteractiveOrPatch = true;
-    }
-    if (arg.startsWith('--am') && '--amend'.startsWith(arg)) {
-      hasAmend = true;
-    } else if (arg === '-p' || arg === '--patch' || arg === '-i' || arg === '--interactive') {
-      continue;
-    } else if (arg === '--all' || SHORT_ALL_CLUSTER_RE.test(arg)) {
-      state.hasAll = true;
-    } else if (arg === '--dry-run') {
-      hasDryRunFlag = true;
-    } else if (COMMIT_READONLY_FLAGS.has(arg)) {
-      hasStatusFormatFlag = true;
-    } else if (isNegatedDryRunFlag(arg)) {
-      hasDryRunFlag = false;
-    } else if (isNegatedStatusFormatFlag(arg)) {
-      hasStatusFormatFlag = false;
-    } else if (arg === '--no-edit' || COMMIT_REUSE_EQ_RE.test(arg)) {
-      state.hasNonInteractiveMsgSource = true;
-    } else if (isPathspecFromFileFlag(arg)) {
-      hasPathspecFromFile = true;
-      if (!arg.includes('=')) i += 1;
-    } else if (arg === '-F' || arg === '--file' || SHORT_FILE_CLUSTER_RE.test(arg)) {
-      hasMessageFile = true;
-      if (!arg.startsWith('--') && arg.slice(1, arg.indexOf('F')).includes('a')) state.hasAll = true;
-      if (arg.startsWith('--') || arg.length <= 2 || arg.indexOf('F') === arg.length - 1) i += 1;
-    } else if (arg.startsWith('--file=')) {
-      hasMessageFile = true;
-    } else {
-      i = parseCommitMessageOrValueFlag(arg, args, i, state);
-    }
-  }
-  return {
-    message: state.messages.length > 0 ? state.messages.join('\n\n') : undefined,
-    hasAmend,
-    hasAll: state.hasAll,
-    hasMessageFile,
-    hasInteractiveOrPatch,
-    hasNonInteractiveMsgSource: state.hasNonInteractiveMsgSource,
-    isDryRun: hasDryRunFlag || hasStatusFormatFlag,
-    hasPathspecFromFile,
-    pathspecs: state.pathspecs,
-    gitDir: prefix.gitDir,
-    workTree: prefix.workTree,
-  };
-}
-
-export function readCommitMessage(args: readonly string[]): string | undefined {
-  return parseGitCommitArgs(args).message;
+function isNonSymlinkDir(dirPath: string): boolean {
+  const st = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isDirectory();
 }
 
 function isSameResolvedPath(a: string, b: string): boolean {
@@ -236,17 +31,22 @@ function isSameResolvedPath(a: string, b: string): boolean {
 
 function findAncestorRepoCommitScript(startDir: string): string | null {
   let current = path.resolve(startDir);
-  while (true) {
-    const candidate = path.join(current, 'scripts', 'commit.ts');
-    if (fs.existsSync(candidate)) return candidate;
+  for (let depth = 0; depth < MAX_ANCESTOR_WALK_DEPTH; depth++) {
+    const scriptsDir = path.join(current, 'scripts');
+    const candidate = path.join(scriptsDir, 'commit.ts');
+    if (isNonSymlinkDir(scriptsDir) && isRegularNonSymlinkFile(candidate)) return candidate;
+    if (fs.lstatSync(path.join(current, '.git'), { throwIfNoEntry: false }) !== undefined) return null;
     const parent = path.dirname(current);
     if (parent === current) return null;
     current = parent;
   }
+  return null;
 }
 
+const COMMIT_MNT_PATH_RE = /^\/?mnt\/[a-zA-Z](?:\/|$)/i;
+
 function normalizeHostSearchDir(dir: string): string {
-  return process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(dir)
+  return process.platform === 'win32' && COMMIT_MNT_PATH_RE.test(dir)
     ? convertToWindowsPath(dir)
     : dir;
 }
@@ -256,11 +56,18 @@ function resolveCommitScript(targetCwd: string, rawCwd: string, spawnCwd: string
   const hostRaw = normalizeHostSearchDir(rawCwd);
   const hostSpawn = normalizeHostSearchDir(spawnCwd);
   const hostExtra = extraSearchDir !== undefined ? normalizeHostSearchDir(extraSearchDir) : undefined;
-  const localAgentPath = path.join(hostTarget, '.agents', 'scripts', 'commit.ts');
-  const localScriptsPath = path.join(hostTarget, 'scripts', 'commit.ts');
+  const localAgentsDir = path.join(hostTarget, '.agents');
+  const localAgentsScriptsDir = path.join(localAgentsDir, 'scripts');
+  const localAgentPath = path.join(localAgentsScriptsDir, 'commit.ts');
+  const localScriptsDir = path.join(hostTarget, 'scripts');
+  const localScriptsPath = path.join(localScriptsDir, 'commit.ts');
   const sameAsSpawnCwd = isSameResolvedPath(hostTarget, hostSpawn);
-  if (fs.existsSync(localAgentPath)) return sameAsSpawnCwd ? './.agents/scripts/commit.ts' : localAgentPath;
-  if (fs.existsSync(localScriptsPath)) return sameAsSpawnCwd ? './scripts/commit.ts' : localScriptsPath;
+  if (isNonSymlinkDir(localAgentsDir) && isNonSymlinkDir(localAgentsScriptsDir) && isRegularNonSymlinkFile(localAgentPath)) {
+    return sameAsSpawnCwd ? './.agents/scripts/commit.ts' : localAgentPath;
+  }
+  if (isNonSymlinkDir(localScriptsDir) && isRegularNonSymlinkFile(localScriptsPath)) {
+    return sameAsSpawnCwd ? './scripts/commit.ts' : localScriptsPath;
+  }
   const searchDirs: string[] = [];
   const rawSearchDirs = hostExtra !== undefined ? [hostTarget, hostRaw, hostSpawn, hostExtra] : [hostTarget, hostRaw, hostSpawn];
   for (const dir of rawSearchDirs) {
@@ -272,11 +79,13 @@ function resolveCommitScript(targetCwd: string, rawCwd: string, spawnCwd: string
   }
   const bundledFallbacks = [
     path.resolve(COMMIT_DIR, '../../commit.ts'),
+    path.resolve(COMMIT_DIR, '../../scripts/commit.ts'),
     path.resolve(COMMIT_DIR, '../../commit/commit.ts'),
     path.resolve(COMMIT_DIR, '../../commit/commit.js'),
+    path.resolve(COMMIT_DIR, '../commit/commit.js'),
   ];
   for (const candidate of bundledFallbacks) {
-    if (fs.existsSync(candidate)) return candidate;
+    if (isRegularNonSymlinkFile(candidate)) return candidate;
   }
   return null;
 }
@@ -294,14 +103,6 @@ function resolvePrefixPath(baseDir: string, rawVal: string, isWsl2: boolean): st
     if (baseDir.startsWith('/')) return path.posix.resolve(baseDir, rawVal);
   }
   return path.resolve(baseDir, rawVal);
-}
-
-function tryRealpath(p: string): string | null {
-  try {
-    return fs.realpathSync.native(p);
-  } catch {
-    return null;
-  }
 }
 
 function isRelativeSelfOrDescendant(rel: string, sep: string): boolean {

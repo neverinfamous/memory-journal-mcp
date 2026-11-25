@@ -21,13 +21,24 @@ function parsePositiveSafeInt(raw: string): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
+function errorCodeOf(err: unknown): string | undefined {
+  return err !== null && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+    ? err.code
+    : undefined;
+}
+
 function pruneExpiredMutexDir(mutexPath: string): void {
   try {
     const st = fs.statSync(mutexPath, { throwIfNoEntry: false });
     if (st !== undefined && Date.now() - st.mtimeMs > 15000) {
       fs.rmdirSync(mutexPath);
     }
-  } catch { /* ignore */ }
+  } catch (err: unknown) {
+    const code = errorCodeOf(err);
+    if (code !== 'ENOENT' && code !== 'ENOTEMPTY' && code !== 'EBUSY') {
+      console.error(`⚠️ WSL mutex prune error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }
 
 async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<boolean> {
@@ -36,8 +47,11 @@ async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<b
       fs.mkdirSync(mutexPath); // Atomic operation
       return { done: true, value: true };
     } catch (err: unknown) {
-      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
-      if (code !== undefined && code !== 'EEXIST') return { done: true, value: false };
+      const code = errorCodeOf(err);
+      if (code !== undefined && code !== 'EEXIST') {
+        console.error(`⚠️ WSL mutex acquire error (${mutexPath}): ${err instanceof Error ? err.message : String(err)}`);
+        return { done: true, value: false };
+      }
       pruneExpiredMutexDir(mutexPath);
       if (Date.now() >= deadlineMs) return { done: true, value: false };
       await new Promise(r => setTimeout(r, 20 + Math.random() * 50));
@@ -47,7 +61,14 @@ async function tryAcquireMutex(mutexPath: string, deadlineMs: number): Promise<b
 }
 
 function releaseMutexDir(mutexPath: string): void {
-  try { fs.rmdirSync(mutexPath); } catch { /* ignore */ }
+  try {
+    fs.rmdirSync(mutexPath);
+  } catch (err: unknown) {
+    const code = errorCodeOf(err);
+    if (code !== 'ENOENT' && code !== 'ENOTEMPTY') {
+      console.error(`⚠️ WSL mutex release error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }
 
 function isLockFileStale(lPath: string, nowMs: number): boolean {
@@ -73,16 +94,19 @@ function countActiveAndPruneStaleLocks(): number {
       } else {
         activeLockCount++;
       }
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      const code = errorCodeOf(err);
+      if (code === 'ENOENT') continue;
+      activeLockCount++;
+      console.error(`⚠️ WSL lock probe warning (${fileName}): ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
   return activeLockCount;
 }
 
 export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000, isJson = false): Promise<string> {
   try {
-    if (!fs.existsSync(WSL_LOCK_DIR)) {
-      fs.mkdirSync(WSL_LOCK_DIR, { recursive: true, mode: 0o700 });
-    }
+    fs.mkdirSync(WSL_LOCK_DIR, { recursive: true, mode: 0o700 });
   } catch (err: unknown) {
     if (!isJson) console.error(`⚠️ WSL lock dir creation failed: ${err instanceof Error ? err.message : String(err)}`);
     return '';
@@ -119,7 +143,13 @@ function registerProcessCleanup(cleanupFn: () => void): void {
   const releaseAll = (): void => {
     if (done) return;
     done = true;
-    try { cleanupFn(); } catch { /* ignore */ }
+    try {
+      cleanupFn();
+    } catch (err: unknown) {
+      if (errorCodeOf(err) !== 'ENOENT') {
+        console.error(`⚠️ Cleanup release error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     process.off('exit', releaseAll);
     process.off('SIGINT', onSigint);
     process.off('SIGTERM', onSigterm);
@@ -154,7 +184,13 @@ function deductTimeout(baseTimeoutMs: number | undefined, elapsedMs: number): nu
 
 function runCleanupHandlers(cleanups: readonly (() => void)[]): void {
   for (let i = cleanups.length - 1; i >= 0; i--) {
-    try { cleanups[i]?.(); } catch { /* ignore */ }
+    try {
+      cleanups[i]?.();
+    } catch (err: unknown) {
+      if (errorCodeOf(err) !== 'ENOENT') {
+        console.error(`⚠️ Lock cleanup error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 }
 

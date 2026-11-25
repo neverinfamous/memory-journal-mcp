@@ -3,15 +3,15 @@ import path from 'node:path';
 import type { ExecPayload } from '../schema.js';
 import { stripInlineCodeArgs } from './utils.js';
 
-const NON_RUNNER_CLIS = [
+const NON_RUNNER_CLI_SET: ReadonlySet<string> = new Set([
   'rg', 'ripgrep', 'grep', 'egrep', 'fgrep', 'select-string',
   'find', 'fd', 'fdfind', 'ls', 'dir', 'get-childitem', 'gci', 'tree',
   'cat', 'get-content', 'head', 'tail', 'wc', 'sort', 'uniq', 'tee',
   'jq', 'yq', 'sed', 'awk', 'gawk', 'git', 'gh', 'curl', 'wget',
   'rm', 'rmdir', 'cp', 'mv', 'mkdir', 'touch', 'chmod', 'diff',
-];
+]);
 
-const TEST_RUNNER_WORDS = ['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'];
+const TEST_RUNNER_WORD_SET: ReadonlySet<string> = new Set(['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage']);
 
 export interface WslCommandProfile {
   isDockerScout: boolean;
@@ -92,7 +92,7 @@ export function wslCommandProfile(
   underlyingScript: string,
   isNestedAgentExec: boolean,
 ): WslCommandProfile {
-  const isWslNonRunnerCli = NON_RUNNER_CLIS.includes(cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, ''));
+  const isWslNonRunnerCli = NON_RUNNER_CLI_SET.has(cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, ''));
   const isKnownDeterministic = knownDeterministic(cmdBasename, args, isWslNonRunnerCli);
   const nonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
   const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && nonInlineArgs.some(arg => /scout/i.test(arg));
@@ -111,7 +111,7 @@ export function windowsCommandProfile(
   underlyingScript: string,
   isNestedAgentExec: boolean,
 ): WindowsCommandProfile {
-  const isWinNonRunnerCli = NON_RUNNER_CLIS.includes(cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, ''));
+  const isWinNonRunnerCli = NON_RUNNER_CLI_SET.has(cmdBasename.toLowerCase().replace(/\.(?:exe|cmd|bat)$/i, ''));
   const isKnownDeterministic = knownDeterministic(cmdBasename, args, isWinNonRunnerCli);
   const isBackupConversations = /backup-conversations\.ts/i.test(cmdBasename) || args.some(arg => /backup-conversations\.ts/i.test(arg));
   const nonInlineArgs = stripInlineCodeArgs(cmdBasename, args);
@@ -251,7 +251,7 @@ function qualityGate(cmdBasename: string, nonInlineArgs: string[], underlyingScr
 }
 
 function isTestDirArg(arg: string): boolean {
-  if (arg.startsWith('-') || TEST_RUNNER_WORDS.includes(arg.toLowerCase())) return false;
+  if (arg.startsWith('-') || TEST_RUNNER_WORD_SET.has(arg.toLowerCase())) return false;
   if (!/(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(arg)) return false;
   return !/\.[a-zA-Z0-9_-]+$/i.test(arg);
 }

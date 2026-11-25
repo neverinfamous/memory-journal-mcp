@@ -1,11 +1,11 @@
 // @ts-nocheck
-import fs from 'node:fs';
 import path from 'node:path';
 import type { ExecutionContext } from './interceptors/types.js';
 import { findPatternExprIndex } from './command-utils.js';
 import { resolveEvalExecutionTarget } from './eval-healer.js';
 import {
   CANDIDATE_EXTENSIONS,
+  createPathProbeCache,
   formatHealedPath,
   isDirectoryPath,
   isFilePath,
@@ -13,7 +13,9 @@ import {
   normalizeMntPathForHost,
   preserveQuotes,
   splitJoinedFileArg,
+  statPathKind,
   WSL_DRIVE_MNT_RE,
+  type PathProbeCache,
 } from './path-healer.js';
 import { findNeighborFilePath } from './path-neighbor.js';
 import { resolveBuildSrcSwap, resolvePathWithDirectorySynonyms } from './path-synonym.js';
@@ -26,15 +28,23 @@ import {
   SEARCH_OR_LIST,
   SEARCH_TOOLS,
   applyHeal,
+  buildResolvedArgArray,
   findBarrelName,
   hasGrepRecurse,
-  isDuplicateArg,
+  resolveArgForCompare,
   shiftSkipIndices,
   shouldSkipArg,
   skipBunPositionals,
   skipFlagValues,
   skipNodeTail,
 } from './path-argv-utils.js';
+
+const BACKUP_TOKEN_RE = /(^|['"]|[\\/])backups(?=[\\/]|['"]|$)/i;
+const DATA_BACKUP_TOKEN_RE = /(?:^|[\\/])data[\\/]backups(?=[\\/]|$)/i;
+const BACKUP_REPLACE_RE = /(^|[\\/])backups(?=[\\/]|$)/i;
+const MCP_CONFIG_SEP_RE = /\.gemini[\\/]mcp_config\.json/g;
+const ARGV_CODE_EXT_RE = /\.(?:ts|js|tsx|jsx|mjs|cjs)$/i;
+const ARGV_TRAIL_SEP_RE = /[\\/]$/;
 
 function healEvalPayload(ctx: ExecutionContext, cwd: string): void {
   if (ctx.payload.type !== 'eval' || typeof ctx.payload.code !== 'string') return;
@@ -51,30 +61,30 @@ function healEvalPayload(ctx: ExecutionContext, cwd: string): void {
   for (const line of deferredLogs) console.error(line);
 }
 
-function healBackupPaths(args: string[], skip: ReadonlySet<number>, cwd: string, syncArgs: () => void): void {
+function healBackupPaths(args: string[], skip: ReadonlySet<number>, cwd: string, syncArgs: () => void, cache: PathProbeCache): void {
   for (let index = 0; index < args.length; index += 1) {
     if (skip.has(index)) continue;
     const arg = args[index];
     if (arg === undefined || arg.startsWith('-')) continue;
-    if (!/(^|['"]|[\\/])backups(?=[\\/]|['"]|$)/i.test(arg)) continue;
+    if (!BACKUP_TOKEN_RE.test(arg)) continue;
     const raw = arg.replace(/^['"]|['"]$/g, '');
-    if (/(?:^|[\\/])data[\\/]backups(?=[\\/]|$)/i.test(raw)) continue;
+    if (DATA_BACKUP_TOKEN_RE.test(raw)) continue;
     const isWslPath = WSL_DRIVE_MNT_RE.test(raw);
     const hostRaw = isWslPath ? normalizeMntPathForHost(raw) : raw;
     const resolved = path.isAbsolute(hostRaw) ? path.normalize(hostRaw) : path.resolve(cwd, hostRaw);
-    if (fs.existsSync(resolved)) continue;
+    if (statPathKind(resolved, cache) !== null) continue;
     const sep = raw.includes('\\') && !isWslPath ? '\\' : '/';
-    const candidateRaw = raw.replace(/(^|[\\/])backups(?=[\\/]|$)/i, `$1data${sep}backups`);
+    const candidateRaw = raw.replace(BACKUP_REPLACE_RE, `$1data${sep}backups`);
     const candidateHost = isWslPath ? normalizeMntPathForHost(candidateRaw) : candidateRaw;
     const candidateResolved = path.isAbsolute(candidateHost) ? path.normalize(candidateHost) : path.resolve(cwd, candidateHost);
-    if (!fs.existsSync(candidateResolved)) continue;
+    if (statPathKind(candidateResolved, cache) === null) continue;
     args[index] = preserveQuotes(arg, candidateRaw);
     syncArgs();
     console.error(`\n   💡 AGENT HINT: 'backups' directory was found at 'data/backups'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to data/backups.\x1b[0m`);
   }
 }
 
-function healMcpConfigPaths(args: string[], skip: ReadonlySet<number>, cwd: string, syncArgs: () => void): void {
+function healMcpConfigPaths(args: string[], skip: ReadonlySet<number>, cwd: string, syncArgs: () => void, cache: PathProbeCache): void {
   for (let index = 0; index < args.length; index += 1) {
     if (skip.has(index)) continue;
     const arg = args[index];
@@ -82,57 +92,59 @@ function healMcpConfigPaths(args: string[], skip: ReadonlySet<number>, cwd: stri
     const raw = arg.replace(/^['"]|['"]$/g, '');
     const hostRaw = normalizeMntPathForHost(raw);
     const resolved = path.isAbsolute(hostRaw) ? path.normalize(hostRaw) : path.resolve(cwd, hostRaw);
-    if (fs.existsSync(resolved)) continue;
-    args[index] = arg.replace(/\.gemini[\\/]mcp_config\.json/g, '.gemini/antigravity-ide/mcp_config.json');
+    if (statPathKind(resolved, cache) !== null) continue;
+    args[index] = arg.replace(MCP_CONFIG_SEP_RE, '.gemini/antigravity-ide/mcp_config.json');
     syncArgs();
     console.error(`\n   💡 AGENT HINT: 'mcp_config.json' is located in '.gemini/antigravity-ide/mcp_config.json', not directly under '.gemini'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to .gemini/antigravity-ide/mcp_config.json... (Frictionless Recovery)\x1b[0m`);
   }
 }
 
-function healModularDirectory(args: string[], base: string, index: number, arg: string, rawPath: string, isWslPath: boolean, cwd: string, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): { handled: boolean; needsRecurse: boolean } {
-  const extMatch = rawPath.match(/\.(?:ts|js|tsx|jsx|mjs|cjs)$/i);
+function healModularDirectory(args: string[], base: string, index: number, arg: string, rawPath: string, isWslPath: boolean, cwd: string, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>, cache?: PathProbeCache, resolvedArgs?: string[], grepHasRecurse?: boolean): { handled: boolean; needsRecurse: boolean } {
+  const extMatch = rawPath.match(ARGV_CODE_EXT_RE);
   if (extMatch === null) return { handled: false, needsRecurse: false };
   const withoutExt = rawPath.slice(0, -extMatch[0].length);
-  if (withoutExt.length === 0 || /[\\/]$/.test(withoutExt)) return { handled: false, needsRecurse: false };
+  if (withoutExt.length === 0 || ARGV_TRAIL_SEP_RE.test(withoutExt)) return { handled: false, needsRecurse: false };
   const normalizedWithoutExt = isWslPath ? normalizeMntPathForHost(withoutExt) : withoutExt;
   const resolvedWithoutExt = path.isAbsolute(normalizedWithoutExt) ? path.normalize(normalizedWithoutExt) : path.resolve(cwd, normalizedWithoutExt);
-  if (!isDirectoryPath(resolvedWithoutExt)) return { handled: false, needsRecurse: false };
+  if (!isDirectoryPath(resolvedWithoutExt, cache)) return { handled: false, needsRecurse: false };
   if (SEARCH_TOOLS.has(base)) {
-    return { handled: true, needsRecurse: healSearchDirectory(args, base, index, arg, withoutExt, cwd, skip, syncArgs, duplicateIndices) };
+    return { handled: true, needsRecurse: healSearchDirectory(args, base, index, arg, withoutExt, cwd, skip, syncArgs, duplicateIndices, resolvedArgs, grepHasRecurse) };
   }
-  const foundBarrel = findBarrelName(resolvedWithoutExt);
+  const foundBarrel = findBarrelName(resolvedWithoutExt, cache);
   if (foundBarrel === null) return { handled: false, needsRecurse: false };
   const sep = withoutExt.includes('\\') ? '\\' : '/';
   const healedBarrel = preserveQuotes(arg, `${withoutExt}${sep}${foundBarrel}`);
-  if (applyHeal(args, index, healedBarrel, cwd, skip)) {
+  if (applyHeal(args, index, healedBarrel, cwd, skip, resolvedArgs) === 'healed') {
     syncArgs();
     logPathHeal(`File '${arg}' not found on disk, but directory '${withoutExt}' exists with entrypoint '${foundBarrel}'.`, `Auto-correcting path to '${healedBarrel}'... (Frictionless Recovery)`);
   }
   return { handled: true, needsRecurse: false };
 }
 
-function healSearchDirectory(args: string[], base: string, index: number, arg: string, withoutExt: string, cwd: string, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): boolean {
+function healSearchDirectory(args: string[], base: string, index: number, arg: string, withoutExt: string, cwd: string, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>, resolvedArgs?: string[], grepHasRecurse?: boolean): boolean {
   const healedDir = preserveQuotes(arg, withoutExt);
-  if (applyHeal(args, index, healedDir, cwd, skip)) {
+  const outcome = applyHeal(args, index, healedDir, cwd, skip, resolvedArgs);
+  if (outcome === 'healed') {
     syncArgs();
     logPathHeal(`File '${arg}' not found, but modular directory '${withoutExt}' exists.`, `Auto-correcting path to '${healedDir}'... (Frictionless Recovery)`);
-    return GREP_TOOLS.has(base) && !hasGrepRecurse(args);
+    return GREP_TOOLS.has(base) && grepHasRecurse !== true;
   }
-  if (duplicateIndices !== undefined && isDuplicateArg(args, index, healedDir, cwd, skip)) {
+  if (outcome === 'duplicate' && duplicateIndices !== undefined) {
     duplicateIndices.add(index);
   }
   return false;
 }
 
-function healAddedExtension(args: string[], index: number, arg: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean, isSearchOrListTool: boolean, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): 'healed' | 'blocked' | 'none' {
+function healAddedExtension(args: string[], index: number, arg: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean, isSearchOrListTool: boolean, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>, cache?: PathProbeCache, resolvedArgs?: string[]): 'healed' | 'blocked' | 'none' {
   const cleanResolved = resolved.replace(/[\\/]+$/, '');
   for (const ext of CANDIDATE_EXTENSIONS) {
     if (hadTrailingSlash && !CODE_MODULE_EXTENSIONS.has(ext)) continue;
     const candidate = cleanResolved + ext;
-    if (!isFilePath(candidate)) continue;
+    if (!isFilePath(candidate, cache)) continue;
     const healedArg = formatHealedPath(arg, candidate, cwd, isWslPath);
-    if (!applyHeal(args, index, healedArg, cwd, skip)) {
-      if (isSearchOrListTool && duplicateIndices !== undefined && isDuplicateArg(args, index, healedArg, cwd, skip)) {
+    const outcome = applyHeal(args, index, healedArg, cwd, skip, resolvedArgs);
+    if (outcome !== 'healed') {
+      if (outcome === 'duplicate' && isSearchOrListTool && duplicateIndices !== undefined) {
         duplicateIndices.add(index);
       }
       return 'blocked';
@@ -144,18 +156,19 @@ function healAddedExtension(args: string[], index: number, arg: string, resolved
   return 'none';
 }
 
-function healNeighborArg(args: string[], base: string, index: number, arg: string, rawPath: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>): boolean {
+function healNeighborArg(args: string[], base: string, index: number, arg: string, rawPath: string, resolved: string, hadTrailingSlash: boolean, cwd: string, isWslPath: boolean, skip: ReadonlySet<number>, syncArgs: () => void, duplicateIndices?: Set<number>, cache?: PathProbeCache, resolvedArgs?: string[], grepHasRecurse?: boolean): boolean {
   const isSearchOrListTool = SEARCH_OR_LIST.has(base);
   if (!isSearchOrListTool && !rawPath.includes('/') && !rawPath.includes('\\')) return false;
-  const candidatePath = resolvePathWithDirectorySynonyms(resolved, isSearchOrListTool)
-    ?? resolveBuildSrcSwap(resolved, isSearchOrListTool)
-    ?? (hadTrailingSlash ? null : findNeighborFilePath(resolved, isSearchOrListTool));
+  const candidatePath = resolvePathWithDirectorySynonyms(resolved, isSearchOrListTool, cache)
+    ?? resolveBuildSrcSwap(resolved, isSearchOrListTool, cache)
+    ?? (hadTrailingSlash ? null : findNeighborFilePath(resolved, isSearchOrListTool, cache));
   if (candidatePath === null) return false;
-  const isDir = isDirectoryPath(candidatePath);
+  const isDir = isDirectoryPath(candidatePath, cache);
   if (hadTrailingSlash && !isDir) return false;
   const healedArg = formatHealedPath(arg, candidatePath, cwd, isWslPath);
-  if (!applyHeal(args, index, healedArg, cwd, skip)) {
-    if (isSearchOrListTool && duplicateIndices !== undefined && isDuplicateArg(args, index, healedArg, cwd, skip)) {
+  const outcome = applyHeal(args, index, healedArg, cwd, skip, resolvedArgs);
+  if (outcome !== 'healed') {
+    if (outcome === 'duplicate' && isSearchOrListTool && duplicateIndices !== undefined) {
       duplicateIndices.add(index);
     }
     return false;
@@ -163,34 +176,39 @@ function healNeighborArg(args: string[], base: string, index: number, arg: strin
   syncArgs();
   const kind = isDir ? 'Directory' : 'File';
   logPathHeal(`${kind} '${arg}' not found on disk, but found at '${healedArg}'.`, `Auto-correcting path to '${healedArg}'... (Frictionless Recovery)`);
-  return isDir && GREP_TOOLS.has(base) && !hasGrepRecurse(args);
+  return isDir && GREP_TOOLS.has(base) && grepHasRecurse !== true;
 }
 
-function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<number>, syncArgs: () => void): void {
+function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<number>, syncArgs: () => void, probeCache: PathProbeCache): void {
   let recurseDirArg: string | null = null;
   let pendingGrepRecurse = false;
+  const isGrepTool = GREP_TOOLS.has(base);
+  const grepHasRecurse = isGrepTool && hasGrepRecurse(args);
   const isSearchOrListTool = SEARCH_OR_LIST.has(base);
   const duplicateIndices = new Set<number>();
+  const resolvedArgs = buildResolvedArgArray(args, cwd);
   for (let index = 0; index < args.length; index += 1) {
     if (skip.has(index)) continue;
     const arg = args[index];
     if (shouldSkipArg(arg) || arg === undefined) continue;
     const rawPath = arg.replace(/^['"]|['"]$/g, '');
-    const hadTrailingSlash = /[\\/]$/.test(rawPath);
+    const hadTrailingSlash = ARGV_TRAIL_SEP_RE.test(rawPath);
     const isWslPath = WSL_DRIVE_MNT_RE.test(rawPath);
     const wslNormalized = isWslPath ? normalizeMntPathForHost(rawPath) : rawPath;
     const resolved = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(cwd, wslNormalized);
-    if (fs.existsSync(resolved)) {
-      if (isDirectoryPath(resolved) && GREP_TOOLS.has(base) && !hasGrepRecurse(args)) {
+    const existingKind = statPathKind(resolved, probeCache);
+    if (existingKind !== null) {
+      if (existingKind === 'dir' && isGrepTool && !grepHasRecurse) {
         pendingGrepRecurse = true;
         recurseDirArg ??= arg;
       }
       continue;
     }
     if (MULTI_TARGET_FILE_TOOLS.has(base)) {
-      const splitParts = splitJoinedFileArg(arg, cwd);
+      const splitParts = splitJoinedFileArg(arg, cwd, probeCache);
       if (splitParts !== null) {
         args.splice(index, 1, ...splitParts);
+        resolvedArgs.splice(index, 1, ...splitParts.map((part) => (part.startsWith('-') ? '' : resolveArgForCompare(part, cwd))));
         shiftSkipIndices(skip, index, splitParts.length - 1);
         syncArgs();
         logPathHeal(
@@ -201,14 +219,14 @@ function healFileToolArgs(args: string[], base: string, cwd: string, skip: Set<n
         continue;
       }
     }
-    const modularResult = healModularDirectory(args, base, index, arg, rawPath, isWslPath, cwd, skip, syncArgs, duplicateIndices);
+    const modularResult = healModularDirectory(args, base, index, arg, rawPath, isWslPath, cwd, skip, syncArgs, duplicateIndices, probeCache, resolvedArgs, grepHasRecurse);
     if (modularResult.handled) {
       if (modularResult.needsRecurse) pendingGrepRecurse = true;
       continue;
     }
-    const extensionResult = healAddedExtension(args, index, arg, resolved, hadTrailingSlash, cwd, isWslPath, isSearchOrListTool, skip, syncArgs, duplicateIndices);
+    const extensionResult = healAddedExtension(args, index, arg, resolved, hadTrailingSlash, cwd, isWslPath, isSearchOrListTool, skip, syncArgs, duplicateIndices, probeCache, resolvedArgs);
     if (extensionResult !== 'none') continue;
-    if (healNeighborArg(args, base, index, arg, rawPath, resolved, hadTrailingSlash, cwd, isWslPath, skip, syncArgs, duplicateIndices)) {
+    if (healNeighborArg(args, base, index, arg, rawPath, resolved, hadTrailingSlash, cwd, isWslPath, skip, syncArgs, duplicateIndices, probeCache, resolvedArgs, grepHasRecurse)) {
       pendingGrepRecurse = true;
     }
   }
@@ -276,8 +294,9 @@ export function healPathHallucinations(ctx: ExecutionContext): void {
   skipFlagValues(base, args, skip);
   if (base === 'bun' && skipBunPositionals(args, skip)) return;
   if (base === 'node') skipNodeTail(args, skip);
-  healBackupPaths(args, skip, cwd, syncArgs);
-  healMcpConfigPaths(args, skip, cwd, syncArgs);
+  const probeCache = createPathProbeCache();
+  healBackupPaths(args, skip, cwd, syncArgs, probeCache);
+  healMcpConfigPaths(args, skip, cwd, syncArgs, probeCache);
   // [INVARIANT]: Never heal an arg into a duplicate of another existing arg (e.g. two copies of the same file).
-  healFileToolArgs(args, base, cwd, skip, syncArgs);
+  healFileToolArgs(args, base, cwd, skip, syncArgs, probeCache);
 }

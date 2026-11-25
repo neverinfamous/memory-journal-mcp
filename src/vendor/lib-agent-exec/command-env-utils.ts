@@ -97,12 +97,14 @@ const PackageScriptsSchema = z.object({
   scripts: z.record(z.string(), z.unknown()).optional(),
 });
 
+const PKG_SCRIPT_MANAGERS = new Set(['pnpm', 'npm', 'bun', 'yarn']);
+
 /**
  * [INTENT]: Look up the underlying command string for `npm|pnpm|bun|yarn` script invocations via `package.json`.
  */
 export function getUnderlyingPackageScript(cmdBasename: string, args: string[] | undefined, payloadCwd: string | undefined): string {
   const base = cmdBasename.toLowerCase().replace(/\.(cmd|exe)$/i, '');
-  if (!['pnpm', 'npm', 'bun', 'yarn'].includes(base) || !args || args.length === 0) return '';
+  if (!PKG_SCRIPT_MANAGERS.has(base) || !args || args.length === 0) return '';
   const nonFlagArgs: string[] = [];
   let dirFlagVal: string | undefined;
   for (let i = 0; i < args.length; i++) {
@@ -126,13 +128,17 @@ export function getUnderlyingPackageScript(cmdBasename: string, args: string[] |
   if (!scriptName) return '';
   try {
     const pkgPath = path.join(resolvePkgScriptDir(payloadCwd, dirFlagVal), 'package.json');
-    if (!fs.existsSync(pkgPath)) return '';
+    if (fs.statSync(pkgPath, { throwIfNoEntry: false })?.isFile() !== true) return '';
     const parsedPkg = PackageScriptsSchema.safeParse(JSON.parse(fs.readFileSync(pkgPath, 'utf8')));
     if (!parsedPkg.success || parsedPkg.data.scripts === undefined) return '';
     const scripts = parsedPkg.data.scripts;
     const val = Object.hasOwn(scripts, scriptName) ? scripts[scriptName] : undefined;
     return typeof val === 'string' ? val : '';
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      console.error(`⚠️ package.json script lookup warning: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return '';
   }
 }

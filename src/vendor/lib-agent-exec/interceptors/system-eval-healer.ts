@@ -4,16 +4,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ExecPayload } from '../schema.js';
 import { RG_VALUE_FLAGS, convertToWindowsPath, convertToWslPath, escapeUnixArg, extractLeadingShortFlags } from '../command-utils.js';
-import { isJavaScriptOrTypeScriptCode, isPythonCode, isShellCommandScript } from '../eval-healer.js';
-import { buildNonCodeSpans, isIndexInSpans } from '../quote-spans.js';
 import { findEcosystemScript } from '../utils.js';
 import { AGENT_EXEC_README_URL, splitFirstShellSegment } from './utils.js';
 import { parseGrepSearchArgs } from './search-interceptor.js';
-import { AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
-import { healEvalGrepSegment, healEvalRgSegment } from './system-eval-search-healer.js';
+import { AGENT_NATIVE_TOOL_SET, ECOSYSTEM_MCP_TOOL_SET } from './types.js';
+import { healEvalGrepSegment, healEvalRgSegment, unbundleQuotedSearchFlags } from './system-eval-search-healer.js';
 
 type EvalPayload = Extract<ExecPayload, { type: 'eval' }>;
+type SplitSegment = { firstSegment: string; remainder: string };
 const PRUNE_TARGET_DIRS = ['node_modules', '.git', 'dist', '.cache', 'coverage'] as const;
+const BROAD_FIND_OPT_OUT_FLAGS: ReadonlySet<string> = new Set(['-maxdepth', '-delete', '-depth', '--help', '--version']);
 const FIND_ACTION_RE = /(?:^|\s)(?:-print0?|-printf|-quit|-ls|-delete|-exec(?:dir)?|-ok(?:dir)?|-fprint0?|-fprintf)\b/i;
 
 function resolveEvalBaseCwd(payload: EvalPayload, fallbackCwd?: string): string {
@@ -31,32 +31,27 @@ function quoteShellWord(word: string): string {
   return `"${word.replace(/["\\$`]/g, (ch) => `\\${ch}`)}"`;
 }
 
-// [INVARIANT]: This pattern is not global. Only the bundled flag/pattern match is rewritten.
-const bundledSearchFlagsRegex = /(?:^|[;&|\s])(?:rg|ripgrep|grep|egrep|fgrep)\s+(["'])(-[a-zA-Z0-9_-]+(?:\s+\d+)?(?:\s+-[a-zA-Z0-9_-]+(?:\s+\d+)?)*)\s+([^"']+)\1/i;
-
 export function healEvalPayload(payload: ExecPayload, baseCwd?: string): void {
   if (payload.type !== 'eval' || typeof payload.code !== 'string') return;
   const resolvedCwd = resolveEvalBaseCwd(payload, baseCwd);
-  const trimmedCode = payload.code.trim();
-  healEvalToolAliases(payload, trimmedCode, resolvedCwd);
-  healGitInspectEval(payload, trimmedCode, resolvedCwd);
-  healFindMissingName(payload, trimmedCode);
-  healBroadFindEval(payload);
+  let cachedSrc: string | undefined;
+  let cachedSplit: SplitSegment | undefined;
+  const getSplit = (code: string): SplitSegment =>
+    code === cachedSrc && cachedSplit !== undefined ? cachedSplit : (cachedSplit = splitFirstShellSegment(cachedSrc = code));
+  healEvalToolAliases(payload, payload.code.trim(), resolvedCwd);
+  healGitInspectEval(payload, payload.code, resolvedCwd, getSplit);
+  healFindMissingName(payload, payload.code, getSplit);
+  healBroadFindEval(payload, getSplit);
   unbundleQuotedSearchFlags(payload);
-  healUnquotedRgPattern(payload, resolvedCwd);
-  healEvalGrepSegment(payload, resolvedCwd);
-  healEvalRgSegment(payload, resolvedCwd);
+  healUnquotedRgPattern(payload, resolvedCwd, getSplit);
+  healEvalGrepSegment(payload, resolvedCwd, getSplit);
+  healEvalRgSegment(payload, resolvedCwd, getSplit);
   blockNativeEvalTools(payload.code.trim());
 }
 
 function healEvalToolAliases(payload: EvalPayload, trimmedCode: string, baseCwd: string): void {
-  if (/^grep_search\s*\(/i.test(trimmedCode)) {
-    healGrepSearchFunction(payload, trimmedCode);
-    return;
-  }
-  if (healGrepSearchCli(payload, trimmedCode, baseCwd)) return;
-  if (healListDirEval(payload, trimmedCode)) return;
-  if (healViewFileEval(payload, trimmedCode)) return;
+  if (/^grep_search\s*\(/i.test(trimmedCode)) { healGrepSearchFunction(payload, trimmedCode); return; }
+  if (healGrepSearchCli(payload, trimmedCode, baseCwd) || healListDirEval(payload, trimmedCode) || healViewFileEval(payload, trimmedCode)) return;
   healPackageRunnerSearch(payload, trimmedCode);
 }
 
@@ -67,9 +62,9 @@ function healGrepSearchFunction(payload: EvalPayload, trimmedCode: string): void
   const caseMatch = trimmedCode.match(/["'`]?(?:CaseInsensitive|caseInsensitive)["'`]?\s*:\s*(true|false)/i);
   const regexMatch = trimmedCode.match(/["'`]?(?:IsRegex|isRegex)["'`]?\s*:\s*(true|false)/i);
   const pattern = patternMatch[1];
-  const searchPath = pathMatch !== null && pathMatch[1] !== undefined ? pathMatch[1] : '.';
-  const isCaseInsensitive = caseMatch !== null && caseMatch[1] !== undefined ? caseMatch[1].toLowerCase() === 'true' : false;
-  const isRegex = regexMatch !== null && regexMatch[1] !== undefined ? regexMatch[1].toLowerCase() === 'true' : false;
+  const searchPath = pathMatch?.[1] ?? '.';
+  const isCaseInsensitive = caseMatch?.[1]?.toLowerCase() === 'true';
+  const isRegex = regexMatch?.[1]?.toLowerCase() === 'true';
   const flags = ['-n'];
   if (isCaseInsensitive) flags.push('-i');
   if (!isRegex) flags.push('-F');
@@ -78,8 +73,7 @@ function healGrepSearchFunction(payload: EvalPayload, trimmedCode: string): void
   if (isWin32) payload.target = 'wsl2';
   payload.interpreter = 'bash';
   payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(isWin32 ? convertToWslPath(searchPath) : searchPath, false)}`;
-  console.error(`\n   💡 AGENT HINT: 'grep_search' called as a function inside eval code.`);
-  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating grep_search function call to ripgrep (rg) command... (Frictionless Recovery)\x1b[0m`);
+  console.error(`\n   💡 AGENT HINT: 'grep_search' called as a function inside eval code.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating grep_search function call to ripgrep (rg) command... (Frictionless Recovery)\x1b[0m`);
 }
 
 function healGrepSearchCli(payload: EvalPayload, trimmedCode: string, baseCwd: string): boolean {
@@ -98,20 +92,14 @@ function healGrepSearchCli(payload: EvalPayload, trimmedCode: string, baseCwd: s
     if (isWin32) payload.target = 'wsl2';
     payload.interpreter = 'bash';
     payload.code = `rg --files ${escapeUnixArg(isWin32 ? convertToWslPath(parsed.searchPath) : parsed.searchPath, false)}`;
-    console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code without pattern.`);
-    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg) --files... (Frictionless Recovery)\x1b[0m`);
+    console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code without pattern.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg) --files... (Frictionless Recovery)\x1b[0m`);
     return true;
   }
   return false;
 }
 
 function writeGrepSearchRg(
-  payload: EvalPayload,
-  pattern: string,
-  searchPath: string,
-  isCaseInsensitive: boolean,
-  isWord: boolean,
-  isRegex: boolean,
+  payload: EvalPayload, pattern: string, searchPath: string, isCaseInsensitive: boolean, isWord: boolean, isRegex: boolean,
 ): void {
   const isWin32 = process.platform === 'win32';
   if (isWin32) payload.target = 'wsl2';
@@ -122,8 +110,7 @@ function writeGrepSearchRg(
   if (!isRegex) rgFlags.push('-F');
   if (pattern.startsWith('-')) rgFlags.push('-e');
   payload.code = `rg ${rgFlags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(isWin32 ? convertToWslPath(searchPath) : searchPath, false)}`;
-  console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code.`);
-  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+  console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
 }
 
 function stripOptionalEvalCallParens(raw: string): string {
@@ -140,8 +127,7 @@ function healListDirEval(payload: EvalPayload, trimmedCode: string): boolean {
   if (isWin32) payload.target = 'wsl2';
   payload.interpreter = 'bash';
   payload.code = `ls ${escapeUnixArg(isWin32 ? convertToWslPath(targetPath) : targetPath, false)}`;
-  console.error(`\n   💡 AGENT HINT: 'list_dir' executed directly in eval code.`);
-  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'list_dir' to ls... (Frictionless Recovery)\x1b[0m`);
+  console.error(`\n   💡 AGENT HINT: 'list_dir' executed directly in eval code.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'list_dir' to ls... (Frictionless Recovery)\x1b[0m`);
   return true;
 }
 
@@ -162,17 +148,16 @@ function healViewFileEval(payload: EvalPayload, trimmedCode: string): boolean {
   if (isWin32) payload.target = 'wsl2';
   payload.interpreter = 'bash';
   payload.code = `cat ${escapeUnixArg(isWin32 ? convertToWslPath(targetPath) : targetPath, false)}`;
-  console.error(`\n   💡 AGENT HINT: 'view_file/read_file' executed directly in eval code.`);
-  console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating to cat... (Frictionless Recovery)\x1b[0m`);
+  console.error(`\n   💡 AGENT HINT: 'view_file/read_file' executed directly in eval code.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating to cat... (Frictionless Recovery)\x1b[0m`);
   return true;
 }
 
 function healPackageRunnerSearch(payload: EvalPayload, trimmedCode: string): void {
-  const pkgRunnerMatch = trimmedCode.match(/^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(?:rg|ripgrep|fd|fdfind)\b\s*(.*)$/i);
-  if (pkgRunnerMatch === null) return;
-  const isFd = /^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(?:fd|fdfind)\b/i.test(trimmedCode);
-  const toolName = isFd ? 'fd' : 'rg';
-  const rest = pkgRunnerMatch[1] ?? '';
+  const pkgRunnerMatch = trimmedCode.match(/^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(rg|ripgrep|fd|fdfind)\b\s*(.*)$/i);
+  if (pkgRunnerMatch === null || pkgRunnerMatch[1] === undefined) return;
+  const matchedTool = pkgRunnerMatch[1].toLowerCase();
+  const toolName = matchedTool === 'fd' || matchedTool === 'fdfind' ? 'fd' : 'rg';
+  const rest = pkgRunnerMatch[2] ?? '';
   if (process.platform === 'win32') payload.target = 'wsl2';
   payload.interpreter = 'bash';
   payload.code = `${toolName} ${rest}`.trim();
@@ -230,8 +215,13 @@ function parseSupportedGitInspectArgs(gitSubCmd: string, tokens: readonly string
   return out;
 }
 
-function healGitInspectEval(payload: EvalPayload, trimmedCode: string, baseCwd: string): void {
-  const { firstSegment, remainder } = splitFirstShellSegment(trimmedCode);
+function healGitInspectEval(
+  payload: EvalPayload,
+  trimmedCode: string,
+  baseCwd: string,
+  getSplit: (code: string) => SplitSegment = splitFirstShellSegment,
+): void {
+  const { firstSegment, remainder } = getSplit(trimmedCode);
   if (remainder.trim().length > 0) return;
   const isPosixWslCwd = payload.cwd !== undefined && payload.cwd.length > 0
     && ((payload.cwd.startsWith('/') && !payload.cwd.startsWith('/mnt/')) || payload.cwd.startsWith('~'));
@@ -258,8 +248,12 @@ function gitHistorySpawn(scriptPathEscaped: string, cwdEscaped: string, extraArg
   return `import { spawnSync } from 'node:child_process'; const res = spawnSync(process.execPath, [${spawnArgs}], { stdio: 'inherit', cwd: ${JSON.stringify(cwdEscaped)} }); process.exit(res.status ?? 1);`;
 }
 
-function healFindMissingName(payload: EvalPayload, trimmedCode: string): void {
-  const { firstSegment, remainder } = splitFirstShellSegment(trimmedCode);
+function healFindMissingName(
+  payload: EvalPayload,
+  trimmedCode: string,
+  getSplit: (code: string) => SplitSegment = splitFirstShellSegment,
+): void {
+  const { firstSegment, remainder } = getSplit(trimmedCode);
   const findGlobMatch = firstSegment.trim().match(/^find\s+((?:[^\s"']|"[^"]*"|'[^']*')+)\s+((?:[^\s"']|"[^"]*"|'[^']*')+)(.*)$/i);
   if (findGlobMatch === null || findGlobMatch[1] === undefined || findGlobMatch[2] === undefined) return;
   if (!findGlobMatch[2].includes('*') && !findGlobMatch[2].includes('?')) return;
@@ -280,8 +274,8 @@ function isBroadFindRootPath(rootPath: string): boolean {
     || clean.startsWith('/mnt/') || /^[a-zA-Z]:/.test(clean);
 }
 
-function healBroadFindEval(payload: EvalPayload): void {
-  const { firstSegment, remainder } = splitFirstShellSegment(payload.code);
+function healBroadFindEval(payload: EvalPayload, getSplit: (code: string) => SplitSegment = splitFirstShellSegment): void {
+  const { firstSegment, remainder } = getSplit(payload.code);
   const trimmedFirst = firstSegment.trimStart();
   if (trimmedFirst.includes('-prune')) return;
   const findBodyMatch = trimmedFirst.match(/^find\s+(.+)$/i);
@@ -305,12 +299,10 @@ function healBroadFindEval(payload: EvalPayload): void {
   const restTokens = tokens.slice(idx);
   const rest = restTokens.join(' ').trim();
   if (rootPaths.length === 0 || !rootPaths.some(isBroadFindRootPath)) return;
-  if (restTokens.some(t => ['-maxdepth', '-delete', '-depth', '--help', '--version'].includes(t))) return;
-  const rootSegs = rootPaths.flatMap(rp => stripWrappingQuotes(rp.trim()).replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean));
-  const dirsToPrune = PRUNE_TARGET_DIRS.filter((dir) => {
-    const dirLower = dir.toLowerCase();
-    return !rootSegs.includes(dirLower) && !rest.toLowerCase().includes(dirLower);
-  });
+  if (restTokens.some(t => BROAD_FIND_OPT_OUT_FLAGS.has(t))) return;
+  const rootSegs = new Set(rootPaths.flatMap(rp => stripWrappingQuotes(rp.trim()).replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean)));
+  const restLower = rest.toLowerCase();
+  const dirsToPrune = PRUNE_TARGET_DIRS.filter((dir) => !rootSegs.has(dir) && !restLower.includes(dir));
   if (dirsToPrune.length === 0) return;
   const pruneClause = `\\( ${dirsToPrune.map((d) => `-name ${d}`).join(' -o ')} \\) -prune -o`;
   const groupedRest = rest.length > 0 && /(?:^|\s)(?:-o|-or)\b/.test(rest) ? `\\( ${rest} \\)` : rest;
@@ -320,25 +312,6 @@ function healBroadFindEval(payload: EvalPayload): void {
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Broad find in eval payload detected. Auto-injecting directory pruning for node_modules, .git, and dist to prevent timeouts... (Frictionless Recovery)\x1b[0m`);
 }
 
-function unbundleQuotedSearchFlags(payload: EvalPayload): void {
-  if (!isShellCommandScript(payload.code) && (isJavaScriptOrTypeScriptCode(payload.code) || isPythonCode(payload.code))) return;
-  const match = bundledSearchFlagsRegex.exec(payload.code);
-  if (match === null) return;
-  const spans = buildNonCodeSpans(payload.code, { includeHashComments: true });
-  if (isIndexInSpans(spans, match.index)) return;
-  let unbundled = false;
-  payload.code = payload.code.replace(bundledSearchFlagsRegex, (full: string, quote: string, flags: string, pattern: string) => {
-    const quoted = `${quote}${flags} ${pattern}${quote}`;
-    const at = full.lastIndexOf(quoted);
-    if (at < 0) return full;
-    unbundled = true;
-    return `${full.slice(0, at)}${flags} ${quote}${pattern}${quote}`;
-  });
-  if (unbundled) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected bundled search flags and pattern inside quotes in eval code. Unbundling flags... (Frictionless Recovery)\x1b[0m`);
-  }
-}
-
 function hasFileOrPathLikeWord(words: readonly string[], cwd?: string): boolean {
   const baseCwd = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
   return words.some((word) => {
@@ -346,7 +319,11 @@ function hasFileOrPathLikeWord(words: readonly string[], cwd?: string): boolean 
     if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|json|md|txt|ya?ml|sql|ps1|sh|css|html|xml|log|toml|ini|lock)$/i.test(word)) return true;
     try {
       return fs.statSync(path.resolve(baseCwd, word), { throwIfNoEntry: false }) !== undefined;
-    } catch {
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'ENAMETOOLONG' && code !== 'EINVAL') {
+        console.error(`⚠️ Search word stat error (${word}): ${err instanceof Error ? err.message : String(err)}`);
+      }
       return false;
     }
   });
@@ -356,9 +333,13 @@ const RG_EVAL_VALUE_FLAGS = new Set(RG_VALUE_FLAGS);
 
 const RG_EXPLICIT_PATTERN_FLAGS = new Set(['-e', '--regexp', '-f', '--file']);
 
-function healUnquotedRgPattern(payload: EvalPayload, baseCwd: string): void {
-  const { firstSegment, remainder } = splitFirstShellSegment(payload.code.trim());
-  const rgHead = firstSegment.match(/^rg\s+(.*)$/i);
+function healUnquotedRgPattern(
+  payload: EvalPayload,
+  baseCwd: string,
+  getSplit: (code: string) => SplitSegment = splitFirstShellSegment,
+): void {
+  const { firstSegment, remainder } = getSplit(payload.code);
+  const rgHead = firstSegment.trimStart().match(/^rg\s+(.*)$/i);
   if (rgHead?.[1] === undefined) return;
   const tokens = rgHead[1].split(/\s+/);
   const flagTokens: string[] = [];
@@ -407,14 +388,14 @@ function healUnquotedRgPattern(payload: EvalPayload, baseCwd: string): void {
 function blockNativeEvalTools(trimmedCode: string): void {
   const headMatch = /^([a-zA-Z_][a-zA-Z0-9_]*)(?=$|\s|\()/.exec(trimmedCode);
   const headIdent = headMatch?.[1];
-  if (headIdent !== undefined && (AGENT_NATIVE_TOOLS as readonly string[]).includes(headIdent)) {
+  if (headIdent !== undefined && AGENT_NATIVE_TOOL_SET.has(headIdent)) {
     console.error(`\n   💡 AGENT HINT: '${headIdent}' is an agent-native tool, NOT executable code or a shell script. Please invoke the '${headIdent}' tool directly.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or invoke the appropriate native tool (logged for CMS-03). Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
     process.exit(1);
   }
-  const matchedMcpTool = (ECOSYSTEM_MCP_TOOLS as readonly string[]).find(tool => trimmedCode === tool || trimmedCode.startsWith(`${tool}(`) || trimmedCode.startsWith(`${tool} `));
-  if (matchedMcpTool === undefined) return;
-  console.error(`\n   💡 AGENT HINT: '${matchedMcpTool}' is an MCP tool, NOT executable code or a shell script. Please call the '${matchedMcpTool}' MCP tool via call_mcp_tool.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Call MCP tool. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
-  process.exit(1);
+  if (headIdent !== undefined && ECOSYSTEM_MCP_TOOL_SET.has(headIdent)) {
+    console.error(`\n   💡 AGENT HINT: '${headIdent}' is an MCP tool, NOT executable code or a shell script. Please call the '${headIdent}' MCP tool via call_mcp_tool.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Call MCP tool. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
+    process.exit(1);
+  }
 }
 
 function shellTokens(rest: string): string[] {

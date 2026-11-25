@@ -52,11 +52,13 @@ export function emitInterceptBanner(message: string): void {
   }
 }
 
+const THIS_FILENAME = fileURLToPath(import.meta.url);
+const THIS_AGENTS_DIR = path.join(path.dirname(THIS_FILENAME), '..', '..');
+
 export function recordAgentIssue(issueType: string, message: string, payload?: unknown, extra?: Record<string, unknown>): void {
   if (process.env['NODE_ENV'] === 'test' || process.env['AGENT_EXEC_SILENT'] === '1') return;
   try {
-    const filename = fileURLToPath(import.meta.url);
-    let targetDir = path.join(path.dirname(filename), '..', '..');
+    let targetDir = THIS_AGENTS_DIR;
 
     if (payload !== null && payload !== undefined && typeof payload === 'object' && 'cwd' in payload && typeof payload.cwd === 'string') {
       const root = findEcosystemRoot(payload.cwd);
@@ -65,7 +67,11 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
       }
     }
     
+    const dirStat = fs.lstatSync(targetDir, { throwIfNoEntry: false });
+    if (dirStat === undefined || dirStat.isSymbolicLink() || !dirStat.isDirectory()) return;
     const issuesFilePath = path.join(targetDir, 'agent-exec-issues.jsonl');
+    const issuesStat = fs.lstatSync(issuesFilePath, { throwIfNoEntry: false });
+    if (issuesStat !== undefined && (issuesStat.isSymbolicLink() || !issuesStat.isFile())) return;
     const { safePayload, internalStallBypass } = sanitizeLoggedIssuePayload(payload, extra);
     const safeExtra = extra !== undefined ? redactPayloadForLog(extra) : undefined;
 
@@ -82,11 +88,27 @@ export function recordAgentIssue(issueType: string, message: string, payload?: u
       record['internalStallBypass'] = true;
     }
     const entry = JSON.stringify(record) + '\n';
-    
-    fs.appendFileSync(issuesFilePath, entry, 'utf8');
-  } catch {
-    // Ignore logging errors to prevent breaking execution
+    const noFollow = typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0;
+    const fd = fs.openSync(
+      issuesFilePath,
+      fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_WRONLY | noFollow,
+      0o600,
+    );
+    try {
+      fs.writeSync(fd, entry, undefined, 'utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'EACCES' && code !== 'EPERM' && code !== 'ELOOP') {
+      console.error(`⚠️ Issue log write failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
+}
+
+export function errorCodeOf(err: unknown): string | undefined {
+  return typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string' ? err.code : undefined;
 }
 
 const nativeBinaryCache = new Map<string, string | null>();
@@ -95,28 +117,40 @@ const nativeBinaryCache = new Map<string, string | null>();
  * [INTENT]: Memoized PATH x PATHEXT lookup for a native binary (no child process spawn).
  * Returns the absolute path, or null when the binary is not installed natively.
  */
+function isWindowsSymlinkExecFallback(full: string): boolean {
+  try {
+    const lst = fs.lstatSync(full, { throwIfNoEntry: false });
+    return lst !== undefined && !lst.isDirectory();
+  } catch (lstatErr: unknown) {
+    const lCode = errorCodeOf(lstatErr);
+    if (lCode !== 'ENOENT' && lCode !== 'ENOTDIR' && lCode !== 'EACCES') {
+      console.error(`⚠️ Binary lstat probe warning (${full}): ${lstatErr instanceof Error ? lstatErr.message : String(lstatErr)}`);
+    }
+    return false;
+  }
+}
+
 function isAccessibleExecutable(full: string, isWin: boolean): boolean {
   try {
     const st = fs.statSync(full, { throwIfNoEntry: false });
     return st !== undefined && st.isFile() && (isWin || (st.mode & 0o111) !== 0);
   } catch (err: unknown) {
-    const code = typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string' ? err.code : '';
-    if (!isWin || (code !== 'EACCES' && code !== 'EPERM')) return false;
-    try {
-      const lst = fs.lstatSync(full, { throwIfNoEntry: false });
-      return lst !== undefined && !lst.isDirectory();
-    } catch {
-      return false;
-    }
+    const code = errorCodeOf(err) ?? '';
+    return isWin && (code === 'EACCES' || code === 'EPERM') && isWindowsSymlinkExecFallback(full);
   }
 }
 
 export function resolveNativeBinary(name: string): string | null {
-  const cached = nativeBinaryCache.get(name);
+  const rawPath = process.env['PATH'] ?? process.env['Path'] ?? '';
+  const cacheKey = `${rawPath}\0${name}`;
+  const cached = nativeBinaryCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  const rawPath = process.env['PATH'] ?? process.env['Path'] ?? '';
-  const dirs = rawPath.split(path.delimiter).map(d => d.trim().replace(/^"|"$/g, '')).filter(d => d.length > 0);
+  const dirs = new Set<string>();
+  for (const part of rawPath.split(path.delimiter)) {
+    const trimmed = part.trim().replace(/^"|"$/g, '');
+    if (trimmed.length > 0) dirs.add(trimmed);
+  }
   const isWin = process.platform === 'win32';
   const exts = isWin
     ? (process.env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').map(e => e.trim().toLowerCase()).filter(e => e.length > 0)
@@ -124,8 +158,8 @@ export function resolveNativeBinary(name: string): string | null {
   const hasExt = isWin && exts.includes(path.extname(name).toLowerCase());
 
   let resolved: string | null = null;
+  const candidates = hasExt ? [name] : exts.map(ext => `${name}${ext}`);
   outer: for (const dir of dirs) {
-    const candidates = hasExt ? [name] : exts.map(ext => `${name}${ext}`);
     for (const candidate of candidates) {
       const full = path.join(dir, candidate);
       if (isAccessibleExecutable(full, isWin)) {
@@ -134,7 +168,7 @@ export function resolveNativeBinary(name: string): string | null {
       }
     }
   }
-  nativeBinaryCache.set(name, resolved);
+  nativeBinaryCache.set(cacheKey, resolved);
   return resolved;
 }
 
@@ -192,26 +226,83 @@ export async function sendWebhook(
   await sendWebhookWithReporter(payload, urls, vars, isJson, recordAgentIssue);
 }
 
+function isNonSymlinkDir(dirPath: string): boolean {
+  const st = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isDirectory();
+}
+
+function isRegularNonSymlinkFile(filePath: string): boolean {
+  const st = fs.lstatSync(filePath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isFile();
+}
+
+function isContainedInRealDir(targetPath: string, baseDir: string): boolean {
+  try {
+    const realBase = fs.realpathSync.native(baseDir);
+    const realTarget = fs.realpathSync.native(targetPath);
+    const normBase = process.platform === 'win32' ? realBase.toLowerCase() : realBase;
+    const normTarget = process.platform === 'win32' ? realTarget.toLowerCase() : realTarget;
+    const rel = path.relative(normBase, normTarget);
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  } catch (err: unknown) {
+    const code = errorCodeOf(err);
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      console.error(`⚠️ Containment realpath warning (${targetPath}): ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return false;
+  }
+}
+
+const ecosystemRootCache = new Map<string, string | null>();
+const NORM_TMP_ROOT = (() => {
+  const r = path.resolve(os.tmpdir());
+  return process.platform === 'win32' ? r.toLowerCase() : r;
+})();
+
+function isUnderTempRoot(resolvedDir: string): boolean {
+  const norm = process.platform === 'win32' ? resolvedDir.toLowerCase() : resolvedDir;
+  const rel = path.relative(NORM_TMP_ROOT, norm);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
 export function findEcosystemRoot(startDir: string): string | null {
-  let current = path.resolve(startDir);
+  const startResolved = path.resolve(startDir);
+  const skipCache = isUnderTempRoot(startResolved);
+  if (!skipCache) {
+    const cached = ecosystemRootCache.get(startResolved);
+    if (cached !== undefined) return cached;
+  }
+  let current = startResolved;
+  let result: string | null = null;
   while (true) {
     const agentsDir = path.join(current, '.agents');
-    if (fs.existsSync(agentsDir)) {
-      return current;
+    if (isNonSymlinkDir(agentsDir)) {
+      result = current;
+      break;
+    }
+    if (fs.lstatSync(path.join(current, '.git'), { throwIfNoEntry: false }) !== undefined) {
+      break;
     }
     const parent = path.dirname(current);
     if (parent === current) {
-      return null;
+      break;
     }
     current = parent;
   }
+  if (!skipCache) {
+    if (ecosystemRootCache.size >= 64) ecosystemRootCache.clear();
+    ecosystemRootCache.set(startResolved, result);
+  }
+  return result;
 }
 
 export function findEcosystemScript(startDir: string, scriptName: string): string | null {
   const root = findEcosystemRoot(startDir);
-  if (!root) return null;
-  const scriptPath = path.join(root, '.agents', 'scripts', scriptName);
-  if (fs.existsSync(scriptPath)) {
+  if (root === null) return null;
+  const scriptsDir = path.join(root, '.agents', 'scripts');
+  if (!isNonSymlinkDir(scriptsDir)) return null;
+  const scriptPath = path.join(scriptsDir, scriptName);
+  if (isRegularNonSymlinkFile(scriptPath) && isContainedInRealDir(scriptPath, scriptsDir)) {
     return scriptPath;
   }
   return null;
@@ -222,6 +313,34 @@ export {
   resolveFreshCompiledCommitBundle,
   tryAccelerateCompiledCommitScript,
 } from './commit-script-resolver.js';
+
+const ddApiKeyCache = new Map<string, string | null>();
+
+function resolveDatadogApiKey(cwd: string): string | null {
+  const cached = ddApiKeyCache.get(cwd);
+  if (cached !== undefined) return cached;
+  let apiKey: string | null = null;
+  const cwdRoot = findEcosystemRoot(cwd);
+  const cwdEnvPath = cwdRoot !== null ? path.join(cwdRoot, 'secrets.env') : undefined;
+  const hasCwdEnv = cwdEnvPath !== undefined && isRegularNonSymlinkFile(cwdEnvPath);
+  let envPath = hasCwdEnv ? cwdEnvPath : undefined;
+  if (envPath === undefined) {
+    const scriptRoot = findEcosystemRoot(fileURLToPath(import.meta.url));
+    if (scriptRoot !== null) {
+      const candidate = path.join(scriptRoot, 'secrets.env');
+      if (isRegularNonSymlinkFile(candidate)) {
+        envPath = candidate;
+      }
+    }
+  }
+  if (envPath !== undefined) {
+    const envConfig = dotenv.parse(fs.readFileSync(envPath));
+    apiKey = envConfig['DD_API_KEY'] || null;
+  }
+  if (ddApiKeyCache.size >= 64) ddApiKeyCache.clear();
+  ddApiKeyCache.set(cwd, apiKey);
+  return apiKey;
+}
 
 export async function sendDatadogTelemetry(
   payload: ExecPayload,
@@ -234,17 +353,8 @@ export async function sendDatadogTelemetry(
 ): Promise<void> {
   if (process.env['NODE_ENV'] === 'test' || process.env['AGENT_EXEC_SILENT'] === '1') return;
   try {
-    const cwdRoot = findEcosystemRoot(cwd);
-    const scriptRoot = findEcosystemRoot(fileURLToPath(import.meta.url));
-    const cwdEnvPath = cwdRoot !== null ? path.join(cwdRoot, 'secrets.env') : undefined;
-    const hasCwdEnv = cwdEnvPath !== undefined && fs.statSync(cwdEnvPath, { throwIfNoEntry: false })?.isFile() === true;
-    const root = hasCwdEnv ? cwdRoot : scriptRoot;
-    if (!root) return;
-    const envPath = path.join(root, 'secrets.env');
-    if (envPath !== cwdEnvPath && fs.statSync(envPath, { throwIfNoEntry: false })?.isFile() !== true) return;
-    const envConfig = dotenv.parse(fs.readFileSync(envPath));
-    const apiKey = envConfig['DD_API_KEY'];
-    if (!apiKey) return;
+    const apiKey = resolveDatadogApiKey(cwd);
+    if (apiKey === null) return;
 
     const hostname = os.hostname();
     const service = 'lib-agent-exec';
@@ -295,8 +405,8 @@ export async function sendDatadogTelemetry(
     ];
 
     await Promise.allSettled(reqs);
-  } catch {
-    // Fail silently so we don't break the agent
+  } catch (err: unknown) {
+    console.error(`⚠️ Telemetry dispatch warning: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

@@ -31,7 +31,7 @@ const WRAPPER_BASENAMES = new Set([
 ]);
 
 const SHELL_EVAL_INTERPRETERS = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'ps1', 'cmd', 'cmd.exe', 'bat']);
-const GIT_GLOBAL_VALUE_FLAGS = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--config-env']);
+const GIT_GLOBAL_VALUE_FLAGS = new Set(['-c', '-C', '--attr-source', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--config-env']);
 
 function commandBasename(command: string): string {
   return path.basename(command).toLowerCase();
@@ -129,7 +129,7 @@ function splitUnquotedStatements(rawScript: string, isWindowsShell = false): str
       start = i + 1;
     } else if (ch === '\n') {
       const piece = commentFree.slice(start, i).trim();
-      if (piece.length > 0 && !/(?:&&|\|\||[|\\])$/.test(piece)) {
+      if (piece.length > 0 && !LINE_CONT_END_RE.test(piece)) {
         stmts.push(piece);
         start = i + 1;
       }
@@ -170,6 +170,12 @@ function extractFinalShellSegment(rawScript: string, isWindowsShell = false, imp
   return (pipeParts[pipeParts.length - 1] ?? '').trim();
 }
 
+const LINE_CONT_END_RE = /(?:&&|\|\||[|\\])$/;
+const POSIX_SHORT_EU_RE = /^-[a-zA-Z]*[eu]/;
+const POSIX_SHORT_O_CLUSTER_RE = /^-[a-zA-Z]*[oO][a-zA-Z]*$/;
+const POSIX_SIGNED_O_CLUSTER_RE = /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/;
+const POSIX_STRICT_OPTION_RE = /^(?:errexit|pipefail|nounset)$/i;
+const POSIX_SHORT_C_CLUSTER_RE = /^-[a-zA-Z]*c[a-zA-Z]*$/;
 const POSIX_WRAPPER_SHELLS = new Set(['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe']);
 const WIN_PWSH_SHELLS = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'ps1']);
 const PWSH_WRAPPER_VALUE_FLAGS = new Set([
@@ -182,17 +188,17 @@ function extractPosixShellScriptText(args: readonly string[]): string | null {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') return null;
-    if (/^-[a-zA-Z]*[eu]/.test(a) && !a.startsWith('--')) return null;
-    if (a.startsWith('-') && !a.startsWith('--') && /^-[a-zA-Z]*[oO][a-zA-Z]*$/.test(a) && a.includes('c')) {
-      if (a.includes('o') && /^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
+    if (POSIX_SHORT_EU_RE.test(a) && !a.startsWith('--')) return null;
+    if (a.startsWith('-') && !a.startsWith('--') && POSIX_SHORT_O_CLUSTER_RE.test(a) && a.includes('c')) {
+      if (a.includes('o') && POSIX_STRICT_OPTION_RE.test(args[i + 1] ?? '')) return null;
       return args[i + 2] ?? '';
     }
-    if (/^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(a)) {
-      if (a.startsWith('-') && a.includes('o') && /^(?:errexit|pipefail|nounset)$/i.test(args[i + 1] ?? '')) return null;
+    if (POSIX_SIGNED_O_CLUSTER_RE.test(a)) {
+      if (a.startsWith('-') && a.includes('o') && POSIX_STRICT_OPTION_RE.test(args[i + 1] ?? '')) return null;
       i += 1;
       continue;
     }
-    if (a === '-c' || (a.startsWith('-') && !a.startsWith('--') && /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a))) {
+    if (a === '-c' || (a.startsWith('-') && !a.startsWith('--') && POSIX_SHORT_C_CLUSTER_RE.test(a))) {
       return args[i + 1] ?? '';
     }
     if (!a.startsWith('-') && !a.startsWith('+')) return null;

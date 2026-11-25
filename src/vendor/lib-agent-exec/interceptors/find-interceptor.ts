@@ -3,11 +3,16 @@ import { convertToWslPath } from '../command-utils.js';
 import { GREP_EXCLUDE_DIRS } from './grep-exclusions.js';
 import { type ExecutionContext } from './types.js';
 
-const FIND_NAME_FLAGS = ['-name', '-iname', '-path', '-ipath', '-wholename', '-iwholename', '-regex', '-iregex', '-lname', '-ilname'];
-const FIND_ACTIONS = [
+const FIND_NAME_FLAG_SET: ReadonlySet<string> = new Set(['-name', '-iname', '-path', '-ipath', '-wholename', '-iwholename', '-regex', '-iregex', '-lname', '-ilname']);
+const FIND_ACTION_SET: ReadonlySet<string> = new Set([
   '-print', '-print0', '-printf', '-quit', '-exec', '-execdir', '-ok', '-okdir',
   '-delete', '-ls', '-fls', '-fprint', '-fprint0', '-fprintf',
-];
+]);
+const FIND_EXEC_STOP_SET: ReadonlySet<string> = new Set(['-exec', '-execdir', '-ok', '-okdir', '--']);
+const FIND_EXEC_ONLY_SET: ReadonlySet<string> = new Set(['-exec', '-execdir', '-ok', '-okdir']);
+const FIND_FORMAT_PREV_SET: ReadonlySet<string> = new Set(['-printf', '-fprintf', '-fprint', '-fprint0', '-fls']);
+const PS_FILTER_FLAG_SET: ReadonlySet<string> = new Set(['-filter', '-include']);
+const PS_RECURSE_FLAG_SET: ReadonlySet<string> = new Set(['-recurse', '-r', '/s']);
 
 const WIN_FIND_SWITCH_RE = /^\/(?:[sSbBwWpPqQcC4ivn?]|[aA](?::[dhrsalio-]+|(?:-?[dhrsalio]){1,3})?|[oO](?::[nesdg-]+|(?:-?[nesdg]){1,3})?)$/;
 
@@ -23,13 +28,13 @@ function findFindTargetPath(args: string[], filterIdx: number): string {
 }
 
 function rewritePowerShellFindFilter(ctx: ExecutionContext): boolean {
-  const execStopIdx = ctx.args.findIndex((arg) => ['-exec', '-execdir', '-ok', '-okdir', '--'].includes(arg));
+  const execStopIdx = ctx.args.findIndex((arg) => FIND_EXEC_STOP_SET.has(arg));
   const scanArgs = execStopIdx === -1 ? ctx.args : ctx.args.slice(0, execStopIdx);
-  const filterIdx = scanArgs.findIndex((arg) => ['-filter', '-include'].includes(arg.toLowerCase()));
+  const filterIdx = scanArgs.findIndex((arg) => PS_FILTER_FLAG_SET.has(arg.toLowerCase()));
   if (filterIdx === -1 || filterIdx + 1 >= scanArgs.length) return false;
   const pattern = scanArgs[filterIdx + 1];
   if (pattern === undefined) return false;
-  const hasRecurse = scanArgs.some((arg) => ['-recurse', '-r', '-R', '/s'].includes(arg.toLowerCase()));
+  const hasRecurse = scanArgs.some((arg) => PS_RECURSE_FLAG_SET.has(arg.toLowerCase()));
   const newArgs = [findFindTargetPath(scanArgs, filterIdx)];
   if (!hasRecurse) newArgs.push('-maxdepth', '1');
   newArgs.push('-name', pattern);
@@ -45,7 +50,7 @@ function syncFindPayloadArgs(ctx: ExecutionContext): void {
 function healFindTypeValues(ctx: ExecutionContext): void {
   for (let i = 0; i < ctx.args.length; i++) {
     const arg = ctx.args[i];
-    if (arg === undefined || ['-exec', '-execdir', '-ok', '-okdir', '--'].includes(arg)) break;
+    if (arg === undefined || FIND_EXEC_STOP_SET.has(arg)) break;
     if (arg !== '-type' || i + 1 >= ctx.args.length) continue;
     const typeVal = ctx.args[i + 1];
     if (typeVal === 'file') {
@@ -79,13 +84,13 @@ function healFindExecEmptyArgs(ctx: ExecutionContext): void {
 }
 
 function healFindMissingNameFlag(ctx: ExecutionContext): void {
-  const execIdx = ctx.args.findIndex((arg) => ['-exec', '-execdir', '-ok', '-okdir'].includes(arg));
+  const execIdx = ctx.args.findIndex((arg) => FIND_EXEC_ONLY_SET.has(arg));
   const scanLimit = execIdx === -1 ? ctx.args.length : execIdx;
   for (let idx = 1; idx < scanLimit; idx++) {
     const arg = ctx.args[idx];
     if (arg === undefined || arg.startsWith('-') || arg === '(' || arg === '!' || arg === '\\(') continue;
     const prev = ctx.args[idx - 1];
-    if (prev === '-D' || (prev !== undefined && (FIND_NAME_FLAGS.includes(prev) || ['-printf', '-fprintf', '-fprint', '-fprint0', '-fls'].includes(prev)))) continue;
+    if (prev === '-D' || (prev !== undefined && (FIND_NAME_FLAG_SET.has(prev) || FIND_FORMAT_PREV_SET.has(prev)))) continue;
     if (arg.includes('/') || arg.includes('\\') || (!arg.includes('*') && !arg.includes('?'))) continue;
     ctx.args.splice(idx, 1, '-name', arg);
     syncFindPayloadArgs(ctx);
@@ -146,25 +151,23 @@ function splitFindTargets(args: string[]): FindTargetSplit {
   return { prePathOpts, targetPaths, restOfArgs, effectivePaths, banners };
 }
 
-function pathTargetsDir(targetPath: string, dirLower: string): boolean {
-  const cleaned = targetPath.trim().replace(/^(['"])(.*)\1$/, '$2');
-  const segments = cleaned.replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean);
-  return segments.includes(dirLower);
-}
-
 const FIND_PATH_PREDICATES = new Set(['-path', '-ipath', '-wholename', '-iwholename', '-name', '-iname']);
 
-function dirIsExplicitlyTargeted(args: string[], effectivePaths: string[], dir: string): boolean {
-  const dirLower = dir.toLowerCase();
-  if (effectivePaths.some((targetPath) => pathTargetsDir(targetPath, dirLower))) return true;
+function collectExplicitFindTargetSegs(args: readonly string[], effectivePaths: readonly string[]): Set<string> {
+  const segs = new Set<string>();
+  const addSegs = (val: string): void => {
+    const cleaned = val.trim().replace(/^['"`]|['"`]$/g, '').replace(/\\/g, '/').toLowerCase();
+    for (const seg of cleaned.split('/')) {
+      if (seg.length > 0) segs.add(seg);
+    }
+  };
+  for (const targetPath of effectivePaths) addSegs(targetPath);
   for (let i = 0; i < args.length - 1; i++) {
     const a = args[i]?.toLowerCase();
     const val = args[i + 1];
-    if (a !== undefined && FIND_PATH_PREDICATES.has(a) && val !== undefined && pathTargetsDir(val, dirLower)) {
-      return true;
-    }
+    if (a !== undefined && FIND_PATH_PREDICATES.has(a) && val !== undefined) addSegs(val);
   }
-  return false;
+  return segs;
 }
 
 function isBroadFindSearch(effectivePaths: string[]): boolean {
@@ -203,7 +206,7 @@ function applyBroadFindPrune(
   dirsToPrune: string[],
 ): void {
   if (!isBroadFindSearch(effectivePaths) || dirsToPrune.length === 0) return;
-  const hasAction = restOfArgs.some((arg) => FIND_ACTIONS.includes(arg));
+  const hasAction = restOfArgs.some((arg) => FIND_ACTION_SET.has(arg));
   const groupedOr = restOfArgs.length > 0 && hasTopLevelOr(restOfArgs) ? ['(', ...restOfArgs, ')'] : restOfArgs;
   const finalRest = hasAction ? groupedOr : (groupedOr.length === 0 ? ['-print'] : [...groupedOr, '-print']);
   ctx.args = [...prePathOpts, ...effectivePaths, ...buildFindPruneClause(dirsToPrune), ...finalRest];
@@ -231,7 +234,8 @@ function injectFindDirectoryPruning(ctx: ExecutionContext): void {
     syncFindPayloadArgs(ctx);
   }
   for (const banner of split.banners) console.error(banner);
-  const dirsToPrune = GREP_EXCLUDE_DIRS.filter((dir) => !dirIsExplicitlyTargeted(ctx.args, split.effectivePaths, dir));
+  const targetedSegs = collectExplicitFindTargetSegs(ctx.args, split.effectivePaths);
+  const dirsToPrune = GREP_EXCLUDE_DIRS.filter((dir) => !targetedSegs.has(dir.toLowerCase()));
   applyBroadFindPrune(ctx, split.prePathOpts, split.effectivePaths, split.restOfArgs, dirsToPrune);
 }
 

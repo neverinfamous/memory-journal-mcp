@@ -1,10 +1,12 @@
 // @ts-nocheck
 import { FLAGS_WITH_ARG_BY_TOOL, RG_VALUE_FLAGS, extractLeadingShortFlags, inspectCombinedShortFlag } from '../command-utils.js';
+import { isJavaScriptOrTypeScriptCode, isPythonCode, isShellCommandScript } from '../eval-healer.js';
+import { buildNonCodeSpans, isIndexInSpans } from '../quote-spans.js';
 import type { ExecPayload } from '../schema.js';
 import { isKnownRgEncoding, splitRgExtendedCluster } from './ripgrep-flag-normalize.js';
-import { isGrepTargetExplicitlyIncluded } from './grep-exclusions.js';
+import { GREP_EXCLUDE_DIRS, collectTargetPathSegments } from './grep-exclusions.js';
 import { splitFirstShellSegment } from './utils.js';
-import { GREP_EXCLUDE_DIRS, isLikelyDirectoryArg } from './search-interceptor.js';
+import { isLikelyDirectoryArg } from './search-interceptor.js';
 import { isSecondExistingTargetOnly } from './search-path-utils.js';
 
 type EvalPayload = Extract<ExecPayload, { type: 'eval' }>;
@@ -13,6 +15,56 @@ const GREP_VALUE_FLAG_SET: ReadonlySet<string> = new Set(FLAGS_WITH_ARG_BY_TOOL[
 const PATTERN_FLAG_SET: ReadonlySet<string> = new Set(['-e', '--regexp', '-f', '--file']);
 const STANDALONE_REDIR_RE = /^(?:\d*>>?|\d*<<?|<&|>&|&>|&>>)$/;
 const SEGMENT_TOKEN_RE = /(?:[^\s"'`]|"[^"]*"|'[^']*'|`[^`]*`)+/g;
+
+const BUNDLED_SEARCH_FLAGS_REGEX = /(?:^|[;&|\s])(?:rg|ripgrep|grep|egrep|fgrep)\s+(["'])(-[^"'\r\n]+)\1/i;
+const BUNDLED_FLAG_TOK_RE = /^-[a-zA-Z0-9_-]+(?:\s+\d+(?=\s+\S))?/;
+
+function splitBundledFlagsAndPattern(inner: string): { flags: string; pattern: string } | null {
+  let pos = 0;
+  let flagsEnd = -1;
+  while (pos < inner.length) {
+    const rest = inner.slice(pos);
+    const tokMatch = BUNDLED_FLAG_TOK_RE.exec(rest);
+    if (tokMatch === null) break;
+    const nextPos = pos + tokMatch[0].length;
+    let wsEnd = nextPos;
+    while (wsEnd < inner.length && /\s/.test(inner[wsEnd] ?? '')) wsEnd++;
+    if (wsEnd === nextPos || wsEnd >= inner.length) break;
+    flagsEnd = nextPos;
+    pos = wsEnd;
+  }
+  if (flagsEnd === -1) return null;
+  const pattern = inner.slice(flagsEnd).trimStart();
+  return pattern.length > 0 ? { flags: inner.slice(0, flagsEnd), pattern } : null;
+}
+
+export function unbundleQuotedSearchFlags(payload: EvalPayload): void {
+  if (!isShellCommandScript(payload.code) && (isJavaScriptOrTypeScriptCode(payload.code) || isPythonCode(payload.code))) return;
+  BUNDLED_SEARCH_FLAGS_REGEX.lastIndex = 0;
+  const firstMatch = BUNDLED_SEARCH_FLAGS_REGEX.exec(payload.code);
+  if (firstMatch === null) return;
+  const spans = buildNonCodeSpans(payload.code, { includeHashComments: true });
+  if (isIndexInSpans(spans, firstMatch.index)) return;
+  const quote = firstMatch[1];
+  const inner = firstMatch[2];
+  const parsed = quote !== undefined && inner !== undefined ? splitBundledFlagsAndPattern(inner) : null;
+  if (quote === undefined || inner === undefined || parsed === null) return;
+  const quoted = `${quote}${inner}${quote}`;
+  const at = firstMatch[0].lastIndexOf(quoted);
+  if (at < 0) return;
+  const replacedHead = `${firstMatch[0].slice(0, at)}${parsed.flags} ${quote}${parsed.pattern}${quote}`;
+  let tail = payload.code.slice(firstMatch.index + firstMatch[0].length);
+  BUNDLED_SEARCH_FLAGS_REGEX.lastIndex = 0;
+  tail = tail.replace(BUNDLED_SEARCH_FLAGS_REGEX, (full: string, q: string, rawInner: string) => {
+    const nextParsed = splitBundledFlagsAndPattern(rawInner);
+    if (nextParsed === null) return full;
+    const qStr = `${q}${rawInner}${q}`;
+    const qAt = full.lastIndexOf(qStr);
+    return qAt < 0 ? full : `${full.slice(0, qAt)}${nextParsed.flags} ${q}${nextParsed.pattern}${q}`;
+  });
+  payload.code = `${payload.code.slice(0, firstMatch.index)}${replacedHead}${tail}`;
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected bundled search flags and pattern inside quotes in eval code. Unbundling flags... (Frictionless Recovery)\x1b[0m`);
+}
 
 function extractEvalSearchPositionals(tokens: readonly string[], isRg: boolean): { nonFlagTokens: string[]; hasPatternFlag: boolean; hasRecursiveFlag: boolean } {
   const valueFlags = isRg ? RG_VALUE_FLAG_SET : GREP_VALUE_FLAG_SET;
@@ -58,15 +110,27 @@ function resolveEvalSearchCwd(payload: EvalPayload, baseCwd?: string): string | 
   return baseCwd;
 }
 
-export function healEvalGrepSegment(payload: EvalPayload, baseCwd?: string): void {
-  const { firstSegment, remainder } = splitFirstShellSegment(payload.code);
+export function healEvalGrepSegment(
+  payload: EvalPayload,
+  baseCwd?: string,
+  getSplit: (code: string) => { firstSegment: string; remainder: string } = splitFirstShellSegment,
+): void {
+  const { firstSegment, remainder } = getSplit(payload.code);
   const leadingWs = /^\s*/.exec(firstSegment)?.[0] ?? '';
   const trimmedSegment = firstSegment.trimStart();
   const grepDirMatch = trimmedSegment.match(/^(?:grep|egrep|fgrep)\s+(.*)$/i);
   if (grepDirMatch === null) return;
   const tokens = shellTokens(grepDirMatch[1] ?? '');
   const cwd = resolveEvalSearchCwd(payload, baseCwd);
-  const isDir = (token: string): boolean => isLikelyDirectoryArg(stripTokenQuotes(token), cwd);
+  const kindCache = new Map<string, 'dir' | 'file' | 'none'>();
+  const dirCache = new Map<string, boolean>();
+  const isDir = (token: string): boolean => {
+    const hit = dirCache.get(token);
+    if (hit !== undefined) return hit;
+    const val = isLikelyDirectoryArg(stripTokenQuotes(token), cwd, kindCache);
+    dirCache.set(token, val);
+    return val;
+  };
   const { nonFlagTokens, hasPatternFlag, hasRecursiveFlag } = extractEvalSearchPositionals(tokens, false);
   const banners: string[] = [];
   const swapped = hasPatternFlag
@@ -79,6 +143,7 @@ export function healEvalGrepSegment(payload: EvalPayload, baseCwd?: string): voi
         true,
         cwd,
         banners,
+        kindCache,
       );
   const withRecursive = injectEvalGrepRecursive(swapped.segment, swapped.nonFlagTokens, hasPatternFlag, hasRecursiveFlag, isDir, banners);
   const updatedSegment = injectBroadGrepGuards(payload, withRecursive, swapped.nonFlagTokens, hasPatternFlag, hasRecursiveFlag || withRecursive !== swapped.segment, banners);
@@ -88,31 +153,43 @@ export function healEvalGrepSegment(payload: EvalPayload, baseCwd?: string): voi
   for (const banner of banners) console.error(banner);
 }
 
-export function healEvalRgSegment(payload: EvalPayload, baseCwd?: string): void {
-  const { firstSegment, remainder } = splitFirstShellSegment(payload.code);
+export function healEvalRgSegment(
+  payload: EvalPayload,
+  baseCwd?: string,
+  getSplit: (code: string) => { firstSegment: string; remainder: string } = splitFirstShellSegment,
+): void {
+  const { firstSegment, remainder } = getSplit(payload.code);
   const leadingWs = /^\s*/.exec(firstSegment)?.[0] ?? '';
   const trimmedSegment = firstSegment.trimStart();
   const rgDirMatch = trimmedSegment.match(/^(?:rg|ripgrep)\s+(.*)$/i);
   if (rgDirMatch === null) return;
   const rawTokens = shellTokens(rgDirMatch[1] ?? '');
   const banners: string[] = [];
-  let updatedRgSegment = rewriteRgExtendedFlag(trimmedSegment, rawTokens, banners);
-  const postTokens = shellTokens(updatedRgSegment.replace(/^(?:rg|ripgrep)\s+/i, ''));
+  const { segment: updatedRgSegment0, tokens: postTokens } = rewriteRgExtendedFlag(trimmedSegment, rawTokens, banners);
   const cwd = resolveEvalSearchCwd(payload, baseCwd);
-  const isDir = (token: string): boolean => isLikelyDirectoryArg(stripTokenQuotes(token), cwd);
+  const kindCache = new Map<string, 'dir' | 'file' | 'none'>();
+  const dirCache = new Map<string, boolean>();
+  const isDir = (token: string): boolean => {
+    const hit = dirCache.get(token);
+    if (hit !== undefined) return hit;
+    const val = isLikelyDirectoryArg(stripTokenQuotes(token), cwd, kindCache);
+    dirCache.set(token, val);
+    return val;
+  };
   const { nonFlagTokens, hasPatternFlag } = extractEvalSearchPositionals(postTokens, true);
   const swapped = hasPatternFlag
-    ? { segment: updatedRgSegment, nonFlagTokens }
+    ? { segment: updatedRgSegment0, nonFlagTokens }
     : swapReversedDirAndPattern(
-        updatedRgSegment,
+        updatedRgSegment0,
         nonFlagTokens,
         isDir,
         `\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in eval 'rg' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`,
         false,
         cwd,
         banners,
+        kindCache,
       );
-  updatedRgSegment = swapped.segment;
+  const updatedRgSegment = swapped.segment;
   if (updatedRgSegment !== trimmedSegment) {
     payload.code = `${leadingWs}${updatedRgSegment}${remainder}`;
   }
@@ -174,7 +251,7 @@ function stepRgExtendedRewrite(
   return null;
 }
 
-function rewriteRgExtendedFlag(segment: string, tokens: readonly string[], banners: string[]): string {
+function rewriteRgExtendedFlag(segment: string, tokens: readonly string[], banners: string[]): { segment: string; tokens: readonly string[] } {
   let currentSegment = segment;
   let currentTokens = tokens;
   let strippedAny = false;
@@ -189,7 +266,7 @@ function rewriteRgExtendedFlag(segment: string, tokens: readonly string[], banne
   }
   if (strippedAny) banners.push(`\n   🛠️ AUTONOMOUS HEALING: Stripped incomplete/ambiguous '-E' encoding flag in eval 'rg'... (Frictionless Recovery)\x1b[0m`);
   if (rewroteAny) banners.push(`\n   🛠️ AUTONOMOUS HEALING: Detected grep-style '-E' flag in eval 'rg'. Rewriting to '-e'... (Frictionless Recovery)\x1b[0m`);
-  return currentSegment;
+  return { segment: currentSegment, tokens: currentTokens };
 }
 
 function shellTokens(rest: string): string[] {
@@ -212,6 +289,7 @@ function swapReversedDirAndPattern(
   rejectAbsolutePattern: boolean,
   cwd?: string,
   banners?: string[],
+  kindCache?: Map<string, 'dir' | 'file' | 'none'>,
 ): { segment: string; nonFlagTokens: string[] } {
   if (nonFlagTokens.length !== 2) {
     return { segment, nonFlagTokens };
@@ -221,7 +299,7 @@ function swapReversedDirAndPattern(
   if (first === undefined || second === undefined || !isDir(first) || isDir(second)) {
     return { segment, nonFlagTokens };
   }
-  if (isSecondExistingTargetOnly(stripTokenQuotes(first), stripTokenQuotes(second), cwd)) {
+  if (isSecondExistingTargetOnly(stripTokenQuotes(first), stripTokenQuotes(second), cwd, kindCache)) {
     return { segment, nonFlagTokens };
   }
   if (rejectAbsolutePattern && second.startsWith('/')) {
@@ -289,8 +367,9 @@ function isBroadGrepPath(clean: string): boolean {
 }
 
 function injectMissingExcludeDirs(segment: string, targetPaths: readonly string[], banners: string[]): string {
+  const targetSegments = collectTargetPathSegments(targetPaths);
   const missingExcludes = GREP_EXCLUDE_DIRS.filter(
-    dir => !isGrepTargetExplicitlyIncluded(targetPaths, dir)
+    dir => !targetSegments.has(dir.toLowerCase())
       && !segment.includes(`--exclude-dir=${dir}`)
       && !segment.includes(`--exclude-dir ${dir}`),
   );

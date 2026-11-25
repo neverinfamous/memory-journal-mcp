@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { getPositionalArgs } from '../command-utils.js';
-import { healPathHallucinations } from '../path-healer.js';
+import { healPathHallucinations } from '../path-argv-healer.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
 import { runSystemCommandArms } from './system-command-arms.js';
@@ -13,10 +13,30 @@ import { routeEmbeddedShellTools } from './system-shell-routing.js';
 import { extendPayloadTimeouts } from './system-timeouts.js';
 import type { ExecutionContext } from './types.js';
 
-function syncDerivedArgs(ctx: ExecutionContext, derived: ReturnType<typeof buildSystemCommandContext>): void {
+interface DerivedSyncState {
+  cmdBasename: string;
+  ctxArgsRef: string[];
+  ctxArgsSnapshot: string[];
+}
+
+function sameArgs(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function syncDerivedArgs(ctx: ExecutionContext, derived: ReturnType<typeof buildSystemCommandContext>, prev: DerivedSyncState): void {
+  if (ctx.cmdBasename === prev.cmdBasename && ctx.args === prev.ctxArgsRef && sameArgs(ctx.args, prev.ctxArgsSnapshot)) {
+    return;
+  }
+  prev.cmdBasename = ctx.cmdBasename;
+  prev.ctxArgsRef = ctx.args;
+  prev.ctxArgsSnapshot = [...ctx.args];
   derived.cmdBasename = ctx.cmdBasename;
   derived.cmd = ctx.cmdBasename.toLowerCase();
-  const combined = [...derived.embeddedArgs, ...ctx.args];
+  const combined = derived.embeddedArgs.length === 0 ? ctx.args : [...derived.embeddedArgs, ...ctx.args];
   derived.args = combined;
   derived.positionalArgs = getPositionalArgs(derived.cmdBasename, combined);
 }
@@ -28,17 +48,22 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   healEvalPayload(ctx.payload, resolvedCwd);
 
   const derived = buildSystemCommandContext(ctx);
+  const syncState: DerivedSyncState = {
+    cmdBasename: ctx.cmdBasename,
+    ctxArgsRef: ctx.args,
+    ctxArgsSnapshot: [...ctx.args],
+  };
   routeEmbeddedShellTools(derived.payload, resolvedCwd);
   extendPayloadTimeouts(derived, resolvedCwd);
 
   healPathHallucinations(ctx);
-  syncDerivedArgs(ctx, derived);
+  syncDerivedArgs(ctx, derived, syncState);
 
   runMutatingInterceptors(ctx, { cmd: derived.cmd, cmdBasename: derived.cmdBasename, args: derived.args });
-  syncDerivedArgs(ctx, derived);
+  syncDerivedArgs(ctx, derived, syncState);
 
   runSystemCommandArms(ctx, derived, derived.positionalArgs);
-  syncDerivedArgs(ctx, derived);
+  syncDerivedArgs(ctx, derived, syncState);
 
   blockUnsafePipes(derived);
 

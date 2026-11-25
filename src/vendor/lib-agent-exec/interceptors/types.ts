@@ -21,7 +21,11 @@ export const AGENT_NATIVE_TOOLS = [
   'read_browser_page'
 ] as const;
 
+export const AGENT_NATIVE_TOOL_SET: ReadonlySet<string> = new Set(AGENT_NATIVE_TOOLS);
+
 export const ECOSYSTEM_MCP_TOOLS = [
   'sqlite_execute_code', 'mysql_execute_code', 'mj_execute_code',
   'server_info', 'server_health', 'list_adapters', 'update_configuration'
 ] as const;
+
+export const ECOSYSTEM_MCP_TOOL_SET: ReadonlySet<string> = new Set(ECOSYSTEM_MCP_TOOLS);

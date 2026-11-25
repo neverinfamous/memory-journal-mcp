@@ -7,6 +7,7 @@ import { syncGitPayloadArgs } from './git-add-guards.js';
 
 const GIT_VALUE_FLAGS = new Set([
   '-c',
+  '--attr-source',
   '--git-dir',
   '--work-tree',
   '--namespace',
@@ -71,9 +72,11 @@ function assertNoDangerousGitConfig(args: readonly string[]): void {
   }
 }
 
+const GIT_MNT_PATH_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/i;
+
 function resolveGitCDir(nextPath: string, currentCwd: string, usePosix: boolean): string {
   if (nextPath === '~' || nextPath.startsWith('~/')) return nextPath;
-  const hostPath = !usePosix && process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(nextPath)
+  const hostPath = !usePosix && process.platform === 'win32' && GIT_MNT_PATH_RE.test(nextPath)
     ? convertToWindowsPath(nextPath)
     : (usePosix && path.win32.isAbsolute(nextPath) ? convertToWslPath(nextPath) : (usePosix ? nextPath.replace(/\\/g, '/') : nextPath));
   if (currentCwd === '~' || currentCwd.startsWith('~/')) {

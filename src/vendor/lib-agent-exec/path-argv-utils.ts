@@ -6,6 +6,7 @@ import {
   isFilePath,
   normalizeMntPathForHost,
   WSL_DRIVE_MNT_RE,
+  type PathProbeCache,
 } from './path-healer.js';
 
 export const FILE_TOOLS: ReadonlySet<string> = new Set([
@@ -167,25 +168,52 @@ export function skipFlagValues(base: string, args: string[], skip: Set<number>):
   }
 }
 
-function resolveArgForCompare(value: string, cwd: string): string {
+export function resolveArgForCompare(value: string, cwd: string): string {
   const raw = value.replace(/^['"]|['"]$/g, '');
   const norm = normalizeMntPathForHost(raw);
   const resolved = (path.isAbsolute(norm) ? path.normalize(norm) : path.resolve(cwd, norm)).replace(/[\\/]+$/, '');
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-export function isDuplicateArg(args: string[], idx: number, healed: string, cwd: string, skip?: ReadonlySet<number>): boolean {
-  const target = resolveArgForCompare(healed, cwd);
-  return args.some((other, otherIdx) =>
-    otherIdx !== idx && !(skip?.has(otherIdx) ?? false) && !other.startsWith('-') && resolveArgForCompare(other, cwd) === target
-  );
+export function buildResolvedArgArray(args: readonly string[], cwd: string): string[] {
+  return args.map((a) => (a.startsWith('-') ? '' : resolveArgForCompare(a, cwd)));
 }
 
-export function applyHeal(args: string[], idx: number, healed: string, cwd: string, skip?: ReadonlySet<number>): boolean {
-  if (healed.replace(/^['"]|['"]$/g, '').trim().length === 0) return false;
-  if (isDuplicateArg(args, idx, healed, cwd, skip)) return false;
+export function isDuplicateArg(
+  args: string[],
+  idx: number,
+  healed: string,
+  cwd: string,
+  skip?: ReadonlySet<number>,
+  preResolved?: string[],
+): boolean {
+  const target = resolveArgForCompare(healed, cwd);
+  for (let otherIdx = 0; otherIdx < args.length; otherIdx += 1) {
+    if (otherIdx === idx || (skip?.has(otherIdx) ?? false)) continue;
+    const other = args[otherIdx];
+    if (other === undefined || other.startsWith('-')) continue;
+    const cachedNorm = preResolved !== undefined ? preResolved[otherIdx] : undefined;
+    const norm = cachedNorm !== undefined && cachedNorm.length > 0 ? cachedNorm : resolveArgForCompare(other, cwd);
+    if (norm === target) return true;
+  }
+  return false;
+}
+
+export type ApplyHealOutcome = 'healed' | 'duplicate' | 'blank';
+
+export function applyHeal(
+  args: string[],
+  idx: number,
+  healed: string,
+  cwd: string,
+  skip?: ReadonlySet<number>,
+  preResolved?: string[],
+): ApplyHealOutcome {
+  if (healed.replace(/^['"]|['"]$/g, '').trim().length === 0) return 'blank';
+  if (isDuplicateArg(args, idx, healed, cwd, skip, preResolved)) return 'duplicate';
   args[idx] = healed;
-  return true;
+  if (preResolved !== undefined) preResolved[idx] = resolveArgForCompare(healed, cwd);
+  return 'healed';
 }
 
 export function shiftSkipIndices(skip: Set<number>, afterIdx: number, delta: number): void {
@@ -225,9 +253,9 @@ export function hasGrepRecurse(args: readonly string[]): boolean {
   return false;
 }
 
-export function findBarrelName(dirPath: string): string | null {
+export function findBarrelName(dirPath: string, cache?: PathProbeCache): string | null {
   for (const barrel of BARREL_CANDIDATES) {
-    if (isFilePath(path.join(dirPath, barrel))) return barrel;
+    if (isFilePath(path.join(dirPath, barrel), cache)) return barrel;
   }
   return null;
 }

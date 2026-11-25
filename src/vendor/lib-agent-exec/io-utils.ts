@@ -39,7 +39,7 @@ export function createConfiguredOutputStream(
     } else {
       const outPath = path.resolve(cwd, expanded);
       const dir = path.dirname(outPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true });
       stream = fs.createWriteStream(outPath);
     }
     stream.on('error', (err: unknown) => {
@@ -79,12 +79,16 @@ export function appendOutputTail(currentTail: string, chunk: string): string {
   return next.length > TAIL_MAX_LENGTH ? next.slice(-TAIL_TRIM_LENGTH) : next;
 }
 
+const ANSI_TUI_1049 = '\u001b[?1049h';
+const ANSI_TUI_47 = '\u001b[?47h';
+const ANSI_TUI_1047 = '\u001b[?1047h';
+const ANSI_TUI_2004 = '\u001b[?2004h';
+
 export function hasAnsiTuiSequence(tail: string): boolean {
-  const esc = String.fromCharCode(27);
-  return tail.includes(`${esc}[?1049h`) ||
-    tail.includes(`${esc}[?47h`) ||
-    tail.includes(`${esc}[?1047h`) ||
-    tail.includes(`${esc}[?2004h`);
+  return tail.includes(ANSI_TUI_1049) ||
+    tail.includes(ANSI_TUI_47) ||
+    tail.includes(ANSI_TUI_1047) ||
+    tail.includes(ANSI_TUI_2004);
 }
 
 export function pauseStreamUntilDrained(
@@ -135,7 +139,8 @@ export function extractEnvelope(tail: string): EnvelopeMatch | null {
   let startIdx = -1;
   let inString = false;
   let escape = false;
-  let lastValidEnvelope: EnvelopeMatch | null = null;
+  let candidateStart = -1;
+  let candidateEnd = -1;
 
   for (let i = 0; i < tail.length; i++) {
     const char = tail[i];
@@ -153,17 +158,16 @@ export function extractEnvelope(tail: string): EnvelopeMatch | null {
     } else if (char === '}' && braceCount > 0) {
       braceCount--;
       if (braceCount === 0 && startIdx !== -1) {
-        const candidate = tryParseEnvelopeCandidate(tail, startIdx, i + 1);
-        if (candidate !== null) lastValidEnvelope = candidate;
+        candidateStart = startIdx;
+        candidateEnd = i + 1;
         startIdx = -1;
       }
     }
   }
 
-  if (lastValidEnvelope === null) return null;
-  if (!isLineStartAt(tail, lastValidEnvelope.start)) return null;
-  if (tail.slice(lastValidEnvelope.end).trim().length > 0) return null;
-  return lastValidEnvelope;
+  if (candidateStart === -1 || !isLineStartAt(tail, candidateStart)) return null;
+  if (tail.slice(candidateEnd).trim().length > 0) return null;
+  return tryParseEnvelopeCandidate(tail, candidateStart, candidateEnd);
 }
 
 export function parseEnvelopeFromTail(tailStr: string): Record<string, unknown> | null {
@@ -180,6 +184,7 @@ function dispatchWebhookChunk(
   payload: ExecPayload,
   data: Buffer,
   inFlightReqs: Set<Promise<void>>,
+  pinnedTargetPromise: Promise<Awaited<ReturnType<typeof resolvePinnedWebhookTarget>>>,
 ): Promise<void> {
   const method = payload.webhookMethod || 'POST';
   const headers: Record<string, string> = { ...payload.webhookHeaders };
@@ -201,7 +206,7 @@ function dispatchWebhookChunk(
   if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') reqInit.body = bodyPayload;
 
   const req = (async (): Promise<void> => {
-    const pinnedTarget = await resolvePinnedWebhookTarget(filePath);
+    const pinnedTarget = await pinnedTargetPromise;
     if (pinnedTarget === null) {
       recordAgentIssue('WEBHOOK_DELIVERY_FAILED', 'Invalid or unsafe webhook stream URL', payload, { targetUrl: filePath, method });
       return;
@@ -223,6 +228,7 @@ export function createWebhookStream(filePath: string, payload: ExecPayload): Wri
   let buffer: Buffer[] = [];
   let timer: NodeJS.Timeout | null = null;
   const inFlightReqs = new Set<Promise<void>>();
+  const pinnedTargetPromise = resolvePinnedWebhookTarget(filePath);
 
   const clearFlushTimer = (): void => {
     if (timer) {
@@ -230,7 +236,7 @@ export function createWebhookStream(filePath: string, payload: ExecPayload): Wri
       timer = null;
     }
   };
-  const sendChunk = (data: Buffer): Promise<void> => dispatchWebhookChunk(filePath, payload, data, inFlightReqs);
+  const sendChunk = (data: Buffer): Promise<void> => dispatchWebhookChunk(filePath, payload, data, inFlightReqs, pinnedTargetPromise);
 
   return new Writable({
     write(chunk: Buffer, _encoding: string, callback: (error?: Error | null) => void) {
@@ -304,7 +310,10 @@ export async function closeStreamsWithTimeout(streams: readonly (Writable | unde
 function destroyStreamSafely(stream: Writable): void {
   try {
     stream.destroy();
-  } catch {
-    // ignore
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ERR_STREAM_DESTROYED' && code !== 'EPIPE' && code !== 'ENOENT') {
+      console.error(`⚠️ Stream destroy warning: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }

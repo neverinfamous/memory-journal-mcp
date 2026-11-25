@@ -5,8 +5,8 @@ import { convertToWindowsPath, healFragmentedQuotes } from '../command-utils.js'
 import { nestedAgentExec } from './system-timeout-flags.js';
 import type { ExecutionContext } from './types.js';
 
-const PACKAGE_RUNNERS = ['bun', 'pnpm', 'npm', 'npx', 'yarn', 'bunx', 'pnpx', 'node', 'tsx', 'ts-node'];
-const DIRECT_SHELLS = ['pwsh', 'powershell', 'cmd', 'bash', 'sh', 'wsl'];
+const PACKAGE_RUNNER_SET: ReadonlySet<string> = new Set(['bun', 'pnpm', 'npm', 'npx', 'yarn', 'bunx', 'pnpx', 'node', 'tsx', 'ts-node']);
+const DIRECT_SHELL_SET: ReadonlySet<string> = new Set(['pwsh', 'powershell', 'cmd', 'bash', 'sh', 'wsl']);
 
 export function healFragmentedQuoteArgs(ctx: ExecutionContext): void {
   const originalArgs = ctx.args;
@@ -37,7 +37,7 @@ function resolveUnwrapTargetDir(rawDir: string, ctx: ExecutionContext): string {
 
 export function unwrapPackageRunnerShell(ctx: ExecutionContext): void {
   const pkgBase = ctx.cmdBasename.toLowerCase().replace(/\.(exe|cmd)$/i, '');
-  if (!PACKAGE_RUNNERS.includes(pkgBase)) return;
+  if (!PACKAGE_RUNNER_SET.has(pkgBase)) return;
   const isJsRuntime = JS_RUNTIME_RUNNERS.has(pkgBase);
   let runIdx = 0;
   let sawSubcmd = false;
@@ -75,7 +75,7 @@ export function unwrapPackageRunnerShell(ctx: ExecutionContext): void {
     break;
   }
   const possibleShell = ctx.args[runIdx]?.toLowerCase().replace(/\.(exe|cmd)$/i, '');
-  if (possibleShell !== undefined && possibleShell.length > 0 && DIRECT_SHELLS.includes(possibleShell)) {
+  if (possibleShell !== undefined && possibleShell.length > 0 && DIRECT_SHELL_SET.has(possibleShell)) {
     rebindPackageRunnerToShell(ctx, possibleShell, runIdx, targetDir);
     return;
   }
@@ -166,7 +166,11 @@ function timeoutFloorForJsonFile(filePath: string, baseCwd: string): number {
     if (st === undefined || !st.isFile() || st.size > 512 * 1024) return 0;
     const fileContent = fs.readFileSync(resolved, 'utf8');
     return Math.max(readTimeoutMsField(fileContent), keywordFloor(fileContent));
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EACCES') {
+      console.error(`⚠️ Timeout floor read error (${filePath}): ${err instanceof Error ? err.message : String(err)}`);
+    }
     return 0;
   }
 }

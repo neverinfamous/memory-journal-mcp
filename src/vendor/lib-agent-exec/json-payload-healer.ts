@@ -15,6 +15,8 @@ interface RepairChain {
   withoutTrailingCommas: () => unknown;
   withQuotedKeys: () => unknown;
   withSingleQuotes: () => unknown;
+  withHealedQuotedStrings: () => unknown;
+  withHealedQuotedStringsNoTrailingCommas: () => unknown;
 }
 
 function stripMarkdownFence(trimmed: string): string {
@@ -109,18 +111,18 @@ function decodeSingleQuotedInterior(raw: string): string {
   });
 }
 
-function convertSingleQuotedTokens(source: string): string {
-  return stripTrailingCommasOutsideStrings(
-    source.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/g, (match: string, _dq: string | undefined, sq: string | undefined) => (
-      sq === undefined ? match : JSON.stringify(decodeSingleQuotedInterior(sq))
-    ))
-  );
+function convertSingleQuotedTokens(source: string, stripCommas = true): string {
+  const replaced = source.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/g, (match: string, _dq: string | undefined, sq: string | undefined) => (
+    sq === undefined ? match : JSON.stringify(decodeSingleQuotedInterior(sq))
+  ));
+  return stripCommas ? stripTrailingCommasOutsideStrings(replaced) : replaced;
 }
 
 // [INVARIANT]: Each repair strategy derives from the immutable comma-stripped string rather than mutating shared state across strategies.
 function createRepairChain(trimmed: string): RepairChain {
   let commaStripped: string | undefined;
   let keyQuoted: string | undefined;
+  let healedQuotedStrings: string | undefined;
   const getCommaStripped = (): string => {
     commaStripped ??= stripTrailingCommasOutsideStrings(trimmed);
     return commaStripped;
@@ -129,10 +131,21 @@ function createRepairChain(trimmed: string): RepairChain {
     keyQuoted ??= quoteUnquotedObjectKeys(getCommaStripped());
     return keyQuoted;
   };
+  const getHealedQuotedStrings = (): string => {
+    healedQuotedStrings ??= healQuotedJsonStrings(trimmed);
+    return healedQuotedStrings;
+  };
   return {
     withoutTrailingCommas: () => tryParse(getCommaStripped()),
     withQuotedKeys: () => tryParse(getKeyQuoted()),
-    withSingleQuotes: () => tryParse(convertSingleQuotedTokens(getKeyQuoted())) ?? tryParse(convertSingleQuotedTokens(getCommaStripped())),
+    withSingleQuotes: () => {
+      const kq = getKeyQuoted();
+      const cs = getCommaStripped();
+      return tryParse(convertSingleQuotedTokens(kq, false))
+        ?? (cs === kq ? undefined : tryParse(convertSingleQuotedTokens(cs, false)));
+    },
+    withHealedQuotedStrings: () => tryParse(getHealedQuotedStrings()),
+    withHealedQuotedStringsNoTrailingCommas: () => tryParse(stripTrailingCommasOutsideStrings(getHealedQuotedStrings())),
   };
 }
 
@@ -163,14 +176,6 @@ function healJsonStringInner(inner: string): string {
 
 function healQuotedJsonStrings(source: string): string {
   return source.replace(/"((?:[^"\\]|\\.)*)"/gs, (_match, inner: string) => `"${healJsonStringInner(inner)}"`);
-}
-
-function tryHealedQuotedStrings(trimmed: string): unknown {
-  return tryParse(healQuotedJsonStrings(trimmed));
-}
-
-function tryHealedQuotedStringsWithoutTrailingCommas(trimmed: string): unknown {
-  return tryParse(stripTrailingCommasOutsideStrings(healQuotedJsonStrings(trimmed)));
 }
 
 function tryHealLooseEscapes(trimmed: string): unknown {
@@ -210,15 +215,19 @@ function tryCloseTrailingBrace(trimmed: string): unknown {
 
 const KNOWN_KEYS_PATTERN = KNOWN_PAYLOAD_KEYS.join('|');
 const TEMPLATE_BACKTICK_COMMA_RE = new RegExp(`(\`)\\s*,\\s*(("?)(${KNOWN_KEYS_PATTERN})("?)\\s*:)`, 'g');
+const TEMPLATE_BACKTICK_CLOSE_RE = /(`)\s*\}/g;
 
 function tryHealTemplateBackticks(trimmed: string): unknown {
   if (!trimmed.includes('`')) return undefined;
   try {
     const candidate = trimmed
       .replace(TEMPLATE_BACKTICK_COMMA_RE, '$1",$2')
-      .replace(/(`)\s*\}/g, '$1"}');
+      .replace(TEMPLATE_BACKTICK_CLOSE_RE, '$1"}');
     return tryParse(candidate);
-  } catch {
+  } catch (err: unknown) {
+    if (!(err instanceof SyntaxError)) {
+      console.error(`⚠️ Template backtick heal error: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return undefined;
   }
 }
@@ -233,8 +242,8 @@ export function tryHealJsonPayload(rawJson: string, depth = 0): unknown {
     () => chain.withoutTrailingCommas(),
     () => chain.withQuotedKeys(),
     () => chain.withSingleQuotes(),
-    () => tryHealedQuotedStrings(trimmed),
-    () => tryHealedQuotedStringsWithoutTrailingCommas(trimmed),
+    () => chain.withHealedQuotedStrings(),
+    () => chain.withHealedQuotedStringsNoTrailingCommas(),
     () => tryHealLooseEscapes(trimmed),
     () => tryTokenAwareJson(trimmed),
     () => tryPowershellStrippedQuotes(trimmed),

@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
-import { match, P } from 'ts-pattern';
 import type { ExecutionContext } from './types.js';
 import { rewriteGitCommit } from './git-commit-rewrite.js';
 import { rewriteGitInspection } from './git-history-rewrite.js';
@@ -17,20 +16,56 @@ interface GitScope {
 const EDITOR_CAPABLE_GIT_SUBCMDS: ReadonlySet<string> = new Set([
   'add', 'commit', 'merge', 'tag', 'notes', 'config', 'rebase', 'cherry-pick', 'revert',
 ]);
+const EDITOR_CAPABLE_SHORT_E_SUBCMDS: ReadonlySet<string> = new Set([
+  'add', 'commit', 'merge', 'tag', 'config', 'cherry-pick', 'revert',
+]);
+const STASH_VALUE_FLAGS: ReadonlySet<string> = new Set(['-m', '--message', '-c']);
+const GIT_INSPECT_CMDS: ReadonlySet<string> = new Set(['log', 'shortlog', 'show', 'diff', 'status']);
+const PATCH_MODE_CMDS: ReadonlySet<string> = new Set(['add', 'checkout', 'reset', 'stash', 'restore']);
+const NO_EDIT_BYPASS_FLAGS: ReadonlySet<string> = new Set(['--no-edit', '--no-commit', '-n', '--abort', '--continue', '--quit', '--skip']);
 
 const GIT_GLOBAL_VALUE_FLAGS: ReadonlySet<string> = new Set([
-  '-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
+  '-C', '-c', '--attr-source', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
 ]);
 const GIT_GUARD_VALUE_FLAGS: ReadonlySet<string> = new Set([
   '-m', '--message', '-F', '--file', '-am', '-C', '-c', '--author', '--date',
   '--template', '--cleanup', '--trailer', '--fixup', '--squash', '--reuse-message', '--reedit-message',
 ]);
+const GIT_GUARD_LONG_VALUE_FLAGS: readonly string[] = [
+  '--message', '--file', '--author', '--date', '--template', '--cleanup',
+  '--trailer', '--fixup', '--squash', '--reuse-message', '--reedit-message',
+];
 const SHORT_FLAG_RE_BY_CHARS: Readonly<Record<string, RegExp>> = {
   e: /^-[a-zA-Z]*e[a-zA-Z]*$/,
   i: /^-[a-zA-Z]*i[a-zA-Z]*$/,
   a: /^-[a-zA-Z]*a[a-zA-Z]*$/,
   p: /^-[a-zA-Z]*p[a-zA-Z]*$/,
 };
+
+function matchesLongFlagOrPrefix(arg: string, longFlags: readonly string[], minPrefixLenOverride?: number): boolean {
+  if (!arg.startsWith('--') || arg.includes('=')) return longFlags.includes(arg);
+  for (const flag of longFlags) {
+    if (!flag.startsWith('--')) continue;
+    if (arg === flag) return true;
+    const minLen = minPrefixLenOverride ?? (flag.length <= 6 ? 4 : 5);
+    if (arg.length >= minLen && flag.startsWith(arg)) return true;
+  }
+  return false;
+}
+
+const MESSAGE_FLAG_LIST: readonly string[] = ['--message'];
+const INLINE_F_RE = /F/;
+const INLINE_DEFAULT_MF_RE = /[mF]/;
+const STASH_REF_EXACT_RE = /^stash@\{\d+\}$/;
+const DIGITS_ONLY_RE = /^\d+$/;
+const TAG_ANNO_VALUE_CLUSTER_RE = /^-[a-tv-zA-Z]*[mF]/;
+const TAG_ANNO_SHORT_CLUSTER_RE = /^-[a-zA-Z]*[asu]/;
+
+function isGitGuardValueFlag(arg: string, booleanM: boolean, expectedCmd?: string): boolean {
+  if (booleanM && (arg === '-m' || arg === '-am' || matchesLongFlagOrPrefix(arg, MESSAGE_FLAG_LIST, 5))) return false;
+  if (GIT_GUARD_VALUE_FLAGS.has(arg) || (arg === '-t' && (expectedCmd === 'commit' || expectedCmd === 'tag'))) return true;
+  return matchesLongFlagOrPrefix(arg, GIT_GUARD_LONG_VALUE_FLAGS, 5);
+}
 
 function findGitSubcmdFlagStart(args: readonly string[], expectedCmd?: string): number {
   for (let i = 0; i < args.length; i++) {
@@ -58,11 +93,11 @@ function hasGitSubcmdFlag(args: readonly string[], shortChars: string, longFlags
   for (let i = startIdx; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
-    if ((!booleanM || (a !== '-m' && a !== '--message' && a !== '-am')) && (GIT_GUARD_VALUE_FLAGS.has(a) || (a === '-t' && (expectedCmd === 'commit' || expectedCmd === 'tag')))) { i++; continue; }
+    if (isGitGuardValueFlag(a, booleanM, expectedCmd)) { i++; continue; }
     if (!a.startsWith('-')) continue;
-    if (longFlags.includes(a)) return true;
+    if (matchesLongFlagOrPrefix(a, longFlags)) return true;
     if (a.startsWith('--')) continue;
-    const inlineValIdx = a.search(booleanM ? /F/ : (INLINE_VAL_RE_BY_CMD.get(expectedCmd ?? '') ?? /[mF]/));
+    const inlineValIdx = a.search(booleanM ? INLINE_F_RE : (INLINE_VAL_RE_BY_CMD.get(expectedCmd ?? '') ?? INLINE_DEFAULT_MF_RE));
     const shortCluster = inlineValIdx === -1 ? a : a.slice(0, inlineValIdx);
     if (shortCluster.length > 1 && shortRe !== null && shortRe.test(shortCluster)) return true;
     if (inlineValIdx === a.length - 1) i++;
@@ -72,13 +107,12 @@ function hasGitSubcmdFlag(args: readonly string[], shortChars: string, longFlags
 
 function hasEditFlag(cmd: string | undefined, args: readonly string[]): boolean {
   if (cmd === undefined || !EDITOR_CAPABLE_GIT_SUBCMDS.has(cmd)) return false;
-  return hasGitSubcmdFlag(args, (cmd === 'add' || cmd === 'commit' || cmd === 'merge' || cmd === 'tag' || cmd === 'config' || cmd === 'cherry-pick' || cmd === 'revert') ? 'e' : '', ['-e', '--edit'], cmd);
+  return hasGitSubcmdFlag(args, EDITOR_CAPABLE_SHORT_E_SUBCMDS.has(cmd) ? 'e' : '', ['-e', '--edit'], cmd);
 }
 
 function getStashSubaction(args: readonly string[]): { action: string | undefined; ref: string } {
   const stashStart = findGitSubcmdFlagStart(args, 'stash');
   if (stashStart === 0) return { action: undefined, ref: 'stash@{0}' };
-  const STASH_VALUE_FLAGS = new Set(['-m', '--message', '-c']);
   let action: string | undefined;
   let ref = 'stash@{0}';
   for (let i = stashStart; i < args.length; i++) {
@@ -90,11 +124,11 @@ function getStashSubaction(args: readonly string[]): { action: string | undefine
       action = a;
       continue;
     }
-    if (/^stash@\{\d+\}$/.test(a)) {
+    if (STASH_REF_EXACT_RE.test(a)) {
       ref = a;
       break;
     }
-    if (/^\d+$/.test(a)) {
+    if (DIGITS_ONLY_RE.test(a)) {
       ref = `stash@{${a}}`;
       break;
     }
@@ -110,7 +144,7 @@ function hasTagAnnotationValue(args: readonly string[]): boolean {
     if (
       a === '-m' || a.startsWith('--message=') || a === '--message' ||
       a === '-F' || a.startsWith('--file=') || a === '--file' ||
-      (!a.startsWith('--') && /^-[a-tv-zA-Z]*[mF]/.test(a))
+      (!a.startsWith('--') && TAG_ANNO_VALUE_CLUSTER_RE.test(a))
     ) {
       return true;
     }
@@ -129,7 +163,7 @@ function tagNeedsAnnotationMessage(args: readonly string[]): boolean {
       return true;
     }
     if (!a.startsWith('--') && a.startsWith('-')) {
-      if (/^-[a-zA-Z]*[asu]/.test(a)) return true;
+      if (TAG_ANNO_SHORT_CLUSTER_RE.test(a)) return true;
     }
     if (GIT_GUARD_VALUE_FLAGS.has(a) || a === '-t') i += 1;
   }
@@ -142,82 +176,70 @@ function hasInteractiveFlag(args: readonly string[], expectedCmd?: string): bool
 
 export function applyEarlyGitGuards(scope: GitScope): boolean {
   const { cmd, args, ctx, targetCwd, rawCwd, explicitCwd } = scope;
-  return match({ cmd, args, ctx })
-    .with({ cmd: P.union('difftool', 'mergetool') }, ({ cmd: tool }) => {
-      console.error(`\n   💡 AGENT HINT: 'git ${tool}' launches interactive UI tools and will hang.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
-      console.error(`   Please use standard 'git diff' or 'git merge' instead.`);
-      process.exit(1);
-    })
-    .with({ args: P.when((list: string[]) => hasEditFlag(cmd, list)) }, ({ cmd: tool }) => {
-      console.error(`\n   💡 AGENT HINT: 'git ${tool} -e / --edit' requires an interactive editor and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
-      process.exit(1);
-    })
-    .with({ cmd: 'bisect' }, () => {
-      console.error(`\n   💡 AGENT HINT: 'git bisect' requires interactive input at each step and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
-      process.exit(1);
-    })
-    .with({ cmd: 'commit' }, () => {
-      rewriteGitCommit(ctx, args, targetCwd, rawCwd, explicitCwd);
-      return true;
-    })
-    .with({ cmd: P.union('log', 'shortlog', 'show', 'diff', 'status') }, ({ cmd: tool }) => {
-      if (tool === undefined) return false;
-      rewriteGitInspection(ctx, args, tool, targetCwd, rawCwd, explicitCwd);
-      return true;
-    })
-    .otherwise(() => false);
+  if (cmd === 'difftool' || cmd === 'mergetool') {
+    console.error(`\n   💡 AGENT HINT: 'git ${cmd}' launches interactive UI tools and will hang.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
+    console.error(`   Please use standard 'git diff' or 'git merge' instead.`);
+    process.exit(1);
+  }
+  if (hasEditFlag(cmd, args)) {
+    console.error(`\n   💡 AGENT HINT: 'git ${cmd} -e / --edit' requires an interactive editor and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
+    process.exit(1);
+  }
+  if (cmd === 'bisect') {
+    console.error(`\n   💡 AGENT HINT: 'git bisect' requires interactive input at each step and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
+    process.exit(1);
+  }
+  if (cmd === 'commit') {
+    rewriteGitCommit(ctx, args, targetCwd, rawCwd, explicitCwd);
+    return true;
+  }
+  if (cmd !== undefined && GIT_INSPECT_CMDS.has(cmd)) {
+    rewriteGitInspection(ctx, args, cmd, targetCwd, rawCwd, explicitCwd);
+    return true;
+  }
+  return false;
 }
 
 export function applyInteractiveGitBlocks(scope: GitScope): boolean {
   const { cmd, args, ctx } = scope;
-  return match({ cmd, args, ctx })
-    .with({ cmd: 'stash', args: P.when((list: string[]) => getStashSubaction(list).action === 'show') }, ({ args: list }) => {
-      const { ref } = getStashSubaction(list);
-      const stashSubIdx = findGitSubcmdFlagStart(list, 'stash') - 1;
-      const globalPrefix = stashSubIdx > 0 ? list.slice(0, stashSubIdx) : [];
+  if (cmd === 'stash') {
+    const stash = getStashSubaction(args);
+    if (stash.action === 'show') {
+      const stashSubIdx = findGitSubcmdFlagStart(args, 'stash') - 1;
+      const globalPrefix = stashSubIdx > 0 ? args.slice(0, stashSubIdx) : [];
       const prefix = globalPrefix.includes('--no-pager') ? globalPrefix : [...globalPrefix, '--no-pager'];
-      ctx.args = [...prefix, 'diff', ref, '--stat'];
+      ctx.args = [...prefix, 'diff', stash.ref, '--stat'];
       if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git stash show' to non-interactive 'git diff ${ref} --stat'... (Frictionless Recovery)`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git stash show' to non-interactive 'git diff ${stash.ref} --stat'... (Frictionless Recovery)`);
       return true;
-    })
-    .with({ cmd: 'tag', args: P.when((list: string[]) => tagNeedsAnnotationMessage(list)) }, () => {
-      console.error(`\n   💡 AGENT HINT: 'git tag -a / -s / -u' requires an interactive editor without '-m' or '-F'. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    })
-    .with({ cmd: 'clean', args: P.when((list: string[]) => hasInteractiveFlag(list, 'clean')) }, () => {
-      console.error(`\n   💡 AGENT HINT: 'git clean -i' is interactive and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
-      process.exit(1);
-    })
-    .with({ cmd: 'add', args: P.when((list: string[]) => hasInteractiveFlag(list, 'add')) }, () => {
-      console.error(`\n   💡 AGENT HINT: 'git add -i' is interactive and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
-      process.exit(1);
-    })
-    .with(
-      P.when((m) =>
-        (m.cmd === 'add' || m.cmd === 'checkout' || m.cmd === 'reset' || m.cmd === 'stash' || m.cmd === 'restore')
-        && hasGitSubcmdFlag(m.args, 'p', ['--patch'], m.cmd)),
-      ({ cmd: tool }) => {
-        console.error(`\n   💡 AGENT HINT: 'git ${tool} -p' (patch selection) is highly interactive and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-        console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Do not use patch mode for this command.`);
-        process.exit(1);
-      }
-    )
-    .with(
-      P.when((m) =>
-        (m.cmd === 'rebase' || m.cmd === 'pull')
-        && (hasInteractiveFlag(m.args, m.cmd) || hasFlagBeforeDoubleDash(m.args, (arg) => arg.startsWith('--rebase=interactive')))),
-      ({ cmd: tool }) => {
-      console.error(`\n   💡 AGENT HINT: 'git ${tool}' with interactive mode requires an interactive editor and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Use non-interactive ${tool} or specific commands.`);
-      process.exit(1);
-    })
-    .otherwise(() => false);
+    }
+  }
+  if (cmd === 'tag' && tagNeedsAnnotationMessage(args)) {
+    console.error(`\n   💡 AGENT HINT: 'git tag -a / -s / -u' requires an interactive editor without '-m' or '-F'. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
+    process.exit(1);
+  }
+  if ((cmd === 'clean' || cmd === 'add') && hasInteractiveFlag(args, cmd)) {
+    console.error(`\n   💡 AGENT HINT: 'git ${cmd} -i' is interactive and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
+    process.exit(1);
+  }
+  if (cmd !== undefined && PATCH_MODE_CMDS.has(cmd) && hasGitSubcmdFlag(args, 'p', ['--patch'], cmd)) {
+    console.error(`\n   💡 AGENT HINT: 'git ${cmd} -p' (patch selection) is highly interactive and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Do not use patch mode for this command.`);
+    process.exit(1);
+  }
+  if (
+    (cmd === 'rebase' || cmd === 'pull') &&
+    (hasInteractiveFlag(args, cmd) || hasFlagBeforeDoubleDash(args, (arg) => arg.startsWith('--rebase=i') && '--rebase=interactive'.startsWith(arg)))
+  ) {
+    console.error(`\n   💡 AGENT HINT: 'git ${cmd}' with interactive mode requires an interactive editor and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Use non-interactive ${cmd} or specific commands.`);
+    process.exit(1);
+  }
+  return false;
 }
 
 function hasFlagBeforeDoubleDash(args: readonly string[], pred: (arg: string) => boolean): boolean {
@@ -244,26 +266,28 @@ function pullUsesRebase(args: string[]): boolean {
   return hasFlagBeforeDoubleDash(args, (arg) => arg === '-r' || arg === '--rebase' || (arg.startsWith('--rebase=') && arg !== '--rebase=false'));
 }
 
+const EDIT_DESC_FLAG_LIST: readonly string[] = ['--edit-description'];
+
 export function applyEditorGitHeals(scope: GitScope): void {
   const { cmd, args, ctx } = scope;
   const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = args; };
-  match({ cmd, args })
-    .with({ cmd: P.union('merge', 'pull'), args: P.when(mergeNeedsNoEdit) }, ({ cmd: tool, args: matched }) => {
-      if (tool === 'pull' && pullUsesRebase(matched)) return;
-      insertNoEditFlag(matched);
-      syncArgs();
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-edit' into 'git ${tool}' to prevent interactive editor prompt... (Frictionless Recovery)`);
-    })
-    .with({ cmd: P.union('cherry-pick', 'revert'), args: P.when((list: string[]) => !hasFlagBeforeDoubleDash(list, (arg) => ['--no-edit', '--no-commit', '-n', '--abort', '--continue', '--quit', '--skip'].includes(arg))) }, ({ cmd: tool }) => {
-      insertNoEditFlag(args);
-      syncArgs();
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'git ${tool}' may open an interactive editor. Automatically injecting '--no-edit'.... (Frictionless Recovery)`);
-    })
-    .with({ cmd: 'branch', args: P.when((list: string[]) => hasFlagBeforeDoubleDash(list, (arg) => arg === '--edit-description')) }, () => {
-      console.error(`\n   💡 AGENT HINT: 'git branch --edit-description' opens an interactive editor. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    })
-    .otherwise(() => undefined);
+  if ((cmd === 'merge' || cmd === 'pull') && mergeNeedsNoEdit(args)) {
+    if (cmd === 'pull' && pullUsesRebase(args)) return;
+    insertNoEditFlag(args);
+    syncArgs();
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-edit' into 'git ${cmd}' to prevent interactive editor prompt... (Frictionless Recovery)`);
+    return;
+  }
+  if ((cmd === 'cherry-pick' || cmd === 'revert') && !hasFlagBeforeDoubleDash(args, (arg) => NO_EDIT_BYPASS_FLAGS.has(arg))) {
+    insertNoEditFlag(args);
+    syncArgs();
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: 'git ${cmd}' may open an interactive editor. Automatically injecting '--no-edit'.... (Frictionless Recovery)`);
+    return;
+  }
+  if (cmd === 'branch' && hasFlagBeforeDoubleDash(args, (arg) => matchesLongFlagOrPrefix(arg, EDIT_DESC_FLAG_LIST, 4))) {
+    console.error(`\n   💡 AGENT HINT: 'git branch --edit-description' opens an interactive editor. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
+    process.exit(1);
+  }
 }
 
 export type { GitScope };

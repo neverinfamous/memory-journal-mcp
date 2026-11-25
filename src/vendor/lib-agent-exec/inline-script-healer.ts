@@ -5,10 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createCodeScanState, healStrippedSqlTemplateLiterals, stepCodeScanState } from './eval-healer.js';
-import { healEvalCodePathHallucinations } from './path-healer.js';
+import { healEvalCodePathHallucinations } from './path-eval-healer.js';
 import { emitInterceptBanner } from './utils.js';
 
 const RESOLVER_MODULE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'cwd-module-resolver.mjs');
+const RESOLVER_MODULE_EXISTS = fs.existsSync(RESOLVER_MODULE_PATH);
+const CWD_MODULE_RUNTIMES: ReadonlySet<string> = new Set(['node', 'tsx', 'ts-node']);
 const TEMP_FILES_TO_CLEANUP = new Set<string>();
 let exitCleanupRegistered = false;
 
@@ -19,9 +21,12 @@ function registerTempScriptCleanup(tmpFile: string): void {
   process.once('exit', () => {
     for (const filePath of TEMP_FILES_TO_CLEANUP) {
       try {
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      } catch {
-        // ignore cleanup failure
+        fs.unlinkSync(filePath);
+      } catch (err: unknown) {
+        const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+        if (code !== 'ENOENT') {
+          console.error(`⚠️ Inline temp script cleanup error (${filePath}): ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
   });
@@ -88,7 +93,7 @@ function tryHealStringRawAt(code: string, idx: number): { startIdx: number; endI
     return null;
   }
   const startIdx = idx + 10;
-  if (!/^(?:[a-zA-Z]:[/\\]|[/\\]|\.\.?[/\\])/.test(code.slice(startIdx))) {
+  if (!/^(?:[a-zA-Z]:[/\\]|[/\\]|\.\.?[/\\])/.test(code.slice(startIdx, startIdx + 4))) {
     return null;
   }
   const endIdx = findStringRawEndIdx(code, startIdx);
@@ -133,10 +138,12 @@ export function healStrippedStringRawLiterals(code: string, deferredLogs?: strin
 
 export function buildCwdNodeModulePaths(cwd: string, existingNodePath?: string): string {
   const paths: string[] = [];
+  const seen = new Set<string>();
   let current = path.resolve(cwd);
   while (true) {
     const candidate = path.join(current, 'node_modules');
-    if (!paths.includes(candidate)) {
+    if (!seen.has(candidate)) {
+      seen.add(candidate);
       paths.push(candidate);
     }
     const parent = path.dirname(current);
@@ -149,7 +156,8 @@ export function buildCwdNodeModulePaths(cwd: string, existingNodePath?: string):
   if (typeof existingNodePath === 'string' && existingNodePath.length > 0) {
     for (const entry of existingNodePath.split(path.delimiter)) {
       const trimmed = entry.trim();
-      if (trimmed.length > 0 && !paths.includes(trimmed)) {
+      if (trimmed.length > 0 && !seen.has(trimmed)) {
+        seen.add(trimmed);
         paths.push(trimmed);
       }
     }
@@ -187,7 +195,7 @@ export function configureCwdModuleResolution(
     readEnvCaseInsensitive(process.env, 'NODE_PATH');
   envOverrides['NODE_PATH'] = buildCwdNodeModulePaths(cwd, baseNodePath);
 
-  if (['node', 'tsx', 'ts-node'].includes(interpreterName.toLowerCase()) && fs.existsSync(RESOLVER_MODULE_PATH)) {
+  if (CWD_MODULE_RUNTIMES.has(interpreterName.toLowerCase()) && RESOLVER_MODULE_EXISTS) {
     envOverrides['AGENT_EXEC_INLINE_CWD'] = path.resolve(cwd);
     const resolverUrl = pathToFileURL(RESOLVER_MODULE_PATH).href;
     const importFlag = `--import=${resolverUrl}`;

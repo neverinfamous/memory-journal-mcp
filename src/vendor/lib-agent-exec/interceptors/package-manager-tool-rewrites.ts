@@ -11,8 +11,16 @@ import {
 } from '../utils.js';
 import { handleRipgrepInterception, parseGrepSearchArgs } from './search-interceptor.js';
 import { resolvePackageProjectDir } from './package-manager-js-rewrites.js';
-import { AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS, type ExecutionContext } from './types.js';
+import { AGENT_NATIVE_TOOL_SET, ECOSYSTEM_MCP_TOOL_SET, type ExecutionContext } from './types.js';
 import { findFirstPkgSubcmdIndex } from './utils.js';
+
+const HEAL_PM_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  '--dir', '-C', '--cwd', '--prefix', '--filter', '-F', '--config', '-c', '--userconfig', '-p', '--package', '--tsconfig',
+]);
+const HEAL_PM_WRAPPER_TOKENS: ReadonlySet<string> = new Set([
+  'run', 'exec', 'x', 'dlx', 'tsx', 'ts-node', 'ts-node-esm', 'node', 'bun',
+]);
+const PM_TOOL_MNT_DRIVE_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/i;
 
 export function healMissingAgentScriptArgs(
   args: string[],
@@ -23,6 +31,10 @@ export function healMissingAgentScriptArgs(
   for (let i = 0; i < args.length; i++) {
     const rawArg = args[i];
     if (rawArg === undefined || rawArg === '--') break;
+    if (HEAL_PM_VALUE_FLAGS.has(rawArg)) {
+      i++;
+      continue;
+    }
     if (rawArg.startsWith('-')) continue;
     const resolved = resolveAgentScriptFallback(rawArg, projectDir);
     if (resolved !== null) {
@@ -31,7 +43,8 @@ export function healMissingAgentScriptArgs(
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Resolved missing '${rawArg}' to '${resolved}'... (Frictionless Recovery)`);
       break;
     }
-    if (/\.(?:ts|js|mjs|cjs)$/i.test(rawArg)) break;
+    if (HEAL_PM_WRAPPER_TOKENS.has(rawArg.toLowerCase())) continue;
+    break;
   }
 }
 
@@ -60,8 +73,12 @@ export function tryAccelerateCommitForPm(
   return true;
 }
 
+const EXTERNAL_TS_EXT_RE = /\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/i;
+const JOINED_TEST_EXT_RE = /\.(?:test|spec)\.[a-zA-Z0-9]+$/i;
+const JOINED_TEST_DIR_RE = /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i;
+
 function isExternalTsScriptArg(arg: string, projectDir: string): boolean {
-  if (!/\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/i.test(arg)) return false;
+  if (!EXTERNAL_TS_EXT_RE.test(arg)) return false;
   const resolvedArg = path.resolve(projectDir, arg);
   const normProj = process.platform === 'win32' ? projectDir.toLowerCase() : projectDir;
   const normArg = process.platform === 'win32' ? resolvedArg.toLowerCase() : resolvedArg;
@@ -99,15 +116,16 @@ export function rewriteTsxInvocation(
   }
 }
 
+const JOINED_TEST_WS_SPLIT_RE = /\s+/;
+
 export function splitJoinedTestTargetArgs(ctx: ExecutionContext, args: string[]): void {
   let didSplit = false;
   const expandedArgs: string[] = [];
   for (const a of args) {
     if (!a.startsWith('-') && a.includes(' ')) {
-      const parts = a.trim().split(/\s+/);
+      const parts = a.trim().split(JOINED_TEST_WS_SPLIT_RE);
       const allTestTargets = parts.length > 1 && parts.every(p =>
-        /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(p) ||
-        /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(p)
+        JOINED_TEST_EXT_RE.test(p) || JOINED_TEST_DIR_RE.test(p)
       );
       if (allTestTargets) {
         expandedArgs.push(...parts);
@@ -144,10 +162,10 @@ export function translateNativeOrDlxTool(
   args: string[],
   subCmd: string | undefined,
 ): boolean {
-  if (subCmd && (AGENT_NATIVE_TOOLS as readonly string[]).includes(subCmd)) {
+  if (subCmd && AGENT_NATIVE_TOOL_SET.has(subCmd)) {
     return handleAgentNativeToolSubcmd(ctx, cmdBasename, args, subCmd);
   }
-  if (subCmd && (ECOSYSTEM_MCP_TOOLS as readonly string[]).includes(subCmd)) {
+  if (subCmd && ECOSYSTEM_MCP_TOOL_SET.has(subCmd)) {
     console.error(`\n   💡 AGENT HINT: '${subCmd}' is an MCP tool, NOT a package manager script or CLI binary. Please call the '${subCmd}' MCP tool via call_mcp_tool instead of executing '${cmdBasename} ${subCmd}'.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
@@ -180,7 +198,7 @@ export function rewriteToolBinary(
     : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
   const prefixDir = resolvePackageProjectDir(args.slice(0, targetIdx), baseDir);
   if (prefixDir !== baseDir) {
-    const resolvedPrefixDir = process.platform === 'win32' && ctx.payload.target !== 'wsl2' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(prefixDir)
+    const resolvedPrefixDir = process.platform === 'win32' && ctx.payload.target !== 'wsl2' && PM_TOOL_MNT_DRIVE_RE.test(prefixDir)
       ? convertToWindowsPath(prefixDir)
       : prefixDir;
     ctx.payload.cwd = resolvedPrefixDir;
@@ -209,17 +227,17 @@ function applySubcmdPrefixCwd(ctx: ExecutionContext, args: readonly string[]): s
   if (subIdx > 0) {
     const prefixDir = resolvePackageProjectDir(args.slice(0, subIdx), baseDir);
     if (prefixDir !== baseDir) {
-      ctx.payload.cwd = process.platform === 'win32' && ctx.payload.target !== 'wsl2' && /^\/mnt\/[a-zA-Z](?:\/|$)/i.test(prefixDir)
+      ctx.payload.cwd = process.platform === 'win32' && ctx.payload.target !== 'wsl2' && PM_TOOL_MNT_DRIVE_RE.test(prefixDir)
         ? convertToWindowsPath(prefixDir)
         : prefixDir;
     }
   }
   const activeCwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? ctx.payload.cwd : ctx.cwd;
   if (process.platform === 'win32' && activeCwd !== undefined) {
-    if ((activeCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(activeCwd)) || activeCwd.startsWith('~')) {
+    if ((activeCwd.startsWith('/') && !PM_TOOL_MNT_DRIVE_RE.test(activeCwd)) || activeCwd.startsWith('~')) {
       return ctx.cwd;
     }
-    if (/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(activeCwd)) return convertToWindowsPath(activeCwd);
+    if (PM_TOOL_MNT_DRIVE_RE.test(activeCwd)) return convertToWindowsPath(activeCwd);
   }
   return activeCwd;
 }

@@ -26,7 +26,8 @@ export const DOCKER_VALUE_FLAGS: readonly string[] = [
   '--detach-keys', '--volumes-from', '--label-file', '--dns-opt', '--dns-search', '--annotation',
 ];
 
-const DOCKER_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS);
+export const DOCKER_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS);
+const CONTAINER_META_HELP_FLAGS: ReadonlySet<string> = new Set(['--help', '-h', '--version', '-V']);
 const DEFAULT_DB_CONN_VALUE_FLAGS: ReadonlySet<string> = new Set([
   '-h', '-p', '-a', '-n', '-u', '-P', '-D', '-U', '-d',
   '--host', '--port', '--user', '--socket', '--database', '--dbname',
@@ -63,6 +64,10 @@ const ALL_CONTAINER_REPLS: ReadonlySet<string> = new Set([
   ...CONTAINER_DB_REPLS,
 ]);
 
+const DOCKER_FALSY_EQ_VAL_RE = /^(?:false|0)$/i;
+const DOCKER_FALSY_EQ_SUFFIX_RE = /=(?:false|0)$/;
+const DOCKER_ALPHA_CHAR_RE = /[a-zA-Z]/;
+const DOCKER_SHORT_CLUSTER_RE = /^-[a-zA-Z]/;
 const DOCKER_SHORT_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS.filter(f => f.length === 2 && f.startsWith('-') && !f.startsWith('--')));
 
 function stripLeadingDockerTtyShortFlags(arg: string, hasStdin: boolean): string | null {
@@ -76,9 +81,9 @@ function stripLeadingDockerTtyShortFlags(arg: string, hasStdin: boolean): string
       if (prev === '') return null;
       const prevStripped = prev === 't' || (!hasStdin && prev === 'i');
       if (!prevStripped) return `${prefix}${arg.slice(j)}`;
-      return /^(?:false|0)$/i.test(arg.slice(j + 1)) ? `${prefix}${prev}${arg.slice(j)}` : prefix;
+      return DOCKER_FALSY_EQ_VAL_RE.test(arg.slice(j + 1)) ? `${prefix}${prev}${arg.slice(j)}` : prefix;
     }
-    if (!/[a-zA-Z]/.test(ch)) return null;
+    if (!DOCKER_ALPHA_CHAR_RE.test(ch)) return null;
     if (ch === 't' || (!hasStdin && ch === 'i')) continue;
     prefix += ch;
   }
@@ -110,13 +115,13 @@ export function stripDockerTtyFlags(
     if (DOCKER_VALUE_FLAG_SET.has(arg) || (arg.length === 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(arg))) { expectFlagValue = true; newArgs.push(arg); continue; }
     if (arg.length > 2 && DOCKER_SHORT_VALUE_FLAG_SET.has(arg.slice(0, 2))) { newArgs.push(arg); continue; }
     const lowArg = arg.toLowerCase();
-    const isFalsyEq = /=(?:false|0)$/.test(lowArg);
+    const isFalsyEq = DOCKER_FALSY_EQ_SUFFIX_RE.test(lowArg);
     if (arg === '--tty' || arg === '-t' || ((lowArg.startsWith('--tty=') || arg.startsWith('-t=')) && !isFalsyEq)) continue;
     if (arg === '--interactive' || arg === '-i' || ((lowArg.startsWith('--interactive=') || arg.startsWith('-i=')) && !isFalsyEq)) {
       if (hasStdin) newArgs.push(arg);
       continue;
     }
-    if (/^-[a-zA-Z]/.test(arg)) {
+    if (DOCKER_SHORT_CLUSTER_RE.test(arg)) {
       const strippedShort = stripLeadingDockerTtyShortFlags(arg, hasStdin);
       if (strippedShort !== null) {
         if (strippedShort.length > 0) {
@@ -236,31 +241,39 @@ function matchesContainerFlagOrPrefix(arg: string, exactFlags: readonly string[]
   return false;
 }
 
+const SQLITE_OK_FLAGS = ['-cmd', '-batch', '--batch', '-version', '--version', '-help', '--help'] as const;
+const REDIS_OK_FLAGS = ['--eval', '-v', '--version', '--help'] as const;
+const MONGO_OK_FLAGS = ['--eval', '-f', '--file', '--version', '--help'] as const;
+const PSQL_OK_FLAGS = ['-c', '--command', '-f', '--file', '-V', '--version', '--help'] as const;
+const MYSQL_OK_FLAGS = ['-e', '--execute', '-V', '--version', '--help'] as const;
+const SHELL_OK_FLAGS = ['-c', '--command'] as const;
+const JS_RUNTIME_OK_FLAGS = ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'] as const;
+const RUBY_OK_FLAGS = ['-e', '-v', '--version', '-h', '--help'] as const;
+const PERL_OK_FLAGS = ['-e', '-E', '-v', '--version', '-h', '--help'] as const;
+const PHP_OK_FLAGS = ['-r', '-f', '--file', '-v', '--version', '-h', '--help'] as const;
+const GENERIC_OK_FLAGS = ['-e', '-v', '--version', '-h', '--help'] as const;
+const MONGO_URI_PREFIX_RE = /^mongodb(?:\+srv)?:\/\//i;
+const JS_MODULE_EXT_RE = /\.(?:[cm]?js)$/i;
+
 function isContainerDbNonInteractive(baseCmd: string, containerCmdArgs: readonly string[]): boolean {
   if (baseCmd === 'sqlite3') {
-    if (containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-cmd', '-batch', '--batch', '-version', '--version', '-help', '--help'], false))) {
-      return true;
-    }
+    if (containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, SQLITE_OK_FLAGS, false))) return true;
     return collectNonConnDbPositionals(baseCmd, containerCmdArgs).length >= 2;
   }
   if (baseCmd === 'redis-cli') {
-    if (containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['--eval', '-v', '--version', '--help'], false))) {
-      return true;
-    }
+    if (containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, REDIS_OK_FLAGS, false))) return true;
     return collectNonConnDbPositionals(baseCmd, containerCmdArgs).length >= 1;
   }
   if (baseCmd === 'mongosh' || baseCmd === 'mongo') {
-    if (containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['--eval', '-f', '--file', '--version', '--help'], false))) {
-      return true;
-    }
+    if (containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, MONGO_OK_FLAGS, false))) return true;
     const mongoPos = collectNonConnDbPositionals(baseCmd, containerCmdArgs);
-    return mongoPos.length >= 2 || mongoPos.some(p => !/^mongodb(?:\+srv)?:\/\//i.test(p) && /\.(?:[cm]?js)$/i.test(p));
+    return mongoPos.length >= 2 || mongoPos.some(p => !MONGO_URI_PREFIX_RE.test(p) && JS_MODULE_EXT_RE.test(p));
   }
   if (baseCmd === 'psql') {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-c', '--command', '-f', '--file', '-V', '--version', '--help']));
+    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, PSQL_OK_FLAGS));
   }
   if (baseCmd === 'mysql') {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-e', '--execute', '-V', '--version', '--help']));
+    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, MYSQL_OK_FLAGS));
   }
   return false;
 }
@@ -326,7 +339,7 @@ function isContainerCmdNonInteractive(
   if (hasStdin) return true;
   if (containerCmdArgs.length === 0) return false;
   if (CONTAINER_SHELLS.has(baseCmd)) {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-c', '--command']) || a === '--version' || a === '--help') || hasContainerScriptPositional(containerCmdArgs, SHELL_VALUE_FLAGS);
+    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, SHELL_OK_FLAGS) || a === '--version' || a === '--help') || hasContainerScriptPositional(containerCmdArgs, SHELL_VALUE_FLAGS);
   }
   if (CONTAINER_JS_RUNTIMES.has(baseCmd)) {
     const ddIdx = containerCmdArgs.indexOf('--');
@@ -351,25 +364,25 @@ function isContainerCmdNonInteractive(
     if ((baseCmd === 'bun' && firstPos === 'repl') || (baseCmd === 'deno' && firstPos === 'repl') || (baseCmd === 'tsx' && firstPos === 'watch') || (baseCmd === 'node' && firstPos === 'inspect')) {
       return false;
     }
-    return preDd.some(a => matchesContainerFlagOrPrefix(a, ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, JS_RUNTIME_VALUE_FLAGS);
+    return preDd.some(a => matchesContainerFlagOrPrefix(a, JS_RUNTIME_OK_FLAGS)) || hasContainerScriptPositional(containerCmdArgs, JS_RUNTIME_VALUE_FLAGS);
   }
   if (CONTAINER_PYTHON.has(baseCmd)) {
     const pyFlags = scanPythonPreScriptFlags(containerCmdArgs);
     return !pyFlags.hasInteractive && !pyFlags.hasPdb && pyFlags.hasExecOrScript;
   }
   if (CONTAINER_RUBY.has(baseCmd)) {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-e', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, RUBY_VALUE_FLAGS);
+    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, RUBY_OK_FLAGS)) || hasContainerScriptPositional(containerCmdArgs, RUBY_VALUE_FLAGS);
   }
   if (CONTAINER_PERL.has(baseCmd)) {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-e', '-E', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, PERL_VALUE_FLAGS);
+    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, PERL_OK_FLAGS)) || hasContainerScriptPositional(containerCmdArgs, PERL_VALUE_FLAGS);
   }
   if (CONTAINER_PHP.has(baseCmd)) {
-    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-r', '-f', '--file', '-v', '--version', '-h', '--help'])) || hasContainerScriptPositional(containerCmdArgs, PHP_VALUE_FLAGS);
+    return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, PHP_OK_FLAGS)) || hasContainerScriptPositional(containerCmdArgs, PHP_VALUE_FLAGS);
   }
   if (CONTAINER_DB_REPLS.has(baseCmd)) {
     return isContainerDbNonInteractive(baseCmd, containerCmdArgs);
   }
-  return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, ['-e', '-v', '--version', '-h', '--help'])) || containerCmdArgs.some(a => !a.startsWith('-'));
+  return containerCmdArgs.some(a => matchesContainerFlagOrPrefix(a, GENERIC_OK_FLAGS)) || containerCmdArgs.some(a => !a.startsWith('-'));
 }
 
 function hasComposeNoTtyBeforeService(args: readonly string[], targetIdx: number): boolean {
@@ -413,7 +426,7 @@ export function guardDockerTtyAndRepl(
   if (CONTAINER_TUI_COMMANDS.has(baseCmd)) {
     const ddIdx = parsed.containerCmdArgs.indexOf('--');
     const preDd = ddIdx === -1 ? parsed.containerCmdArgs : parsed.containerCmdArgs.slice(0, ddIdx);
-    const hasMetaHelp = preDd.some(a => ['--help', '-h', '--version', '-V'].includes(a));
+    const hasMetaHelp = preDd.some(a => CONTAINER_META_HELP_FLAGS.has(a));
     if (!hasMetaHelp) {
       console.error(`\n   💡 AGENT HINT: 'docker ... ${parsed.containerCmd}' launches an interactive TUI application inside the container.\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);

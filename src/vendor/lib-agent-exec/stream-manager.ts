@@ -5,10 +5,7 @@ import { stripVTControlCharacters } from 'node:util';
 const ESC = String.fromCharCode(27);
 const CSI = String.fromCharCode(155);
 const BEL = String.fromCharCode(7);
-const ANSI_REGEX_K0 = new RegExp(`${ESC}\\[[0]?K`, 'g');
-const ANSI_REGEX_K2 = new RegExp(`${ESC}\\[2K`, 'g');
-const ANSI_REGEX_J2 = new RegExp(`${ESC}\\[2J`, 'g');
-const ANSI_REGEX_H = new RegExp(`${ESC}\\[H`, 'g');
+const ANSI_TRANSLATE_REGEX = new RegExp(`${ESC}\\[(?:([0]?K)|(2K)|(2J)|(H))`, 'g');
 const LONG_CSI_REGEX = new RegExp(`[${ESC}${CSI}]\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
 const OSC_REGEX = new RegExp(`[${ESC}${CSI}]][^\\x07${ESC}]*(?:\\x07|${ESC}\\\\)`, 'g');
 const COMPLETE_OSC_REGEX = new RegExp(`^[${ESC}${CSI}]][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`);
@@ -25,6 +22,7 @@ const MAX_ANSI_SEQ_LENGTH_CSI = 50;
 interface StreamState {
   ansiBuffer: string;
   lineBuffer: string;
+  lineDirty: boolean;
   flushedResolved: string;
   length: number;
   truncated: boolean;
@@ -32,8 +30,8 @@ interface StreamState {
 
 export class StreamManager {
   private state = {
-    out: { ansiBuffer: '', lineBuffer: '', flushedResolved: '', length: 0, truncated: false } as StreamState,
-    err: { ansiBuffer: '', lineBuffer: '', flushedResolved: '', length: 0, truncated: false } as StreamState
+    out: { ansiBuffer: '', lineBuffer: '', lineDirty: false, flushedResolved: '', length: 0, truncated: false } as StreamState,
+    err: { ansiBuffer: '', lineBuffer: '', lineDirty: false, flushedResolved: '', length: 0, truncated: false } as StreamState
   };
 
   constructor(
@@ -58,15 +56,20 @@ export class StreamManager {
 
     // Preserve Erase in Line/Whole Line semantics by translating them to \u001A (Substitute)
     // before stripping ANSI codes, so they can be processed dynamically in resolveCarriageReturns
-    let preProcessed = str.replace(ANSI_REGEX_K0, '\u001A');
-    preProcessed = preProcessed.replace(ANSI_REGEX_K2, '\r\u001A');
-    preProcessed = preProcessed.replace(ANSI_REGEX_J2, '\n--- [Screen Cleared] ---\n');
-    preProcessed = preProcessed.replace(ANSI_REGEX_H, '\n--- [Cursor Home] ---\n');
-    
+    let preProcessed = str.replace(
+      ANSI_TRANSLATE_REGEX,
+      (_m, k0: string | undefined, k2: string | undefined, j2: string | undefined) => {
+        if (k0 !== undefined) return '\u001A';
+        if (k2 !== undefined) return '\r\u001A';
+        if (j2 !== undefined) return '\n--- [Screen Cleared] ---\n';
+        return '\n--- [Cursor Home] ---\n';
+      },
+    );
+
     // Node's stripVTControlCharacters restricts number length to 4 chars. Add a broad pass to catch overlong edge-cases.
     preProcessed = preProcessed.replace(LONG_CSI_REGEX, '');
     preProcessed = preProcessed.replace(OSC_REGEX, '');
-    
+
     return stripVTControlCharacters(preProcessed);
   }
 
@@ -156,7 +159,10 @@ export class StreamManager {
     s.ansiBuffer = remainder;
 
     const stripped = this.stripAnsi(safeStr);
-    s.lineBuffer += stripped;
+    if (stripped.length > 0) {
+      s.lineBuffer += stripped;
+      s.lineDirty = true;
+    }
     if (!stripped.includes('\n') && s.lineBuffer.length <= DEFENSIVE_LINE_LIMIT) {
       return '';
     }
@@ -165,15 +171,17 @@ export class StreamManager {
     }
     const lines = s.lineBuffer.split('\n');
     s.lineBuffer = lines.pop() ?? '';
+    s.lineDirty = s.lineBuffer.length > 0;
     return lines.length === 0 ? '' : this.resolveMergedLines(lines, s);
   }
 
   public flushPendingLine(isErr: boolean): string {
     const s = this.getState(isErr);
-    if (!s.lineBuffer) return '';
+    if (!s.lineBuffer || !s.lineDirty) return '';
     
     const res = this.resolveCarriageReturns(s.lineBuffer);
     const toReturn = s.flushedResolved ? this.diffAgainstFlushed(res, s.flushedResolved) : res;
+    s.lineDirty = false;
     
     if (toReturn) {
       s.flushedResolved = res;
@@ -191,6 +199,7 @@ export class StreamManager {
     s.lineBuffer += stripped;
     const resLine = s.lineBuffer;
     s.lineBuffer = '';
+    s.lineDirty = false;
     
     if (!resLine) return '';
     const res = this.resolveCarriageReturns(resLine);

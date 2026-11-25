@@ -1,12 +1,10 @@
 // @ts-nocheck
-import fs from 'node:fs';
 import path from 'node:path';
 import { convertToWindowsPath, convertToWslPath, extractLeadingShortFlags, findPatternExprIndex, FLAGS_WITH_ARG_BY_TOOL, inspectCombinedShortFlag } from '../command-utils.js';
 import { emitInterceptBanner } from '../utils.js';
 import { injectRecursiveGrepExclusions } from './grep-exclusions.js';
 import { unbundleSearchCommandArgs } from './search-flag-unpack.js';
 import {
-  existsOnDisk,
   hasBackslashRegexEscape,
   hasUnambiguousRegexMeta,
   hasUnmistakableStructuredPathPrefix,
@@ -14,6 +12,7 @@ import {
   isGlobPathArg,
   isLikelyDirectoryArg,
   isSecondExistingTargetOnly,
+  statPathKindOnDisk,
 } from './search-path-utils.js';
 import { type ExecutionContext } from './types.js';
 
@@ -26,9 +25,21 @@ function routeGrepToWsl(ctx: ExecutionContext, hasStdin: boolean): void {
   emitInterceptBanner(msg);
 }
 
-function collectGrepPositionalIndices(cmdBasename: string, args: readonly string[]): number[] {
+const DEFAULT_GREP_VALUE_FLAGS: ReadonlySet<string> = new Set(FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+const GREP_VALUE_FLAG_MAP = new Map<string, ReadonlySet<string>>([
+  ['grep', DEFAULT_GREP_VALUE_FLAGS],
+  ['egrep', new Set(FLAGS_WITH_ARG_BY_TOOL['egrep'] ?? DEFAULT_GREP_VALUE_FLAGS)],
+  ['fgrep', new Set(FLAGS_WITH_ARG_BY_TOOL['fgrep'] ?? DEFAULT_GREP_VALUE_FLAGS)],
+]);
+
+function getGrepValueFlags(cmdBasename: string): { base: string; valueFlags: ReadonlySet<string> } {
   const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  const valueFlags = GREP_VALUE_FLAG_MAP.get(base) ?? DEFAULT_GREP_VALUE_FLAGS;
+  return { base, valueFlags };
+}
+
+function collectGrepPositionalIndices(cmdBasename: string, args: readonly string[]): number[] {
+  const { base, valueFlags } = getGrepValueFlags(cmdBasename);
   const indices: number[] = [];
   let seenDoubleDash = false;
   for (let i = 0; i < args.length; i++) {
@@ -48,8 +59,7 @@ function collectGrepPositionalIndices(cmdBasename: string, args: readonly string
 }
 
 function hasGrepHelpOrVersion(args: readonly string[], cmdBasename: string): boolean {
-  const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  const { base, valueFlags } = getGrepValueFlags(cmdBasename);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
@@ -76,8 +86,7 @@ function resolveGrepHostCwd(ctx: ExecutionContext): string | undefined {
 }
 
 function hasGrepPatternFlag(args: readonly string[], cmdBasename: string): boolean {
-  const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  const { base, valueFlags } = getGrepValueFlags(cmdBasename);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
@@ -121,28 +130,19 @@ function recombineGrepStdinPattern(
   return [combinedPattern];
 }
 
-function existsAsDirectory(arg: string, cwd?: string): boolean {
-  try {
-    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
-    return fs.statSync(path.resolve(baseDir, arg), { throwIfNoEntry: false })?.isDirectory() === true;
-  } catch {
-    return false;
-  }
-}
-
-function isGrepPathLike(arg: string, cwd?: string): boolean {
-  if (isGlobPathArg(arg)) return true;
-  if (existsOnDisk(arg, cwd)) return true;
+function isGrepPathLike(arg: string, cwd?: string, kindCache?: Map<string, 'dir' | 'file' | 'none'>): boolean {
+  if (isGlobPathArg(arg, cwd, kindCache)) return true;
+  const kind = statPathKindOnDisk(arg, cwd, kindCache);
+  if (kind !== 'none') return true;
   if (hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
   if (hasUnmistakableStructuredPathPrefix(arg) && !hasUnambiguousRegexMeta(arg.replace(/[+[\]]/g, ''))) return true;
   if (hasUnambiguousRegexMeta(arg)) return false;
-  if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
+  if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg, cwd, kindCache)) return false;
   return arg === '.' || arg === '..'
     || arg.includes('/')
     || arg.includes('\\')
     || /^[a-zA-Z]:/.test(arg)
-    || /\.[a-zA-Z0-9_-]+$/.test(arg)
-    || existsAsDirectory(arg, cwd);
+    || /\.[a-zA-Z0-9_-]+$/.test(arg);
 }
 
 function recombineGrepMultiwordPattern(
@@ -150,13 +150,14 @@ function recombineGrepMultiwordPattern(
   hasStdin: boolean,
   hasPatternFlag: boolean,
   positionalArgs: string[],
+  kindCache: Map<string, 'dir' | 'file' | 'none'>,
 ): string[] {
   if (hasStdin || hasPatternFlag || positionalArgs.length <= 2) return positionalArgs;
   const lastArg = positionalArgs[positionalArgs.length - 1];
   const intermediateArgs = positionalArgs.slice(1, -1);
   const cwd = resolveGrepHostCwd(ctx);
-  if (lastArg === undefined || !isGrepPathLike(lastArg, cwd)) return positionalArgs;
-  if (intermediateArgs.some((arg) => isGrepPathLike(arg, cwd))) return positionalArgs;
+  if (lastArg === undefined || !isGrepPathLike(lastArg, cwd, kindCache)) return positionalArgs;
+  if (intermediateArgs.some((arg) => isGrepPathLike(arg, cwd, kindCache))) return positionalArgs;
   const patternParts = positionalArgs.slice(0, -1);
   const combinedPattern = patternParts.join(' ');
   replacePositionalSlice(ctx, patternParts.length, combinedPattern);
@@ -170,14 +171,15 @@ function swapGrepReversedArgs(
   hasStdin: boolean,
   hasPatternFlag: boolean,
   positionalArgs: string[],
+  kindCache: Map<string, 'dir' | 'file' | 'none'>,
 ): string[] {
   if (hasStdin || hasPatternFlag || positionalArgs.length !== 2) return positionalArgs;
   const first = positionalArgs[0];
   const second = positionalArgs[1];
   if (first === undefined || second === undefined) return positionalArgs;
   const cwd = resolveGrepHostCwd(ctx);
-  if (!isLikelyDirectoryArg(first, cwd) || isLikelyDirectoryArg(second, cwd)) return positionalArgs;
-  if (isSecondExistingTargetOnly(first, second, cwd)) return positionalArgs;
+  if (!isLikelyDirectoryArg(first, cwd, kindCache) || isLikelyDirectoryArg(second, cwd, kindCache)) return positionalArgs;
+  if (isSecondExistingTargetOnly(first, second, cwd, kindCache)) return positionalArgs;
   const posIndices = collectGrepPositionalIndices(ctx.cmdBasename, ctx.args);
   const idx0 = posIndices[0];
   const idx1 = posIndices[1];
@@ -208,8 +210,7 @@ function isGrepShortValueCluster(base: string, arg: string, valueFlags: Readonly
 }
 
 function detectGrepRecursive(args: readonly string[], cmdBasename: string): boolean {
-  const base = path.basename(cmdBasename).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  const { base, valueFlags } = getGrepValueFlags(cmdBasename);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
@@ -247,13 +248,14 @@ function ensureGrepRecursiveSearch(
   hasStdin: boolean,
   hasPatternFlag: boolean,
   positionalArgs: string[],
+  kindCache: Map<string, 'dir' | 'file' | 'none'>,
 ): boolean {
   const isRecursive = detectGrepRecursive(ctx.args, ctx.cmdBasename);
   if (hasStdin) return isRecursive;
   const targetFileArgs = hasPatternFlag ? positionalArgs : positionalArgs.slice(1);
   if (targetFileArgs.length === 0) return injectGrepMissingTarget(ctx, isRecursive, targetFileArgs.includes('.'));
   const cwd = resolveGrepHostCwd(ctx);
-  if (isRecursive || !targetFileArgs.some((arg) => isLikelyDirectoryArg(arg, cwd))) return isRecursive;
+  if (isRecursive || !targetFileArgs.some((arg) => isLikelyDirectoryArg(arg, cwd, kindCache))) return isRecursive;
   ctx.args.unshift('-r');
   if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
   console.error(`\n   💡 AGENT HINT: '${grepCommandName(ctx)}' called with a directory target without recursive flag.`);
@@ -263,8 +265,7 @@ function ensureGrepRecursiveSearch(
 
 function convertGrepPathsForWsl(ctx: ExecutionContext): void {
   if (ctx.payload.target !== 'wsl2') return;
-  const base = path.basename(ctx.cmdBasename).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = new Set(FLAGS_WITH_ARG_BY_TOOL[base] ?? FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []);
+  const { base, valueFlags } = getGrepValueFlags(ctx.cmdBasename);
   const patternIdx = findPatternExprIndex(ctx.cmdBasename, ctx.args);
   const exempt = new Set<number>();
   if (patternIdx !== -1) exempt.add(patternIdx);
@@ -308,12 +309,13 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
   routeGrepToWsl(ctx, hasStdin);
   if (hasGrepHelpOrVersion(ctx.args, ctx.cmdBasename)) return;
   const hasPatternFlag = hasGrepPatternFlag(ctx.args, ctx.cmdBasename);
+  const kindCache = new Map<string, 'dir' | 'file' | 'none'>();
   let positionalArgs = collectGrepPositionalIndices(ctx.cmdBasename, ctx.args).map(idx => ctx.args[idx] ?? '');
   positionalArgs = recombineGrepStdinPattern(ctx, hasStdin, hasPatternFlag, positionalArgs);
-  positionalArgs = recombineGrepMultiwordPattern(ctx, hasStdin, hasPatternFlag, positionalArgs);
-  positionalArgs = swapGrepReversedArgs(ctx, hasStdin, hasPatternFlag, positionalArgs);
+  positionalArgs = recombineGrepMultiwordPattern(ctx, hasStdin, hasPatternFlag, positionalArgs, kindCache);
+  positionalArgs = swapGrepReversedArgs(ctx, hasStdin, hasPatternFlag, positionalArgs, kindCache);
   blockEmptyGrep(ctx, hasStdin, hasPatternFlag, positionalArgs);
-  const isRecursive = ensureGrepRecursiveSearch(ctx, hasStdin, hasPatternFlag, positionalArgs);
+  const isRecursive = ensureGrepRecursiveSearch(ctx, hasStdin, hasPatternFlag, positionalArgs, kindCache);
   convertGrepPathsForWsl(ctx);
   const targetPaths = hasPatternFlag ? positionalArgs : positionalArgs.slice(1);
   applyRecursiveGrepGuards(ctx, !hasStdin && isRecursive, targetPaths);

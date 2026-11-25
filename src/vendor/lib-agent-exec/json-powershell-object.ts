@@ -72,14 +72,17 @@ function consumeDepthChar(scan: PairScan, ch: string): boolean {
   return false;
 }
 
-function takePairAtComma(scan: PairScan): void {
+const NEXT_KNOWN_KEY_RE = /^(?:\\ ?|"|')?([A-Za-z]+)(?:\\:|:|"|')/;
+
+function takePairAtComma(scan: PairScan, knownKeySet: ReadonlySet<string>): void {
   let k = scan.index + 1;
   const len = scan.content.length;
   while (k < len && isAsciiSpace(scan.content.charCodeAt(k))) k++;
   if (k >= len || !isKeyStartCode(scan.content.charCodeAt(k))) return;
   const rest = scan.content.slice(k, k + 40);
-  const matchKey = scan.knownKeys.find(key => keyRestStarts(rest, key));
-  if (matchKey === undefined) return;
+  const keyMatch = rest.match(NEXT_KNOWN_KEY_RE);
+  const candidateKey = keyMatch?.[1];
+  if (candidateKey === undefined || !knownKeySet.has(candidateKey) || !keyRestStarts(rest, candidateKey)) return;
   const rawVal = scan.content.slice(scan.valStart, scan.index).trim();
   scan.pairs.push({ key: scan.currentKey.replace(KEY_STRIP_RE, ''), rawVal });
   scan.currentKey = '';
@@ -92,16 +95,17 @@ function pushTrailingPair(scan: PairScan): void {
   scan.pairs.push({ key: scan.currentKey.replace(KEY_STRIP_RE, ''), rawVal });
 }
 
-function handleCommaRun(scan: PairScan, match: RegExpExecArray): number {
+function handleCommaRun(scan: PairScan, match: RegExpExecArray, knownKeySet: ReadonlySet<string>): number {
   const lastComma = match.index + match[0].length - 1;
   if (lastComma + 1 < scan.content.length) {
     scan.index = lastComma;
-    takePairAtComma(scan);
+    takePairAtComma(scan, knownKeySet);
   }
   return lastComma;
 }
 
 function scanPowershellPairs(content: string, knownKeys: readonly string[]): PowershellPair[] {
+  const knownKeySet = new Set(knownKeys);
   const scan: PairScan = {
     content,
     knownKeys,
@@ -125,7 +129,7 @@ function scanPowershellPairs(content: string, knownKeys: readonly string[]): Pow
       const match = VALUE_SPECIAL_RE.exec(content);
       if (match === null) break;
       if (content.charCodeAt(match.index) === 44) {
-        i = handleCommaRun(scan, match);
+        i = handleCommaRun(scan, match, knownKeySet);
         continue;
       }
       i = match.index;
@@ -259,7 +263,10 @@ export function tryPowershellObject(trimmed: string, knownKeys: readonly string[
       result[pair.key] = coercePowershellValue(pair.rawVal);
     }
     return result;
-  } catch {
+  } catch (err: unknown) {
+    if (!(err instanceof SyntaxError)) {
+      console.error(`⚠️ PowerShell object heal error: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return undefined;
   }
 }

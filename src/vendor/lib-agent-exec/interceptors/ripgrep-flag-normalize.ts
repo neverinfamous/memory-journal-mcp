@@ -50,19 +50,41 @@ function reassembleRipgrepQuotes(ctx: ExecutionContext): void {
   if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
 }
 
-function shouldKeepBareRipgrepR(args: readonly string[], idx: number): boolean {
+const RG_DOLLAR_BACKREF_RE = /\$(?:\d+|\{|[A-Za-z_]|&)/;
+const RG_REC_CLUSTER_RE = /^-[rRniIlLwFvcqHsSoxu]+$/;
+const RG_ALNUM_FLAG_RE = /^-[a-zA-Z0-9]+$/;
+const RG_GREP_E_CLUSTER_RE = /^-[rRniIlLwFvcqHsSoxuPU]*E[rRniIlLwFvcqHsSoxuPU]*$/;
+
+function hasAllUniqueTailChars(arg: string): boolean {
+  for (let i = 1; i < arg.length; i++) {
+    const ch = arg[i];
+    if (ch !== undefined && arg.indexOf(ch, i + 1) !== -1) return false;
+  }
+  return true;
+}
+
+function shouldKeepBareRipgrepR(
+  args: readonly string[],
+  idx: number,
+  getPositionalSummary: () => { count: number; hasPatternFlag: boolean },
+): boolean {
   const nextArg = args[idx + 1];
   if (nextArg === undefined) return false;
   if (nextArg === '') return true;
   if (nextArg.startsWith('-')) return false;
-  if (/\$(?:\d+|\{|[A-Za-z_]|&)/.test(nextArg)) return true;
-  const { count, hasPatternFlag } = countRgNonValuePositionals(args);
+  if (RG_DOLLAR_BACKREF_RE.test(nextArg)) return true;
+  const { count, hasPatternFlag } = getPositionalSummary();
   return hasPatternFlag ? count >= 1 : count >= 2;
 }
 
 function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped: boolean } {
   let stripped = false;
   const cleaned: string[] = [];
+  let cachedSummary: { count: number; hasPatternFlag: boolean } | undefined;
+  const getPositionalSummary = (): { count: number; hasPatternFlag: boolean } => {
+    cachedSummary ??= countRgNonValuePositionals(args);
+    return cachedSummary;
+  };
   for (let idx = 0; idx < args.length; idx++) {
     const arg = args[idx];
     if (arg === undefined) continue;
@@ -71,7 +93,7 @@ function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped:
       break;
     }
     if (arg === '-r') {
-      if (shouldKeepBareRipgrepR(args, idx)) {
+      if (shouldKeepBareRipgrepR(args, idx, getPositionalSummary)) {
         cleaned.push('-r', args[idx + 1] ?? '');
         idx++;
       } else {
@@ -94,11 +116,11 @@ function stripRipgrepRecursiveFlags(args: string[]): { args: string[]; stripped:
     }
     const shortPrefix = extractLeadingShortFlags('rg', arg);
     const hasAttachedOperand = shortPrefix.length < arg.length && !shortPrefix.endsWith('r') && !shortPrefix.endsWith('R');
-    const isRecursiveCluster = /^-[rRniIlLwFvcqHsSoxu]+$/.test(arg)
+    const isRecursiveCluster = RG_REC_CLUSTER_RE.test(arg)
       && arg !== '-r'
       && !arg.endsWith('r')
-      && new Set(arg.slice(1)).size === arg.length - 1;
-    if (!hasAttachedOperand && /^-[a-zA-Z0-9]+$/.test(arg) && (shortPrefix.includes('R') || (shortPrefix.includes('r') && isRecursiveCluster))) {
+      && hasAllUniqueTailChars(arg);
+    if (!hasAttachedOperand && RG_ALNUM_FLAG_RE.test(arg) && (shortPrefix.includes('R') || (shortPrefix.includes('r') && isRecursiveCluster))) {
       stripped = true;
       const withoutR = arg.replace(/[Rr]/g, '');
       if (withoutR !== '-') cleaned.push(withoutR);
@@ -151,7 +173,7 @@ const GREP_E_CLUSTER_BOOL_RE = /^[rRniIlLwFvcqHsSoxuPU]+$/;
 export function splitRgExtendedCluster(arg: string): { leadFlags: string; hadAttachedBoolSuffix: boolean } | null {
   if (arg === '-E') return { leadFlags: '', hadAttachedBoolSuffix: false };
   if (!arg.startsWith('-') || arg.startsWith('--')) return null;
-  const hasRecursiveGrepCluster = /^-[rRniIlLwFvcqHsSoxuPU]*E[rRniIlLwFvcqHsSoxuPU]*$/.test(arg);
+  const hasRecursiveGrepCluster = RG_GREP_E_CLUSTER_RE.test(arg);
   const candidate = hasRecursiveGrepCluster ? `-${arg.slice(1).replace(/[rR]/g, '')}` : arg;
   const strippedR = candidate !== arg;
   if (candidate === '-E') {

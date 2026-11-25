@@ -6,13 +6,13 @@ import { convertToWindowsPath } from '../command-utils.js';
 import { isJavaScriptOrTypeScriptCode, isPowerShellCode, isPythonCode, isShellCommandScript } from '../eval-healer.js';
 import { buildNonCodeSpans, isIndexInSpans } from '../quote-spans.js';
 
-const NETWORK_ALIASES = ['curl', 'wget', 'invoke-webrequest', 'iwr'];
-const SHELL_INTERPRETERS = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'];
-const WINDOWS_INTERPRETERS = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'];
-const SHELL_SCRIPT_EXTS = ['.ps1', '.bat', '.cmd', '.sh', '.bash'];
-const FS_SEARCH_ALIASES = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'];
-const FS_LIST_ALIASES = ['ls', 'ls.exe', 'dir', 'dir.exe', 'tree', 'tree.com'];
-const SYSTEMD_ALIASES = ['journalctl', 'journalctl.exe'];
+const NETWORK_ALIAS_SET: ReadonlySet<string> = new Set(['curl', 'wget', 'invoke-webrequest', 'iwr']);
+const SHELL_INTERPRETER_SET: ReadonlySet<string> = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe']);
+const WINDOWS_INTERPRETER_SET: ReadonlySet<string> = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe']);
+const SHELL_SCRIPT_EXT_SET: ReadonlySet<string> = new Set(['.ps1', '.bat', '.cmd', '.sh', '.bash']);
+const FS_SEARCH_ALIAS_SET: ReadonlySet<string> = new Set(['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe']);
+const FS_LIST_ALIAS_SET: ReadonlySet<string> = new Set(['ls', 'ls.exe', 'dir', 'dir.exe', 'tree', 'tree.com']);
+const SYSTEMD_ALIAS_SET: ReadonlySet<string> = new Set(['journalctl', 'journalctl.exe']);
 const SHELL_PREFIX_KEYWORDS = new Set(['if', 'then', 'do', 'else', 'elif', 'while', 'until', '!', 'time', 'exec']);
 
 export function routeEmbeddedShellTools(payload: ExecPayload, baseCwd?: string): void {
@@ -25,22 +25,25 @@ function routeNetworkCommandString(payload: ExecPayload): void {
   const firstToken = payload.command.trim().split(/\s+/)[0]?.toLowerCase();
   if (firstToken === undefined || firstToken.length === 0) return;
   const firstTokenBase = path.basename(firstToken).replace(/\.exe$/, '');
-  if (!NETWORK_ALIASES.includes(firstTokenBase) || firstToken.endsWith('.exe') || payload.target === 'wsl2') return;
+  if (!NETWORK_ALIAS_SET.has(firstTokenBase) || firstToken.endsWith('.exe') || payload.target === 'wsl2') return;
   payload.target = 'wsl2';
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Network request command '${firstToken}' detected in command string. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
 }
 
-function stripLeadingComments(content: string): string {
+function stripLeadingComments(content: string): { commentFree: string; spans: ReturnType<typeof buildNonCodeSpans> } {
   const spans = buildNonCodeSpans(content, { includeHashComments: true, includeSlashComments: false, includeRegexLiterals: false });
-  const chars = content.split('');
+  const hashChunks: string[] = [];
+  let cursor = 0;
   for (const span of spans) {
-    if (content[span.start] !== '#') continue;
-    for (let i = span.start; i < span.end; i++) {
-      if (chars[i] !== '\n') chars[i] = ' ';
-    }
+    if (content[span.start] !== '#' || span.start < cursor) continue;
+    hashChunks.push(content.slice(cursor, span.start));
+    const seg = content.slice(span.start, span.end);
+    hashChunks.push(seg.includes('\n') ? seg.replace(/[^\n]/g, ' ') : ' '.repeat(seg.length));
+    cursor = span.end;
   }
+  hashChunks.push(content.slice(cursor));
   // Strip full-line `//` comments outside strings/heredocs while preserving URLs (`https://...`) and globs (`/tmp/*`).
-  const partiallyClean = chars.join('');
+  const partiallyClean = hashChunks.length > 1 ? hashChunks.join('') : content;
   const lines = partiallyClean.split('\n');
   let offset = 0;
   for (let i = 0; i < lines.length; i++) {
@@ -50,12 +53,11 @@ function stripLeadingComments(content: string): string {
     }
     offset += line.length + 1;
   }
-  return lines.join('\n');
+  return { commentFree: lines.join('\n'), spans };
 }
 
 function extractShellCommandHeads(scriptContent: string): Array<{ head: string; segment: string }> {
-  const commentFree = stripLeadingComments(scriptContent);
-  const spans = buildNonCodeSpans(commentFree, { includeHashComments: false, includeSlashComments: false, includeRegexLiterals: false });
+  const { commentFree, spans } = stripLeadingComments(scriptContent);
   const segments: string[] = [];
   let start = 0;
   for (let i = 0; i < commentFree.length; i++) {
@@ -104,7 +106,7 @@ function isPosixFindSegment(head: string, segment: string): boolean {
 function detectShellToolAlias(scriptContent: string): string | undefined {
   const entries = extractShellCommandHeads(scriptContent);
   for (const { head, segment } of entries) {
-    if (NETWORK_ALIASES.includes(head) || FS_SEARCH_ALIASES.includes(head) || FS_LIST_ALIASES.includes(head) || SYSTEMD_ALIASES.includes(head)) {
+    if (NETWORK_ALIAS_SET.has(head) || FS_SEARCH_ALIAS_SET.has(head) || FS_LIST_ALIAS_SET.has(head) || SYSTEMD_ALIAS_SET.has(head)) {
       return head;
     }
     if (isPosixFindSegment(head, segment)) return head;
@@ -112,12 +114,46 @@ function detectShellToolAlias(scriptContent: string): string | undefined {
   return undefined;
 }
 
+interface ShellPayloadClassification {
+  isShell: boolean;
+  precomputedIsShellScript?: boolean;
+  precomputedIsPwsh?: boolean;
+  precomputedDetectedAlias?: string | undefined;
+}
+
+function classifyShellPayload(payload: ExecPayload): ShellPayloadClassification {
+  if (payload.type === 'eval') {
+    if (payload.interpreter !== undefined && payload.interpreter.length > 0) {
+      return { isShell: SHELL_INTERPRETER_SET.has(payload.interpreter.toLowerCase()) };
+    }
+    const isShellCmd = isShellCommandScript(payload.code);
+    if ((!isShellCmd && isJavaScriptOrTypeScriptCode(payload.code)) || isPythonCode(payload.code)) {
+      return { isShell: false };
+    }
+    const isPwsh = isPowerShellCode(payload.code);
+    if (isShellCmd || isPwsh) {
+      return { isShell: true, precomputedIsShellScript: isShellCmd, precomputedIsPwsh: isPwsh };
+    }
+    const alias = detectShellToolAlias(payload.code);
+    return alias !== undefined
+      ? { isShell: true, precomputedIsShellScript: false, precomputedIsPwsh: false, precomputedDetectedAlias: alias }
+      : { isShell: false };
+  }
+  if (payload.type === 'script' && typeof payload.scriptPath === 'string') {
+    if (payload.interpreter) return { isShell: SHELL_INTERPRETER_SET.has(payload.interpreter.toLowerCase()) };
+    return { isShell: SHELL_SCRIPT_EXT_SET.has(path.extname(payload.scriptPath).toLowerCase()) };
+  }
+  return { isShell: false };
+}
+
 function routeShellToolAliases(payload: ExecPayload, baseCwd?: string): void {
   if ((payload.type !== 'eval' && payload.type !== 'script') || payload.target === 'wsl2') return;
-  if (!isShellPayload(payload)) return;
+  const classification = classifyShellPayload(payload);
+  if (!classification.isShell) return;
   const scriptContent = readShellScriptContent(payload, baseCwd);
   // [INTENT]: PowerShell cmdlets stay on Windows pwsh rather than routing to WSL2.
-  if (isPowerShellCode(scriptContent)) {
+  const isPwsh = classification.precomputedIsPwsh ?? isPowerShellCode(scriptContent);
+  if (isPwsh) {
     const interpLower = payload.interpreter?.toLowerCase();
     const shouldSwitchToPwsh = interpLower === undefined || interpLower.length === 0 || interpLower === 'bash' || interpLower === 'sh';
     if (shouldSwitchToPwsh && (payload.type === 'eval' || (interpLower !== undefined && interpLower.length > 0))) {
@@ -126,23 +162,7 @@ function routeShellToolAliases(payload: ExecPayload, baseCwd?: string): void {
     }
     return;
   }
-  switchShellToolTarget(payload, scriptContent);
-}
-
-function isShellPayload(payload: ExecPayload): boolean {
-  if (payload.type === 'eval') {
-    if (payload.interpreter !== undefined && payload.interpreter.length > 0) {
-      return SHELL_INTERPRETERS.includes(payload.interpreter.toLowerCase());
-    }
-    return (isShellCommandScript(payload.code) || !isJavaScriptOrTypeScriptCode(payload.code))
-      && !isPythonCode(payload.code)
-      && (isShellCommandScript(payload.code) || isPowerShellCode(payload.code) || detectShellToolAlias(payload.code) !== undefined);
-  }
-  if (payload.type === 'script' && typeof payload.scriptPath === 'string') {
-    if (payload.interpreter) return SHELL_INTERPRETERS.includes(payload.interpreter.toLowerCase());
-    return SHELL_SCRIPT_EXTS.includes(path.extname(payload.scriptPath).toLowerCase());
-  }
-  return false;
+  switchShellToolTarget(payload, scriptContent, classification);
 }
 
 function normalizeWinPathIfMnt(p: string): string {
@@ -167,21 +187,25 @@ function readShellScriptContent(payload: ExecPayload, baseCwd?: string): string 
       if (st !== undefined && st.isFile() && st.size <= 512 * 1024) {
         return fs.readFileSync(resolved, 'utf8');
       }
-    } catch {
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EACCES') {
+        console.error(`⚠️ Shell script read warning (${resolved}): ${err instanceof Error ? err.message : String(err)}`);
+      }
       return '';
     }
   }
   return '';
 }
 
-function switchShellToolTarget(payload: ExecPayload, scriptContent: string): void {
+function switchShellToolTarget(payload: ExecPayload, scriptContent: string, classification: ShellPayloadClassification): void {
   if (process.platform !== 'win32') return;
   if (payload.type !== 'eval' && payload.type !== 'script') return;
-  if (payload.type === 'eval' && !isShellCommandScript(scriptContent) && (isJavaScriptOrTypeScriptCode(scriptContent) || isPythonCode(scriptContent))) return;
-  const detected = detectShellToolAlias(scriptContent);
+  if (payload.type === 'eval' && !(classification.precomputedIsShellScript ?? isShellCommandScript(scriptContent)) && (isJavaScriptOrTypeScriptCode(scriptContent) || isPythonCode(scriptContent))) return;
+  const detected = classification.precomputedDetectedAlias !== undefined ? classification.precomputedDetectedAlias : detectShellToolAlias(scriptContent);
   if (detected === undefined) return;
   payload.target = 'wsl2';
-  if (!payload.interpreter || WINDOWS_INTERPRETERS.includes(payload.interpreter.toLowerCase())) {
+  if (!payload.interpreter || WINDOWS_INTERPRETER_SET.has(payload.interpreter.toLowerCase())) {
     payload.interpreter = 'bash';
   }
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Shell command/script using '${detected}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);

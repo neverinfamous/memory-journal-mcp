@@ -5,6 +5,7 @@ import { getPositionalArgs } from '../command-utils.js';
 import type { ExecutionContext } from './types.js';
 
 export const EXACT_SHELL_CHARS: readonly string[] = ['|', '>', '<', '&&', '||', ';'];
+export const EXACT_SHELL_CHAR_SET: ReadonlySet<string> = new Set(EXACT_SHELL_CHARS);
 
 export const PATTERN_TOOLS: readonly string[] = [
   'grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe',
@@ -12,6 +13,7 @@ export const PATTERN_TOOLS: readonly string[] = [
   'node', 'node.exe', 'python', 'python.exe', 'sqlite3', 'sqlite3.exe', 'tail', 'tail.exe', 'head', 'head.exe',
   'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe',
 ];
+export const PATTERN_TOOL_SET: ReadonlySet<string> = new Set(PATTERN_TOOLS);
 
 export const SHELL_NAMES: readonly string[] = [
   'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe',
@@ -21,6 +23,12 @@ export const SHELL_NAMES: readonly string[] = [
 export const INLINE_FLAGS: readonly string[] = [
   '-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-e', '--eval', '--exec', '-execute', '--execute',
 ];
+const INLINE_POSIX_O_CLUSTER_RE = /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/;
+const INLINE_SHORT_FLAG_ALPHA_RE = /^-[a-zA-Z]+$/;
+const INLINE_PWSH_VERSION_VAL_RE = /^\d+(?:\.\d+)*$/;
+const INLINE_CMD_SLASH_C_RE = /^\/c(?:$|[=:])/i;
+
+export const INLINE_FLAG_SET: ReadonlySet<string> = new Set(INLINE_FLAGS);
 
 export interface SystemCommandDerived {
   cmdBasename: string;
@@ -109,12 +117,12 @@ export function findPosixShellCAndBody(args: readonly string[]): { flagIdx: numb
       i++;
       continue;
     }
-    if (!a.startsWith('--') && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(a)) {
+    if (!a.startsWith('--') && INLINE_POSIX_O_CLUSTER_RE.test(a)) {
       if (flagIdx === -1 && a.startsWith('-') && a.slice(1).includes('c')) flagIdx = i;
       i++;
       continue;
     }
-    if (a === '-c' || a === '--command' || (/^-[a-zA-Z]+$/.test(a) && a.includes('c'))) {
+    if (a === '-c' || a === '--command' || (INLINE_SHORT_FLAG_ALPHA_RE.test(a) && a.includes('c'))) {
       if (flagIdx === -1) flagIdx = i;
       continue;
     }
@@ -151,7 +159,7 @@ export function resolveInlineCommand(args: string[], cmdBasename = ''): InlineCo
       const pwshHead = colonIdx !== -1 ? low.slice(0, colonIdx) : low;
       if (pwshHead === '-version') {
         const nextTok = colonIdx !== -1 ? low.slice(colonIdx + 1) : (args[i + 1] ?? '');
-        if (colonIdx === -1 && /^\d+(?:\.\d+)*$/.test(nextTok)) i++;
+        if (colonIdx === -1 && INLINE_PWSH_VERSION_VAL_RE.test(nextTok)) i++;
         continue;
       }
       if (colonIdx === -1 && PWSH_VALUE_FLAGS.has(pwshHead)) { i++; continue; }
@@ -161,8 +169,8 @@ export function resolveInlineCommand(args: string[], cmdBasename = ''): InlineCo
       continue;
     }
     const isMatch = isCmdShell
-      ? /^\/c(?:$|[=:])/i.test(low)
-      : (isWslCmd ? (low === '-e' || low === '--exec') : INLINE_FLAGS.includes(low));
+      ? INLINE_CMD_SLASH_C_RE.test(low)
+      : (isWslCmd ? (low === '-e' || low === '--exec') : INLINE_FLAG_SET.has(low));
     if (isMatch) { inlineIdx = i; break; }
     if (!low.startsWith('-') && !(isCmdShell && low.startsWith('/'))) {
       break;

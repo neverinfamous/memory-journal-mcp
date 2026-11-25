@@ -7,8 +7,10 @@ import { convertToWindowsPath, convertToWslPath } from '../command-utils.js';
 import { type ExecutionContext } from './types.js';
 import { AGENT_EXEC_README_URL, hasJournalctlFollowFlag } from './utils.js';
 import { sanitizeJqInvocation } from './jq-sanitizer.js';
+import { extractGitDirWorkTreeFlags } from './git-add-broad-scan.js';
 import {
   STALE_INDEX_LOCK_MS,
+  collectGitPathspecs,
   findAlreadyStagedGitDeletions,
   findGitRepoRoot,
   healGitAddForceFlag,
@@ -32,7 +34,7 @@ export {
 };
 
 const GIT_TOP_VALUE_FLAGS = new Set([
-  '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
+  '-c', '--attr-source', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix',
 ]);
 
 interface ParsedGitInvocation {
@@ -40,6 +42,10 @@ interface ParsedGitInvocation {
   subcmdIndex: number;
   subcmd: string | undefined;
 }
+
+const MUTATING_MNT_PREFIX_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/i;
+const RM_SHORT_INTERACTIVE_CLUSTER_RE = /^-[a-zA-Z]*[iI][a-zA-Z]*$/;
+const RM_STRIP_I_RE = /[iI]/g;
 
 /**
  * [INTENT]: Resolve effective git working directory (honoring top-level `-C <dir>`) and locate the git subcommand
@@ -52,7 +58,7 @@ function isPosixOrTildePath(p: string): boolean {
 function resolveMutatingGitDir(next: string, currentCwd: string): string {
   const isPosixBase = isPosixOrTildePath(currentCwd);
   let normalized = next;
-  if (/^\/mnt\/[a-zA-Z](?:\/|$)/.test(next) && process.platform === 'win32') {
+  if (MUTATING_MNT_PREFIX_RE.test(next) && process.platform === 'win32') {
     normalized = convertToWindowsPath(next);
   } else if (isPosixBase && path.win32.isAbsolute(next)) {
     normalized = convertToWslPath(next);
@@ -68,7 +74,7 @@ function resolveMutatingGitDir(next: string, currentCwd: string): string {
 
 function parseGitInvocation(ctx: ExecutionContext): ParsedGitInvocation {
   const rawPayloadCwd = ctx.payload.cwd;
-  const convertedPayloadCwd = rawPayloadCwd !== undefined && rawPayloadCwd.length > 0 && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(rawPayloadCwd) && process.platform === 'win32'
+  const convertedPayloadCwd = rawPayloadCwd !== undefined && rawPayloadCwd.length > 0 && MUTATING_MNT_PREFIX_RE.test(rawPayloadCwd) && process.platform === 'win32'
     ? convertToWindowsPath(rawPayloadCwd)
     : rawPayloadCwd;
   const baseCwd =
@@ -137,44 +143,88 @@ const WIN_PING_T_RE = /^[-/]t$/i;
 const UNIX_PING_C_RE = /^-c\d+$/;
 const RM_FORCE_SHORT_RE = /^-([a-zA-Z]*f[a-zA-Z]*)$/;
 
-function resolveGitIndexLockPath(lockRoot: string): string {
+const MAX_DOT_GIT_FILE_BYTES = 4096;
+
+function isRegularNonSymlinkFile(filePath: string): boolean {
+  const st = fs.lstatSync(filePath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isFile();
+}
+
+function isValidGitDir(dirPath: string): boolean {
+  const dirStat = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  if (dirStat === undefined || dirStat.isSymbolicLink() || !dirStat.isDirectory()) return false;
+  return isRegularNonSymlinkFile(path.join(dirPath, 'HEAD'));
+}
+
+export function resolveGitIndexLockPath(lockRoot: string): string | null {
   const dotGitPath = path.join(lockRoot, '.git');
   const dotGitStat = fs.lstatSync(dotGitPath, { throwIfNoEntry: false });
-  if (dotGitStat !== undefined && dotGitStat.isFile() && !dotGitStat.isSymbolicLink()) {
+  if (dotGitStat === undefined || dotGitStat.isSymbolicLink()) return null;
+  if (dotGitStat.isDirectory()) {
+    return isValidGitDir(dotGitPath) ? path.join(dotGitPath, 'index.lock') : null;
+  }
+  if (dotGitStat.isFile() && dotGitStat.size <= MAX_DOT_GIT_FILE_BYTES) {
     try {
       const content = fs.readFileSync(dotGitPath, 'utf8');
-      const match = /^gitdir:\s*(.+)$/im.exec(content);
-      if (match?.[1] !== undefined) {
-        return path.join(path.resolve(lockRoot, match[1].trim()), 'index.lock');
+      const match = /^gitdir:[ \t]*([^\r\n]+)$/im.exec(content);
+      const rawDir = match?.[1]?.trim();
+      if (rawDir !== undefined && rawDir.length > 0) {
+        const resolvedGitDir = path.resolve(lockRoot, rawDir);
+        return isValidGitDir(resolvedGitDir) ? path.join(resolvedGitDir, 'index.lock') : null;
       }
-    } catch {
-      // Fall back to default .git/index.lock
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== 'ENOENT' && code !== 'EISDIR') {
+        console.error(`⚠️ .git pointer read warning (${dotGitPath}): ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return null;
     }
   }
-  return path.join(dotGitPath, 'index.lock');
+  return null;
+}
+
+function cleanupStaleGitIndexLock(lockRoot: string): void {
+  const lockPath = resolveGitIndexLockPath(lockRoot);
+  if (lockPath === null) return;
+  const lockStats = fs.lstatSync(lockPath, { throwIfNoEntry: false });
+  if (lockStats === undefined || lockStats.isSymbolicLink() || !lockStats.isFile()) return;
+  const ageMs = Date.now() - lockStats.mtimeMs;
+  if (ageMs <= STALE_INDEX_LOCK_MS) return;
+  try {
+    fs.unlinkSync(lockPath);
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected stale '.git/index.lock' (age: ${Math.round(ageMs / 1000)}s). Removing lock to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT') {
+      console.error(`⚠️ Stale git index.lock removal failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }
 
 function healGitMutatingCommand(ctx: ExecutionContext, matchedArgs: readonly string[]): void {
   const { gitCwd, subcmdIndex, subcmd } = parseGitInvocation(ctx);
   const isNonHostPosixCwd = process.platform === 'win32'
-    && ((gitCwd.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(gitCwd)) || gitCwd.startsWith('~'));
+    && ((gitCwd.startsWith('/') && !MUTATING_MNT_PREFIX_RE.test(gitCwd)) || gitCwd.startsWith('~'));
   const hasLocalGitCwd = !isNonHostPosixCwd && fs.statSync(gitCwd, { throwIfNoEntry: false })?.isDirectory() === true;
+  let preResolvedRepoRoot: string | undefined;
   if (hasLocalGitCwd) {
     const lockRoot = findGitRepoRoot(gitCwd);
-    const lockPath = resolveGitIndexLockPath(lockRoot);
-    const lockStats = fs.lstatSync(lockPath, { throwIfNoEntry: false });
-    if (lockStats !== undefined && !lockStats.isSymbolicLink() && lockStats.isFile() && Date.now() - lockStats.mtimeMs > STALE_INDEX_LOCK_MS) {
-      try {
-        fs.unlinkSync(lockPath);
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected stale '.git/index.lock' (age: ${Math.round((Date.now() - lockStats.mtimeMs) / 1000)}s). Removing lock to prevent exit 128... (Frictionless Recovery)\x1b[0m`);
-      } catch { /* ignore stale lock race */ }
-    }
+    preResolvedRepoRoot = lockRoot;
+    cleanupStaleGitIndexLock(lockRoot);
   }
   if (subcmd === 'rm' && ctx.payload.target !== 'wsl2') healGitRmStagedDeletions(ctx, gitCwd, subcmdIndex);
   else if (subcmd === 'add') {
-    const rewritten = ctx.payload.target !== 'wsl2' ? healGitAddStagedDeletions(ctx, gitCwd, subcmdIndex) : false;
-    if (!rewritten && (ctx.payload.target !== 'wsl2' || hasLocalGitCwd)) healGitAddForceFlag(ctx, gitCwd, subcmdIndex);
-    else if (!rewritten) validateNonHostWslAddPaths(gitCwd, ctx.args.slice(subcmdIndex + 1));
+    const preLen = ctx.args.length;
+    const preOverrides = ctx.payload.target !== 'wsl2' || hasLocalGitCwd
+      ? extractGitDirWorkTreeFlags(ctx.args.slice(0, subcmdIndex), ctx.payload.env, gitCwd)
+      : undefined;
+    const prePathspecs = collectGitPathspecs(ctx.args.slice(subcmdIndex + 1));
+    const rewritten = ctx.payload.target !== 'wsl2'
+      ? healGitAddStagedDeletions(ctx, gitCwd, subcmdIndex, preOverrides?.flags, prePathspecs)
+      : false;
+    if (!rewritten && (ctx.payload.target !== 'wsl2' || hasLocalGitCwd)) {
+      healGitAddForceFlag(ctx, gitCwd, subcmdIndex, preResolvedRepoRoot, preOverrides, ctx.args.length === preLen ? prePathspecs : undefined);
+    } else if (!rewritten) validateNonHostWslAddPaths(gitCwd, ctx.args.slice(subcmdIndex + 1));
   }
   const ddIdx = matchedArgs.indexOf('--');
   const bFlags = ddIdx === -1 ? matchedArgs : matchedArgs.slice(0, ddIdx);
@@ -228,8 +278,8 @@ function healRmCommand(ctx: ExecutionContext): void {
     if (a === '-i' || a === '-I' || a === '--interactive' || a.startsWith('--interactive=')) {
       ctx.args.splice(i, 1);
       strippedInteractive = true;
-    } else if (!a.startsWith('--') && /^-[a-zA-Z]*[iI][a-zA-Z]*$/.test(a)) {
-      const rest = a.replace(/[iI]/g, '');
+    } else if (!a.startsWith('--') && RM_SHORT_INTERACTIVE_CLUSTER_RE.test(a)) {
+      const rest = a.replace(RM_STRIP_I_RE, '');
       if (rest === '-') ctx.args.splice(i, 1);
       else ctx.args[i] = rest;
       strippedInteractive = true;

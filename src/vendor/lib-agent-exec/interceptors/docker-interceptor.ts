@@ -6,16 +6,17 @@ import {
   handleKubectlInterception,
   splitDockerMultiTargets,
 } from './docker-lifecycle-guards.js';
-import { DOCKER_VALUE_FLAGS, absorbsNextDockerShortValue, guardDockerTtyAndRepl } from './docker-tty-repl-guard.js';
+import { DOCKER_VALUE_FLAG_SET, absorbsNextDockerShortValue, guardDockerTtyAndRepl } from './docker-tty-repl-guard.js';
 import { type ExecutionContext } from './types.js';
 
-const DOCKER_RUN_EXEC_VALUE_FLAG_SET: ReadonlySet<string> = new Set(DOCKER_VALUE_FLAGS);
-const DOCKER_CMDS = ['docker', 'docker.exe', 'docker.bat'];
-const DOCKER_COMPOSE_CMDS = ['docker-compose', 'docker-compose.exe', 'docker-compose.bat'];
-const KUBECTL_CMDS = ['kubectl', 'kubectl.exe'];
+const DOCKER_CMD_SET: ReadonlySet<string> = new Set(['docker', 'docker.exe', 'docker.bat']);
+const DOCKER_COMPOSE_CMD_SET: ReadonlySet<string> = new Set(['docker-compose', 'docker-compose.exe', 'docker-compose.bat']);
+const KUBECTL_CMD_SET: ReadonlySet<string> = new Set(['kubectl', 'kubectl.exe']);
 const COMPOSE_GLOBAL_VALUE_FLAGS = new Set(['-f', '--file', '-p', '--project-name', '--profile', '--env-file', '--project-directory', '--progress', '--ansi']);
-const PRUNE_CATEGORIES = ['system', 'image', 'volume', 'network', 'container', 'builder'];
-const MULTI_TARGET_SUBCMDS = ['inspect', 'stop', 'start', 'restart', 'rm', 'rmi', 'kill', 'pause', 'unpause'];
+const PRUNE_CATEGORY_SET: ReadonlySet<string> = new Set(['system', 'image', 'volume', 'network', 'container', 'builder']);
+const MULTI_TARGET_SUBCMD_SET: ReadonlySet<string> = new Set(['inspect', 'stop', 'start', 'restart', 'rm', 'rmi', 'kill', 'pause', 'unpause']);
+const BUILDX_VALUE_FLAG_SET: ReadonlySet<string> = new Set(['--builder']);
+const EMPTY_DOCKER_FLAG_SET: ReadonlySet<string> = new Set();
 
 function isLeadingDockerHelp(args: readonly string[], isComposeCmd: boolean): boolean {
   let firstSub: string | undefined;
@@ -25,7 +26,7 @@ function isLeadingDockerHelp(args: readonly string[], isComposeCmd: boolean): bo
     if (a === undefined || a === '--') break;
     if (a === '--help' || (firstSub === undefined && a === '-h')) return true;
     const activeFlags = inRunOrExec
-      ? DOCKER_RUN_EXEC_VALUE_FLAG_SET
+      ? DOCKER_VALUE_FLAG_SET
       : ((isComposeCmd || firstSub === 'compose') ? COMPOSE_GLOBAL_VALUE_FLAGS : DOCKER_GLOBAL_VALUE_FLAGS);
     if (activeFlags.has(a) || (inRunOrExec && absorbsNextDockerShortValue(a))) { i++; continue; }
     if (a.startsWith('-')) continue;
@@ -86,6 +87,18 @@ function injectPlainProgressIfMissing(args: string[], composeBuildIdx = -1, onSy
   onSync?.();
 }
 
+const SHORT_FOLLOW_CLUSTER_RE = /^-[a-zA-Z]*f[a-zA-Z]*$/;
+const SHORT_FOLLOW_EQ_RE = /^(-[a-zA-Z]+)f=(.*)$/;
+const FALSY_BOOL_VAL_RE = /^(?:false|0)$/i;
+const SHORT_N_DIGITS_RE = /^-n\d+$/;
+const SHORT_FLAGS_EQ_RE = /^-[a-zA-Z]+=/;
+const SHORT_IA_BEFORE_EQ_RE = /[ia]/;
+const SHORT_IA_CLUSTER_RE = /^-[a-zA-Z]*[ia][a-zA-Z]*$/;
+const WATCH_CLUSTER_RE = /^-[dVw]*w[dVw]*$/;
+const WATCH_CLUSTER_EQ_RE = /^(-[dVw]+)w=(.*)$/;
+const SHORT_W_EQ_FALSY_RE = /^-w=(?:false|0)$/i;
+const DETACH_SHORT_RE = /^-[a-zA-Z]*d[a-zA-Z]*$/;
+
 function stripFollowFromLogsArgs(args: string[], startIdx: number, endIdx: number): boolean {
   let stripped = false;
   for (let i = endIdx - 1; i >= startIdx; i--) {
@@ -95,15 +108,15 @@ function stripFollowFromLogsArgs(args: string[], startIdx: number, endIdx: numbe
     if (a === '-f' || a === '--follow' || (low.startsWith('--follow=') && low !== '--follow=false' && a !== '--follow=0') || (a.startsWith('-f=') && low !== '-f=false' && a !== '-f=0')) {
       args.splice(i, 1);
       stripped = true;
-    } else if (/^-[a-zA-Z]*f[a-zA-Z]*$/.test(a)) {
-      const rest = a.replace(/f/g, '');
+    } else if (SHORT_FOLLOW_CLUSTER_RE.test(a)) {
+      const rest = a.replaceAll('f', '');
       if (rest === '-') args.splice(i, 1);
       else args[i] = rest;
       stripped = true;
     } else {
-      const m = /^(-[a-zA-Z]+)f=(.*)$/.exec(a);
-      if (m !== null && !/^(?:false|0)$/i.test(m[2] ?? '')) {
-        const rest = (m[1] ?? '').replace(/f/g, '');
+      const m = SHORT_FOLLOW_EQ_RE.exec(a);
+      if (m !== null && !FALSY_BOOL_VAL_RE.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replaceAll('f', '');
         if (rest === '-') args.splice(i, 1);
         else args[i] = rest;
         stripped = true;
@@ -125,7 +138,7 @@ function handleDockerLogsCmd(cmdBasename: string, args: string[], ctx: Execution
   const postLogsDd = args.indexOf('--', startIdx);
   const postLogsSlice = args.slice(startIdx, postLogsDd === -1 ? args.length : postLogsDd);
   const hasTailOrLimit = postLogsSlice.some(a =>
-    a === '--tail' || a.startsWith('--tail=') || a === '-n' || a.startsWith('-n=') || /^-n\d+$/.test(a) ||
+    a === '--tail' || a.startsWith('--tail=') || a === '-n' || a.startsWith('-n=') || SHORT_N_DIGITS_RE.test(a) ||
     a === '--since' || a.startsWith('--since=') || a === '--until' || a.startsWith('--until=')
   );
   if (!hasTailOrLimit) {
@@ -144,14 +157,14 @@ function hasDockerStartInteractiveFlag(args: readonly string[], startSubIdx = -1
     if (a === undefined || a === '--') break;
     if (a === '--detach-keys' || a === '--checkpoint' || a === '--checkpoint-dir') { i++; continue; }
     const low = a.toLowerCase();
-    const eqIdx = !a.startsWith('--') && /^-[a-zA-Z]+=/.test(a) ? a.indexOf('=') : -1;
-    const shortEqActive = eqIdx !== -1 && (/[ia]/.test(a.slice(1, eqIdx - 1)) || ((a[eqIdx - 1] === 'i' || a[eqIdx - 1] === 'a') && !/^(?:false|0)$/i.test(a.slice(eqIdx + 1))));
+    const eqIdx = !a.startsWith('--') && SHORT_FLAGS_EQ_RE.test(a) ? a.indexOf('=') : -1;
+    const shortEqActive = eqIdx !== -1 && (SHORT_IA_BEFORE_EQ_RE.test(a.slice(1, eqIdx - 1)) || ((a[eqIdx - 1] === 'i' || a[eqIdx - 1] === 'a') && !FALSY_BOOL_VAL_RE.test(a.slice(eqIdx + 1))));
     if (
       a === '--interactive' ||
       a === '--attach' ||
       (low.startsWith('--attach=') && low !== '--attach=false' && low !== '--attach=0') ||
       (low.startsWith('--interactive=') && low !== '--interactive=false' && low !== '--interactive=0') ||
-      (!a.startsWith('--') && /^-[a-zA-Z]*[ia][a-zA-Z]*$/.test(a)) ||
+      (!a.startsWith('--') && SHORT_IA_CLUSTER_RE.test(a)) ||
       shortEqActive
     ) {
       return true;
@@ -165,18 +178,18 @@ function stripWatchFromComposeUpArgs(args: string[], composeSubIdx: number, endI
   for (let i = endIdx - 1; i > composeSubIdx; i--) {
     const a = args[i];
     if (a === undefined) continue;
-    if (a === '--watch' || a === '-w' || (a.startsWith('--watch=') && a.toLowerCase() !== '--watch=false' && a !== '--watch=0') || (a.startsWith('-w=') && !/^-w=(?:false|0)$/i.test(a))) {
+    if (a === '--watch' || a === '-w' || (a.startsWith('--watch=') && a.toLowerCase() !== '--watch=false' && a !== '--watch=0') || (a.startsWith('-w=') && !SHORT_W_EQ_FALSY_RE.test(a))) {
       args.splice(i, 1);
       strippedWatch = true;
-    } else if (/^-[dVw]*w[dVw]*$/.test(a)) {
-      const rest = a.replace(/w/g, '');
+    } else if (WATCH_CLUSTER_RE.test(a)) {
+      const rest = a.replaceAll('w', '');
       if (rest === '-') args.splice(i, 1);
       else args[i] = rest;
       strippedWatch = true;
     } else {
-      const m = /^(-[dVw]+)w=(.*)$/.exec(a);
-      if (m !== null && !/^(?:false|0)$/i.test(m[2] ?? '')) {
-        const rest = (m[1] ?? '').replace(/w/g, '');
+      const m = WATCH_CLUSTER_EQ_RE.exec(a);
+      if (m !== null && !FALSY_BOOL_VAL_RE.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replaceAll('w', '');
         if (rest === '-') args.splice(i, 1);
         else args[i] = rest;
         strippedWatch = true;
@@ -198,7 +211,7 @@ function guardDockerComposeSubcmd(
     const ddIdx = args.indexOf('--', subStart);
     const preDd = ddIdx === -1 ? args.slice(subStart) : args.slice(subStart, ddIdx);
     const hasDetach = preDd.some(a =>
-      a === '-d' || a === '--detach' || a === '--detach=true' || (!a.startsWith('--') && /^-[a-zA-Z]*d[a-zA-Z]*$/.test(a)),
+      a === '-d' || a === '--detach' || a === '--detach=true' || (!a.startsWith('--') && DETACH_SHORT_RE.test(a)),
     );
     if (!hasDetach) {
       if (ddIdx !== -1) args.splice(ddIdx, 0, '-d');
@@ -226,7 +239,7 @@ function guardDockerComposeSubcmd(
     console.error(`\n   💡 AGENT HINT: 'docker compose ${composeSubCmd}' blocks or streams indefinitely. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
-  if (composeSubCmd === 'rm' && !postSubArgs.some(a => a === '--force' || /^-[a-zA-Z]*f[a-zA-Z]*$/.test(a))) {
+  if (composeSubCmd === 'rm' && !postSubArgs.some(a => a === '--force' || SHORT_FOLLOW_CLUSTER_RE.test(a))) {
     if (subDdIdx !== -1) args.splice(subDdIdx, 0, '-f');
     else args.push('-f');
     syncArgs();
@@ -244,9 +257,9 @@ function guardDockerPrune(
   preArgs: readonly string[],
   syncArgs: () => void,
 ): void {
-  const needsSubPrune = isDockerCmd && subCmd !== undefined && PRUNE_CATEGORIES.includes(subCmd) && secondSubPos === 'prune';
+  const needsSubPrune = isDockerCmd && subCmd !== undefined && PRUNE_CATEGORY_SET.has(subCmd) && secondSubPos === 'prune';
   const needsBuildxPrune = isBuildxPlugin && buildxSubCmd === 'prune';
-  if ((!needsSubPrune && !needsBuildxPrune) || preArgs.some(a => a === '--force' || /^-[a-zA-Z]*f[a-zA-Z]*$/.test(a))) return;
+  if ((!needsSubPrune && !needsBuildxPrune) || preArgs.some(a => a === '--force' || SHORT_FOLLOW_CLUSTER_RE.test(a))) return;
   const ddIdx = args.indexOf('--');
   if (ddIdx !== -1) args.splice(ddIdx, 0, '-f');
   else args.push('-f');
@@ -326,13 +339,13 @@ function guardNonInteractiveDockerSubcmds(
 export function dockerInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, args, payload } = ctx;
   const lowerCmd = cmdBasename.toLowerCase();
-  if (KUBECTL_CMDS.includes(lowerCmd)) {
+  if (KUBECTL_CMD_SET.has(lowerCmd)) {
     handleKubectlInterception(args, ctx);
     return;
   }
 
-  const isDockerCmd = DOCKER_CMDS.includes(lowerCmd);
-  const isComposeCmd = DOCKER_COMPOSE_CMDS.includes(lowerCmd);
+  const isDockerCmd = DOCKER_CMD_SET.has(lowerCmd);
+  const isComposeCmd = DOCKER_COMPOSE_CMD_SET.has(lowerCmd);
   if (!isDockerCmd && !isComposeCmd) return;
   if (isLeadingDockerHelp(args, isComposeCmd)) return;
 
@@ -346,10 +359,10 @@ export function dockerInterceptor(ctx: ExecutionContext): void {
     : (isComposeCmd ? firstInfo : { pos: [], idx: -1 });
   const composeSubCmd = composeInfo.pos[0];
   const buildxSubCmd = isBuildxPlugin
-    ? walkSubcommands(args, firstInfo.idx + 1, new Set(['--builder'])).pos[0]
+    ? walkSubcommands(args, firstInfo.idx + 1, BUILDX_VALUE_FLAG_SET).pos[0]
     : undefined;
-  const secondInfo = (isDockerCmd && subCmd !== undefined && (PRUNE_CATEGORIES.includes(subCmd) || subCmd === 'plugin'))
-    ? walkSubcommands(args, firstInfo.idx + 1, new Set())
+  const secondInfo = (isDockerCmd && subCmd !== undefined && (PRUNE_CATEGORY_SET.has(subCmd) || subCmd === 'plugin'))
+    ? walkSubcommands(args, firstInfo.idx + 1, EMPTY_DOCKER_FLAG_SET)
     : { pos: [], idx: -1 };
   const secondSubPos = secondInfo.pos[0];
   const containerSubCmd = subCmd === 'container' ? secondSubPos : undefined;
@@ -378,7 +391,7 @@ export function dockerInterceptor(ctx: ExecutionContext): void {
 
   const targetMultiSub = subCmd === 'container' ? containerSubCmd : subCmd;
   const targetMultiIdx = subCmd === 'container' ? secondInfo.idx : firstInfo.idx;
-  if (isDockerCmd && !isComposePlugin && !isBuildxPlugin && targetMultiSub !== undefined && MULTI_TARGET_SUBCMDS.includes(targetMultiSub)) {
+  if (isDockerCmd && !isComposePlugin && !isBuildxPlugin && targetMultiSub !== undefined && MULTI_TARGET_SUBCMD_SET.has(targetMultiSub)) {
     splitDockerMultiTargets(args, targetMultiSub, ctx, targetMultiIdx);
   }
 

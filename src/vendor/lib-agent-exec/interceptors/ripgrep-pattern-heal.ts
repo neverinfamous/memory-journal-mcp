@@ -1,11 +1,8 @@
 // @ts-nocheck
-import fs from 'node:fs';
-import path from 'node:path';
 import { RG_VALUE_FLAGS as RG_VALUE_FLAGS_LIST, convertToWindowsPath, extractLeadingShortFlags, findPatternExprIndex } from '../command-utils.js';
 import { type ExecutionContext } from './types.js';
 import {
   KNOWN_POSIX_ROOT_DIRS_REGEX,
-  existsOnDisk,
   hasBackslashRegexEscape,
   hasUnambiguousRegexMeta,
   hasUnmistakableStructuredPathPrefix,
@@ -13,6 +10,7 @@ import {
   isGlobPathArg,
   isLikelyDirectoryArg,
   isSecondExistingTargetOnly,
+  statPathKindOnDisk,
 } from './search-path-utils.js';
 
 const RG_VALUE_FLAGS = new Set<string>(RG_VALUE_FLAGS_LIST);
@@ -137,33 +135,36 @@ function isAnchoredDirectoryArg(arg: string): boolean {
     || KNOWN_POSIX_ROOT_DIRS_REGEX.test(arg);
 }
 
-function isConfirmedDirForFiles(arg: string, cwd?: string): boolean {
-  if (!isLikelyDirectoryArg(arg, cwd)) return false;
+function isConfirmedDirForFiles(arg: string, cwd?: string, kindCache?: Map<string, 'dir' | 'file' | 'none'>): boolean {
+  if (!isLikelyDirectoryArg(arg, cwd, kindCache)) return false;
   if (isAnchoredDirectoryArg(arg)) return true;
-  try {
-    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
-    if (!fs.existsSync(baseDir)) return true;
-    return fs.statSync(path.resolve(baseDir, arg), { throwIfNoEntry: false })?.isDirectory() === true;
-  } catch {
-    return false;
-  }
+  const cachedKind = kindCache !== undefined ? cachedStatKind(arg, cwd, kindCache) : statPathKindOnDisk(arg, cwd);
+  if (cachedKind !== 'none') return cachedKind === 'dir';
+  return statPathKindOnDisk('.', cwd, kindCache) === 'none';
 }
 
-export function isRipgrepPathLike(arg: string, cwd?: string): boolean {
-  if (isGlobPathArg(arg)) return true;
-  if (existsOnDisk(arg, cwd)) return true;
+function cachedStatKind(arg: string, cwd: string | undefined, kindCache: Map<string, 'dir' | 'file' | 'none'>): 'dir' | 'file' | 'none' {
+  return statPathKindOnDisk(arg, cwd, kindCache);
+}
+
+function isRipgrepPathLikeWithCache(arg: string, cwd: string | undefined, kindCache?: Map<string, 'dir' | 'file' | 'none'>): boolean {
+  if (isGlobPathArg(arg, cwd, kindCache)) return true;
+  if (statPathKindOnDisk(arg, cwd, kindCache) !== 'none') return true;
   if (hasUriOrNonDriveColon(arg) || /\s/.test(arg)) return false;
   if (hasUnmistakableStructuredPathPrefix(arg) && !hasUnambiguousRegexMeta(arg.replace(/[+[\]]/g, ''))) return true;
   if (hasUnambiguousRegexMeta(arg)) return false;
-  if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
+  if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg, cwd, kindCache)) return false;
   return arg === '.' || arg === '..'
     || arg.startsWith('./') || arg.startsWith('../')
     || arg.endsWith('/') || arg.endsWith('\\')
     || /^[a-zA-Z]:/.test(arg)
     || arg.startsWith('/mnt/')
     || (arg.startsWith('/') && arg.slice(1).includes('/'))
-    || /\.[a-zA-Z0-9_-]+$/.test(arg)
-    || isLikelyDirectoryArg(arg, cwd);
+    || /\.[a-zA-Z0-9_-]+$/.test(arg);
+}
+
+export function isRipgrepPathLike(arg: string, cwd?: string): boolean {
+  return isRipgrepPathLikeWithCache(arg, cwd);
 }
 
 function syncCommandArgs(ctx: ExecutionContext): void {
@@ -192,14 +193,15 @@ function swapRipgrepReversedArgs(
   hasPatternFlag: boolean,
   hasFiles: boolean,
   positionalArgs: string[],
+  kindCache: Map<string, 'dir' | 'file' | 'none'>,
 ): string[] {
   if (hasStdin || hasPatternFlag || hasFiles || positionalArgs.length !== 2) return positionalArgs;
   const first = positionalArgs[0];
   const second = positionalArgs[1];
   if (first === undefined || second === undefined) return positionalArgs;
   const cwd = resolveCtxCwd(ctx);
-  if (!isLikelyDirectoryArg(first, cwd) || isLikelyDirectoryArg(second, cwd)) return positionalArgs;
-  if (isSecondExistingTargetOnly(first, second, cwd)) return positionalArgs;
+  if (!isLikelyDirectoryArg(first, cwd, kindCache) || isLikelyDirectoryArg(second, cwd, kindCache)) return positionalArgs;
+  if (isSecondExistingTargetOnly(first, second, cwd, kindCache)) return positionalArgs;
   const posIndices = collectRgPositionalIndices(ctx.args);
   const idx0 = posIndices[0];
   const idx1 = posIndices[1];
@@ -215,12 +217,8 @@ function swapRipgrepReversedArgs(
 }
 
 function injectRipgrepFilesForGlobs(
-  ctx: ExecutionContext,
-  hasStdin: boolean,
-  hasPatternFlag: boolean,
-  hasFiles: boolean,
-  hasGlob: boolean,
-  positionalArgs: string[],
+  ctx: ExecutionContext, hasStdin: boolean, hasPatternFlag: boolean, hasFiles: boolean, hasGlob: boolean,
+  positionalArgs: string[], kindCache: Map<string, 'dir' | 'file' | 'none'>,
 ): string[] {
   if (hasStdin || hasPatternFlag || hasFiles || !hasGlob) return positionalArgs;
   const cwd = resolveCtxCwd(ctx);
@@ -231,7 +229,7 @@ function injectRipgrepFilesForGlobs(
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected 'rg' with glob flag but no search pattern. Auto-injecting '--files' and '.' to search filenames... (Frictionless Recovery)\x1b[0m`);
     return ['.'];
   }
-  const onlyConfirmedDirs = positionalArgs.every((arg) => isConfirmedDirForFiles(arg, cwd));
+  const onlyConfirmedDirs = positionalArgs.every((arg) => isConfirmedDirForFiles(arg, cwd, kindCache));
   if (positionalArgs.length === 1 && onlyConfirmedDirs) {
     ctx.args.unshift('--files');
     syncCommandArgs(ctx);
@@ -247,22 +245,27 @@ function injectRipgrepFilesForGlobs(
 }
 
 function recombineRipgrepPositionalPattern(
-  ctx: ExecutionContext,
-  hasPatternFlag: boolean,
-  hasFiles: boolean,
-  positionalArgs: string[],
+  ctx: ExecutionContext, hasPatternFlag: boolean, hasFiles: boolean,
+  positionalArgs: string[], kindCache: Map<string, 'dir' | 'file' | 'none'>,
 ): void {
   if (hasPatternFlag || hasFiles || positionalArgs.length <= 2) return;
   const lastArg = positionalArgs[positionalArgs.length - 1];
   const intermediateArgs = positionalArgs.slice(1, -1);
   const cwd = resolveCtxCwd(ctx);
-  if (lastArg === undefined || !isRipgrepPathLike(lastArg, cwd)) return;
-  if (intermediateArgs.some((arg) => isRipgrepPathLike(arg, cwd))) return;
+  if (lastArg === undefined || !isRipgrepPathLikeWithCache(lastArg, cwd, kindCache)) return;
+  if (intermediateArgs.some((arg) => isRipgrepPathLikeWithCache(arg, cwd, kindCache))) return;
   const patternParts = positionalArgs.slice(0, -1);
   const candidateIdxs = collectRgPositionalIndices(ctx.args).slice(0, patternParts.length);
   if (candidateIdxs.length !== patternParts.length) return;
   recombineIndexedPattern(ctx, candidateIdxs, patternParts);
 }
+
+const RG_SHORT_KV_RE = /^-[a-zA-Z0-9]+=/;
+const RG_SHORT_FLAG_RE = /^-[a-zA-Z0-9]+$/;
+const RG_LONG_FLAG_RE = /^--[a-zA-Z0-9-]+(?:=|$)/;
+const RG_SINGLE_HYPHEN_META_RE = /[|()[\]^$+{}]/;
+const RG_SINGLE_HYPHEN_ESC_RE = /\\[bBwWdDsS]/;
+const OUTER_QUOTE_WRAP_RE = /^(['"])(.*)\1$/;
 
 function collectNonFlagIndices(args: string[]): number[] {
   const nonFlagIndices: number[] = [];
@@ -270,19 +273,9 @@ function collectNonFlagIndices(args: string[]): number[] {
     const arg = args[i];
     if (arg === undefined) continue;
     if (arg === '--') break;
-    if (isRgSeparateValueFlag(arg)) {
-      i++;
-      continue;
-    }
+    if (isRgSeparateValueFlag(arg)) { i++; continue; }
     const shortPrefix = arg.startsWith('-') && !arg.startsWith('--') ? extractLeadingShortFlags('rg', arg) : arg;
-    if (
-      /^-[a-zA-Z0-9]+=/.test(arg) ||
-      shortPrefix.length < arg.length ||
-      /^-[a-zA-Z0-9]+$/.test(arg) ||
-      (arg.startsWith('--') && /^--[a-zA-Z0-9-]+(?:=|$)/.test(arg))
-    ) {
-      continue;
-    }
+    if (RG_SHORT_KV_RE.test(arg) || shortPrefix.length < arg.length || RG_SHORT_FLAG_RE.test(arg) || (arg.startsWith('--') && RG_LONG_FLAG_RE.test(arg))) continue;
     nonFlagIndices.push(i);
   }
   return nonFlagIndices;
@@ -292,26 +285,26 @@ function recombineIndexedPattern(ctx: ExecutionContext, candidateIdxs: number[],
   const combinedPattern = patternParts.join(' ');
   const firstIdx = candidateIdxs[0];
   const removeSet = new Set(candidateIdxs.slice(1));
-  ctx.args = ctx.args
-    .map((arg, idx) => (idx === firstIdx ? combinedPattern : arg))
-    .filter((_arg, idx) => !removeSet.has(idx));
+  ctx.args = ctx.args.map((arg, idx) => (idx === firstIdx ? combinedPattern : arg)).filter((_arg, idx) => !removeSet.has(idx));
   syncCommandArgs(ctx);
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected unquoted multi-word search pattern in 'rg'. Recombining into a single pattern... (Frictionless Recovery)\x1b[0m`);
 }
 
-function recombineRipgrepNonFlagPattern(ctx: ExecutionContext, hasPatternFlag: boolean, hasFiles: boolean): void {
+function recombineRipgrepNonFlagPattern(
+  ctx: ExecutionContext, hasPatternFlag: boolean, hasFiles: boolean, kindCache: Map<string, 'dir' | 'file' | 'none'>,
+): void {
   if (hasPatternFlag || hasFiles) return;
   const nonFlagIndices = collectNonFlagIndices(ctx.args);
   const lastPosIdx = nonFlagIndices.length > 0 ? nonFlagIndices[nonFlagIndices.length - 1] : undefined;
   if (lastPosIdx === undefined) return;
   const lastArg = ctx.args[lastPosIdx];
   const cwd = resolveCtxCwd(ctx);
-  if (lastArg === undefined || lastArg.startsWith('-') || !isRipgrepPathLike(lastArg, cwd)) return;
+  if (lastArg === undefined || lastArg.startsWith('-') || !isRipgrepPathLikeWithCache(lastArg, cwd, kindCache)) return;
   const candidateIdxs = nonFlagIndices.filter((idx) => idx < lastPosIdx);
   if (candidateIdxs.length < 2) return;
   const patternParts = candidateIdxs.map((idx) => ctx.args[idx]);
   const intermediateParts = patternParts.slice(1);
-  if (intermediateParts.some((arg) => arg !== undefined && isRipgrepPathLike(arg, cwd))) return;
+  if (intermediateParts.some((arg) => arg !== undefined && isRipgrepPathLikeWithCache(arg, cwd, kindCache))) return;
   const concreteParts = patternParts.filter((arg): arg is string => arg !== undefined);
   if (concreteParts.length !== patternParts.length) return;
   if (concreteParts[0]?.startsWith('-') === true) return;
@@ -319,7 +312,7 @@ function recombineRipgrepNonFlagPattern(ctx: ExecutionContext, hasPatternFlag: b
 }
 
 function unquoteArg(arg: string): string {
-  return arg.replace(/^(['"])(.*)\1$/, '$2');
+  return arg.replace(OUTER_QUOTE_WRAP_RE, '$2');
 }
 
 function listNonFlagArgs(args: string[]): string[] {
@@ -327,56 +320,36 @@ function listNonFlagArgs(args: string[]): string[] {
   for (let idx = 0; idx < args.length; idx++) {
     const arg = args[idx];
     if (arg === undefined) continue;
-    if (arg === '--') {
-      result.push(...args.slice(idx + 1));
-      break;
-    }
-    if (isRgSeparateValueFlag(arg)) {
-      idx++;
-      continue;
-    }
-    if (arg.startsWith('-')) continue;
-    result.push(arg);
+    if (arg === '--') { result.push(...args.slice(idx + 1)); break; }
+    if (isRgSeparateValueFlag(arg)) { idx++; continue; }
+    if (!arg.startsWith('-')) result.push(arg);
   }
   return result;
 }
 
-function scanForHyphenPatternIndex(
-  args: string[],
-  allNonFlagArePaths: boolean,
-  nonFlagCount: number,
-): number {
+function scanForHyphenPatternIndex(args: string[], allNonFlagArePaths: boolean, nonFlagCount: number): number {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined || arg === '--') break;
-    if (isRgSeparateValueFlag(arg)) {
-      i++;
-      continue;
-    }
+    if (isRgSeparateValueFlag(arg)) { i++; continue; }
     const unquoted = unquoteArg(arg);
     if (unquoted !== arg && unquoted.startsWith('-')) return i;
     const baseFlag = unquoted.split('=')[0]?.toLowerCase() ?? '';
-    const isUnknownLongFlag = unquoted.startsWith('--')
-      && unquoted.length > 2
-      && !RG_VALUE_FLAGS.has(baseFlag)
-      && !KNOWN_RG_LONG_FLAGS.has(baseFlag);
-    const isSingleHyphenRegex = !unquoted.startsWith('--')
-      && unquoted.startsWith('-')
-      && unquoted.length > 2
-      && !RG_VALUE_FLAGS.has(unquoted)
-      && (/[|()[\]^$+{}]/.test(unquoted) || /\\[bBwWdDsS]/.test(unquoted));
+    const isUnknownLongFlag = unquoted.startsWith('--') && unquoted.length > 2 && !RG_VALUE_FLAGS.has(baseFlag) && !KNOWN_RG_LONG_FLAGS.has(baseFlag);
+    const isSingleHyphenRegex = !unquoted.startsWith('--') && unquoted.startsWith('-') && unquoted.length > 2
+      && !RG_VALUE_FLAGS.has(unquoted) && (RG_SINGLE_HYPHEN_META_RE.test(unquoted) || RG_SINGLE_HYPHEN_ESC_RE.test(unquoted));
     if (unquoted.startsWith('\\-') || ((isUnknownLongFlag || isSingleHyphenRegex) && (allNonFlagArePaths || nonFlagCount === 0))) return i;
   }
   return -1;
 }
 
-function resolveHyphenCandidate(ctx: ExecutionContext, patternIdx: number): number {
+function resolveHyphenCandidate(ctx: ExecutionContext, patternIdx: number, kindCache: Map<string, 'dir' | 'file' | 'none'>): number {
   const current = patternIdx !== -1 ? ctx.args[patternIdx] : undefined;
   const currentUnquoted = current !== undefined ? unquoteArg(current) : '';
   if (patternIdx !== -1 && currentUnquoted.startsWith('-')) return patternIdx;
   const nonFlagArgs = listNonFlagArgs(ctx.args);
   const cwd = resolveCtxCwd(ctx);
-  const allNonFlagArePaths = nonFlagArgs.length > 0 && nonFlagArgs.every((arg) => isRipgrepPathLike(arg, cwd));
+  const allNonFlagArePaths = nonFlagArgs.length > 0 && nonFlagArgs.every((arg) => isRipgrepPathLikeWithCache(arg, cwd, kindCache));
   return scanForHyphenPatternIndex(ctx.args, allNonFlagArePaths, nonFlagArgs.length);
 }
 
@@ -395,10 +368,12 @@ function applyRipgrepHyphenSeparator(ctx: ExecutionContext, candidateIdx: number
   console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected hyphen-prefixed search pattern in 'rg'. Injecting '${sep}' separator to prevent flag parsing errors... (Frictionless Recovery)\x1b[0m`);
 }
 
-function healRipgrepHyphenPatterns(ctx: ExecutionContext, hasPatternFlag: boolean, hasHelpOrVersion: boolean): void {
+function healRipgrepHyphenPatterns(
+  ctx: ExecutionContext, hasPatternFlag: boolean, hasHelpOrVersion: boolean, kindCache: Map<string, 'dir' | 'file' | 'none'>,
+): void {
   if (hasHelpOrVersion || hasPatternFlag || ctx.args.includes('--')) return;
   const patternIdx = findPatternExprIndex(ctx.cmdBasename, ctx.args);
-  applyRipgrepHyphenSeparator(ctx, resolveHyphenCandidate(ctx, patternIdx));
+  applyRipgrepHyphenSeparator(ctx, resolveHyphenCandidate(ctx, patternIdx, kindCache));
 }
 
 function hasRipgrepMetaFlag(args: readonly string[]): boolean {
@@ -412,14 +387,16 @@ function hasRipgrepMetaFlag(args: readonly string[]): boolean {
 }
 
 export function healRipgrepPatternShape(ctx: ExecutionContext, hasStdin: boolean, flags: RipgrepSearchFlags): boolean {
-  const swapped = swapRipgrepReversedArgs(ctx, hasStdin, flags.hasPatternFlag, flags.hasFiles, flags.positionalArgs);
+  const kindCache = new Map<string, 'dir' | 'file' | 'none'>();
+  const swapped = swapRipgrepReversedArgs(ctx, hasStdin, flags.hasPatternFlag, flags.hasFiles, flags.positionalArgs, kindCache);
+  const preGlobLen = ctx.args.length;
   const positionalArgs = injectRipgrepFilesForGlobs(
-    ctx, hasStdin, flags.hasPatternFlag, flags.hasFiles, flags.hasGlob, swapped,
+    ctx, hasStdin, flags.hasPatternFlag, flags.hasFiles, flags.hasGlob, swapped, kindCache,
   );
-  const hasFiles = scanPreDoubleDashFlags(ctx.args).hasFiles;
-  recombineRipgrepPositionalPattern(ctx, flags.hasPatternFlag, hasFiles, positionalArgs);
-  recombineRipgrepNonFlagPattern(ctx, flags.hasPatternFlag, hasFiles);
+  const hasFiles = flags.hasFiles || (ctx.args.length !== preGlobLen && scanPreDoubleDashFlags(ctx.args).hasFiles);
+  recombineRipgrepPositionalPattern(ctx, flags.hasPatternFlag, hasFiles, positionalArgs, kindCache);
+  recombineRipgrepNonFlagPattern(ctx, flags.hasPatternFlag, hasFiles, kindCache);
   const hasHelpOrVersion = hasRipgrepMetaFlag(ctx.args);
-  healRipgrepHyphenPatterns(ctx, flags.hasPatternFlag, hasHelpOrVersion);
+  healRipgrepHyphenPatterns(ctx, flags.hasPatternFlag, hasHelpOrVersion, kindCache);
   return hasHelpOrVersion;
 }

@@ -258,6 +258,14 @@ export function mergeFinalEnvironment(
       .map(([k]) => (process.platform === 'win32' ? k.toUpperCase() : k))
   );
 
+  let upperKeyMap: Map<string, string> | undefined;
+  if (process.platform === 'win32') {
+    upperKeyMap = new Map<string, string>();
+    for (const key of Object.keys(finalEnv)) {
+      upperKeyMap.set(key.toUpperCase(), key);
+    }
+  }
+
   for (const [k, v] of Object.entries(envOverrides)) {
     const normalized = process.platform === 'win32' ? k.toUpperCase() : k;
     const isExplicitPayload = explicitKeys.has(normalized) && !IMMUTABLE_ENV_OVERRIDES.has(k.toUpperCase());
@@ -265,9 +273,13 @@ export function mergeFinalEnvironment(
       continue;
     }
     let targetKey = k;
-    if (process.platform === 'win32') {
-      const existingKey = Object.keys(finalEnv).find(key => key.toUpperCase() === k.toUpperCase());
-      if (existingKey) targetKey = existingKey;
+    if (upperKeyMap !== undefined) {
+      const existingKey = upperKeyMap.get(normalized);
+      if (existingKey !== undefined) {
+        targetKey = existingKey;
+      } else {
+        upperKeyMap.set(normalized, k);
+      }
     }
     finalEnv[targetKey] = v;
   }

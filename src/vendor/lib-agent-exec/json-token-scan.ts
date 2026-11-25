@@ -27,6 +27,8 @@ function unescapeStructuralPrefix(source: string): string {
     .replace(/\[\s*\\"/g, '["');
 }
 
+const VALID_JSON_ESCAPES = new Set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't']);
+
 function appendOutsideString(state: ScanState, ch: string): void {
   if (ch === '"') state.inString = true;
   state.out += ch;
@@ -34,27 +36,26 @@ function appendOutsideString(state: ScanState, ch: string): void {
 
 function appendEscapedChar(state: ScanState, source: string, ch: string): void {
   state.isEscaped = false;
-  if (['"', '\\', '/', 'b', 'f', 'n', 'r', 't'].includes(ch)) {
-    state.out += ch;
+  if (VALID_JSON_ESCAPES.has(ch)) {
+    state.out += '\\' + ch;
     return;
   }
   if (ch === 'u' && /^[0-9a-fA-F]{4}/.test(source.slice(state.index + 1, state.index + 5))) {
-    state.out += ch;
+    state.out += '\\u';
     return;
   }
   if (ch === 'x' && /^[0-9a-fA-F]{2}/.test(source.slice(state.index + 1, state.index + 3))) {
     const hex = source.slice(state.index + 1, state.index + 3);
-    state.out = state.out.slice(0, -1) + (hex === '00' ? '\\\\x00' : `\\u00${hex}`);
+    state.out += hex === '00' ? '\\\\x00' : `\\u00${hex}`;
     state.index += 2;
     return;
   }
-  state.out = state.out.slice(0, -1) + '\\\\' + ch;
+  state.out += '\\\\' + ch;
 }
 
 function appendPlainStringChar(state: ScanState, source: string, ch: string): void {
   if (ch === '\\') {
     state.isEscaped = true;
-    state.out += ch;
     return;
   }
   if (ch === '"') {
@@ -123,7 +124,7 @@ function scanTokenAwareJson(source: string): string {
     appendPlainStringChar(state, source, ch);
   }
   if (state.isEscaped) {
-    state.out = state.out.slice(0, -1) + '\\\\';
+    state.out += '\\\\';
   }
   return stripTrailingCommasOutsideStrings(state.out);
 }
@@ -131,7 +132,10 @@ function scanTokenAwareJson(source: string): string {
 export function tryTokenAwareJson(trimmed: string): unknown {
   try {
     return tryParse(scanTokenAwareJson(unescapeStructuralPrefix(trimmed)));
-  } catch {
+  } catch (err: unknown) {
+    if (!(err instanceof SyntaxError)) {
+      console.error(`⚠️ Token-aware JSON heal error: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return undefined;
   }
 }

@@ -17,62 +17,67 @@ const SHELL_INTERPRETERS = new Set([
   'cmd', 'cmd.exe', 'bat',
 ]);
 
-export function isJavaScriptOrTypeScriptCode(code: string): boolean {
+const JS_ESM_IMPORT_RE = /^import(?:\s*\(|\s*\.meta\b|\s+(?:type\s+)?(?:['"*{]|[A-Za-z_$][\w$]*(?:\s*,\s*(?:\*\s+as\s+[A-Za-z_$][\w$]*|\{[^}]*\}))?\s+from\s+['"]))/;
+const JS_DIRECT_STMT_RE = /^(?:export\s|console\.(?:log|error|warn|info|dir|trace)\b|const\s|let\s|var\s|async\s+function|function\*?\s|process\.(?:exit|env|cwd|version|argv)\b|require\s*\()/;
+const JS_CONSTRUCT_RE = /\b(?:console\.(?:log|error|warn|info|dir|trace)\s*\(|require\s*\(['"][^'"]+['"]\)|JSON\.(?:stringify|parse)\s*\(|process\.(?:exit|env|cwd|version)\b)/g;
+const SHELL_COMMANDS_RE = /^(?:echo|cat|rm|mkdir|touch|cd|ls|dir|git|apt|apt-get|pnpm|npm|yarn|bun|node|python|python3|which|where|curl|wget|chmod|chown|source|rg|grep|egrep|fgrep|find|sed|awk|gawk|jq|printf|docker|gh|kubectl)\s(?![ \t]*=)|^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=)/;
+const SHELL_TS_INDICATOR_RE = /\b(?:type|interface|enum|class)\s+[A-Z]/;
+const SHELL_OPERATORS_RE = /(?:&&|\|\||(?<![|<>=!])\|(?![|=])|(?:^|\s)\d*>{1,2}\s+\S)/;
+const PYTHON_CODE_RE = /^(?:import\s+[a-zA-Z0-9_]+|from\s+[a-zA-Z0-9_]+\s+import|def\s+[a-zA-Z0-9_]+\s*\(|class\s+[a-zA-Z0-9_]+[:(]|print\s*\()/;
+const PS_VAR_REGEX = /\$(?:PSScriptRoot|PSVersionTable|LASTEXITCODE|ErrorActionPreference|ProgressPreference)\b/gi;
+type CodeSpan = { start: number; end: number };
+
+export function isJavaScriptOrTypeScriptCode(code: string, precomputedSpans?: readonly CodeSpan[]): boolean {
   const trimmed = code.trim();
-  const isJsImport = /^import(?:\s*\(|\s*\.meta\b|\s+(?:type\s+)?(?:['"*{]|[A-Za-z_$][\w$]*(?:\s*,\s*(?:\*\s+as\s+[A-Za-z_$][\w$]*|\{[^}]*\}))?\s+from\s+['"]))/.test(trimmed);
-  // Direct statements at the top (keep bare Python `import mod` distinct from JS ESM `import` syntax)
-  if (isJsImport || /^(?:export\s|console\.(?:log|error|warn|info|dir|trace)\b|const\s|let\s|var\s|async\s+function|function\*?\s|process\.(?:exit|env|cwd|version|argv)\b|require\s*\()/.test(trimmed)) {
-    return true;
-  }
-  // Characteristic JS constructs outside strings/comments
-  const spans = buildNonCodeSpans(code, { includeHashComments: true });
-  const jsRe = /\b(?:console\.(?:log|error|warn|info|dir|trace)\s*\(|require\s*\(['"][^'"]+['"]\)|JSON\.(?:stringify|parse)\s*\(|process\.(?:exit|env|cwd|version)\b)/g;
-  for (const m of code.matchAll(jsRe)) {
+  if (JS_ESM_IMPORT_RE.test(trimmed) || JS_DIRECT_STMT_RE.test(trimmed)) return true;
+  const spans = precomputedSpans ?? buildNonCodeSpans(code, { includeHashComments: true });
+  JS_CONSTRUCT_RE.lastIndex = 0;
+  for (const m of code.matchAll(JS_CONSTRUCT_RE)) {
     if (m.index !== undefined && !isIndexInSpans(spans, m.index)) return true;
   }
   return false;
 }
 
-export function isShellCommandScript(code: string): boolean {
+function classifyShellPsAndJs(code: string): { isShell: boolean; isPs: boolean; isJs: boolean } {
   const trimmed = code.trim();
-  const spans = buildNonCodeSpans(code, { includeHashComments: false, includeSlashComments: true, includeRegexLiterals: false });
+  // [INTENT]: One shared span scan covers JS constructs and PS cmdlets/vars alongside active-line extraction.
+  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: true, includeRegexLiterals: false });
   const activeLines: string[] = [];
   let offset = 0;
   for (const rawLine of code.split('\n')) {
-    const lineLen = rawLine.length;
     const trimmedLine = rawLine.trim();
     if (trimmedLine.length > 0 && !trimmedLine.startsWith('//') && !trimmedLine.startsWith('/*')) {
       const firstNonWs = offset + rawLine.search(/\S/);
-      if (!isIndexInSpans(spans, firstNonWs)) activeLines.push(trimmedLine);
+      if (rawLine[rawLine.search(/\S/)] === '#' || !isIndexInSpans(spans, firstNonWs)) activeLines.push(trimmedLine);
     }
-    offset += lineLen + 1;
+    offset += rawLine.length + 1;
   }
-  const shellCommands = /^(?:echo|cat|rm|mkdir|touch|cd|ls|dir|git|apt|apt-get|pnpm|npm|yarn|bun|node|python|python3|which|where|curl|wget|chmod|chown|source|rg|grep|egrep|fgrep|find|sed|awk|gawk|jq|printf|docker|gh|kubectl)\s(?![ \t]*=)|^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=)/;
-  if (activeLines.some(line => shellCommands.test(line))) return true;
-  if (isJavaScriptOrTypeScriptCode(code) || isPythonCode(code) || isPowerShellCode(code)) return false;
-  if (/\b(?:type|interface|enum|class)\s+[A-Z]/.test(trimmed) || /=>/.test(trimmed)) return false;
-  const shellOperators = /(?:&&|\|\||(?<![|<>=!])\|(?![|=])|(?:^|\s)\d*>{1,2}\s+\S)/;
-  return activeLines.some(line => !line.startsWith('#') && shellOperators.test(line));
+  if (activeLines.some(line => SHELL_COMMANDS_RE.test(line))) return { isShell: true, isPs: false, isJs: false };
+  const isPs = isPowerShellCode(code, spans);
+  const isJs = isJavaScriptOrTypeScriptCode(code, spans);
+  if (isJs || isPythonCode(code) || isPs) return { isShell: false, isPs, isJs };
+  if (SHELL_TS_INDICATOR_RE.test(trimmed) || trimmed.includes('=>')) return { isShell: false, isPs: false, isJs: false };
+  return { isShell: activeLines.some(line => !line.startsWith('#') && SHELL_OPERATORS_RE.test(line)), isPs: false, isJs: false };
+}
+
+export function isShellCommandScript(code: string): boolean {
+  return classifyShellPsAndJs(code).isShell;
 }
 
 export function isPythonCode(code: string): boolean {
-  const trimmed = code.trim();
-  if (/^(?:import\s+[a-zA-Z0-9_]+|from\s+[a-zA-Z0-9_]+\s+import|def\s+[a-zA-Z0-9_]+\s*\(|class\s+[a-zA-Z0-9_]+[:(]|print\s*\()/.test(trimmed)) {
-    return true;
-  }
-  return false;
+  return PYTHON_CODE_RE.test(code.trim());
 }
 
 const PS_CMDLET_REGEX = /(?:^|[;\n|&({])[ \t]*(?:Get|Set|New|Remove|Start|Stop|Restart|Select|Test|Invoke|Clear|Copy|Move|Write|Add|Enter|Exit|Find|Format|Measure|Read|Reset|Resume|Search|Show|Split|Switch|Wait)-(?:[A-Za-z]+)\b/g;
 
-export function isPowerShellCode(code: string): boolean {
-  const spans = buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: true, includeRegexLiterals: false });
+export function isPowerShellCode(code: string, precomputedSpans?: readonly CodeSpan[]): boolean {
+  const spans = precomputedSpans ?? buildNonCodeSpans(code, { includeHashComments: true, includeSlashComments: true, includeRegexLiterals: false });
   PS_CMDLET_REGEX.lastIndex = 0;
   for (const m of code.matchAll(PS_CMDLET_REGEX)) {
     if (m.index !== undefined && !isIndexInSpans(spans, m.index)) return true;
   }
-  const psVarRegex = /\$(?:PSScriptRoot|PSVersionTable|LASTEXITCODE|ErrorActionPreference|ProgressPreference)\b/gi;
-  for (const m of code.matchAll(psVarRegex)) {
+  PS_VAR_REGEX.lastIndex = 0;
+  for (const m of code.matchAll(PS_VAR_REGEX)) {
     if (m.index !== undefined && !isIndexInSpans(spans, m.index)) return true;
   }
   return false;
@@ -112,7 +117,7 @@ function findStaticImportEnd(code: string, start: number): number | null {
   if (start > 0 && !/[\s;]/.test(prev)) return null;
   const nextCh = code[start + 6] ?? '';
   if (!/[\s{'"*]/.test(nextCh)) return null;
-  const trimmedAfter = code.slice(start + 6).trimStart();
+  const trimmedAfter = code.slice(start + 6, start + 38).trimStart();
   if (trimmedAfter.startsWith('(') || trimmedAfter.startsWith('.')) return null;
 
   const scan = createCodeScanState();
@@ -128,7 +133,7 @@ function findStaticImportEnd(code: string, start: number): number | null {
       if (inSpec && !scan.inSingle && !scan.inDouble) { sawSpec = true; inSpec = false; }
       j = skip;
       if (wasLineComment && !scan.inLineComment && code[j] === '\n' && brace === 0 && paren === 0 && bracket === 0 && sawSpec) {
-        if (!/^(?:with|assert)\s*\{/.test(code.slice(j + 1).trimStart())) return j;
+        if (!/^(?:with|assert)\s*\{/.test(code.slice(j + 1, j + 32).trimStart())) return j;
       }
       continue;
     }
@@ -141,7 +146,7 @@ function findStaticImportEnd(code: string, start: number): number | null {
     else if (ch === ']' && bracket > 0) bracket--;
     if (brace === 0 && paren === 0 && bracket === 0 && sawSpec) {
       if (ch === ';') return j + 1;
-      if (ch === '\n' && !/^(?:with|assert)\s*\{/.test(code.slice(j + 1).trimStart())) return j;
+      if (ch === '\n' && !/^(?:with|assert)\s*\{/.test(code.slice(j + 1, j + 32).trimStart())) return j;
     }
   }
   return sawSpec ? code.length : null;
@@ -153,9 +158,19 @@ export function wrapCodeInAsyncIife(code: string): string {
   const bodyParts: string[] = [];
   let cursor = 0;
   let braceDepth = 0;
+  let spanIdx = 0;
 
   for (let i = 0; i < code.length; i++) {
-    if (isIndexInSpans(spans, i)) continue;
+    while (spanIdx < spans.length) {
+      const span = spans[spanIdx];
+      if (span === undefined || i < span.end) break;
+      spanIdx++;
+    }
+    const activeSpan = spans[spanIdx];
+    if (activeSpan !== undefined && i >= activeSpan.start && i < activeSpan.end) {
+      i = activeSpan.end - 1;
+      continue;
+    }
     const ch = code[i];
     if (ch === '{') { braceDepth++; continue; }
     if (ch === '}') { if (braceDepth > 0) braceDepth--; continue; }
@@ -368,29 +383,32 @@ export function resolveEvalExecutionTarget(
   const isShell = SHELL_INTERPRETERS.has(currentInterp);
 
   if (isShell) {
-    if (!isShellCommandScript(p.code) && isPowerShellCode(p.code) && (p.target === 'wsl2' || currentInterp === 'bash' || currentInterp === 'sh')) {
-      const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
-      effectiveInterpreter = 'pwsh';
-      p.interpreter = 'pwsh';
-      p.target = 'windows';
-      console.error(`\n   💡 AGENT HINT: PowerShell cmdlet/code detected in eval payload with shell interpreter '${orig}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'pwsh' and target to 'windows'... (Frictionless Recovery)\x1b[0m`);
-    } else if (!isShellCommandScript(p.code) && !isPowerShellCode(p.code) && !(p.target !== 'wsl2' && isPwsh(p.interpreter ?? '')) && (isJavaScriptOrTypeScriptCode(p.code) || hasTopLevelReturn(p.code))) {
-      const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
-      const needsWindowsTarget = p.target === 'wsl2' && (/\bbetter-sqlite3\b|(?<![A-Za-z0-9_:])[a-zA-Z]:[/\\]/.test(p.code));
-      effectiveInterpreter = 'bun';
-      p.interpreter = 'bun';
-      if (needsWindowsTarget) {
+    const classified = classifyShellPsAndJs(p.code);
+    if (!classified.isShell) {
+      if (classified.isPs && (p.target === 'wsl2' || currentInterp === 'bash' || currentInterp === 'sh')) {
+        const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
+        effectiveInterpreter = 'pwsh';
+        p.interpreter = 'pwsh';
         p.target = 'windows';
+        console.error(`\n   💡 AGENT HINT: PowerShell cmdlet/code detected in eval payload with shell interpreter '${orig}'.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'pwsh' and target to 'windows'... (Frictionless Recovery)\x1b[0m`);
+      } else if (!classified.isPs && !(p.target !== 'wsl2' && isPwsh(p.interpreter ?? '')) && (classified.isJs || hasTopLevelReturn(p.code))) {
+        const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
+        const needsWindowsTarget = p.target === 'wsl2' && (/\bbetter-sqlite3\b|(?<![A-Za-z0-9_:])[a-zA-Z]:[/\\]/.test(p.code));
+        effectiveInterpreter = 'bun';
+        p.interpreter = 'bun';
+        if (needsWindowsTarget) {
+          p.target = 'windows';
+        }
+        console.error(`\n   💡 AGENT HINT: JavaScript/TypeScript code detected in eval payload with shell interpreter '${orig}'.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'bun'${needsWindowsTarget ? " and target to 'windows'" : ''}... (Frictionless Recovery)\x1b[0m`);
+      } else if (isPythonCode(p.code)) {
+        const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
+        effectiveInterpreter = 'python';
+        p.interpreter = 'python';
+        console.error(`\n   💡 AGENT HINT: Python code detected in eval payload with shell interpreter '${orig}'.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'python'... (Frictionless Recovery)\x1b[0m`);
       }
-      console.error(`\n   💡 AGENT HINT: JavaScript/TypeScript code detected in eval payload with shell interpreter '${orig}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'bun'${needsWindowsTarget ? " and target to 'windows'" : ''}... (Frictionless Recovery)\x1b[0m`);
-    } else if (!isShellCommandScript(p.code) && isPythonCode(p.code)) {
-      const orig = effectiveInterpreter ?? (p.target === 'wsl2' ? 'bash' : 'bun');
-      effectiveInterpreter = 'python';
-      p.interpreter = 'python';
-      console.error(`\n   💡 AGENT HINT: Python code detected in eval payload with shell interpreter '${orig}'.`);
-      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching interpreter to 'python'... (Frictionless Recovery)\x1b[0m`);
     }
   }
 

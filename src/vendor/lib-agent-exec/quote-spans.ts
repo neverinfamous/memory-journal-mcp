@@ -32,47 +32,27 @@ function looksLikeRegexStart(source: string, index: number): boolean {
   return /\b(?:return|throw|case|in|of|typeof|instanceof|void|delete|await|yield)$/.test(before);
 }
 
-function hasClosingRegexSlashOnLine(source: string, start: number): boolean {
-  let inClass = false;
-  for (let i = start; i < source.length; i++) {
-    const ch = source[i];
-    if (ch === '\n' || ch === '\r') return false;
-    if (ch === '\\') { i += 1; continue; }
-    if (ch === '[' && !inClass) { inClass = true; continue; }
-    if (ch === ']' && inClass) { inClass = false; continue; }
-    if (ch === '/' && !inClass) return true;
-  }
-  return false;
-}
-
-function closeRegexLiteral(source: string, index: number): number {
+function findClosingRegexSlashEnd(source: string, index: number): { end: number; failedEol: number } {
   let inClass = false;
   let i = index;
   while (i < source.length) {
     const ch = source[i];
-    if (ch === '\\') {
-      i += 2;
-      continue;
-    }
-    if (ch === '\n' || ch === '\r') return index;
-    if (ch === '[' && !inClass) {
-      inClass = true;
-      i += 1;
-      continue;
-    }
-    if (ch === ']' && inClass) {
-      inClass = false;
-      i += 1;
-      continue;
-    }
-    if (ch === '/' && !inClass) {
-      i += 1;
-      while (i < source.length && /[a-z]/i.test(source[i] ?? '')) i += 1;
-      return i;
-    }
+    if (ch === '\\') { i += 2; continue; }
+    if (ch === '\n' || ch === '\r') return { end: -1, failedEol: i };
+    if (ch === '[' && !inClass) { inClass = true; i += 1; continue; }
+    if (ch === ']' && inClass) { inClass = false; i += 1; continue; }
+    if (ch === '/' && !inClass) return { end: i, failedEol: -1 };
     i += 1;
   }
-  return index;
+  return { end: -1, failedEol: source.length };
+}
+
+function closeRegexLiteral(source: string, index: number): number {
+  const res = findClosingRegexSlashEnd(source, index);
+  if (res.end === -1) return index;
+  let i = res.end + 1;
+  while (i < source.length && /[a-z]/i.test(source[i] ?? '')) i += 1;
+  return i;
 }
 
 type TemplateFrame = { kind: 'template' } | { kind: 'expr'; depth: number };
@@ -144,6 +124,7 @@ export function buildNonCodeSpans(source: string, options: NonCodeSpanOptions = 
   const { includeHashComments = false, includeSlashComments = true, includeRegexLiterals = true } = options;
   const spans: Span[] = [];
   let index = 0;
+  let failedRegexEolOffset = -1;
   while (index < source.length) {
     const ch = source[index];
     if (includeSlashComments && ch === '/' && source[index + 1] === '/') {
@@ -166,14 +147,17 @@ export function buildNonCodeSpans(source: string, options: NonCodeSpanOptions = 
       spans.push({ start, end: index });
       continue;
     }
-    if (includeRegexLiterals && ch === '/' && source[index + 1] !== '/' && source[index + 1] !== '*' && looksLikeRegexStart(source, index)) {
+    if (includeRegexLiterals && ch === '/' && source[index + 1] !== '/' && source[index + 1] !== '*' && index > failedRegexEolOffset && looksLikeRegexStart(source, index)) {
       const start = index;
-      const end = closeRegexLiteral(source, index + 1);
-      if (end > index + 1) {
+      const regexCheck = findClosingRegexSlashEnd(source, index + 1);
+      if (regexCheck.end !== -1) {
+        let end = regexCheck.end + 1;
+        while (end < source.length && /[a-z]/i.test(source[end] ?? '')) end += 1;
         spans.push({ start, end });
         index = end;
         continue;
       }
+      failedRegexEolOffset = regexCheck.failedEol;
     }
     if (ch === "'" || ch === '"' || ch === '`') {
       const start = index;
@@ -200,12 +184,26 @@ function closeQuote(source: string, index: number, quote: string, options?: NonC
   return index;
 }
 
-export function isIndexInSpans(spans: readonly Span[], index: number): boolean {
-  for (const span of spans) {
-    if (index < span.start) return false;
-    if (index < span.end) return true;
+export function findSpanContaining(spans: readonly Span[], index: number): Span | undefined {
+  let lo = 0;
+  let hi = spans.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const span = spans[mid];
+    if (span === undefined) break;
+    if (index < span.start) {
+      hi = mid - 1;
+    } else if (index >= span.end) {
+      lo = mid + 1;
+    } else {
+      return span;
+    }
   }
-  return false;
+  return undefined;
+}
+
+export function isIndexInSpans(spans: readonly Span[], index: number): boolean {
+  return findSpanContaining(spans, index) !== undefined;
 }
 
 function extractReplaceOffset(args: readonly unknown[]): unknown {
@@ -219,10 +217,11 @@ export function replaceOutsideQuotes(
   pattern: RegExp,
   replacer: (match: string) => string,
   options?: NonCodeSpanOptions,
+  precomputedSpans?: readonly Span[] | null,
 ): string {
-  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
-  const globalPattern = new RegExp(pattern.source, flags);
-  const spans = buildNonCodeSpans(source, options);
+  const globalPattern = pattern.global ? pattern : new RegExp(pattern.source, `${pattern.flags}g`);
+  globalPattern.lastIndex = 0;
+  const spans = precomputedSpans ?? buildNonCodeSpans(source, options);
   return source.replace(globalPattern, (match: string, ...args: unknown[]) => {
     const offset = extractReplaceOffset(args);
     if (typeof offset === 'number' && isIndexInSpans(spans, offset)) return match;
@@ -238,6 +237,7 @@ export interface CodeScanState {
   inBlockComment: boolean;
   inRegex: boolean;
   inRegexClass: boolean;
+  failedRegexEolOffset: number;
   templateExprDepths: number[];
 }
 
@@ -250,6 +250,7 @@ export function createCodeScanState(): CodeScanState {
     inBlockComment: false,
     inRegex: false,
     inRegexClass: false,
+    failedRegexEolOffset: -1,
     templateExprDepths: [],
   };
 }
@@ -307,7 +308,11 @@ export function stepCodeScanState(code: string, i: number, state: CodeScanState)
   }
   if (ch === '/' && next === '/') { state.inLineComment = true; return i + 1; }
   if (ch === '/' && next === '*') { state.inBlockComment = true; return i + 1; }
-  if (ch === '/' && looksLikeRegexStart(code, i) && hasClosingRegexSlashOnLine(code, i + 1)) { state.inRegex = true; return i; }
+  if (ch === '/' && i > state.failedRegexEolOffset && looksLikeRegexStart(code, i)) {
+    const regexCheck = findClosingRegexSlashEnd(code, i + 1);
+    if (regexCheck.end !== -1) return regexCheck.end;
+    state.failedRegexEolOffset = regexCheck.failedEol;
+  }
   if (ch === "'") { state.inSingle = true; return i; }
   if (ch === '"') { state.inDouble = true; return i; }
   if (ch === '`') { state.inBacktick = true; return i; }

@@ -105,6 +105,9 @@ function hasPositionalTargetPaths(args: readonly string[], valueFlags: ReadonlyS
   return requireCodeExt ? matchedCount > 0 : false;
 }
 
+const EMPTY_FLAG_SET: ReadonlySet<string> = new Set();
+const MNT_DRIVE_EXACT_RE = /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/i;
+
 /** [INTENT]: Classify whether a command requires per-repo validation serialization or can run lock-free. */
 export function classifyValidationCommand(cmd: string, args: readonly string[]): ValidationClassification | null {
   const unwrapped = unwrapRunnerCommand(cmd, args);
@@ -115,7 +118,7 @@ export function classifyValidationCommand(cmd: string, args: readonly string[]):
   if (lowerTool === 'playwright' || /^pretest:e2e$|^test:e2e(?::.*)?$|^test-e2e(?:-.*)?$/.test(lowerTool)) return { kind: 'playwright', label: tool };
   if (lowerTool === 'tsc') return rest.some((a) => a === '-b' || a === '--build' || a.startsWith('--build=')) ? { kind: 'build', label: 'tsc -b' } : { kind: 'typecheck', label: 'tsc' };
   if (lowerTool === 'tsup' || lowerTool === 'esbuild') return { kind: 'build', label: lowerTool };
-  if (lowerTool === 'vite' || lowerTool === 'next') return rest[skipLeadingFlags(rest, 0, new Set())] === 'build' ? { kind: 'build', label: `${lowerTool} build` } : null;
+  if (lowerTool === 'vite' || lowerTool === 'next') return rest[skipLeadingFlags(rest, 0, EMPTY_FLAG_SET)] === 'build' ? { kind: 'build', label: `${lowerTool} build` } : null;
   if (lowerTool === 'eslint') return hasPositionalTargetPaths(rest, ESLINT_VALUE_FLAGS, true) ? null : { kind: 'full-lint', label: 'eslint' };
   if (lowerTool === 'bun-test') return hasPositionalTargetPaths(rest, TEST_VALUE_FLAGS, false) ? null : { kind: 'full-test', label: 'bun test' };
   if (lowerTool === 'vitest') {
@@ -135,17 +138,15 @@ export function classifyValidationCommand(cmd: string, args: readonly string[]):
 
 /** [INTENT]: Derive a deterministic, case-normalized SHA-256 scope key for a project working directory. */
 export function resolveValidationScopeKey(projectDir: string): { scopeKey: string; normalizedDir: string } {
-  if (process.platform === 'win32' && ((projectDir.startsWith('/') && !/^\/mnt\/[a-zA-Z](?:\/|$)/i.test(projectDir)) || projectDir === '~' || projectDir.startsWith('~/'))) {
+  const mntMatch = process.platform === 'win32' ? MNT_DRIVE_EXACT_RE.exec(projectDir) : null;
+  if (process.platform === 'win32' && ((projectDir.startsWith('/') && mntMatch === null) || projectDir === '~' || projectDir.startsWith('~/'))) {
     let normPosix = path.posix.normalize(projectDir);
     while (normPosix.length > 1 && normPosix.endsWith('/')) normPosix = normPosix.slice(0, -1);
     return { scopeKey: crypto.createHash('sha256').update(normPosix).digest('hex').slice(0, 16), normalizedDir: normPosix };
   }
   let hostTarget = projectDir;
-  if (process.platform === 'win32' && /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/i.test(projectDir)) {
-    const m = /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/i.exec(projectDir);
-    if (m?.[1] !== undefined) {
-      hostTarget = `${m[1].toUpperCase()}:\\${(m[2] ?? '').replace(/\//g, '\\')}`;
-    }
+  if (mntMatch?.[1] !== undefined) {
+    hostTarget = `${mntMatch[1].toUpperCase()}:\\${(mntMatch[2] ?? '').replace(/\//g, '\\')}`;
   }
   let resolved: string;
   try { resolved = fs.realpathSync.native(hostTarget); } catch { resolved = path.resolve(hostTarget); }
@@ -176,19 +177,30 @@ function parseLockRecord(rawText: string): ValidationLockRecord | null {
   }
 }
 
-function isLockRecordStale(lockPath: string, staleTtlMs: number, isPidAliveFn: (pid: number) => boolean): boolean {
+function isIgnorableLockFsError(err: unknown): boolean {
+  const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+  return code === 'ENOENT' || code === 'ENOTEMPTY' || code === 'EBUSY';
+}
+
+function probeLockState(lockPath: string, staleTtlMs: number, isPidAliveFn: (pid: number) => boolean): 'missing' | 'stale' | 'active' {
   const stat = fs.statSync(lockPath, { throwIfNoEntry: false });
-  if (stat === undefined) return false;
+  if (stat === undefined) return 'missing';
   let record: ValidationLockRecord | null;
   try {
     record = parseLockRecord(fs.readFileSync(lockPath, 'utf8'));
-  } catch {
-    return false;
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code === 'ENOENT') return 'missing';
+    if (!isIgnorableLockFsError(err)) {
+      console.error(`⚠️ Validation lock read error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return 'active';
   }
   const now = Date.now();
-  return record === null
+  const isStale = record === null
     ? now - stat.mtimeMs > CORRUPT_LOCK_GRACE_MS
     : !isPidAliveFn(record.pid) || now - record.acquiredAt > staleTtlMs;
+  return isStale ? 'stale' : 'active';
 }
 
 function pruneStaleReclaimDir(reclaimDir: string): void {
@@ -196,34 +208,52 @@ function pruneStaleReclaimDir(reclaimDir: string): void {
   if (rStat === undefined || Date.now() - rStat.mtimeMs <= 5000) return;
   try {
     fs.rmdirSync(reclaimDir);
-  } catch { /* another waiter recovered */ }
+  } catch (err: unknown) {
+    if (!isIgnorableLockFsError(err)) {
+      console.error(`⚠️ Reclaim mutex prune error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }
 
 function tryAcquireReclaimMutex(reclaimDir: string): boolean {
   try {
     fs.mkdirSync(reclaimDir, { mode: 0o700 });
     return true;
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== undefined && code !== 'EEXIST') {
+      console.error(`⚠️ Reclaim mutex error: ${err instanceof Error ? err.message : String(err)}`);
+    }
     pruneStaleReclaimDir(reclaimDir);
     return false;
   }
 }
 
 function tryReclaimStaleLock(lockPath: string, staleTtlMs: number, isPidAliveFn: (pid: number) => boolean): boolean {
-  if (fs.statSync(lockPath, { throwIfNoEntry: false }) === undefined) return true;
-  if (!isLockRecordStale(lockPath, staleTtlMs, isPidAliveFn)) return false;
+  const initialState = probeLockState(lockPath, staleTtlMs, isPidAliveFn);
+  if (initialState === 'missing') return true;
+  if (initialState === 'active') return false;
   const reclaimDir = `${lockPath}.reclaim`;
   if (!tryAcquireReclaimMutex(reclaimDir)) return false;
   try {
-    if (!isLockRecordStale(lockPath, staleTtlMs, isPidAliveFn)) {
-      return fs.statSync(lockPath, { throwIfNoEntry: false }) === undefined;
-    }
+    const lockedState = probeLockState(lockPath, staleTtlMs, isPidAliveFn);
+    if (lockedState === 'missing') return true;
+    if (lockedState === 'active') return false;
     fs.unlinkSync(lockPath);
     return true;
-  } catch {
+  } catch (err: unknown) {
+    if (!isIgnorableLockFsError(err)) {
+      console.error(`⚠️ Validation lock reclaim error: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return false;
   } finally {
-    try { fs.rmdirSync(reclaimDir); } catch { /* ignore reclaim dir cleanup failure */ }
+    try {
+      fs.rmdirSync(reclaimDir);
+    } catch (err: unknown) {
+      if (!isIgnorableLockFsError(err)) {
+        console.error(`⚠️ Reclaim dir cleanup error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 }
 
@@ -253,8 +283,18 @@ function createOwnershipRelease(lockPath: string, token: string): () => void {
     try {
       const record = parseLockRecord(fs.readFileSync(lockPath, 'utf8'));
       if (record !== null && record.token === token) fs.unlinkSync(lockPath);
-    } catch { /* Lock already removed or unreadable. */ } finally {
-      try { fs.rmdirSync(reclaimDir); } catch { /* ignore reclaim dir cleanup failure */ }
+    } catch (err: unknown) {
+      if (!isIgnorableLockFsError(err)) {
+        console.error(`⚠️ Lock ownership release error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } finally {
+      try {
+        fs.rmdirSync(reclaimDir);
+      } catch (err: unknown) {
+        if (!isIgnorableLockFsError(err)) {
+          console.error(`⚠️ Reclaim dir cleanup error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     }
   };
 }

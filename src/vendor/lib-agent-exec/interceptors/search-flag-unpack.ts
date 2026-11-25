@@ -10,6 +10,15 @@ const GREP_EXTRA_VALUE_FLAGS = [
   '-d', '-D', '--directories', '--devices',
 ] as const;
 
+const RG_UNPACK_VALUE_FLAG_SET: ReadonlySet<string> = new Set([
+  ...(FLAGS_WITH_ARG_BY_TOOL['rg'] ?? []),
+  ...RG_VALUE_FLAGS,
+]);
+const GREP_UNPACK_VALUE_FLAG_SET: ReadonlySet<string> = new Set([
+  ...(FLAGS_WITH_ARG_BY_TOOL['grep'] ?? []),
+  ...GREP_EXTRA_VALUE_FLAGS,
+]);
+
 function unpackBundledArg(arg: string, shortBase: 'rg' | 'grep', baseFlags: ReadonlySet<string>): string[] | undefined {
   if (!arg.startsWith('-') || !arg.includes(' ')) return undefined;
   const tokens = tokenizeArgs(arg);
@@ -26,10 +35,7 @@ export function unbundleSearchCommandArgs(ctx: ExecutionContext): boolean {
   const unpackedArgs: string[] = [];
   const baseRaw = path.basename(ctx.cmdBasename).toLowerCase().replace(/\.exe$/, '');
   const shortBase = baseRaw === 'rg' || baseRaw === 'ripgrep' ? 'rg' : 'grep';
-  const baseFlags = new Set([
-    ...(FLAGS_WITH_ARG_BY_TOOL[shortBase] ?? []),
-    ...(shortBase === 'rg' ? RG_VALUE_FLAGS : GREP_EXTRA_VALUE_FLAGS),
-  ]);
+  const baseFlags = shortBase === 'rg' ? RG_UNPACK_VALUE_FLAG_SET : GREP_UNPACK_VALUE_FLAG_SET;
   let unbundledFlags = false;
   let expectValue = false;
   for (let i = 0; i < ctx.args.length; i++) {

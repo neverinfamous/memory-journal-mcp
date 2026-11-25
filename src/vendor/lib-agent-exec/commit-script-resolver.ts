@@ -5,16 +5,26 @@ import { fileURLToPath } from 'node:url';
 
 const AGENT_SCRIPT_REF_RE = /^(?:(?:\.[\\/])?\.agents|.*[\\/]\.agents)[\\/]scripts[\\/]([a-zA-Z0-9_.-]+\.(?:ts|js|mjs))$/;
 const TSX_COMMIT_SCRIPT_RE = /^(?:pnpm(?:\s+exec)?\s+|bun(?:x)?\s+|npx\s+|node\s+\S*?)?\b(?:tsx|cli\.mjs)\s+['"]?(?:\.[\\/])?scripts[\\/]commit\.ts['"]?\s*$/i;
+const MAX_PACKAGE_JSON_BYTES = 1 * 1024 * 1024;
 
 function isRegularNonSymlinkFile(filePath: string): boolean {
   const st = fs.lstatSync(filePath, { throwIfNoEntry: false });
   return st !== undefined && !st.isSymbolicLink() && st.isFile();
 }
 
+function isNonSymlinkDir(dirPath: string): boolean {
+  const st = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  return st !== undefined && !st.isSymbolicLink() && st.isDirectory();
+}
+
 function tryRealpathNative(filePath: string): string | null {
   try {
     return fs.realpathSync.native(filePath);
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EACCES') {
+      console.error(`⚠️ Compiled commit script probe warning: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return null;
   }
 }
@@ -53,13 +63,11 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
     let ancestorDir = path.dirname(path.resolve(projectDir));
     for (let depth = 0; depth < 12; depth++) {
       const ancestorCandidate = path.join(ancestorDir, 'scripts', scriptName);
-      const realAncestor = tryRealpathNative(ancestorDir);
-      if (
-        isRegularNonSymlinkFile(ancestorCandidate) &&
-        realAncestor !== null &&
-        isContainedInRealRoot(ancestorCandidate, realAncestor)
-      ) {
-        return ancestorCandidate;
+      if (isRegularNonSymlinkFile(ancestorCandidate)) {
+        const realAncestor = tryRealpathNative(ancestorDir);
+        if (realAncestor !== null && isContainedInRealRoot(ancestorCandidate, realAncestor)) {
+          return ancestorCandidate;
+        }
       }
       if (fs.lstatSync(path.join(ancestorDir, '.git'), { throwIfNoEntry: false }) !== undefined) {
         break;
@@ -70,23 +78,41 @@ export function resolveAgentScriptFallback(rawArg: string, projectDir: string): 
     }
   }
 
-  const bundledScriptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const bundledScriptsDir = path.resolve(thisDir, '..');
+  const distScriptsDir = path.resolve(thisDir, '..', '..', 'scripts');
   const bundledCandidates = [
     path.join(bundledScriptsDir, scriptName),
+    path.join(distScriptsDir, scriptName),
     ...(scriptName === 'commit.ts'
       ? [
           path.join(bundledScriptsDir, 'commit', 'commit.ts'),
           path.join(bundledScriptsDir, 'commit', 'commit.js'),
+          path.join(distScriptsDir, 'commit', 'commit.ts'),
+          path.join(distScriptsDir, 'commit', 'commit.js'),
         ]
       : []),
   ];
+  const nonSymlinkDirCache = new Map<string, boolean>();
+  const checkNonSymlinkDir = (dir: string): boolean => {
+    const hit = nonSymlinkDirCache.get(dir);
+    if (hit !== undefined) return hit;
+    const ok = isNonSymlinkDir(dir);
+    nonSymlinkDirCache.set(dir, ok);
+    return ok;
+  };
   for (const bundledCandidate of bundledCandidates) {
-    if (isRegularNonSymlinkFile(bundledCandidate)) {
+    if (checkNonSymlinkDir(path.dirname(bundledCandidate)) && isRegularNonSymlinkFile(bundledCandidate)) {
       return bundledCandidate;
     }
   }
 
   return null;
+}
+
+function isAbsentOrNonSymlinkDir(dirPath: string): boolean {
+  const st = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  return st === undefined || (!st.isSymbolicLink() && st.isDirectory());
 }
 
 function hasNewerTsInDir(dirPath: string, targetMtimeMs: number): boolean {
@@ -135,6 +161,22 @@ export function resolveFreshCompiledCommitBundle(
   try {
     const realRoot = tryRealpathNative(repoRoot);
     if (realRoot === null) return null;
+    const absScriptDir = path.dirname(absScript);
+    const scriptsDir = path.join(repoRoot, 'scripts');
+    const sameScriptsDir = (process.platform === 'win32'
+      ? absScriptDir.toLowerCase() === scriptsDir.toLowerCase()
+      : absScriptDir === scriptsDir);
+    if (
+      !isNonSymlinkDir(path.join(repoRoot, 'dist')) ||
+      !isNonSymlinkDir(path.join(repoRoot, 'dist', 'vendor')) ||
+      !isNonSymlinkDir(path.join(repoRoot, 'dist', 'vendor', 'commit')) ||
+      !isNonSymlinkDir(absScriptDir) ||
+      !isAbsentOrNonSymlinkDir(path.join(repoRoot, 'src')) ||
+      !isAbsentOrNonSymlinkDir(path.join(repoRoot, 'src', 'vendor')) ||
+      (!sameScriptsDir && !isAbsentOrNonSymlinkDir(scriptsDir))
+    ) {
+      return null;
+    }
     const compiledStats = fs.lstatSync(compiledPath, { throwIfNoEntry: false });
     if (compiledStats === undefined || compiledStats.isSymbolicLink() || !compiledStats.isFile()) {
       return null;
@@ -162,14 +204,25 @@ export function resolveFreshCompiledCommitBundle(
       return null;
     }
     return compiledPath;
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EACCES') {
+      console.error(`⚠️ Compiled commit script probe warning: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return null;
   }
 }
 
 function packageUsesTsxCommitScript(projectDir: string): boolean {
+  const pkgPath = path.join(projectDir, 'package.json');
+  const st = fs.lstatSync(pkgPath, { throwIfNoEntry: false });
+  if (st === undefined || st.isSymbolicLink() || !st.isFile() || st.size > MAX_PACKAGE_JSON_BYTES) {
+    return false;
+  }
   try {
-    const rawPkg: unknown = JSON.parse(fs.readFileSync(path.join(projectDir, 'package.json'), 'utf8'));
+    const rawContent = fs.readFileSync(pkgPath, 'utf8');
+    const cleanContent = rawContent.charCodeAt(0) === 0xfeff ? rawContent.slice(1) : rawContent;
+    const rawPkg: unknown = JSON.parse(cleanContent);
     if (rawPkg === null || typeof rawPkg !== 'object' || !('scripts' in rawPkg)) {
       return false;
     }
@@ -178,9 +231,77 @@ function packageUsesTsxCommitScript(projectDir: string): boolean {
       return false;
     }
     return typeof scripts.commit === 'string' && TSX_COMMIT_SCRIPT_RE.test(scripts.commit);
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      console.error(`⚠️ package.json commit script probe warning (${pkgPath}): ${err instanceof Error ? err.message : String(err)}`);
+    }
     return false;
   }
+}
+
+const PM_COMMIT_DIR_VALUE_FLAGS: ReadonlySet<string> = new Set(['--dir', '-C', '--cwd', '--prefix']);
+const PM_COMMIT_VALUE_FLAGS: ReadonlySet<string> = new Set(['--config', '-c', '--userconfig']);
+const PM_COMMIT_ABORT_FLAGS: ReadonlySet<string> = new Set([
+  '--filter', '-F', '-p', '--package',
+  '--help', '-h', '--version', '-v',
+  '-r', '--recursive', '-w', '--workspace', '--workspaces', '--workspace-root',
+]);
+const PM_COMMIT_ABORT_PREFIXES: readonly string[] = [
+  '--filter=', '--package=', '--workspace=', '-F', '-p',
+];
+const PM_COMMIT_DIR_EQ_RE = /^(?:--dir|--cwd|--prefix|-C)=(.*)$/;
+const COMMIT_VALUE_FLAGS_WITH_NEXT: ReadonlySet<string> = new Set([
+  '-m', '--msg', '--history', '--category', '--impact', '--confidence', '--validation',
+  '--cwd', '--journal-project', '--session-id', '--tags', '--significance', '--relate', '--add',
+]);
+
+function findCommitTargetStart(args: readonly string[]): { idx: number; hasDirFlag: boolean } | null {
+  let hasDirFlag = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') return null;
+    if (PM_COMMIT_ABORT_FLAGS.has(a) || PM_COMMIT_ABORT_PREFIXES.some((prefix) => a.startsWith(prefix))) return null;
+    if (PM_COMMIT_DIR_VALUE_FLAGS.has(a)) {
+      const val = args[i + 1];
+      if (val === undefined || val.trim().length === 0) return null;
+      hasDirFlag = true;
+      i++;
+      continue;
+    }
+    const dirEqMatch = PM_COMMIT_DIR_EQ_RE.exec(a);
+    if (dirEqMatch !== null) {
+      if ((dirEqMatch[1] ?? '').trim().length === 0) return null;
+      hasDirFlag = true;
+      continue;
+    }
+    if (PM_COMMIT_VALUE_FLAGS.has(a)) {
+      i++;
+      continue;
+    }
+    if (a.startsWith('-')) continue;
+    return { idx: i, hasDirFlag };
+  }
+  return null;
+}
+
+function hasExplicitCommitCwdFlag(args: readonly string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (a === '--cwd' || a.startsWith('--cwd=')) return true;
+    if (COMMIT_VALUE_FLAGS_WITH_NEXT.has(a)) {
+      i++;
+    }
+  }
+  return false;
+}
+
+function appendCwdIfDirFlagStripped(remaining: string[], hasDirFlag: boolean, projectDir: string): string[] {
+  if (!hasDirFlag || hasExplicitCommitCwdFlag(remaining)) {
+    return remaining;
+  }
+  return ['--cwd', projectDir, ...remaining];
 }
 
 export function tryAccelerateCompiledCommitScript(
@@ -189,29 +310,34 @@ export function tryAccelerateCompiledCommitScript(
   target?: string
 ): { compiledPath: string; remainingArgs: string[] } | null {
   if (target === 'wsl2') return null;
+  const start = findCommitTargetStart(args);
+  if (start === null) return null;
+  const firstToken = args[start.idx];
+  const secondToken = args[start.idx + 1];
 
-  if ((args[0] === 'commit' || (args[0] === 'run' && args[1] === 'commit')) && packageUsesTsxCommitScript(projectDir)) {
-    const flagStart = args[0] === 'run' ? 2 : 1;
+  if ((firstToken === 'commit' || (firstToken === 'run' && secondToken === 'commit')) && packageUsesTsxCommitScript(projectDir)) {
+    const flagStart = firstToken === 'run' ? start.idx + 2 : start.idx + 1;
     const compiledPath = resolveFreshCompiledCommitBundle('scripts/commit.ts', projectDir);
     if (compiledPath !== null) {
       const rem = args.slice(flagStart);
+      const unwrapped = rem[0] === '--' ? rem.slice(1) : rem;
       return {
         compiledPath,
-        remainingArgs: rem[0] === '--' ? rem.slice(1) : rem,
+        remainingArgs: appendCwdIfDirFlagStripped(unwrapped, start.hasDirFlag, projectDir),
       };
     }
   }
 
   let tsxIdx = -1;
-  if (args[0] === 'tsx' && args[1] !== undefined && !args[1].startsWith('-')) {
-    tsxIdx = 0;
+  if (firstToken === 'tsx' && secondToken !== undefined && !secondToken.startsWith('-')) {
+    tsxIdx = start.idx;
   } else if (
-    (args[0] === 'exec' || args[0] === 'run') &&
-    args[1] === 'tsx' &&
-    args[2] !== undefined &&
-    !args[2].startsWith('-')
+    (firstToken === 'exec' || firstToken === 'run') &&
+    secondToken === 'tsx' &&
+    args[start.idx + 2] !== undefined &&
+    !(args[start.idx + 2] ?? '').startsWith('-')
   ) {
-    tsxIdx = 1;
+    tsxIdx = start.idx + 1;
   }
   if (tsxIdx === -1) return null;
 
@@ -221,6 +347,6 @@ export function tryAccelerateCompiledCommitScript(
   if (compiledPath === null) return null;
   return {
     compiledPath,
-    remainingArgs: args.slice(tsxIdx + 2),
+    remainingArgs: appendCwdIfDirFlagStripped(args.slice(tsxIdx + 2), start.hasDirFlag, projectDir),
   };
 }

@@ -120,21 +120,58 @@ export function isIgnoredEntryName(name: string, skipSkills = false): boolean {
   return skipSkills && name === 'skills';
 }
 
-export function isDirectoryPath(dir: string): boolean {
-  try {
-    return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true;
-  } catch {
-    return false;
-  }
+export interface PathProbeCache {
+  dirents: Map<string, readonly fs.Dirent[] | null>;
+  kinds: Map<string, 'file' | 'dir' | null>;
 }
 
-export function isFilePath(filePath: string): boolean {
-  try {
-    const st = fs.statSync(filePath, { throwIfNoEntry: false });
-    return st !== undefined && !st.isDirectory();
-  } catch {
-    return false;
+export function createPathProbeCache(): PathProbeCache {
+  return { dirents: new Map(), kinds: new Map() };
+}
+
+export function statPathKind(targetPath: string, cache?: PathProbeCache): 'file' | 'dir' | null {
+  if (cache !== undefined) {
+    const cached = cache.kinds.get(targetPath);
+    if (cached !== undefined) return cached;
   }
+  let kind: 'file' | 'dir' | null = null;
+  try {
+    const st = fs.statSync(targetPath, { throwIfNoEntry: false });
+    if (st !== undefined) kind = st.isDirectory() ? 'dir' : 'file';
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EACCES' && code !== 'EPERM' && code !== 'ENAMETOOLONG') {
+      console.error(`⚠️ Path stat warning (${targetPath}): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  cache?.kinds.set(targetPath, kind);
+  return kind;
+}
+
+export function cachedReaddirSync(dirPath: string, cache?: PathProbeCache): readonly fs.Dirent[] | null {
+  if (cache !== undefined) {
+    const cached = cache.dirents.get(dirPath);
+    if (cached !== undefined) return cached;
+  }
+  let entries: readonly fs.Dirent[] | null = null;
+  try {
+    entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EACCES' && code !== 'EPERM') {
+      console.error(`⚠️ Directory read warning (${dirPath}): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  cache?.dirents.set(dirPath, entries);
+  return entries;
+}
+
+export function isDirectoryPath(dir: string, cache?: PathProbeCache): boolean {
+  return statPathKind(dir, cache) === 'dir';
+}
+
+export function isFilePath(filePath: string, cache?: PathProbeCache): boolean {
+  return statPathKind(filePath, cache) === 'file';
 }
 
 export const WSL_DRIVE_MNT_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/i;
@@ -159,12 +196,13 @@ export function logPathHeal(hint: string, action: string): void {
   console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: ${action}\x1b[0m`);
 }
 
-export function isRepositoryRoot(dir: string): boolean {
-  try {
-    return fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, '.agents'));
-  } catch {
-    return false;
-  }
+function isIgnorablePathProbeError(err: unknown): boolean {
+  const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+  return code === 'ENOENT' || code === 'ENOTDIR' || code === 'ENAMETOOLONG' || code === 'EINVAL' || code === 'EACCES';
+}
+
+export function isRepositoryRoot(dir: string, cache?: PathProbeCache): boolean {
+  return statPathKind(path.join(dir, '.git'), cache) !== null || statPathKind(path.join(dir, '.agents'), cache) !== null;
 }
 
 export function isFileSystemRoot(dir: string): boolean {
@@ -189,15 +227,15 @@ export function formatHealedPath(originalArg: string, candidatePath: string, cwd
 
 const JOINED_PATH_EXT_RE = /\.[a-zA-Z0-9]{1,8}$/;
 
-function isJoinedPathToken(token: string, cwd: string): { pathLike: boolean; exists: boolean } {
+function isJoinedPathToken(token: string, cwd: string, cache?: PathProbeCache): { pathLike: boolean; exists: boolean } {
   if (token.length === 0 || token.startsWith('-')) return { pathLike: false, exists: false };
   const hostToken = WSL_DRIVE_MNT_RE.test(token) ? normalizeMntPathForHost(token) : token;
-  let exists: boolean;
+  let exists = false;
   try {
     const resolved = path.isAbsolute(hostToken) ? path.normalize(hostToken) : path.resolve(cwd, hostToken);
-    exists = fs.existsSync(resolved);
-  } catch {
-    exists = false;
+    exists = statPathKind(resolved, cache) !== null;
+  } catch (err: unknown) {
+    if (!isIgnorablePathProbeError(err)) console.error(`⚠️ Joined token probe warning (${token}): ${err instanceof Error ? err.message : String(err)}`);
   }
   const hasPathShape = exists || token.includes('/') || token.includes('\\') || JOINED_PATH_EXT_RE.test(token);
   return { pathLike: hasPathShape, exists };
@@ -207,23 +245,16 @@ function isJoinedPathToken(token: string, cwd: string): { pathLike: boolean; exi
  * [INTENT]: Split a single non-existent whitespace-separated multi-target argument (e.g. `"a.ts b.ts c.ts"`)
  * into individual path arguments when all tokens look path-like and at least two resolve on disk.
  */
-export function splitJoinedFileArg(arg: string, cwd: string): string[] | null {
+export function splitJoinedFileArg(arg: string, cwd: string, cache?: PathProbeCache): string[] | null {
   const raw = arg.replace(/^['"]|['"]$/g, '').trim();
   if (!/\s/.test(raw) || raw.includes('\n') || raw.includes('\r')) return null;
   const parts = raw.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return null;
   let existingCount = 0;
   for (const part of parts) {
-    const info = isJoinedPathToken(part, cwd);
+    const info = isJoinedPathToken(part, cwd, cache);
     if (!info.pathLike) return null;
     if (info.exists) existingCount += 1;
   }
   return existingCount >= 2 ? parts : null;
 }
-
-export { findNeighborFilePath } from './path-neighbor.js';
-export { resolvePathWithDirectorySynonyms, resolveBuildSrcSwap } from './path-synonym.js';
-export { healModulePath, healModuleImports } from './path-module-healer.js';
-export type { HealModuleImportOptions } from './path-module-healer.js';
-export { healEvalCodePathHallucinations } from './path-eval-healer.js';
-export { healPathHallucinations } from './path-argv-healer.js';

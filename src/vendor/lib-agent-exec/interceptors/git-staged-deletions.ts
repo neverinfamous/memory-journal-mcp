@@ -40,6 +40,8 @@ export function collectGitPathspecs(afterArgs: readonly string[]): Array<{ offse
 /**
  * [INTENT]: Query git's index in one batched call to detect deleted files that are already staged as `D`.
  */
+const STAGED_DEL_GLOB_META_RE = /[*?[\]]/;
+
 export function findAlreadyStagedGitDeletions(
   gitCwd: string,
   rawPathspecs: readonly string[],
@@ -50,7 +52,7 @@ export function findAlreadyStagedGitDeletions(
   const missingTargets: Array<{ original: string; relPosix: string }> = [];
   for (const rawPathspec of rawPathspecs) {
     const cleaned = rawPathspec.trim().replace(/^['"]|['"]$/g, '');
-    if (cleaned.length === 0 || cleaned === '.' || cleaned === '..' || cleaned.startsWith(':') || /[*?[\]]/.test(cleaned)) continue;
+    if (cleaned.length === 0 || cleaned === '.' || cleaned === '..' || cleaned.startsWith(':') || STAGED_DEL_GLOB_META_RE.test(cleaned)) continue;
     const absPath = path.resolve(gitCwd, cleaned);
     if (fs.lstatSync(absPath, { throwIfNoEntry: false }) !== undefined) continue;
     const rel = path.relative(gitCwd, absPath);
@@ -107,7 +109,13 @@ export function healGitRmStagedDeletions(ctx: ExecutionContext, gitCwd: string, 
 /**
  * [INTENT]: Omit or turn into idempotent no-ops `git add` targets that are already staged as deleted to avoid exit 128.
  */
-export function healGitAddStagedDeletions(ctx: ExecutionContext, gitCwd: string, addIdx: number): boolean {
+export function healGitAddStagedDeletions(
+  ctx: ExecutionContext,
+  gitCwd: string,
+  addIdx: number,
+  preGitOverrideFlags?: readonly string[],
+  preCollectedPathspecs?: ReadonlyArray<{ offset: number; value: string }>,
+): boolean {
   const afterAdd = ctx.args.slice(addIdx + 1);
   const ddIdx = afterAdd.indexOf('--');
   const preDdAdd = ddIdx === -1 ? afterAdd : afterAdd.slice(0, ddIdx);
@@ -124,9 +132,10 @@ export function healGitAddStagedDeletions(ctx: ExecutionContext, gitCwd: string,
   ) {
     return false;
   }
-  const pathSpecs = collectGitPathspecs(afterAdd).map(s => ({ argIndex: addIdx + 1 + s.offset, value: s.value }));
+  const rawCollected = preCollectedPathspecs ?? collectGitPathspecs(afterAdd);
+  const pathSpecs = rawCollected.map(s => ({ argIndex: addIdx + 1 + s.offset, value: s.value }));
   if (pathSpecs.length === 0) return false;
-  const { flags: gitOverrideFlags } = extractGitDirWorkTreeFlags(ctx.args.slice(0, addIdx), ctx.payload.env);
+  const gitOverrideFlags = preGitOverrideFlags ?? extractGitDirWorkTreeFlags(ctx.args.slice(0, addIdx), ctx.payload.env).flags;
   const stagedSet = findAlreadyStagedGitDeletions(gitCwd, pathSpecs.map(s => s.value), gitOverrideFlags, ctx.payload.env);
   if (stagedSet.size === 0) return false;
   const stagedDeleted = pathSpecs.filter(s => stagedSet.has(s.value));

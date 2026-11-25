@@ -63,36 +63,45 @@ function unwrapQuotedJsonInput(rawArg: string): string {
   return cleaned;
 }
 
-function readPayloadInput(rawArg: string): string {
+interface ReadPayloadResult {
+  content: string;
+  isFileOnDisk: boolean;
+}
+
+function readPayloadInput(rawArg: string): ReadPayloadResult {
   const maxPayloadSize = getMaxPayloadSize();
   const unwrapped = unwrapQuotedJsonInput(rawArg);
   if (unwrapped.startsWith('base64:')) {
     const buf = Buffer.from(unwrapped.slice(7), 'base64');
     if (buf.length > maxPayloadSize) fatalError(`Payload exceeds ${maxPayloadSize} bytes limit.`);
-    return decodePayloadBuffer(buf);
+    return { content: decodePayloadBuffer(buf), isFileOnDisk: false };
   }
   if (unwrapped.startsWith('{') || unwrapped.startsWith('```')) {
     if (Buffer.byteLength(unwrapped, 'utf8') > maxPayloadSize) fatalError(`Payload exceeds ${maxPayloadSize} bytes limit.`);
-    return unwrapped;
+    return { content: unwrapped, isFileOnDisk: false };
   }
   const absPayloadPath = path.resolve(rawArg.trim());
   let stats: fs.Stats | undefined;
   try {
     stats = fs.statSync(absPayloadPath, { throwIfNoEntry: false });
-  } catch {
+  } catch (err: unknown) {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'ENAMETOOLONG' && code !== 'EINVAL') {
+      console.error(`⚠️ Payload path probe warning: ${err instanceof Error ? err.message : String(err)}`);
+    }
     stats = undefined;
   }
   if (stats === undefined) {
     if (/^['"]\s*(?:\{|```)/.test(unwrapped)) {
       const stripped = unwrapped.slice(1).trim();
       if (Buffer.byteLength(stripped, 'utf8') > maxPayloadSize) fatalError(`Payload exceeds ${maxPayloadSize} bytes limit.`);
-      return stripped;
+      return { content: stripped, isFileOnDisk: false };
     }
     if (hasExplicitPayloadFlag || !positionals[0] || path.extname(rawArg).toLowerCase() === '.json') {
       fatalError(`Payload file not found: ${rawArg}`);
     }
     console.error(`\n   💡 AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
-    return JSON.stringify({ type: 'command', target: 'windows', command: positionals[0], args: positionals.slice(1) });
+    return { content: JSON.stringify({ type: 'command', target: 'windows', command: positionals[0], args: positionals.slice(1) }), isFileOnDisk: false };
   }
   if (!stats.isFile()) fatalError(`Payload path must be a regular file.`);
   if (stats.size > maxPayloadSize) fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
@@ -103,7 +112,7 @@ function readPayloadInput(rawArg: string): string {
     fatalError(`Failed to read payload file: ${err instanceof Error ? err.message : String(err)}`);
   }
   if (payloadBuf.length > maxPayloadSize) fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
-  return decodePayloadBuffer(payloadBuf);
+  return { content: decodePayloadBuffer(payloadBuf), isFileOnDisk: true };
 }
 
 try {
@@ -195,13 +204,12 @@ try {
     (resolvedPath, err) => fatalError(`Failed to load interceptor plugin at ${resolvedPath}: ${err instanceof Error ? err.message : String(err)}`),
   );
 
-  const payloadStr = readPayloadInput(payloadPath);
-  const absPayloadForExt = path.resolve(payloadPath);
+  const { content: payloadStr, isFileOnDisk: isFile } = readPayloadInput(payloadPath);
+  const absPayloadForExt = isFile ? path.resolve(payloadPath) : '';
   let rawPayload: unknown;
   try {
     rawPayload = JSON.parse(payloadStr);
   } catch (parseErr) {
-    const isFile = fs.existsSync(absPayloadForExt);
     const ext = isFile ? path.extname(absPayloadForExt).toLowerCase() : '';
     const healed = (!isFile || ext !== '.json') ? tryHealJsonPayload(payloadStr) : null;
     if (healed !== null && healed !== undefined) {
@@ -238,8 +246,13 @@ try {
   const absPayloadPath = path.resolve(payloadPath);
   process.once('exit', () => {
     if (payload.keepPayload === true || path.extname(absPayloadPath).toLowerCase() !== '.json') return;
-    if (fs.existsSync(absPayloadPath)) {
-      try { fs.unlinkSync(absPayloadPath); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(absPayloadPath);
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== 'ENOENT') {
+        console.error(`⚠️ Temp payload cleanup warning: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   });
 

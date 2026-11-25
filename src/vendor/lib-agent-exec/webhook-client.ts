@@ -217,15 +217,32 @@ export async function sendPinnedWebhookRequest(
     function handleRes(res: http.IncomingMessage): void {
       const status = res.statusCode ?? 0;
       const statusText = res.statusMessage ?? '';
-      res.on('error', () => {});
+      res.on('error', (resErr: Error) => {
+        if (!settled) {
+          settled = true;
+          reject(resErr);
+        }
+      });
       res.destroy();
       if (status >= 300 && status < 400) {
-        reject(new Error(`Redirect blocked for webhook request (HTTP ${status})`));
+        if (!settled) {
+          settled = true;
+          reject(new Error(`Redirect blocked for webhook request (HTTP ${status})`));
+        }
         return;
       }
-      resolve({ ok: status >= 200 && status < 300, status, statusText });
+      if (!settled) {
+        settled = true;
+        resolve({ ok: status >= 200 && status < 300, status, statusText });
+      }
     }
-    req.on('error', reject);
+    let settled = false;
+    req.on('error', (reqErr: Error) => {
+      if (!settled) {
+        settled = true;
+        reject(reqErr);
+      }
+    });
     if (init.body !== undefined) req.write(init.body);
     req.end();
   });

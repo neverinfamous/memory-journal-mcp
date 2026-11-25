@@ -27,6 +27,7 @@ export class ProcessController {
   private spawnFailed = false;
   private spawnErrorMessage: string | null = null;
   private hasRetriedWsl = false;
+  private treeKillAttempted = false;
   private timeoutTimer: NodeJS.Timeout | null = null;
   private forceKillTimer: NodeJS.Timeout | null = null;
   private daemonCheckInterval: NodeJS.Timeout | null = null;
@@ -90,8 +91,14 @@ export class ProcessController {
   }
 
   private cleanupTempScript(): void {
-    if (this.tempScriptPath && fs.existsSync(this.tempScriptPath)) {
-      try { fs.unlinkSync(this.tempScriptPath); } catch { /* ignore */ }
+    if (!this.tempScriptPath) return;
+    try {
+      fs.unlinkSync(this.tempScriptPath);
+    } catch (err: unknown) {
+      const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      if (code !== 'ENOENT' && !this.isJson) {
+        console.error(`⚠️ Temp script cleanup error: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 
@@ -262,15 +269,24 @@ export class ProcessController {
       }
       try {
         if (this.child?.pid !== undefined) {
-          if (process.platform === 'win32') killProcessTree(this.child);
-          else process.kill(-this.child.pid, 'SIGTERM');
+          if (process.platform === 'win32') {
+            this.treeKillAttempted = true;
+            killProcessTree(this.child);
+          } else {
+            process.kill(-this.child.pid, 'SIGTERM');
+          }
         }
-      } catch { /* ignore */ }
+      } catch (err: unknown) {
+        const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+        if (code !== 'ESRCH' && !this.isJson) {
+          console.error(`⚠️ Timeout kill warning: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
 
       this.forceKillTimer = setTimeout(() => {
         if (this.isFinished) return;
         if (!this.isJson) console.error(`${this.timedOut ? 'ℹ️' : '❌'} Process did not exit gracefully. Force killing process tree...`);
-        if (this.child) killProcessTree(this.child);
+        if (this.child && !(process.platform === 'win32' && this.treeKillAttempted)) killProcessTree(this.child);
         this.ioController?.destroyStreams();
         void this.handleFinish(null, 'SIGKILL', false);
         setTimeout(() => {

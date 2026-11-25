@@ -34,11 +34,14 @@ export const TARGET_WINDOWS_ALIASES = [
   'pwsh.exe', 'cmd', 'cmd.exe', 'bat', 'ps', 'ps1', 'dos', 'host', 'local', 'default',
 ] as const;
 
+const TARGET_WSL2_ALIAS_SET: ReadonlySet<string> = new Set(TARGET_WSL2_ALIASES);
+const TARGET_WINDOWS_ALIAS_SET: ReadonlySet<string> = new Set(TARGET_WINDOWS_ALIASES);
+
 export const targetNormalizeSchema = z.preprocess(val => {
   if (typeof val === 'string') {
     const v = val.trim().toLowerCase();
-    if ((TARGET_WSL2_ALIASES as readonly string[]).includes(v)) return 'wsl2';
-    if ((TARGET_WINDOWS_ALIASES as readonly string[]).includes(v)) return 'windows';
+    if (TARGET_WSL2_ALIAS_SET.has(v)) return 'wsl2';
+    if (TARGET_WINDOWS_ALIAS_SET.has(v)) return 'windows';
   }
   return val;
 }, z.union([z.literal("windows"), z.literal("wsl2")]));
@@ -165,10 +168,12 @@ const KNOWN_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
 ]);
 const METADATA_KEYS = ['session_id', 'sessionId', 'project_number', 'description', 'title', 'metadata', 'comment', 'timestamp', 'id'];
 const SEARCH_KEYS_TO_CLEAN = ['query', 'path', 'searchPath', 'search_path', 'searchPattern', 'search_pattern', 'pattern', 'regex', 'isRegex', 'case_insensitive', 'caseInsensitive', 'word', 'isWord', 'dir'];
-const KNOWN_TYPES = ['command', 'script', 'eval'];
-const EXEC_TYPE_SYNONYMS = ['exec', 'execute', 'run', 'shell', 'cli', 'cmd'];
-const EVAL_TYPE_SYNONYMS = ['eval_code', 'evaluation', 'evaluate'];
-const KNOWN_INTERPRETERS = ['bash', 'sh', 'pwsh', 'powershell', 'cmd', 'node', 'bun', 'python', 'python3', 'tsx', 'ts-node'];
+const KNOWN_TYPES: ReadonlySet<string> = new Set(['command', 'script', 'eval']);
+const EXEC_TYPE_SYNONYMS: ReadonlySet<string> = new Set(['exec', 'execute', 'run', 'shell', 'cli', 'cmd']);
+const EVAL_TYPE_SYNONYMS: ReadonlySet<string> = new Set(['eval_code', 'evaluation', 'evaluate']);
+const KNOWN_INTERPRETERS: ReadonlySet<string> = new Set([
+  'bash', 'sh', 'pwsh', 'powershell', 'cmd', 'node', 'bun', 'python', 'python3', 'tsx', 'ts-node',
+]);
 
 function isTruthyFlag(value: unknown): boolean {
   return value === true || (typeof value === 'string' && value.toLowerCase() === 'true');
@@ -325,13 +330,13 @@ function resolveTypeByFieldPresence(obj: Record<string, unknown>, defaultToComma
 
 function resolveExplicitTypeString(obj: Record<string, unknown>, rawType: string): void {
   const normalizedType = rawType.trim().toLowerCase();
-  if (KNOWN_TYPES.includes(normalizedType)) { obj['type'] = normalizedType; return; }
-  if (EXEC_TYPE_SYNONYMS.includes(normalizedType)) {
+  if (KNOWN_TYPES.has(normalizedType)) { obj['type'] = normalizedType; return; }
+  if (EXEC_TYPE_SYNONYMS.has(normalizedType)) {
     obj['type'] = typeof obj['code'] === 'string' ? 'eval' : (typeof obj['scriptPath'] === 'string' ? 'script' : 'command');
     return;
   }
-  if (EVAL_TYPE_SYNONYMS.includes(normalizedType)) { obj['type'] = 'eval'; return; }
-  if (KNOWN_INTERPRETERS.includes(normalizedType)) {
+  if (EVAL_TYPE_SYNONYMS.has(normalizedType)) { obj['type'] = 'eval'; return; }
+  if (KNOWN_INTERPRETERS.has(normalizedType)) {
     if (isUnsetField(obj, 'interpreter')) obj['interpreter'] = normalizedType;
     if (typeof obj['code'] === 'string') obj['type'] = 'eval';
     else if (typeof obj['scriptPath'] === 'string') obj['type'] = 'script';

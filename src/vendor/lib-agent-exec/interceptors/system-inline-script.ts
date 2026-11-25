@@ -4,11 +4,11 @@ import { convertToWindowsPath } from '../command-utils.js';
 import { configureCwdModuleResolution, rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
 import type { ExecutionContext } from './types.js';
 
-const INLINE_INTERPRETERS = ['node', 'bun', 'python', 'python3', 'tsx', 'ts-node'];
+const INLINE_INTERPRETER_SET: ReadonlySet<string> = new Set(['node', 'bun', 'python', 'python3', 'tsx', 'ts-node']);
 
 export function rewriteInlineInterpreterScripts(ctx: ExecutionContext, isCommand: boolean, originalCmd: string): void {
   const interpreterName = originalCmd.replace(/\.(?:exe|cmd|bat)$/i, '').toLowerCase();
-  if (!isCommand || !INLINE_INTERPRETERS.includes(interpreterName)) return;
+  if (!isCommand || !INLINE_INTERPRETER_SET.has(interpreterName)) return;
   const { cwd, skipHostProbe } = resolveInlineCwd(ctx);
   const rewritten = rewriteInlineScriptToTempFile({
     interpreterName,

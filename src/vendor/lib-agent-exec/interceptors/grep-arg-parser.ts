@@ -1,8 +1,6 @@
 // @ts-nocheck
-import fs from 'node:fs';
-import path from 'node:path';
-import { FLAGS_WITH_ARG_BY_TOOL, inspectCombinedShortFlag, tokenizeArgs } from '../command-utils.js';
-import { hasBackslashRegexEscape, hasUriOrNonDriveColon, isSecondExistingTargetOnly } from './search-path-utils.js';
+import { FLAGS_WITH_ARG_SET_BY_TOOL, inspectCombinedShortFlag, tokenizeArgs } from '../command-utils.js';
+import { hasBackslashRegexEscape, hasUriOrNonDriveColon, isSecondExistingTargetOnly, statPathKindOnDisk } from './search-path-utils.js';
 
 export interface ParsedGrepSearchArgs {
   pattern: string;
@@ -12,13 +10,15 @@ export interface ParsedGrepSearchArgs {
   isRegex: boolean;
 }
 
-const GREP_PATTERN_VALUE_FLAGS = [
+const GREP_PATTERN_VALUE_FLAG_SET: ReadonlySet<string> = new Set([
   '-s', '--symbol', '--pattern', '-q', '--query', '--searchpattern', '--search-pattern',
   '--targetcontent', '--target-content', '--content',
-];
-const GREP_DIR_VALUE_FLAGS = ['-d', '--dir', '--directory', '--path', '--searchpath', '--search-path'];
-const GREP_DIR_FLAGS_FOR_P = ['-d', '--dir', '--directory', '--searchpath', '--search-path'];
-const GREP_PATTERN_FLAGS_FOR_P = ['-s', '--symbol', '--pattern', '-q', '--query', '--targetcontent', '--target-content'];
+]);
+const GREP_DIR_VALUE_FLAG_SET: ReadonlySet<string> = new Set(['-d', '--dir', '--directory', '--path', '--searchpath', '--search-path']);
+const GREP_DIR_FLAGS_FOR_P_SET: ReadonlySet<string> = new Set(['-d', '--dir', '--directory', '--searchpath', '--search-path']);
+const GREP_PATTERN_FLAGS_FOR_P_SET: ReadonlySet<string> = new Set(['-s', '--symbol', '--pattern', '-q', '--query', '--targetcontent', '--target-content']);
+const BUNDLED_GREP_FLAG_HEAD_RE = /^--?[a-zA-Z0-9-]+$/;
+const GREP_SHORT_CLUSTER_RE = /^-[rnwivclLqhHsoEFGP]+$/;
 
 interface GrepScanState {
   isCaseInsensitive: boolean;
@@ -27,6 +27,7 @@ interface GrepScanState {
   pattern: string;
   searchPath: string;
   nonFlagArgs: string[];
+  pScanCache?: { hasDirFlag: boolean; hasPatternFlagInArgs: boolean };
 }
 
 function createGrepScanState(): GrepScanState {
@@ -45,7 +46,7 @@ function normalizeBundledGrepParserArgs(args: string[]): string[] {
   for (const arg of args) {
     if (arg.startsWith('-') && arg.includes(' ')) {
       const tokens = tokenizeArgs(arg);
-      if (tokens.length > 1 && tokens[0] !== undefined && /^--?[a-zA-Z0-9-]+$/.test(tokens[0])) {
+      if (tokens.length > 1 && tokens[0] !== undefined && BUNDLED_GREP_FLAG_HEAD_RE.test(tokens[0])) {
         normalizedArgs.push(...tokens);
         continue;
       }
@@ -57,7 +58,7 @@ function normalizeBundledGrepParserArgs(args: string[]): string[] {
 
 function isCaseInsensitiveFlag(arg: string, lower: string): boolean {
   if (lower === '-i' || lower === '-ri' || lower === '-ir' || lower === '--case-insensitive') return true;
-  return arg.length <= 5 && /^-[rnwivclLqhHsoEFGP]+$/.test(arg) && !arg.startsWith('--') && arg.includes('i');
+  return arg.length <= 5 && GREP_SHORT_CLUSTER_RE.test(arg) && !arg.startsWith('--') && arg.includes('i');
 }
 
 function consumeRegexFlag(state: GrepScanState, args: string[], index: number, lower: string): number {
@@ -79,26 +80,31 @@ function consumeValueInto(state: GrepScanState, args: string[], index: number, f
   return index;
 }
 
-function assignAmbiguousPValue(state: GrepScanState, args: string[], value: string): void {
-  const hasDirFlag = args.some((arg) => {
+function computePScanCache(args: readonly string[]): { hasDirFlag: boolean; hasPatternFlagInArgs: boolean } {
+  let hasDirFlag = false;
+  let hasPatternFlagInArgs = false;
+  for (const arg of args) {
     const eq = arg.indexOf('=');
     const key = (eq === -1 ? arg : arg.slice(0, eq)).toLowerCase();
-    return GREP_DIR_FLAGS_FOR_P.includes(key);
-  });
-  if (hasDirFlag || state.searchPath.length > 0) {
+    if (GREP_DIR_FLAGS_FOR_P_SET.has(key)) { hasDirFlag = true; break; }
+    if (!hasPatternFlagInArgs && GREP_PATTERN_FLAGS_FOR_P_SET.has(key)) hasPatternFlagInArgs = true;
+  }
+  return { hasDirFlag, hasPatternFlagInArgs };
+}
+
+function assignAmbiguousPValue(state: GrepScanState, args: string[], value: string): void {
+  if (state.searchPath.length > 0) {
     state.pattern = value;
     return;
   }
-  const hasPatternFlag = args.some((arg) => {
-    const eq = arg.indexOf('=');
-    const key = (eq === -1 ? arg : arg.slice(0, eq)).toLowerCase();
-    return GREP_PATTERN_FLAGS_FOR_P.includes(key);
-  });
-  if (hasPatternFlag || state.pattern.length > 0) {
+  state.pScanCache ??= computePScanCache(args);
+  const { hasDirFlag, hasPatternFlagInArgs } = state.pScanCache;
+  const hasPatternFlag = state.pattern.length > 0 || hasPatternFlagInArgs;
+  if (hasDirFlag || !hasPatternFlag) {
+    state.pattern = value;
+  } else {
     state.searchPath = value;
-    return;
   }
-  state.pattern = value;
 }
 
 function consumeAmbiguousP(state: GrepScanState, args: string[], index: number): number {
@@ -135,17 +141,17 @@ function applyGrepSearchFlag(state: GrepScanState, args: string[], index: number
       state.isWord = parseOptionalBoolFlagVal(flagVal);
       return index;
     }
-    if (GREP_PATTERN_VALUE_FLAGS.includes(flagKey)) {
+    if (GREP_PATTERN_VALUE_FLAG_SET.has(flagKey)) {
       state.pattern = flagVal;
       return index;
     }
-    if (GREP_DIR_VALUE_FLAGS.includes(flagKey)) {
+    if (GREP_DIR_VALUE_FLAG_SET.has(flagKey)) {
       state.searchPath = flagVal;
       return index;
     }
   }
   const lower = arg.toLowerCase();
-  if (!arg.startsWith('--') && arg.length > 2 && arg.length <= 5 && /^-[rnwivclLqhHsoEFGP]+$/.test(arg)) {
+  if (!arg.startsWith('--') && arg.length > 2 && arg.length <= 5 && GREP_SHORT_CLUSTER_RE.test(arg)) {
     if (arg.includes('i')) state.isCaseInsensitive = true;
     if (arg.includes('w')) state.isWord = true;
     if (arg.includes('E') || arg.includes('P') || arg.includes('G')) state.isRegex = true;
@@ -166,8 +172,8 @@ function applyGrepSearchFlag(state: GrepScanState, args: string[], index: number
   if (arg === '-e' || lower === '--regexp' || lower === '--is-regex') {
     return consumeRegexFlag(state, args, index, lower);
   }
-  if (GREP_PATTERN_VALUE_FLAGS.includes(lower)) return consumeValueInto(state, args, index, 'pattern');
-  if (GREP_DIR_VALUE_FLAGS.includes(lower)) return consumeValueInto(state, args, index, 'searchPath');
+  if (GREP_PATTERN_VALUE_FLAG_SET.has(lower)) return consumeValueInto(state, args, index, 'pattern');
+  if (GREP_DIR_VALUE_FLAG_SET.has(lower)) return consumeValueInto(state, args, index, 'searchPath');
   if (arg === '-p') return consumeAmbiguousP(state, args, index);
   if (!arg.startsWith('-')) state.nonFlagArgs.push(arg);
   return index;
@@ -199,32 +205,29 @@ function scanGrepSearchFlags(normalizedArgs: string[]): GrepScanState {
   return state;
 }
 
-function isGrepParsePathLike(value: string, cwd?: string): boolean {
+function isGrepParsePathLike(value: string, cwd?: string, kindCache?: Map<string, 'dir' | 'file' | 'none'>): boolean {
   if (!value || value.length === 0) return false;
   const clean = value.trim();
+  const cachedKind = kindCache?.get(clean);
+  if (cachedKind !== undefined) return cachedKind === 'dir';
   if (hasUriOrNonDriveColon(clean)) return false;
   if (/^[a-zA-Z]:[/\\]/.test(clean)) return true;
-  if (/[()*+?[\]^$|{}]/.test(clean) || hasBackslashRegexEscape(clean) || clean.includes('|')) {
+  if (/[()*+?[\]^$|{}]/.test(clean) || hasBackslashRegexEscape(clean, cwd, kindCache) || clean.includes('|')) {
     return false;
   }
   if (clean === '.' || clean === '..' || clean.startsWith('./') || clean.startsWith('../') || clean.endsWith('/') || clean.endsWith('\\')) {
     return true;
   }
   if (clean.includes('/') || clean.includes('\\') || /^[a-zA-Z]:/.test(clean)) return true;
-  try {
-    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
-    const st = fs.statSync(path.resolve(baseDir, clean), { throwIfNoEntry: false });
-    return st !== undefined && st.isDirectory();
-  } catch {
-    return false;
-  }
+  return statPathKindOnDisk(clean, cwd, kindCache) === 'dir';
 }
 
 function realignPatternAndSearchPath(pattern: string, searchPath: string, cwd?: string): { pattern: string; searchPath: string } {
-  if (!isGrepParsePathLike(pattern, cwd) || isSecondExistingTargetOnly(pattern, searchPath, cwd)) {
+  const kindCache = new Map<string, 'dir' | 'file' | 'none'>();
+  if (!isGrepParsePathLike(pattern, cwd, kindCache) || isSecondExistingTargetOnly(pattern, searchPath, cwd, kindCache)) {
     return { pattern, searchPath };
   }
-  if (!isGrepParsePathLike(searchPath, cwd) && searchPath.length > 0) {
+  if (!isGrepParsePathLike(searchPath, cwd, kindCache) && searchPath.length > 0) {
     return { pattern: searchPath, searchPath: pattern };
   }
   if (searchPath.length === 0) return { pattern: '', searchPath: pattern };
@@ -244,7 +247,7 @@ export function parseGrepSearchArgs(args: string[], cwd?: string): ParsedGrepSea
 }
 
 export function isGrepMissingInputTarget(args: readonly string[], positionalArgs: readonly string[]): boolean {
-  const valueFlags = FLAGS_WITH_ARG_BY_TOOL['grep'];
+  const valueFlags = FLAGS_WITH_ARG_SET_BY_TOOL['grep'];
   let hasPattern = false;
   let hasRecursive = false;
   for (let i = 0; i < args.length; i++) {

@@ -10,6 +10,8 @@ import { hasJqShortOrLongFlag, scanJqFromFiles } from './utils.js';
 const sanitizedJqTempFiles = new Set<string>();
 let jqExitCleanupRegistered = false;
 
+const OPEN_OUTPUT_TAG_RE = /<([a-zA-Z0-9_-]+_output|output)>/gi;
+
 function registerJqTempFile(filePath: string): void {
   sanitizedJqTempFiles.add(filePath);
   if (jqExitCleanupRegistered) return;
@@ -17,29 +19,41 @@ function registerJqTempFile(filePath: string): void {
   process.once('exit', () => {
     for (const p of sanitizedJqTempFiles) {
       try {
-        if (fs.statSync(p, { throwIfNoEntry: false }) !== undefined) fs.unlinkSync(p);
-      } catch { /* ignore */ }
+        fs.unlinkSync(p);
+      } catch (err: unknown) {
+        const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+        if (code !== 'ENOENT') {
+          console.error(`⚠️ jq temp cleanup error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     }
   });
+}
+
+function tryParseJson(text: string): boolean {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch (err: unknown) {
+    if (!(err instanceof SyntaxError)) throw err;
+    return false;
+  }
 }
 
 function isValidJsonOrJsonl(raw: string): boolean {
   const trimmed = raw.trim();
   if (trimmed.length === 0) return true;
-  try {
-    JSON.parse(trimmed);
-    return true;
-  } catch {
-    // Check JSONL (each non-empty line valid JSON)
-    const lines = trimmed.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length <= 1) return false;
-    try {
-      for (const line of lines) JSON.parse(line);
-      return true;
-    } catch {
-      return false;
-    }
+  if (tryParseJson(trimmed)) return true;
+  const firstNl = trimmed.indexOf('\n');
+  if (firstNl === -1) return false;
+  const firstLine = trimmed.slice(0, firstNl).trim();
+  if (firstLine.length > 0 && !tryParseJson(firstLine)) return false;
+  const lines = trimmed.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length <= 1) return false;
+  for (const line of lines) {
+    if (!tryParseJson(line)) return false;
   }
+  return true;
 }
 
 interface SanitizedJqText {
@@ -48,15 +62,18 @@ interface SanitizedJqText {
   tagName?: string;
 }
 
+const MAX_TAG_CANDIDATE_ATTEMPTS = 16;
+
 function stripJqPreambleNoise(raw: string): SanitizedJqText {
   if (isValidJsonOrJsonl(raw)) {
     return { cleaned: raw, reason: null };
   }
-  const openTagRe = /<([a-zA-Z0-9_-]+_output|output)>/gi;
+  OPEN_OUTPUT_TAG_RE.lastIndex = 0;
   const lowerRaw = raw.toLowerCase();
   const missingCloseTags = new Set<string>();
+  let tagAttempts = 0;
   let openMatch: RegExpExecArray | null;
-  while ((openMatch = openTagRe.exec(raw)) !== null) {
+  while ((openMatch = OPEN_OUTPUT_TAG_RE.exec(raw)) !== null) {
     const tagName = openMatch[1];
     if (tagName === undefined) continue;
     const lowerTag = tagName.toLowerCase();
@@ -68,8 +85,12 @@ function stripJqPreambleNoise(raw: string): SanitizedJqText {
       continue;
     }
     const cand = raw.slice(contentStart, closeIdx).trim();
-    if (cand.length > 0 && cand !== raw && isValidJsonOrJsonl(cand)) {
-      return { cleaned: cand, reason: 'tags', tagName };
+    if (cand.length > 0 && cand !== raw) {
+      if (tagAttempts >= MAX_TAG_CANDIDATE_ATTEMPTS) break;
+      tagAttempts++;
+      if (isValidJsonOrJsonl(cand)) {
+        return { cleaned: cand, reason: 'tags', tagName };
+      }
     }
   }
   const openIdx = raw.indexOf('```');
@@ -119,9 +140,12 @@ function sanitizeJqStdin(ctx: ExecutionContext): void {
   }
 }
 
+const JQ_MNT_WIN_RE = /^\/?mnt\/[a-zA-Z](?:\/|$)/i;
+const JQ_MNT_ABS_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/;
+
 function resolveJqFileArg(fileArg: string, cwd: string): { isWslPath: boolean; resolvedFile: string } {
   const rawFile = fileArg.replace(/^['"]|['"]$/g, '');
-  const isWslPath = process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(rawFile);
+  const isWslPath = process.platform === 'win32' && JQ_MNT_ABS_RE.test(rawFile);
   const wslNormalized = isWslPath ? convertToWindowsPath(rawFile) : rawFile;
   const resolvedFile = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(cwd, wslNormalized);
   return { isWslPath, resolvedFile };
@@ -143,10 +167,10 @@ export function sanitizeJqInvocation(ctx: ExecutionContext, args: string[]): voi
 
   const rawPayloadCwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? ctx.payload.cwd : undefined;
   if (process.platform === 'win32' && rawPayloadCwd !== undefined &&
-    ((rawPayloadCwd.startsWith('/') && !/^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(rawPayloadCwd)) || rawPayloadCwd.startsWith('~'))) {
+    ((rawPayloadCwd.startsWith('/') && !JQ_MNT_WIN_RE.test(rawPayloadCwd)) || rawPayloadCwd.startsWith('~'))) {
     return;
   }
-  const normPayloadCwd = rawPayloadCwd !== undefined && process.platform === 'win32' && /^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(rawPayloadCwd)
+  const normPayloadCwd = rawPayloadCwd !== undefined && process.platform === 'win32' && JQ_MNT_WIN_RE.test(rawPayloadCwd)
     ? convertToWindowsPath(rawPayloadCwd)
     : rawPayloadCwd;
   const hostCtxCwd = ctx.cwd !== undefined && ctx.cwd.length > 0 ? ctx.cwd : undefined;
@@ -159,7 +183,7 @@ export function sanitizeJqInvocation(ctx: ExecutionContext, args: string[]): voi
   for (const argIdx of fileIndices) {
     const fileArg = ctx.args[argIdx];
     if (!fileArg || fileArg.startsWith('-')) continue;
-    if (process.platform === 'win32' && ((fileArg.startsWith('/') && !/^\/?mnt\/[a-zA-Z](?:\/|$)/i.test(fileArg)) || fileArg.startsWith('~'))) {
+    if (process.platform === 'win32' && ((fileArg.startsWith('/') && !JQ_MNT_WIN_RE.test(fileArg)) || fileArg.startsWith('~'))) {
       continue;
     }
     const { isWslPath, resolvedFile } = resolveJqFileArg(fileArg, cwd);

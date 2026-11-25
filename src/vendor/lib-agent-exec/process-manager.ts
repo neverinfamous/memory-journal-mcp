@@ -45,8 +45,9 @@ function enqueueChild(state: { ordered: number[]; visited: Set<number>; queue: n
 
 function collectDescendants(parentMap: Map<number, number[]>, rootPid: number): number[] {
   const state = { ordered: [] as number[], visited: new Set<number>([rootPid]), queue: [rootPid] };
-  while (state.queue.length > 0) {
-    const current = state.queue.shift();
+  let head = 0;
+  while (head < state.queue.length) {
+    const current = state.queue[head++];
     const children = current === undefined ? undefined : parentMap.get(current);
     if (children === undefined) continue;
     for (const childPid of children) enqueueChild(state, childPid);
@@ -54,18 +55,43 @@ function collectDescendants(parentMap: Map<number, number[]>, rootPid: number): 
   return state.ordered;
 }
 
-function killPidHard(targetPid: number): void {
-  try {
-    spawnSync('taskkill.exe', ['/pid', String(targetPid), '/t', '/f'], {
-      shell: false,
-      timeout: 5000,
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-  } catch { /* ignore */ }
-  try {
-    process.kill(targetPid, 'SIGKILL');
-  } catch { /* ignore */ }
+function isIgnorableKillError(err: unknown): boolean {
+  const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+  return code === 'ESRCH' || code === 'EPERM' || code === 'ENOENT';
+}
+
+function logUnexpectedKillError(scope: string, err: unknown): void {
+  if (!isIgnorableKillError(err)) {
+    console.error(`⚠️ [process-manager] ${scope} warning: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function killPidBatchHard(targetPids: readonly number[]): void {
+  const alivePids = targetPids.filter((pid) => isPidAlive(pid));
+  if (alivePids.length === 0) return;
+  for (let i = 0; i < alivePids.length; i += 32) {
+    const slice = alivePids.slice(i, i + 32);
+    const tkArgs: string[] = [];
+    for (const pid of slice) tkArgs.push('/pid', String(pid));
+    tkArgs.push('/t', '/f');
+    try {
+      spawnSync('taskkill.exe', tkArgs, {
+        shell: false,
+        timeout: 5000,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+    } catch (err: unknown) {
+      logUnexpectedKillError('taskkill batch', err);
+    }
+    for (const pid of slice) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch (err: unknown) {
+        logUnexpectedKillError(`SIGKILL pid ${pid}`, err);
+      }
+    }
+  }
 }
 
 function killWindowsDescendantsFallback(rootPid: number): void {
@@ -86,11 +112,11 @@ function killWindowsDescendantsFallback(rootPid: number): void {
     const parentMap = new Map<number, number[]>();
     for (const rawLine of ps.stdout.split(/\r?\n/)) rememberChild(parentMap, rawLine);
     const ordered = collectDescendants(parentMap, rootPid);
-    for (let i = ordered.length - 1; i >= 0; i--) {
-      const targetPid = ordered[i];
-      if (targetPid !== undefined) killPidHard(targetPid);
-    }
-  } catch { /* ignore fallback errors */ }
+    const bottomUp = ordered.slice().reverse();
+    killPidBatchHard(bottomUp);
+  } catch (err: unknown) {
+    logUnexpectedKillError('Windows descendant snapshot', err);
+  }
 }
 
 const WSL_UUID_ARG = /^AGENT_EXEC_WSL_UUID=[0-9a-f-]+$/i;
@@ -118,12 +144,13 @@ function killWslProcessGroup(spawnargs: readonly string[]): void {
     const distroArgs = extractWslDistroArgs(spawnargs);
     const killScript = `pids=$(grep -l -z '${uuidArg}' /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3); if [ -n "$pids" ]; then for pid in $pids; do kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null; done; fi`;
     spawnSync('wsl.exe', [...distroArgs, '-u', 'root', '-e', 'sh', '-c', killScript], { stdio: 'ignore', timeout: 10000, windowsHide: true });
-  } catch { /* ignore */ }
+  } catch (err: unknown) {
+    logUnexpectedKillError('WSL process group kill', err);
+  }
 }
 
-function taskkillTree(pid: number): boolean {
-  let taskkillSuccess = false;
-  for (let attempt = 0; attempt < 2 && !taskkillSuccess; attempt++) {
+function taskkillTree(pid: number): 'killed' | 'exited' | 'failed' {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const result = spawnSync('taskkill.exe', ['/pid', pid.toString(), '/t', '/f'], {
         shell: false,
@@ -131,11 +158,16 @@ function taskkillTree(pid: number): boolean {
         stdio: 'ignore',
         windowsHide: true,
       });
-      if (!result.error && result.status === 0) taskkillSuccess = true;
-      else if (!isPidStillRunning(pid)) break;
-    } catch { /* ignore */ }
+      if (!result.error && result.status === 0) return 'killed';
+      if (!isPidStillRunning(pid)) return 'exited';
+    } catch (err: unknown) {
+      if (!isIgnorableKillError(err)) {
+        logUnexpectedKillError(`taskkill tree pid ${pid}`, err);
+        break;
+      }
+    }
   }
-  return taskkillSuccess;
+  return 'failed';
 }
 
 function killWindowsTree(child: ChildProcess, pid: number, parentGone: boolean): void {
@@ -143,10 +175,17 @@ function killWindowsTree(child: ChildProcess, pid: number, parentGone: boolean):
   const spawnargs: string[] = child.spawnargs;
   const baseSpawn = path.basename(spawnfile).toLowerCase().replace(/\.exe$/, '');
   if (baseSpawn === 'wsl') killWslProcessGroup(spawnargs);
-  if (parentGone || !taskkillTree(pid)) killWindowsDescendantsFallback(pid);
+  if (parentGone) {
+    if (child.killed || isPidStillRunning(pid)) killWindowsDescendantsFallback(pid);
+  } else {
+    const tkStatus = taskkillTree(pid);
+    if (tkStatus === 'failed') killWindowsDescendantsFallback(pid);
+  }
   try {
     child.kill('SIGKILL');
-  } catch { /* ignore */ }
+  } catch (err: unknown) {
+    logUnexpectedKillError(`child.kill SIGKILL pid ${pid}`, err);
+  }
 }
 
 function killUnixTree(child: ChildProcess, pid: number, force = true): void {
@@ -155,28 +194,36 @@ function killUnixTree(child: ChildProcess, pid: number, force = true): void {
   try {
     process.kill(-pid, signal);
     killedGroup = true;
-  } catch {
-    // Fallback to direct pid when process is not a process group leader
+  } catch (err: unknown) {
+    logUnexpectedKillError(`process.kill -${pid} ${signal}`, err);
   }
   if (!killedGroup) {
     try {
       process.kill(pid, signal);
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      logUnexpectedKillError(`process.kill ${pid} ${signal}`, err);
+    }
   }
   if (force) {
     try {
       child.kill('SIGKILL');
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      logUnexpectedKillError(`child.kill SIGKILL pid ${pid}`, err);
+    }
     return;
   }
   setTimeout(() => {
     if (child.exitCode !== null || child.signalCode !== null) return;
     try {
       process.kill(-pid, 'SIGKILL');
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      logUnexpectedKillError(`delayed process.kill -${pid}`, err);
+    }
     try {
       child.kill('SIGKILL');
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      logUnexpectedKillError(`delayed child.kill ${pid}`, err);
+    }
   }, 5000).unref();
 }
 
@@ -186,7 +233,9 @@ export function killProcessTree(child: ChildProcess, force = true): void {
   const parentGone = child.killed || child.exitCode !== null || child.signalCode !== null;
   for (const hook of processManagerHooks) {
     if (hook.onKill) {
-      try { hook.onKill(pid); } catch { /* ignore */ }
+      try { hook.onKill(pid); } catch (err: unknown) {
+        console.error(`⚠️ Process kill hook error: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
   if (process.platform === 'win32') killWindowsTree(child, pid, parentGone);

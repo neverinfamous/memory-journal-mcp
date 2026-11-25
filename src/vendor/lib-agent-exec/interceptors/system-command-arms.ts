@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { match, P } from 'ts-pattern';
 import { convertToWindowsPath, convertToWslPath, getPositionalArgs } from '../command-utils.js';
 import { collectWslPathExemptIndices } from '../wsl-command-wrapper.js';
 import { emitInterceptBanner, resolveNativeBinary } from '../utils.js';
@@ -10,45 +9,46 @@ import { handleListArm } from './system-list-arm.js';
 import type { ExecutionContext } from './types.js';
 import { collectJqLibraryPaths, hasPreDoubleDashHelpOrVersion, scanJqFromFiles } from './utils.js';
 
-const WRAPPER_SHELLS = ['sh', 'bash', 'pwsh', 'powershell', 'cmd'];
+const WRAPPER_SHELL_SET: ReadonlySet<string> = new Set(['sh', 'bash', 'pwsh', 'powershell', 'cmd']);
+const CAT_ORIG_SET: ReadonlySet<string> = new Set(['cat', 'cat.exe', 'get-content']);
+const GREP_ORIG_SET: ReadonlySet<string> = new Set(['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe']);
+const LIST_ORIG_SET: ReadonlySet<string> = new Set(['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com']);
+const CURL_ORIG_SET: ReadonlySet<string> = new Set(['curl', 'curl.exe', 'wget', 'wget.exe', 'invoke-webrequest', 'iwr']);
+const POSIX_TOOL_CMD_SET: ReadonlySet<string> = new Set([
+  'awk', 'gawk', 'sed', 'sed.exe', 'yq', 'yq.exe', 'find', 'find.exe',
+  'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe',
+  'uniq', 'uniq.exe', 'tee', 'tee.exe',
+]);
+const PWSH_CMD_SET: ReadonlySet<string> = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe']);
 const ATTACHED_JQ_MNT_RE = /^(-[a-zA-Z]*[fL])(\/mnt\/[a-zA-Z](?:\/.*|$))/;
 
 export function runSystemCommandArms(ctx: ExecutionContext, derived: SystemCommandDerived, activePositionalArgs: string[]): void {
   const { cmd, originalCmd, isCommand, hasStdin, embeddedArgs, cmdBasename } = derived;
-  match({ ...ctx, positionalArgs: activePositionalArgs, hasStdin, cmd, isCommand, isWin32: process.platform === 'win32', originalCmd })
-    .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
-      if (originalCmd === 'get-content') {
-        ctx.cmdBasename = 'cat';
-        if (ctx.payload.type === 'command') ctx.payload.command = 'cat';
-      }
-      handleCatArm(ctx, cmd, hasStdin, activePositionalArgs);
-    })
-    .with({ originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe') }, () => {
-      handleGrepArm(ctx, cmd, cmdBasename, originalCmd, embeddedArgs, hasStdin);
-    })
-    .with({ originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com') }, () => {
-      handleListArm(ctx, cmd, cmdBasename);
-    })
-    .with({ originalCmd: P.union('curl', 'curl.exe', 'wget', 'wget.exe', 'invoke-webrequest', 'iwr') }, () => {
-      handleCurlArm(ctx, cmdBasename);
-    })
-    .with({ cmd: P.union('jq', 'jq.exe') }, () => {
-      handleJqArm(ctx, cmd);
-    })
-    .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'yq', 'yq.exe', 'find', 'find.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe') }, () => {
-      handlePosixToolArm(ctx, cmdBasename);
-    })
-    .with({ isCommand: true, originalCmd: P.union('rg', 'rg.exe') }, () => {
-      handleRgArm(ctx, cmd, hasStdin);
-    })
-    .with({ isCommand: true, cmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe') }, ({ args: matchedArgs }) => {
-      handlePwshArm(ctx, cmdBasename, matchedArgs);
-    })
-    .otherwise(() => {});
+  if (CAT_ORIG_SET.has(originalCmd)) {
+    if (originalCmd === 'get-content') {
+      ctx.cmdBasename = 'cat';
+      if (ctx.payload.type === 'command') ctx.payload.command = 'cat';
+    }
+    handleCatArm(ctx, cmd, hasStdin, activePositionalArgs);
+  } else if (GREP_ORIG_SET.has(originalCmd)) {
+    handleGrepArm(ctx, cmd, cmdBasename, originalCmd, embeddedArgs, hasStdin);
+  } else if (LIST_ORIG_SET.has(originalCmd)) {
+    handleListArm(ctx, cmd, cmdBasename);
+  } else if (CURL_ORIG_SET.has(originalCmd)) {
+    handleCurlArm(ctx, cmdBasename);
+  } else if (cmd === 'jq' || cmd === 'jq.exe') {
+    handleJqArm(ctx, cmd);
+  } else if (POSIX_TOOL_CMD_SET.has(cmd)) {
+    handlePosixToolArm(ctx, cmdBasename);
+  } else if (isCommand && (originalCmd === 'rg' || originalCmd === 'rg.exe')) {
+    handleRgArm(ctx, cmd, hasStdin);
+  } else if (isCommand && PWSH_CMD_SET.has(cmd)) {
+    handlePwshArm(ctx, cmdBasename, ctx.args);
+  }
 }
 
 function handleCatArm(ctx: ExecutionContext, cmd: string, hasStdin: boolean, activePositionalArgs: string[]): void {
-  if (WRAPPER_SHELLS.includes(cmd)) return;
+  if (WRAPPER_SHELL_SET.has(cmd)) return;
   if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
     ctx.payload.target = 'wsl2';
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
@@ -72,7 +72,7 @@ function handleGrepArm(
   embeddedArgs: string[],
   hasStdin: boolean,
 ): void {
-  if (WRAPPER_SHELLS.includes(cmd)) return;
+  if (WRAPPER_SHELL_SET.has(cmd)) return;
   if (embeddedArgs.length > 0 && ctx.args.length === 0) {
     ctx.args = [...embeddedArgs];
     embeddedArgs.length = 0;
@@ -94,7 +94,8 @@ function handleCurlArm(ctx: ExecutionContext, cmdBasename: string): void {
     ctx.payload.target = 'wsl2';
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' network command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
   }
-  if (['invoke-webrequest', 'iwr'].includes(cmdBasename.toLowerCase())) {
+  const low = cmdBasename.toLowerCase();
+  if (low === 'invoke-webrequest' || low === 'iwr') {
     ctx.cmdBasename = 'curl';
     if (ctx.payload.type === 'command') ctx.payload.command = 'curl';
   }
@@ -115,7 +116,7 @@ function convertWslCommandArgs(ctx: ExecutionContext, cmdBasename: string): void
 }
 
 function handleJqArm(ctx: ExecutionContext, cmd: string): void {
-  if (WRAPPER_SHELLS.includes(cmd)) return;
+  if (WRAPPER_SHELL_SET.has(cmd)) return;
   if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
     routeWindowsJq(ctx);
     return;
@@ -124,6 +125,9 @@ function handleJqArm(ctx: ExecutionContext, cmd: string): void {
     convertWslCommandArgs(ctx, ctx.cmdBasename);
   }
 }
+
+const POSIX_MNT_ARG_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/;
+const SYS_ARG_MNT_PATH_RE = /^\/mnt\/[a-zA-Z](?:\/|$)/;
 
 function collectJqExternalFiles(args: readonly string[], posArgs: readonly string[]): string[] {
   const { hasFromFile, files } = scanJqFromFiles(args);
@@ -134,7 +138,7 @@ function routeWindowsJq(ctx: ExecutionContext): void {
   const jqPosArgs = getPositionalArgs('jq', ctx.args);
   const jqFileArgs = collectJqExternalFiles(ctx.args, jqPosArgs);
   const targetsLinuxOnlyPath = jqFileArgs.some(arg =>
-    arg.startsWith('/') && !arg.startsWith('//') && !/^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg),
+    arg.startsWith('/') && !arg.startsWith('//') && !POSIX_MNT_ARG_RE.test(arg),
   );
   if (resolveNativeBinary('jq') === null) {
     ctx.payload.target = 'wsl2';
@@ -154,7 +158,7 @@ function routeWindowsJq(ctx: ExecutionContext): void {
       const eqIdx = arg.indexOf('=');
       const flagHead = arg.slice(0, eqIdx + 1);
       const val = arg.slice(eqIdx + 1);
-      return /^\/mnt\/[a-zA-Z](?:\/|$)/.test(val) ? `${flagHead}${convertToWindowsPath(val)}` : arg;
+      return SYS_ARG_MNT_PATH_RE.test(val) ? `${flagHead}${convertToWindowsPath(val)}` : arg;
     }
     if (!exempt.has(idx) && !arg.startsWith('--')) {
       const attached = ATTACHED_JQ_MNT_RE.exec(arg);
@@ -164,7 +168,7 @@ function routeWindowsJq(ctx: ExecutionContext): void {
         return `${prefix}${convertToWindowsPath(val)}`;
       }
     }
-    return !exempt.has(idx) && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg) ? convertToWindowsPath(arg) : arg;
+    return !exempt.has(idx) && SYS_ARG_MNT_PATH_RE.test(arg) ? convertToWindowsPath(arg) : arg;
   });
   syncCtxPayloadArgs(ctx);
 }
@@ -174,7 +178,8 @@ function handlePosixToolArm(ctx: ExecutionContext, cmdBasename: string): void {
     ctx.payload.target = 'wsl2';
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
   }
-  if (['find', 'find.exe'].includes(cmdBasename.toLowerCase())) {
+  const cmdLower = cmdBasename.toLowerCase();
+  if (cmdLower === 'find' || cmdLower === 'find.exe') {
     handleFindInterception(ctx);
   }
   if (ctx.payload.target === 'wsl2') {
@@ -183,7 +188,7 @@ function handlePosixToolArm(ctx: ExecutionContext, cmdBasename: string): void {
 }
 
 function handleRgArm(ctx: ExecutionContext, cmd: string, hasStdin: boolean): void {
-  if (WRAPPER_SHELLS.includes(cmd)) return;
+  if (WRAPPER_SHELL_SET.has(cmd)) return;
   handleRipgrepInterception(ctx, hasStdin);
 }
 

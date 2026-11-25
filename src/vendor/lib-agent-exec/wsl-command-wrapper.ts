@@ -4,7 +4,7 @@ import path from 'node:path';
 import { hasBalancedWrappingQuotes } from './regex-healer.js';
 import { BUILT_INS } from './utils.js';
 import {
-  FLAGS_WITH_ARG_BY_TOOL,
+  FLAGS_WITH_ARG_SET_BY_TOOL,
   convertToWslPath,
   sanitizeWslRegex,
   findPatternExprIndex,
@@ -34,13 +34,19 @@ const WSL_PATTERN_VALUE_FLAGS: Readonly<Record<string, ReadonlySet<string>>> = {
 const JQ_TWO_VALUE_EXEMPT_FLAGS = new Set(['--arg', '--argjson']);
 const JQ_ONE_VALUE_EXEMPT_FLAGS = new Set(['--rawfile', '--slurpfile', '--argfile']);
 
-export function collectWslPathExemptIndices(cmd: string, args: readonly string[]): Set<number> {
+const RG_PATTERN_SHORT_TAIL_CHARS: ReadonlySet<string> = new Set(['e', 'r', 'g']);
+const GREP_MATCHER_FLAGS: ReadonlySet<string> = new Set([
+  '-E', '--extended-regexp', '-G', '--basic-regexp', '-P', '--perl-regexp', '-F', '--fixed-strings',
+]);
+const GREP_SHORT_MATCHER_CLUSTER_RE = /^-[a-zA-Z]*[EGPF][a-zA-Z]*$/;
+
+export function collectWslPathExemptIndices(cmd: string, args: readonly string[], precomputedPatternIdx?: number): Set<number> {
   const exempt = new Set<number>();
-  const patternIdx = findPatternExprIndex(cmd, [...args]);
+  const patternIdx = precomputedPatternIdx !== undefined ? precomputedPatternIdx : findPatternExprIndex(cmd, args);
   if (patternIdx !== -1) exempt.add(patternIdx);
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
   const valueFlags = Object.hasOwn(WSL_PATTERN_VALUE_FLAGS, base) ? WSL_PATTERN_VALUE_FLAGS[base] : undefined;
-  const toolValueFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, base) ? FLAGS_WITH_ARG_BY_TOOL[base] : undefined;
+  const toolValueFlags = Object.hasOwn(FLAGS_WITH_ARG_SET_BY_TOOL, base) ? FLAGS_WITH_ARG_SET_BY_TOOL[base] : undefined;
   const isJq = base === 'jq' || base === 'yq';
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -59,7 +65,7 @@ export function collectWslPathExemptIndices(cmd: string, args: readonly string[]
     const shortInfo = inspectCombinedShortFlag(base, a, toolValueFlags);
     const tailFlag = shortInfo.tailChar.length > 0 ? `-${shortInfo.tailChar}` : '';
     const isPatternValue = (valueFlags !== undefined && (valueFlags.has(a) || (shortInfo.takesSeparateValue && tailFlag.length > 0 && valueFlags.has(tailFlag))))
-      || (base === 'rg' && shortInfo.takesSeparateValue && ['e', 'r', 'g'].includes(shortInfo.tailChar));
+      || (base === 'rg' && shortInfo.takesSeparateValue && RG_PATTERN_SHORT_TAIL_CHARS.has(shortInfo.tailChar));
     if (isPatternValue && i + 1 < args.length) {
       exempt.add(i + 1);
       i += 1;
@@ -96,15 +102,15 @@ export function collectArgJsonValueIndices(cmd: string, args: readonly string[])
 
 function hasAnyGrepExplicitMatcherFlag(cmd: string, args: readonly string[]): boolean {
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, base) ? FLAGS_WITH_ARG_BY_TOOL[base] : undefined;
+  const valueFlags = Object.hasOwn(FLAGS_WITH_ARG_SET_BY_TOOL, base) ? FLAGS_WITH_ARG_SET_BY_TOOL[base] : undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
     const shortInfo = inspectCombinedShortFlag(base, a, valueFlags);
-    if (['-E', '--extended-regexp', '-G', '--basic-regexp', '-P', '--perl-regexp', '-F', '--fixed-strings'].includes(a)) {
+    if (GREP_MATCHER_FLAGS.has(a)) {
       return true;
     }
-    if (shortInfo.shortPrefix.length > 1 && /^-[a-zA-Z]*[EGPF][a-zA-Z]*$/.test(shortInfo.shortPrefix)) {
+    if (shortInfo.shortPrefix.length > 1 && GREP_SHORT_MATCHER_CLUSTER_RE.test(shortInfo.shortPrefix)) {
       return true;
     }
     if (shortInfo.takesSeparateValue) i++;
@@ -114,13 +120,13 @@ function hasAnyGrepExplicitMatcherFlag(cmd: string, args: readonly string[]): bo
 
 function hasGrepBasicRegexpFlag(cmd: string, args: readonly string[]): boolean {
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, base) ? FLAGS_WITH_ARG_BY_TOOL[base] : undefined;
+  const valueFlags = Object.hasOwn(FLAGS_WITH_ARG_SET_BY_TOOL, base) ? FLAGS_WITH_ARG_SET_BY_TOOL[base] : undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined || a === '--') break;
     const shortInfo = inspectCombinedShortFlag(base, a, valueFlags);
     if (a === '-G' || a === '--basic-regexp') return true;
-    if (shortInfo.shortPrefix.length > 1 && /^-[a-zA-Z]*G[a-zA-Z]*$/.test(shortInfo.shortPrefix)) return true;
+    if (shortInfo.shortPrefix.length > 1 && GREP_SHORT_MATCHER_CLUSTER_RE.test(shortInfo.shortPrefix) && shortInfo.shortPrefix.includes('G')) return true;
     if (shortInfo.takesSeparateValue) i++;
   }
   return false;
@@ -128,7 +134,7 @@ function hasGrepBasicRegexpFlag(cmd: string, args: readonly string[]): boolean {
 
 function switchGrepMatcherToPcre2(cmd: string, args: string[]): boolean {
   const base = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
-  const valueFlags = Object.hasOwn(FLAGS_WITH_ARG_BY_TOOL, base) ? FLAGS_WITH_ARG_BY_TOOL[base] : undefined;
+  const valueFlags = Object.hasOwn(FLAGS_WITH_ARG_SET_BY_TOOL, base) ? FLAGS_WITH_ARG_SET_BY_TOOL[base] : undefined;
   let switched = false;
   let hasPcre2 = false;
   for (let i = 0; i < args.length; i++) {
@@ -136,13 +142,13 @@ function switchGrepMatcherToPcre2(cmd: string, args: string[]): boolean {
     if (a === undefined || a === '--') break;
     const shortInfo = inspectCombinedShortFlag(base, a, valueFlags);
     const head = shortInfo.shortPrefix;
-    if (a === '-P' || a === '--perl-regexp' || (head.length > 1 && /^-[a-zA-Z]*P[a-zA-Z]*$/.test(head))) {
+    if (a === '-P' || a === '--perl-regexp' || (head.length > 1 && GREP_SHORT_MATCHER_CLUSTER_RE.test(head) && head.includes('P'))) {
       hasPcre2 = true;
     } else if (a === '-E' || a === '--extended-regexp') {
       args[i] = '-P';
       switched = true;
-    } else if (head.length > 1 && /^-[a-zA-Z]*E[a-zA-Z]*$/.test(head)) {
-      args[i] = head.replace(/E/g, 'P') + a.slice(head.length);
+    } else if (head.length > 1 && GREP_SHORT_MATCHER_CLUSTER_RE.test(head) && head.includes('E')) {
+      args[i] = head.replaceAll('E', 'P') + a.slice(head.length);
       switched = true;
     }
     if (shortInfo.takesSeparateValue) i++;
@@ -225,7 +231,7 @@ export function findWslShellInlineScriptIndex(cmdName: string, cmdArgs: readonly
 export function normalizeWslCommandArgs(cmd: string, args: string[]): { cmd: string; args: string[] } {
   const wslCmd = convertToWslPath(cmd);
   const patternExprIdx = findPatternExprIndex(wslCmd, args);
-  const exempt = collectWslPathExemptIndices(wslCmd, args);
+  const exempt = collectWslPathExemptIndices(wslCmd, args, patternExprIdx);
   const argJsonValues = collectArgJsonValueIndices(wslCmd, args);
   const inlineScriptIdx = findWslShellInlineScriptIndex(wslCmd, args);
 
@@ -272,19 +278,19 @@ function matchAttachedRedirection(trimmed: string): RegExpMatchArray | null {
   return m;
 }
 
+const FIND_EXEC_FLAGS: ReadonlySet<string> = new Set(['-exec', '-execdir', '-ok', '-okdir']);
+
 function isShellWrapExemptArg(
   idx: number,
   trimmed: string,
-  localBase: string,
+  firstFindExecIdx: number,
   localArgs: readonly string[],
   exemptIndices: ReadonlySet<number>,
 ): boolean {
   if (exemptIndices.has(idx)) return true;
   const prev = idx > 0 ? localArgs[idx - 1] : undefined;
   if (prev !== undefined && SHELL_OP_VALUE_FLAGS.has(prev)) return true;
-  return localBase === 'find'
-    && trimmed === ';'
-    && localArgs.slice(0, idx).some(x => x === '-exec' || x === '-execdir' || x === '-ok' || x === '-okdir');
+  return firstFindExecIdx !== -1 && idx > firstFindExecIdx && trimmed === ';';
 }
 
 export function wrapBuiltinOrShellCommand(
@@ -295,6 +301,7 @@ export function wrapBuiltinOrShellCommand(
   const localBase = path.basename(localCmd).toLowerCase().replace(/\.exe$/, '');
   if (findWslShellInlineScriptIndex(localCmd, localArgs) !== -1) return { cmd: localCmd, args: localArgs };
   const exemptIndices = collectWslPathExemptIndices(localCmd, localArgs);
+  const firstFindExecIdx = localBase === 'find' ? localArgs.findIndex(x => FIND_EXEC_FLAGS.has(x)) : -1;
   const hasHardShellMeta = /[|&;<>$`{}\r\n]/.test(localCmd);
   const isRootedPath = /^(?:\/|[a-zA-Z]:[\\/])/.test(localCmd);
   const hasParenCmdMeta = /[()]/.test(localCmd) && !(isRootedPath && !hasHardShellMeta);
@@ -303,7 +310,7 @@ export function wrapBuiltinOrShellCommand(
   const hasCmdMeta = hasHardShellMeta || hasParenCmdMeta || (localCmd.includes(' ') && !isPlainSpacedPath);
   const hasArgMeta = localArgs.some((a, idx) => {
     const trimmed = a.trim();
-    if (isShellWrapExemptArg(idx, trimmed, localBase, localArgs, exemptIndices)) return false;
+    if (isShellWrapExemptArg(idx, trimmed, firstFindExecIdx, localArgs, exemptIndices)) return false;
     return SHELL_OPERATORS_SET.has(trimmed) || matchAttachedRedirection(trimmed) !== null;
   });
   if (!BUILT_INS.includes(localCmd.toLowerCase()) && !(target === 'wsl2' && (hasCmdMeta || hasArgMeta))) {
@@ -315,7 +322,7 @@ export function wrapBuiltinOrShellCommand(
   const isCompoundCmd = hasCmdMeta;
   const renderedArgs = localArgs.map((a, idx) => {
     const trimmed = a.trim();
-    const skipOp = isShellWrapExemptArg(idx, trimmed, localBase, localArgs, exemptIndices);
+    const skipOp = isShellWrapExemptArg(idx, trimmed, firstFindExecIdx, localArgs, exemptIndices);
     if (!skipOp && SHELL_OPERATORS_SET.has(trimmed)) return trimmed;
     const redir = !skipOp ? matchAttachedRedirection(trimmed) : null;
     if (redir?.[1] !== undefined && redir[2] !== undefined) {

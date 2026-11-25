@@ -1,15 +1,13 @@
 // @ts-nocheck
-import { escapePwshSingleQuoted } from '../command-utils.js';
-import { match, P } from 'ts-pattern';
 import {
-  NODE_VALUE_FLAGS, PWSH_EXEC_FLAGS, PWSH_UI_REGEX, PY_VALUE_FLAGS, REDIS_OPTION_WITH_ARG, REPL_COMMANDS,
-  SSH_VALUE_FLAGS, TUI_COMMANDS, collectSshPositionals, findPwshCommandIndex, hasCmdInteractiveKSwitch,
+  NODE_VALUE_FLAGS, PWSH_EXEC_FLAGS, PY_VALUE_FLAGS, REDIS_OPTION_WITH_ARG, REPL_COMMANDS,
+  SSH_VALUE_FLAGS, TUI_COMMANDS, collectSshPositionals, hasCmdInteractiveKSwitch,
   hasNodeDebuggerArg, hasPythonPdbArg, isDbNonInteractive, isPythonValueShortCluster,
   isSshConsumingShortArg, isWslNonInteractive,
 } from './repl-tui-constants.js';
-import { stripCommentAndQuoteSpansForShellScan } from './repl-script-scanner.js';
+import { checkPriorityWatchAndShellGuards, encodeInlinePwshInvocation } from './repl-watch-pwsh-guards.js';
 import type { ExecutionContext } from './types.js';
-import { AGENT_EXEC_README_URL, hasTailFollowFlag } from './utils.js';
+import { AGENT_EXEC_README_URL } from './utils.js';
 
 const REPL_COMMAND_SET: ReadonlySet<string> = new Set(REPL_COMMANDS);
 const TUI_COMMAND_SET: ReadonlySet<string> = new Set(TUI_COMMANDS);
@@ -44,30 +42,54 @@ const PWSH_HELP_VALUE_FLAGS: ReadonlySet<string> = new Set([
 ]);
 const OTHER_REPL_HELP_VALUE_FLAGS: ReadonlySet<string> = new Set(['-e', '-E', '-r', '-I', '-C', '-F', '-c', '--command', '--eval', '-f', '--file']);
 
+const JS_RUNTIME_CLI_SET: ReadonlySet<string> = new Set([
+  'node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe', 'tsx', 'tsx.exe', 'tsx.cmd', 'ts-node',
+]);
+const DEBUGGABLE_JS_CLI_SET: ReadonlySet<string> = new Set([
+  'node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe',
+]);
+const PYTHON_CLI_SET: ReadonlySet<string> = new Set(['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe']);
+const POSIX_SHELL_CLI_SET: ReadonlySet<string> = new Set([
+  'bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe',
+]);
+const PWSH_CLI_SET: ReadonlySet<string> = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe']);
+const NON_POSIX_SHORT_SHELL_SET: ReadonlySet<string> = new Set(['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe']);
+const INTERACTIVE_STRIP_TARGET_SET: ReadonlySet<string> = new Set([
+  ...POSIX_SHELL_CLI_SET, ...PYTHON_CLI_SET,
+]);
+const RUBY_PERL_CLI_SET: ReadonlySet<string> = new Set(['ruby', 'ruby.exe', 'ruby.cmd', 'perl', 'perl.exe', 'perl.cmd']);
+const HELP_LOWER_FLAG_SET: ReadonlySet<string> = new Set(['--version', '-version', '--help', '-help', '-?', '/?']);
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set();
+
 function resolveHelpValueFlags(lowerCmd: string): ReadonlySet<string> {
   if (DB_CLIENTS.has(lowerCmd)) return DB_HELP_VALUE_FLAGS;
   if (SSH_TELNET_CLIENTS.has(lowerCmd)) return SSH_VALUE_FLAGS;
-  if (['node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe', 'tsx', 'tsx.exe', 'tsx.cmd', 'ts-node'].includes(lowerCmd)) {
-    return NODE_HELP_VALUE_FLAGS;
-  }
-  if (['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lowerCmd)) return PYTHON_HELP_VALUE_FLAGS;
-  if (['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lowerCmd)) return SHELL_HELP_VALUE_FLAGS;
-  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lowerCmd)) return PWSH_HELP_VALUE_FLAGS;
+  if (JS_RUNTIME_CLI_SET.has(lowerCmd)) return NODE_HELP_VALUE_FLAGS;
+  if (PYTHON_CLI_SET.has(lowerCmd)) return PYTHON_HELP_VALUE_FLAGS;
+  if (POSIX_SHELL_CLI_SET.has(lowerCmd)) return SHELL_HELP_VALUE_FLAGS;
+  if (PWSH_CLI_SET.has(lowerCmd)) return PWSH_HELP_VALUE_FLAGS;
   return OTHER_REPL_HELP_VALUE_FLAGS;
 }
 
+const POSIX_O_CLUSTER_RE = /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/;
+const CMD_SLASH_CK_RE = /^\/[ck](?:$|[=:])/;
+const PWSH_VERSION_VAL_RE = /^\d+(?:\.\d+)*$/;
+const SHORT_TI_FLAGS_RE = /[ti]/;
+const SHORT_TI_FLAGS_GLOBAL_RE = /[ti]/g;
+const SHORT_TI_CLUSTER_RE = /^-([a-zA-Z]*[ti][a-zA-Z]*)$/;
+
 function isShellOptionWithArg(lowerCmd: string, arg: string): boolean {
-  return ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lowerCmd) && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(arg);
+  return POSIX_SHELL_CLI_SET.has(lowerCmd) && POSIX_O_CLUSTER_RE.test(arg);
 }
 
 function isHelpOrVersion(cmdBasename: string, args: readonly string[]): boolean {
   const lowerCmd = cmdBasename.toLowerCase();
   const isDb = DB_CLIENTS.has(lowerCmd);
   const isCmdShell = lowerCmd === 'cmd' || lowerCmd === 'cmd.exe';
-  const isPwshCmd = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lowerCmd);
-  const isPosixShell = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lowerCmd);
+  const isPwshCmd = PWSH_CLI_SET.has(lowerCmd);
+  const isPosixShell = POSIX_SHELL_CLI_SET.has(lowerCmd);
   const valueFlags = resolveHelpValueFlags(lowerCmd);
-  const vMeansVersion = !isPosixShell && !['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lowerCmd)
+  const vMeansVersion = !isPosixShell && !PYTHON_CLI_SET.has(lowerCmd)
     && !SSH_TELNET_CLIENTS.has(lowerCmd)
     && !NON_V_DB_CLIENTS.has(lowerCmd);
   for (let i = 0; i < args.length; i++) {
@@ -75,12 +97,12 @@ function isHelpOrVersion(cmdBasename: string, args: readonly string[]): boolean 
     if (arg === undefined || arg === '--') break;
     const lower = arg.toLowerCase();
     if (isCmdShell) {
-      if (/^\/[ck](?:$|[=:])/.test(lower)) break;
+      if (CMD_SLASH_CK_RE.test(lower)) break;
       if (lower === '/?') return true;
       continue;
     }
-    if (isPwshCmd && lower === '-version' && /^\d+(?:\.\d+)*$/.test(args[i + 1] ?? '')) { i++; continue; }
-    if (['--version', '-version', '--help', '-help', '-?', '/?'].includes(lower) || ['-V', '-VV'].includes(arg)) return true;
+    if (isPwshCmd && lower === '-version' && PWSH_VERSION_VAL_RE.test(args[i + 1] ?? '')) { i++; continue; }
+    if (HELP_LOWER_FLAG_SET.has(lower) || arg === '-V' || arg === '-VV') return true;
     if (arg === '-h' && !isDb && !isPosixShell) return true;
     if (lower === '-v' && vMeansVersion) return true;
     const checkArg = isPwshCmd ? lower : arg;
@@ -128,16 +150,19 @@ function stripPythonShortFlag(arg: string): { nextArg: string | null; stopAfter:
   return { nextArg: prefix.length > 0 ? `-${prefix}` : null, stopAfter: false, stripped, consumesNext: false };
 }
 
+const PWSH_STOP_FLAG_SET: ReadonlySet<string> = new Set(['-c', '-command', '-f', '-file', '-ec', '-encodedcommand', '-en']);
+
 function isStopFlagForRuntime(lower: string, isPosixShell: boolean, arg: string): boolean {
   if (arg === '--') return true;
   if (!arg.startsWith('-')) return !(isPosixShell && arg.startsWith('+') && arg.length > 1);
   if (isPosixShell) return arg === '-c' || arg === '--command';
   if (lower.startsWith('python')) return arg === '-c' || arg === '-m';
   if (lower === 'php' || lower === 'php.exe') return arg === '-r';
-  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lower)) {
+  if (PWSH_CLI_SET.has(lower)) {
     const low = arg.toLowerCase();
-    const head = low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
-    return ['-c', '-command', '-f', '-file', '-ec', '-encodedcommand', '-en'].includes(head);
+    const colonIdx = low.indexOf(':');
+    const head = colonIdx !== -1 ? low.slice(0, colonIdx) : low;
+    return PWSH_STOP_FLAG_SET.has(head);
   }
   if ((lower === 'perl' || lower === 'perl.exe') && arg === '-E') return true;
   return arg === '-e' || arg === '-p' || arg === '--eval' || arg === '--print' || arg === '-c' || arg === '--command';
@@ -146,18 +171,17 @@ function isStopFlagForRuntime(lower: string, isPosixShell: boolean, arg: string)
 function stripNonSshInteractiveFlags(cmdBasename: string, args: string[]): void {
   const lower = cmdBasename.toLowerCase();
   if (SKIP_INTERACTIVE_STRIP_SET.has(lower)) return;
-  const usesPosixShortFlags = !['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(lower);
-  const isInteractiveTarget = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lower);
-
-  const isPosixShell = ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'].includes(lower);
+  const usesPosixShortFlags = !NON_POSIX_SHORT_SHELL_SET.has(lower);
+  const isInteractiveTarget = INTERACTIVE_STRIP_TARGET_SET.has(lower);
+  const isPosixShell = POSIX_SHELL_CLI_SET.has(lower);
   let stripped = false;
   const newArgs: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
-    if (isPosixShell && !arg.startsWith('--') && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(arg) && i + 1 < args.length) {
-      const hasInteractiveFlag = isInteractiveTarget && arg.startsWith('-') && /[ti]/.test(arg);
-      const outFlag = hasInteractiveFlag ? arg.replace(/[ti]/g, '') : arg;
+    if (isPosixShell && !arg.startsWith('--') && POSIX_O_CLUSTER_RE.test(arg) && i + 1 < args.length) {
+      const hasInteractiveFlag = isInteractiveTarget && arg.startsWith('-') && SHORT_TI_FLAGS_RE.test(arg);
+      const outFlag = hasInteractiveFlag ? arg.replace(SHORT_TI_FLAGS_GLOBAL_RE, '') : arg;
       if (hasInteractiveFlag) stripped = true;
       if (outFlag !== '-') newArgs.push(outFlag);
       newArgs.push(args[++i] ?? '');
@@ -189,8 +213,8 @@ function stripNonSshInteractiveFlags(cmdBasename: string, args: string[]): void 
       }
       continue;
     }
-    if (isInteractiveTarget && usesPosixShortFlags && /^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg)) {
-      const nextArg = arg.replace(/[ti]/g, '');
+    if (isInteractiveTarget && usesPosixShortFlags && SHORT_TI_CLUSTER_RE.test(arg)) {
+      const nextArg = arg.replace(SHORT_TI_FLAGS_GLOBAL_RE, '');
       if (nextArg !== '-') newArgs.push(nextArg);
       stripped = true;
       continue;
@@ -230,7 +254,7 @@ function hasRuntimeExecutionArg(
     const eq = arg.indexOf('=');
     const key = eq === -1 ? arg : arg.slice(0, eq);
     const isCombinedShellO = valueFlags === SHELL_VALUE_FLAGS
-      && /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(arg)
+      && POSIX_O_CLUSTER_RE.test(arg)
       && !(arg.startsWith('-') && arg.slice(1).includes('c'));
     if (
       (eq === -1 && (valueFlags.has(key) || (!caseSensitiveShort && valueFlags.has(key.toLowerCase())))) ||
@@ -259,116 +283,69 @@ const SHELL_VALUE_FLAGS: ReadonlySet<string> = new Set(['-o', '+o', '-O', '+O', 
 const RUBY_PERL_VALUE_FLAGS: ReadonlySet<string> = new Set(['-r', '-I', '-F', '-C', '-K', '-x']);
 const PHP_VALUE_FLAGS: ReadonlySet<string> = new Set(['-d', '-c', '-z']);
 
+const FTP_TELNET_CLI_SET: ReadonlySet<string> = new Set(['ftp', 'ftp.exe', 'telnet', 'telnet.exe']);
+const NODE_EXEC_FLAGS = ['-e', '--eval', '-p', '--print'] as const;
+const PY_EXEC_FLAGS = ['-c', '-m'] as const;
+const SHELL_EXEC_FLAGS = ['-c'] as const;
+const PWSH_EXEC_ARG_FLAGS = ['-c', '-command', '-file', '-f', '-ec', '-encodedcommand', '-en'] as const;
+const RUBY_PERL_EXEC_FLAGS = ['-e', '-E'] as const;
+const PHP_EXEC_FLAGS = ['-r'] as const;
+const CMD_EXEC_FLAGS = ['/c'] as const;
+
 function getReplBlockReason(cmdBasename: string, args: readonly string[]): string | null {
+  if (args.length === 0) return 'without arguments or stdin';
   const lower = cmdBasename.toLowerCase();
   const helpOrVer = isHelpOrVersion(cmdBasename, args);
-  return match({ lower, args })
-    .with({ args: [] }, () => 'without arguments or stdin')
-    .with({ lower: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'), args: P.when(a => hasNodeDebuggerArg(a, lower.startsWith('node'))) }, () => 'with a debugging flag')
-    .with({ lower: P.union('mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'), args: P.when(a => !helpOrVer && !isDbNonInteractive(lower, a)) }, () => 'as a DB client without execution flags')
-    .with({ lower: P.union('ssh', 'ssh.exe', 'sftp', 'sftp.exe'), args: P.when(a => !helpOrVer && collectSshPositionals(a).length < 2) }, () => 'as a naked shell/connection without commands')
-    .with({ lower: P.union('ftp', 'ftp.exe', 'telnet', 'telnet.exe'), args: P.when(() => !helpOrVer) }, () => 'as a naked shell/connection without commands')
-    .with({ lower: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, NODE_VALUE_FLAGS, ['-e', '--eval', '-p', '--print'])) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, PY_VALUE_FLAGS, ['-c', '-m'])) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'ash', 'ash.exe', 'dash', 'dash.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, SHELL_VALUE_FLAGS, ['-c'], { caseSensitiveShort: true })) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, PWSH_EXEC_FLAGS, ['-c', '-command', '-file', '-f', '-ec', '-encodedcommand', '-en'], { useColonBoundary: true })) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('ruby', 'ruby.exe', 'ruby.cmd', 'perl', 'perl.exe', 'perl.cmd'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, RUBY_PERL_VALUE_FLAGS, ['-e', '-E'], { caseSensitiveShort: true })) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('php', 'php.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, PHP_VALUE_FLAGS, ['-r'], { caseSensitiveShort: true })) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && hasCmdInteractiveKSwitch(a)) }, () => 'with interactive /k switch')
-    .with({ lower: P.union('cmd', 'cmd.exe'), args: P.when(a => !helpOrVer && !hasRuntimeExecutionArg(a, new Set(), ['/c'], { isSlashSwitch: true, useColonBoundary: true, requireExecFlag: true })) }, () => 'with only flags and no script execution flags')
-    .with({ lower: P.union('wsl', 'wsl.exe'), args: P.when(a => !helpOrVer && !isWslNonInteractive(a)) }, () => 'with only session flags and no command')
-    .otherwise(() => null);
-}
-
-const RUNNER_CMDS_FOR_WATCH = new Set(['node', 'bun', 'deno', 'npx', 'pnpx', 'bunx', 'pnpm', 'npm', 'yarn', 'tsx', 'vitest', 'jest']);
-const RUNNER_PRE_FLAGS: ReadonlySet<string> = new Set([
-  ...NODE_VALUE_FLAGS, '-C', '--dir', '--cwd', '--prefix', '--filter', '-F', '-c', '--config', '--tsconfig', '--tsconfig-override', '--userconfig', '-w', '--workspace',
-]);
-function scanRunnerWatchContext(baseNoExt: string, args: readonly string[]): { positionals: string[]; sawPreWatch: boolean } {
-  const positionals: string[] = [];
-  let sawPreWatch = false;
-  let pastDoubleDash = false;
-  const isDirectTestRunner = baseNoExt === 'vitest' || baseNoExt === 'jest';
-  const isExecRunner = ['npx', 'pnpx', 'bunx'].includes(baseNoExt);
-  const isJsRuntime = baseNoExt === 'node' || baseNoExt === 'bun' || baseNoExt === 'deno';
-  const isPkgRunner = ['npx', 'pnpx', 'bunx', 'npm', 'pnpm', 'yarn'].includes(baseNoExt);
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === undefined) continue;
-    if (!pastDoubleDash && a === '--') { pastDoubleDash = true; continue; }
-    if (pastDoubleDash) {
-      const canForwardTestWatch = isDirectTestRunner || isExecRunner || positionals.some(p => ['test', 'vitest', 'jest'].includes(p.toLowerCase()));
-      if (!canForwardTestWatch) break;
-      const lowPost = a.toLowerCase();
-      if (lowPost === '--watch' || lowPost === '--watch=true' || lowPost === '--watch-path' || lowPost.startsWith('--watch-path=')) {
-        sawPreWatch = true;
-        break;
-      }
-      continue;
-    }
-    if (a.startsWith('-')) {
-      const low = a.toLowerCase();
-      if (low === '--watch' || low === '--watch=true' || low === '--watch-path' || low.startsWith('--watch-path=')) sawPreWatch = true;
-      if (isJsRuntime && (low === '-e' || low === '--eval' || low === '-p' || low === '--print' || /^--(?:eval|print)=/.test(low))) break;
-      if (!a.includes('=') && (RUNNER_PRE_FLAGS.has(a) || (isPkgRunner && (a === '-p' || a === '--package')))) i++;
-      continue;
-    }
-    positionals.push(a);
-    const nextAfter = args[i + 1]?.toLowerCase();
-    if (a.toLowerCase() === 'tsx' && (nextAfter === 'watch' || nextAfter === '--watch')) sawPreWatch = true;
-    if (baseNoExt === 'node' && positionals.length === 1) break;
+  if (DEBUGGABLE_JS_CLI_SET.has(lower)) {
+    if (hasNodeDebuggerArg(args, lower.startsWith('node'))) return 'with a debugging flag';
+    return !helpOrVer && !hasRuntimeExecutionArg(args, NODE_VALUE_FLAGS, NODE_EXEC_FLAGS)
+      ? 'with only flags and no script execution flags'
+      : null;
   }
-  return { positionals, sawPreWatch };
-}
-
-function checkPriorityWatchAndShellGuards(ctx: ExecutionContext): void {
-  const { cmdBasename, args, envOverrides, payload } = ctx;
-  const lower = cmdBasename.toLowerCase();
-  const baseNoExt = lower.replace(/\.(?:exe|cmd)$/, '');
-
-  if (['nodemon', 'nodemon.cmd', 'nodemon.exe', 'ts-node-dev', 'ts-node-dev.cmd', 'ts-node-dev.exe'].includes(lower)) {
-    blockExecution(`'${cmdBasename}' runs indefinitely in watch mode. Blocking execution.`);
+  if (DB_CLIENTS.has(lower)) {
+    return !helpOrVer && !isDbNonInteractive(lower, args) ? 'as a DB client without execution flags' : null;
   }
-  if (RUNNER_CMDS_FOR_WATCH.has(baseNoExt)) {
-    const { positionals, sawPreWatch } = scanRunnerWatchContext(baseNoExt, args);
-    const [pos0, pos1] = positionals;
-    if (baseNoExt === 'tsx' && (pos0 === 'watch' || sawPreWatch)) {
-      blockExecution(`'tsx ${sawPreWatch ? '--watch' : 'watch'}' runs indefinitely. Blocking execution.`);
-    }
-    if (payload.type === 'command') {
-      const delegated = ['npx', 'pnpx', 'bunx'].includes(baseNoExt) ? pos0 : (pos0 !== undefined && ['exec', 'dlx', 'x'].includes(pos0) ? pos1 : pos0);
-      if (delegated === 'nodemon' || delegated === 'ts-node-dev') {
-        blockExecution(`'${delegated}' runs indefinitely in watch mode. Blocking execution to prevent hanging.`);
-      }
-      if (sawPreWatch) {
-        blockExecution(`'${cmdBasename} --watch' runs indefinitely.`, ['Because \'agent-exec.ts\' is non-interactive, this will hang until timeout.', 'Please use standard execution without watch mode.']);
-      }
-    }
-    if ((baseNoExt === 'bun' || baseNoExt === 'deno') && pos0 === 'repl') blockExecution(`'${baseNoExt} repl' is interactive and will hang indefinitely. Blocking execution.`);
+  if (SSH_CLIENT_SET.has(lower)) {
+    return !helpOrVer && collectSshPositionals(args).length < 2 ? 'as a naked shell/connection without commands' : null;
   }
-  if (baseNoExt === 'pm2') {
-    const ddIdx = args.indexOf('--');
-    const pre = ddIdx === -1 ? args : args.slice(0, ddIdx);
-    const firstPm2Sub = pre.find(a => !a.startsWith('-'));
-    if (firstPm2Sub !== undefined && ['logs', 'monit', 'dash'].includes(firstPm2Sub)) {
-      blockExecution(`'pm2 ${firstPm2Sub}' is interactive/runs indefinitely. Blocking execution.`);
-    }
+  if (FTP_TELNET_CLI_SET.has(lower)) {
+    return !helpOrVer ? 'as a naked shell/connection without commands' : null;
   }
-  if (['watch', 'watch.exe'].includes(lower)) blockExecution(`'watch' runs indefinitely. Blocking execution.`);
-  if (['tail', 'tail.exe'].includes(lower) && hasTailFollowFlag(args)) {
-    blockExecution(`'tail -f' runs indefinitely. Blocking execution.`);
+  if (PYTHON_CLI_SET.has(lower)) {
+    return !helpOrVer && !hasRuntimeExecutionArg(args, PY_VALUE_FLAGS, PY_EXEC_FLAGS)
+      ? 'with only flags and no script execution flags'
+      : null;
   }
-  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(lower)) {
-    envOverrides['POWERSHELL_TELEMETRY_OPTOUT'] = '1';
-    envOverrides['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1';
-    const { cmdIdx, boundary } = findPwshCommandIndex(args);
-    if (args.slice(0, boundary).some(a => a.toLowerCase() === '-noexit')) blockExecution(`'pwsh -NoExit' prevents the shell from exiting and will hang indefinitely. Blocking execution.`);
-    if (cmdIdx !== -1) {
-      const cmdTok = args[cmdIdx] ?? '';
-      const inlineBody = cmdTok.includes(':') ? [cmdTok.slice(cmdTok.indexOf(':') + 1), ...args.slice(cmdIdx + 1)].join(' ') : args.slice(cmdIdx + 1).join(' ');
-      if (inlineBody.length > 0 && PWSH_UI_REGEX.test(stripCommentAndQuoteSpansForShellScan(inlineBody))) blockExecution(`PowerShell UI cmdlets like Get-Credential or Out-GridView will hang headlessly. Blocking execution.`);
-    }
+  if (POSIX_SHELL_CLI_SET.has(lower)) {
+    return !helpOrVer && !hasRuntimeExecutionArg(args, SHELL_VALUE_FLAGS, SHELL_EXEC_FLAGS, { caseSensitiveShort: true })
+      ? 'with only flags and no script execution flags'
+      : null;
   }
+  if (PWSH_CLI_SET.has(lower)) {
+    return !helpOrVer && !hasRuntimeExecutionArg(args, PWSH_EXEC_FLAGS, PWSH_EXEC_ARG_FLAGS, { useColonBoundary: true })
+      ? 'with only flags and no script execution flags'
+      : null;
+  }
+  if (RUBY_PERL_CLI_SET.has(lower)) {
+    return !helpOrVer && !hasRuntimeExecutionArg(args, RUBY_PERL_VALUE_FLAGS, RUBY_PERL_EXEC_FLAGS, { caseSensitiveShort: true })
+      ? 'with only flags and no script execution flags'
+      : null;
+  }
+  if (lower === 'php' || lower === 'php.exe') {
+    return !helpOrVer && !hasRuntimeExecutionArg(args, PHP_VALUE_FLAGS, PHP_EXEC_FLAGS, { caseSensitiveShort: true })
+      ? 'with only flags and no script execution flags'
+      : null;
+  }
+  if (lower === 'cmd' || lower === 'cmd.exe') {
+    if (!helpOrVer && hasCmdInteractiveKSwitch(args)) return 'with interactive /k switch';
+    return !helpOrVer && !hasRuntimeExecutionArg(args, EMPTY_STRING_SET, CMD_EXEC_FLAGS, { isSlashSwitch: true, useColonBoundary: true, requireExecFlag: true })
+      ? 'with only flags and no script execution flags'
+      : null;
+  }
+  if (lower === 'wsl' || lower === 'wsl.exe') {
+    return !helpOrVer && !isWslNonInteractive(args) ? 'with only session flags and no command' : null;
+  }
+  return null;
 }
 
 export function guardDirectCommandMode(ctx: ExecutionContext): void {
@@ -382,10 +359,10 @@ export function guardDirectCommandMode(ctx: ExecutionContext): void {
       `Please use standard terminal commands (e.g. cat, grep, list_dir, view_file) instead.`,
     ]);
   }
-  if (payload.type === 'command' && ['node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'].includes(lowerCmd) && hasNodeDebuggerArg(args, lowerCmd.startsWith('node'))) {
+  if (payload.type === 'command' && DEBUGGABLE_JS_CLI_SET.has(lowerCmd) && hasNodeDebuggerArg(args, lowerCmd.startsWith('node'))) {
     blockExecution(`You attempted to start ${cmdBasename} with a debugging flag.`, [`Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`]);
   }
-  if (payload.type === 'command' && ['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(lowerCmd) && hasPythonPdbArg(args)) {
+  if (payload.type === 'command' && PYTHON_CLI_SET.has(lowerCmd) && hasPythonPdbArg(args)) {
     blockExecution(`You attempted to start Python with a debugger (-m pdb).`, [`Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`]);
   }
   const isReplCmd = REPL_COMMAND_SET.has(cmdBasename) || REPL_COMMAND_SET.has(lowerCmd);
@@ -402,38 +379,4 @@ export function guardDirectCommandMode(ctx: ExecutionContext): void {
   }
 }
 
-export function encodeInlinePwshInvocation(ctx: ExecutionContext): void {
-  const { cmdBasename, args, payload } = ctx;
-  if (payload.type !== 'command' || payload.target === 'wsl2') return;
-  if (!['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmdBasename.toLowerCase())) return;
-
-  const { cmdIdx: cIndex } = findPwshCommandIndex(args);
-  const cmdTok = cIndex !== -1 ? (args[cIndex] ?? '') : '';
-  const colonBody = cmdTok.includes(':') ? cmdTok.slice(cmdTok.indexOf(':') + 1) : '';
-  const isStdinDashCommand = colonBody.length === 0 && args[cIndex + 1] === '-' && cIndex + 2 === args.length;
-  if (cIndex !== -1 && !isStdinDashCommand && (colonBody.length > 0 || cIndex + 1 < args.length)) {
-    const scriptArgs = colonBody.length > 0 ? [colonBody, ...args.slice(cIndex + 1)] : args.slice(cIndex + 1);
-    const safeArgs = scriptArgs.map((a) => (!/[ \t]/.test(a) || (a.startsWith("'") && a.endsWith("'")) || (a.startsWith('"') && a.endsWith('"')) || a.startsWith('$(') || a.startsWith('@(') ? a : `'${escapePwshSingleQuoted(a)}'`));
-    const scriptBody = scriptArgs.length === 1 ? (scriptArgs[0] ?? '') : safeArgs.join(' ');
-    const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n` + scriptBody;
-    const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
-    args.splice(cIndex, args.length - cIndex, '-EncodedCommand', encoded);
-    payload.args = args;
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Intercepted inline PowerShell command. Converting to Base64 -EncodedCommand to prevent quote parsing failures... (Frictionless Recovery)`);
-  }
-
-  const { boundary: flagBoundary } = findPwshCommandIndex(args);
-  const lowerHeads = args.slice(0, flagBoundary).map((a) => {
-    const low = a.toLowerCase();
-    return low.includes(':') ? low.slice(0, low.indexOf(':')) : low;
-  });
-  const newArgs: string[] = [];
-  if (!lowerHeads.includes('-executionpolicy') && !lowerHeads.includes('-ep')) newArgs.push('-ExecutionPolicy', 'Bypass');
-  if (!lowerHeads.includes('-noninteractive')) newArgs.push('-NonInteractive');
-  if (!lowerHeads.includes('-noprofile')) newArgs.push('-NoProfile');
-  if (newArgs.length > 0) {
-    args.unshift(...newArgs);
-    payload.args = args;
-    console.error(`\n   💡 AGENT HINT: Automatically injected [${newArgs.join(', ')}] into ${cmdBasename} command to prevent hanging.`);
-  }
-}
+export { encodeInlinePwshInvocation };

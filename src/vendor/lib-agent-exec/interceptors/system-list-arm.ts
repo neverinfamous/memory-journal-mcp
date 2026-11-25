@@ -6,6 +6,11 @@ import { emitInterceptBanner } from '../utils.js';
 import { handleFindInterception } from './search-interceptor.js';
 import type { ExecutionContext } from './types.js';
 
+const WRAPPER_SHELL_SET: ReadonlySet<string> = new Set(['sh', 'bash', 'pwsh', 'powershell', 'cmd']);
+const WINDOWS_LIST_CMD_SET: ReadonlySet<string> = new Set(['dir', 'get-childitem', 'gci']);
+const LIST_VALUE_FLAG_SET: ReadonlySet<string> = new Set(['-depth', '-filter', '-include', '-exclude']);
+const WINDOWS_RECURSE_FLAG_SET: ReadonlySet<string> = new Set(['-recurse', '-r', '/s']);
+
 export function handleListArm(ctx: ExecutionContext, cmd: string, cmdBasename: string): void {
   if (isWrapperShell(cmd)) return;
   if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
@@ -13,21 +18,20 @@ export function handleListArm(ctx: ExecutionContext, cmd: string, cmdBasename: s
     emitInterceptBanner(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
   }
   const cleanBase = cmdBasename.toLowerCase().replace(/\.exe$/, '');
-  const isWindowsListCmd = ['dir', 'get-childitem', 'gci'].includes(cleanBase);
+  const isWindowsListCmd = WINDOWS_LIST_CMD_SET.has(cleanBase);
   if (rewriteListFilterToFind(ctx, isWindowsListCmd)) return;
   if (rewriteRecursiveListToFind(ctx, isWindowsListCmd)) return;
-  renameDirToLs(ctx, cmdBasename);
+  renameDirToLs(ctx, isWindowsListCmd);
   ctx.args = cleanWindowsListArgs(ctx.args, isWindowsListCmd);
   if (ctx.payload.type === 'command') ctx.payload.args = ctx.args;
 }
 
 function isWrapperShell(cmd: string): boolean {
-  return ['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd);
+  return WRAPPER_SHELL_SET.has(cmd);
 }
 
 function isListValueFlag(arg: string, isWindowsListCmd: boolean): boolean {
-  if (!isWindowsListCmd) return false;
-  return ['-depth', '-filter', '-include', '-exclude'].includes(arg.toLowerCase());
+  return isWindowsListCmd && LIST_VALUE_FLAG_SET.has(arg.toLowerCase());
 }
 
 function rewriteListFilterToFind(ctx: ExecutionContext, isWindowsListCmd: boolean): boolean {
@@ -45,9 +49,14 @@ function rewriteListFilterToFind(ctx: ExecutionContext, isWindowsListCmd: boolea
   return true;
 }
 
+const WIN_LIST_SWITCH_RE = /^\/(?:[sSbBwWpPqQcC4]|[aA](?::[dhrsalio-]+|(?:-?[dhrsalio]){1,3})?|[oO](?::[nesdg-]+|(?:-?[nesdg]){1,3})?)$/;
+const WIN_A_SWITCH_RE = /^\/a(?::[dhrsalio-]+|(?:-?[dhrsalio]){1,3})?$/;
+const WIN_UNNEGATED_H_RE = /(?<!-)h/;
+const WIN_O_SWITCH_RE = /^\/o(?::[nesdg-]+|(?:-?[nesdg]){1,3})?$/;
+
 function isWinSwitch(arg: string, isWindowsListCmd: boolean): boolean {
   if (!isWindowsListCmd) return false;
-  return /^\/(?:[sSbBwWpPqQcC4]|[aA](?::[dhrsalio-]+|(?:-?[dhrsalio]){1,3})?|[oO](?::[nesdg-]+|(?:-?[nesdg]){1,3})?)$/.test(arg);
+  return WIN_LIST_SWITCH_RE.test(arg);
 }
 
 function collectListPositionals(args: readonly string[], isWindowsListCmd: boolean): string[] {
@@ -97,7 +106,7 @@ function applyFindRewrite(ctx: ExecutionContext, targetPath: string, pattern: st
 function hasRecurseFlag(args: string[], isWindowsListCmd: boolean): boolean {
   return args.some(arg =>
     isWindowsListCmd
-      ? ['-recurse', '-r', '/s'].includes(arg.toLowerCase())
+      ? WINDOWS_RECURSE_FLAG_SET.has(arg.toLowerCase())
       : arg === '-R' || arg === '--recursive',
   );
 }
@@ -130,9 +139,8 @@ function splitPatternPath(patternArg: string): { targetPath: string; pattern: st
   return { targetPath: convertToWslPath(normalizedDir), pattern };
 }
 
-function renameDirToLs(ctx: ExecutionContext, cmdBasename: string): void {
-  const cleanBase = cmdBasename.toLowerCase().replace(/\.exe$/, '');
-  if (!['dir', 'get-childitem', 'gci'].includes(cleanBase)) return;
+function renameDirToLs(ctx: ExecutionContext, isWindowsListCmd: boolean): void {
+  if (!isWindowsListCmd) return;
   ctx.cmdBasename = 'ls';
   if (ctx.payload.type === 'command') ctx.payload.command = 'ls';
 }
@@ -177,8 +185,8 @@ function translateListFlag(lower: string, args: string[], index: number, isWindo
   if (lower === '-file' || lower === '-directory' || (isWindowsListCmd && (lower === '/ad' || lower === '/a:d'))) {
     return { consumeNext: false, outputs: [] };
   }
-  if (isWindowsListCmd && /^\/a(?::[dhrsalio-]+|(?:-?[dhrsalio]){1,3})?$/.test(lower)) {
-    return { consumeNext: false, outputs: /(?<!-)h/.test(lower.slice(2)) ? ['-a'] : [] };
+  if (isWindowsListCmd && WIN_A_SWITCH_RE.test(lower)) {
+    return { consumeNext: false, outputs: WIN_UNNEGATED_H_RE.test(lower.slice(2)) ? ['-a'] : [] };
   }
   const orderFlag = isWindowsListCmd ? translateOrderFlag(lower) : null;
   if (orderFlag !== null) return orderFlag;
@@ -192,7 +200,7 @@ function translateListFlag(lower: string, args: string[], index: number, isWindo
 }
 
 function translateOrderFlag(lower: string): { consumeNext: boolean; outputs: string[] } | null {
-  if (!/^\/o(?::[nesdg-]+|(?:-?[nesdg]){1,3})?$/.test(lower)) return null;
+  if (!WIN_O_SWITCH_RE.test(lower)) return null;
   const outputs: string[] = [];
   if (lower.includes('d')) outputs.push('-t');
   if (lower.includes('s')) outputs.push('-S');

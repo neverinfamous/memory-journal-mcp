@@ -85,17 +85,16 @@ export function convertToWslPath(winPath: string): string {
     }
     if (value.includes('\\')) {
       if (/[{}`;|"'<>:$()*?&!`]/.test(value) || /\\[$()*?&!`]/.test(value)) return winPath;
-      if (value.includes(' ') && !fs.existsSync(value.trim())) return winPath;
-      if (value.trim().endsWith('\\') && !fs.existsSync(value.trim())) return winPath;
-      if (prefix.endsWith(':') && !/^[a-zA-Z]:[/\\]/.test(value.trim())) return winPath;
+      const trimmedVal = value.trim();
+      if ((value.includes(' ') || trimmedVal.endsWith('\\')) && !fs.existsSync(trimmedVal)) return winPath;
+      if (prefix.endsWith(':') && !/^[a-zA-Z]:[/\\]/.test(trimmedVal)) return winPath;
       return `${prefix}${value.replace(/\\/g, '/')}`;
     }
   }
 
   if (!winPath.startsWith('-') && winPath.includes('\\')) {
     if (/[{}`;|"'<>:$()*?&!`]/.test(winPath) || /\\[$()*?&!`]/.test(winPath)) return winPath;
-    if (winPath.includes(' ') && !fs.existsSync(winPath)) return winPath;
-    if (winPath.endsWith('\\') && !fs.existsSync(winPath)) return winPath;
+    if ((winPath.includes(' ') || winPath.endsWith('\\')) && !fs.existsSync(winPath)) return winPath;
     return winPath.replace(/\\/g, '/');
   }
 
