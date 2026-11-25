@@ -93,7 +93,36 @@ export function truncateSafely(str: string, maxLength: number, truncateMsg: stri
   return str.slice(0, safeLen) + truncateMsg;
 }
 
-const EXT_TO_LANGUAGE: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
+export function createNullProtoRecord<V>(): Record<string, V> {
+  const obj: Record<string, V> = {};
+  Object.setPrototypeOf(obj, null);
+  return obj;
+}
+
+export function iterateFromFirstStep<T>(
+  first: IteratorResult<T>,
+  rest: AsyncGenerator<T>,
+): AsyncIterable<T> {
+  let useFirst = true;
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      return {
+        next(): Promise<IteratorResult<T>> {
+          if (useFirst) {
+            useFirst = false;
+            return Promise.resolve(first);
+          }
+          return rest.next();
+        },
+        return(): Promise<IteratorResult<T>> {
+          return rest.return(undefined);
+        },
+      };
+    },
+  };
+}
+
+const extToLanguageMap: Record<string, string> = {
   ts: 'TypeScript', tsx: 'TypeScript', mts: 'TypeScript', cts: 'TypeScript',
   js: 'JavaScript', jsx: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript',
   py: 'Python', go: 'Go', rs: 'Rust', md: 'Markdown', json: 'JSON', jsonc: 'JSON',
@@ -102,7 +131,9 @@ const EXT_TO_LANGUAGE: Readonly<Record<string, string>> = Object.assign(Object.c
   c: 'C', h: 'C++', cpp: 'C++', hpp: 'C++', cc: 'C++', cs: 'C#', php: 'PHP', sql: 'SQL',
   vue: 'Vue', svelte: 'Svelte', toml: 'TOML', xml: 'XML', swift: 'Swift',
   kt: 'Kotlin', kts: 'Kotlin', dart: 'Dart', ex: 'Elixir', exs: 'Elixir',
-});
+};
+Object.setPrototypeOf(extToLanguageMap, null);
+const EXT_TO_LANGUAGE: Readonly<Record<string, string>> = Object.freeze(extToLanguageMap);
 
 export function getLanguage(file: string): string | undefined {
   const dotIdx = file.lastIndexOf('.');

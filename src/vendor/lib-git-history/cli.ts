@@ -1,12 +1,7 @@
 // @ts-nocheck
 import { parseArgs } from 'node:util';
-
-const pc = {
-  bold: (str: string) => `\x1b[1m${str}\x1b[22m`,
-  red: (str: string) => `\x1b[31m${str}\x1b[39m`,
-};
-
 import type { CliArgs } from './schema.js';
+import { hasControlChar } from './security-utils.js';
 
 export type { CliArgs };
 
@@ -64,6 +59,11 @@ const NUMERIC_ARG_REGEX = /^-?\d+(?:\.\d+)?$/;
 
 const NON_NEGATIVE_INT_ARG_REGEX = /^\d+$/;
 
+const pc = {
+  bold: (str: string) => `\x1b[1m${str}\x1b[22m`,
+  red: (str: string) => `\x1b[31m${str}\x1b[39m`,
+};
+
 function parseNonNegIntArg(raw: string | undefined, flagName: string): number | undefined {
   if (raw === undefined) return undefined;
   const trimmed = raw.trim();
@@ -77,24 +77,28 @@ function parseNonNegIntArg(raw: string | undefined, flagName: string): number | 
   return parsed;
 }
 
-function parseNonBlankArg(raw: string | undefined): string | undefined {
+function parseSafeStringArg(raw: string | undefined, flagName: string): string | undefined {
   if (raw === undefined) return undefined;
-  if (raw.trim().length === 0) {
-    throw new Error('Flag value must not be blank');
-  }
+  if (raw.length > 4096 || hasControlChar(raw)) throw new Error(`Invalid or unsafe value for --${flagName}`);
   return raw;
+}
+
+function parseNonBlankArg(raw: string | undefined, flagName = 'option'): string | undefined {
+  const safe = parseSafeStringArg(raw, flagName);
+  if (safe !== undefined && safe.trim().length === 0) throw new Error('Flag value must not be blank');
+  return safe;
 }
 
 type ParsedCliValues = ReturnType<typeof parseArgs<{ options: typeof CLI_OPTIONS; strict: true }>>['values'];
 
 function assignValidatedStrings(values: ParsedCliValues, out: CliArgs): void {
-  const pathVal = parseNonBlankArg(values.path);
-  const rangeVal = parseNonBlankArg(values.range);
-  const formatVal = parseNonBlankArg(values.format);
-  const mailmapVal = parseNonBlankArg(values.mailmap);
-  const slackMapVal = parseNonBlankArg(values['slack-map']);
-  const streamFileVal = parseNonBlankArg(values['stream-to-file']);
-  const cwdVal = parseNonBlankArg(values.cwd);
+  const pathVal = parseNonBlankArg(values.path, 'path');
+  const rangeVal = parseNonBlankArg(values.range, 'range');
+  const formatVal = parseNonBlankArg(values.format, 'format');
+  const mailmapVal = parseNonBlankArg(values.mailmap, 'mailmap');
+  const slackMapVal = parseNonBlankArg(values['slack-map'], 'slack-map');
+  const streamFileVal = parseNonBlankArg(values['stream-to-file'], 'stream-to-file');
+  const cwdVal = parseNonBlankArg(values.cwd, 'cwd');
   if (pathVal !== undefined) out.path = pathVal;
   if (rangeVal !== undefined) out.range = rangeVal;
   if (formatVal !== undefined) out.format = formatVal;
@@ -102,20 +106,34 @@ function assignValidatedStrings(values: ParsedCliValues, out: CliArgs): void {
   if (slackMapVal !== undefined) out['slack-map'] = slackMapVal;
   if (streamFileVal !== undefined) out['stream-to-file'] = streamFileVal;
   if (cwdVal !== undefined) out.cwd = cwdVal;
-  if (values.author !== undefined) out.author = values.author;
-  if (values.search !== undefined) out.search = values.search;
-  if (values.grep !== undefined) out.grep = values.grep;
-  if (values.since !== undefined) out.since = values.since;
-  if (values.until !== undefined) out.until = values.until;
-  if (values.category !== undefined) out.category = values.category;
-  if (values.type !== undefined) out.type = values.type;
-  if (values.impact !== undefined) out.impact = values.impact;
-  if (values.confidence !== undefined) out.confidence = values.confidence;
-  if (values['patch-search'] !== undefined) out['patch-search'] = values['patch-search'];
-  if (values.pickaxe !== undefined) out.pickaxe = values.pickaxe;
-  if (values['diff-filter'] !== undefined) out['diff-filter'] = values['diff-filter'];
-  if (values['issue-tracker'] !== undefined) out['issue-tracker'] = values['issue-tracker'];
-  if (values['issue-pattern'] !== undefined) out['issue-pattern'] = values['issue-pattern'];
+  const authorVal = parseSafeStringArg(values.author, 'author');
+  const searchVal = parseSafeStringArg(values.search, 'search');
+  const grepVal = parseSafeStringArg(values.grep, 'grep');
+  const sinceVal = parseSafeStringArg(values.since, 'since');
+  const untilVal = parseSafeStringArg(values.until, 'until');
+  const catVal = parseSafeStringArg(values.category, 'category');
+  const typeVal = parseSafeStringArg(values.type, 'type');
+  const impactVal = parseSafeStringArg(values.impact, 'impact');
+  const confVal = parseSafeStringArg(values.confidence, 'confidence');
+  const patchSearchVal = parseSafeStringArg(values['patch-search'], 'patch-search');
+  const pickaxeVal = parseSafeStringArg(values.pickaxe, 'pickaxe');
+  const diffFilterVal = parseSafeStringArg(values['diff-filter'], 'diff-filter');
+  const trackerVal = parseSafeStringArg(values['issue-tracker'], 'issue-tracker');
+  const patternVal = parseSafeStringArg(values['issue-pattern'], 'issue-pattern');
+  if (authorVal !== undefined) out.author = authorVal;
+  if (searchVal !== undefined) out.search = searchVal;
+  if (grepVal !== undefined) out.grep = grepVal;
+  if (sinceVal !== undefined) out.since = sinceVal;
+  if (untilVal !== undefined) out.until = untilVal;
+  if (catVal !== undefined) out.category = catVal;
+  if (typeVal !== undefined) out.type = typeVal;
+  if (impactVal !== undefined) out.impact = impactVal;
+  if (confVal !== undefined) out.confidence = confVal;
+  if (patchSearchVal !== undefined) out['patch-search'] = patchSearchVal;
+  if (pickaxeVal !== undefined) out.pickaxe = pickaxeVal;
+  if (diffFilterVal !== undefined) out['diff-filter'] = diffFilterVal;
+  if (trackerVal !== undefined) out['issue-tracker'] = trackerVal;
+  if (patternVal !== undefined) out['issue-pattern'] = patternVal;
 }
 
 function validateCliValues(values: ParsedCliValues): CliArgs {
@@ -153,6 +171,7 @@ export function parseArguments(): CliArgs {
     const args: string[] = [];
     for (let i = 0; i < rawArgs.length; i++) {
       const curr = rawArgs[i];
+      if (curr === undefined) continue;
       if (curr === '--') {
         args.push(...rawArgs.slice(i));
         break;

@@ -311,6 +311,8 @@ function resolveExplicitAddPaths(
     if (item.isMissing) {
       if (stagedCanonical !== undefined) knownStagedDeletions.add(finalPath);
       else checkedNotStagedDeletions.add(finalPath);
+    } else {
+      checkedNotStagedDeletions.add(finalPath);
     }
     paths.push(finalPath);
   }
@@ -394,9 +396,9 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
       checkedNotStagedDeletions = resolvedAdd.checkedNotStagedDeletions;
     }
 
-    const firstLine = args.msg.trim().split('\n')[0].trim();
+    const firstLine = (args.msg.trim().split('\n')[0] ?? '').trim();
     const commitMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
-    const type = commitMatch ? commitMatch[1] : 'chore';
+    const type = commitMatch?.[1] ?? 'chore';
     const historyContent = resolveHistoryContent(args, cwd);
     const stagedFiles = ensureStagedFiles(
       cwd,
@@ -411,7 +413,7 @@ export async function main(rawArgv?: readonly string[]): Promise<void> {
     const body = generateHistoryEntry(args, type, historyContent, cwd, resolvedJournalTarget);
     const sha = executeCommit(args.msg, body, cwd, args.add, repoRoot);
     await createJournalEntry(
-      sha, args.msg, args, historyContent, cwd, () => {}, () => {},
+      sha, args.msg, args, historyContent, cwd,
       getErrorMessage, stagedFiles.length > 0 ? stagedFiles : undefined, resolvedJournalTarget
     );
 

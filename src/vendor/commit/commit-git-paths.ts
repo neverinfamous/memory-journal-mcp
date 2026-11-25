@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fatalError } from './commit-cli-schema.js';
-import { isSensitiveRepoPath } from './commit-security.js';
+import { isSensitiveRepoPath, stripWin32TrailingDotsAndSpaces } from './commit-security.js';
 
 const SCRATCH_SEGMENT_RE = /(?:^|\/)scratch(?:\/|$)/;
 const SCRATCH_FILE_RE = /(?:^|\/)[^/]*scratch\.[cm]?[jt]s$/;
@@ -234,7 +234,10 @@ export function resolveRepoRootForGuard(cwd: string, resolvedGitDir: string | nu
 }
 
 export function isScratchRepoPath(filepath: string): boolean {
-  const normalized = normalizeRelGitPath(filepath).toLowerCase();
+  const normalized = normalizeRelGitPath(filepath)
+    .split('/')
+    .map((seg) => stripWin32TrailingDotsAndSpaces(seg).toLowerCase())
+    .join('/');
   return (
     SCRATCH_SEGMENT_RE.test(normalized) ||
     normalized.includes('.agents/scratch') ||

@@ -17,11 +17,15 @@
         "parser-utils.ts",
         "parser.ts",
         "schema.ts",
+        "security-git.ts",
+        "security-regex.ts",
+        "security-sqlite.ts",
+        "security-utils.ts",
         "uncommitted.ts",
         "AGENT_README.md"
       ],
-      "syncedAt": "2026-11-24T08:17:07.228Z",
-      "syncedFromCommit": "385911a8ac883fcc51e5fed5c9239b9917c6b8bf"
+      "syncedAt": "2026-11-25T05:26:27.695Z",
+      "syncedFromCommit": "8da1916bf3cf1e1092e5579ba5bbbc29f6131916"
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
@@ -121,8 +125,8 @@
         "windows-wrapper-utils.ts",
         "wsl-command-wrapper.ts"
       ],
-      "syncedAt": "2026-11-25T04:48:51.240Z",
-      "syncedFromCommit": "5d8f286f024ac87733af1461f59c74b85f8684b1"
+      "syncedAt": "2026-11-25T05:26:27.695Z",
+      "syncedFromCommit": "8da1916bf3cf1e1092e5579ba5bbbc29f6131916"
     },
     "commit": {
       "source": ".agents/scripts",
@@ -136,8 +140,8 @@
         "commit-journal-config.ts",
         "commit-security.ts"
       ],
-      "syncedAt": "2026-11-23T20:50:50.138Z",
-      "syncedFromCommit": "98ad3acc18239e464595f6f18014c200464124ca"
+      "syncedAt": "2026-11-25T05:26:27.695Z",
+      "syncedFromCommit": "8da1916bf3cf1e1092e5579ba5bbbc29f6131916"
     }
   }
 }

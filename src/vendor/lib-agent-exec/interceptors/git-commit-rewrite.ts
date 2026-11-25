@@ -48,6 +48,22 @@ const SHORT_PATCH_OR_INTERACTIVE_RE = /^-[asnqvoiep]*(?:p|i)[asnqvoiep]*(?:$|[FC
 const COMMIT_REUSE_VALUE_FLAGS = new Set(['-C', '--reuse-message', '--fixup']);
 const COMMIT_REUSE_EQ_RE = /^(?:--reuse-message=|(?!--fixup=(?:amend|reword):)--fixup=)/;
 
+function isNegatedDryRunFlag(arg: string): boolean {
+  return arg.startsWith('--no-dr') && '--no-dry-run'.startsWith(arg);
+}
+
+function isNegatedStatusFormatFlag(arg: string): boolean {
+  return (
+    (arg.startsWith('--no-sh') && '--no-short'.startsWith(arg)) ||
+    (arg.startsWith('--no-por') && '--no-porcelain'.startsWith(arg)) ||
+    (arg.startsWith('--no-l') && '--no-long'.startsWith(arg))
+  );
+}
+
+function isLongMessageFlag(arg: string): boolean {
+  return arg.length >= 3 && arg.startsWith('--m') && !arg.includes('=') && '--message'.startsWith(arg);
+}
+
 function isPathspecFromFileFlag(arg: string): boolean {
   const eqIdx = arg.indexOf('=');
   const flagPart = eqIdx === -1 ? arg : arg.slice(0, eqIdx);
@@ -101,7 +117,7 @@ function parseCommitMessageOrValueFlag(
   idx: number,
   state: CommitParseState,
 ): number {
-  if (arg === '-m' || arg === '--message' || arg === '-am' || SHORT_MSG_CLUSTER_RE.test(arg)) {
+  if (arg === '-m' || arg === '--message' || isLongMessageFlag(arg) || arg === '-am' || SHORT_MSG_CLUSTER_RE.test(arg)) {
     if (arg === '-am' || SHORT_ALL_MSG_CLUSTER_RE.test(arg)) state.hasAll = true;
     const nextMsg = args[idx + 1];
     if (nextMsg !== undefined) state.messages.push(nextMsg);
@@ -146,7 +162,8 @@ function parseGitCommitArgs(args: readonly string[]): ParsedGitCommitArgs {
   let hasAmend = false;
   let hasMessageFile = false;
   let hasInteractiveOrPatch = false;
-  let isDryRun = false;
+  let hasDryRunFlag = false;
+  let hasStatusFormatFlag = false;
   let hasPathspecFromFile = false;
   let pastDoubleDash = false;
   for (let i = prefix.commitStartIdx; i < args.length; i++) {
@@ -169,10 +186,14 @@ function parseGitCommitArgs(args: readonly string[]): ParsedGitCommitArgs {
       continue;
     } else if (arg === '--all' || SHORT_ALL_CLUSTER_RE.test(arg)) {
       state.hasAll = true;
+    } else if (arg === '--dry-run') {
+      hasDryRunFlag = true;
     } else if (COMMIT_READONLY_FLAGS.has(arg)) {
-      isDryRun = true;
-    } else if (arg.startsWith('--no-dry') && '--no-dry-run'.startsWith(arg)) {
-      isDryRun = false;
+      hasStatusFormatFlag = true;
+    } else if (isNegatedDryRunFlag(arg)) {
+      hasDryRunFlag = false;
+    } else if (isNegatedStatusFormatFlag(arg)) {
+      hasStatusFormatFlag = false;
     } else if (arg === '--no-edit' || COMMIT_REUSE_EQ_RE.test(arg)) {
       state.hasNonInteractiveMsgSource = true;
     } else if (isPathspecFromFileFlag(arg)) {
@@ -195,7 +216,7 @@ function parseGitCommitArgs(args: readonly string[]): ParsedGitCommitArgs {
     hasMessageFile,
     hasInteractiveOrPatch,
     hasNonInteractiveMsgSource: state.hasNonInteractiveMsgSource,
-    isDryRun,
+    isDryRun: hasDryRunFlag || hasStatusFormatFlag,
     hasPathspecFromFile,
     pathspecs: state.pathspecs,
     gitDir: prefix.gitDir,

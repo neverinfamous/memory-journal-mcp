@@ -1,13 +1,17 @@
 // @ts-nocheck
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { CommitEntry } from './schema.js';
 import type { CliArgs } from './cli.js';
-import { MAX_ISSUE_TEXT_LENGTH, flattenString, truncateSafely, getLanguage } from './constants.js';
+import { MAX_ARRAY_LENGTH, MAX_ISSUE_TEXT_LENGTH, createNullProtoRecord, flattenString, truncateSafely, getLanguage } from './constants.js';
+import { isSafeCustomIssuePattern } from './security-regex.js';
+import {
+  encodeTrackerIssueToken, isSafeHttpUrl, isSafeRepoHost, readContainedTextFileSync,
+  sanitizeLogText, sanitizeRepoPathSegments,
+} from './security-utils.js';
 
 export { flattenString, truncateSafely, getLanguage };
 
-const EMPTY_SLACK_MAP: Record<string, string> = Object.create(null) as Record<string, string>;
+const EMPTY_SLACK_MAP: Record<string, string> = Object.freeze(createNullProtoRecord<string>());
 
 export function extractShaFromBuffer(recordBuf: Buffer): { sha: string; shaEnd: number } {
   let shaEnd = recordBuf.indexOf(0x0A);
@@ -21,41 +25,37 @@ export function extractShaFromBuffer(recordBuf: Buffer): { sha: string; shaEnd: 
 const SLACK_MAP_CACHE = new Map<string, Record<string, string>>();
 const MAX_SLACK_MAP_CACHE = 16;
 
+function parseSlackMapJson(content: string, realPath: string): Record<string, string> {
+  const empty = createNullProtoRecord<string>();
+  try {
+    const raw: unknown = JSON.parse(content);
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) { console.warn(`[lib-git-history] Warning: Invalid slack-map JSON shape at ${sanitizeLogText(realPath)}`); return empty; }
+    const candidate = createNullProtoRecord<string>();
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v !== 'string') { console.warn(`[lib-git-history] Warning: Invalid slack-map JSON shape at ${sanitizeLogText(realPath)}`); return empty; }
+      if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') candidate[k] = v;
+    }
+    return candidate;
+  } catch (err: unknown) { console.warn(`[lib-git-history] Warning: Failed to parse slack-map JSON: ${sanitizeLogText(err instanceof Error ? err.message : String(err))}`); return empty; }
+}
+
 export function getSlackMap(args: CliArgs, cwd: string = process.cwd()): Record<string, string> {
   const rawPath = args['slack-map'];
   if (!rawPath) return EMPTY_SLACK_MAP;
-  const resolvedPath = path.resolve(cwd, rawPath);
-  const cached = SLACK_MAP_CACHE.get(resolvedPath);
+  const cacheKey = `${path.resolve(cwd)}\0${rawPath}`;
+  const cached = SLACK_MAP_CACHE.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  let resultMap: Record<string, string> = Object.create(null) as Record<string, string>;
-  try {
-    const raw: unknown = JSON.parse(readFileSync(resolvedPath, 'utf-8'));
-    if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
-      const candidate: Record<string, string> = Object.create(null) as Record<string, string>;
-      let valid = true;
-      for (const [k, v] of Object.entries(raw)) {
-        if (typeof v !== 'string') { valid = false; break; }
-        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-        candidate[k] = v;
-      }
-      if (valid) resultMap = candidate;
-      else console.warn(`[lib-git-history] Warning: Invalid slack-map JSON shape at ${resolvedPath}`);
-    } else {
-      console.warn(`[lib-git-history] Warning: Invalid slack-map JSON shape at ${resolvedPath}`);
-    }
-  } catch (err: unknown) {
-    console.warn(`[lib-git-history] Warning: Failed to parse slack-map JSON: ${err}`);
-  }
+  const res = readContainedTextFileSync(cwd, rawPath, 1024 * 1024);
+  if (!res.ok) console.warn(`[lib-git-history] Warning: Failed to load slack-map JSON: ${sanitizeLogText(res.reason)}`);
+  const resultMap = Object.freeze(res.ok ? parseSlackMapJson(res.content, res.realPath) : createNullProtoRecord<string>());
   if (SLACK_MAP_CACHE.size >= MAX_SLACK_MAP_CACHE) SLACK_MAP_CACHE.clear();
-  SLACK_MAP_CACHE.set(resolvedPath, resultMap);
+  SLACK_MAP_CACHE.set(cacheKey, resultMap);
   return resultMap;
 }
 
 export function hasOwnKeys(obj: Record<string, unknown>): boolean {
-  for (const k in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, k)) return true;
-  }
+  for (const k in obj) { if (Object.hasOwn(obj, k)) return true; }
   return false;
 }
 
@@ -63,6 +63,7 @@ const TRACKER_RULES_CACHE = new Map<string, Array<readonly [string, string]>>();
 const MAX_TRACKER_RULES_CACHE = 32;
 const PLACEHOLDER_ID_RE = /\{id\}/g;
 const PLACEHOLDER_EMPTY_RE = /\{\}/g;
+const SINGLE_TRACKER_RULE_RE = /^[^/=:\s]+\s*=\s*https?:\/\//i;
 
 function getParsedTrackerRules(tracker: string): Array<readonly [string, string]> {
   const cached = TRACKER_RULES_CACHE.get(tracker);
@@ -70,11 +71,9 @@ function getParsedTrackerRules(tracker: string): Array<readonly [string, string]
   const rules: Array<readonly [string, string]> = [];
   for (const p of tracker.split(',')) {
     const eqIdx = p.indexOf('=');
-    if (eqIdx !== -1) {
-      const prefix = p.slice(0, eqIdx).trim();
-      const tpl = p.slice(eqIdx + 1).trim();
-      if (tpl) rules.push([prefix, tpl] as const);
-    }
+    if (eqIdx === -1) continue;
+    const prefix = p.slice(0, eqIdx).trim(), tpl = p.slice(eqIdx + 1).trim();
+    if (tpl) rules.push([prefix, tpl] as const);
   }
   if (TRACKER_RULES_CACHE.size >= MAX_TRACKER_RULES_CACHE) TRACKER_RULES_CACHE.clear();
   TRACKER_RULES_CACHE.set(tracker, rules);
@@ -82,48 +81,49 @@ function getParsedTrackerRules(tracker: string): Array<readonly [string, string]
 }
 
 export function expandIssueTrackerUrl(issue: string, tracker: string): string {
-  if (issue.startsWith('http://') || issue.startsWith('https://')) return issue;
+  if (issue.startsWith('http://') || issue.startsWith('https://')) return isSafeHttpUrl(issue) ? issue : '';
   let urlTemplate = tracker;
-
-  if (urlTemplate.includes(',')) {
+  if (urlTemplate.includes(',') || SINGLE_TRACKER_RULE_RE.test(urlTemplate)) {
     let matched = false;
     for (const [prefix, tpl] of getParsedTrackerRules(urlTemplate)) {
-      if (issue.startsWith(prefix)) {
-        urlTemplate = tpl;
-        matched = true;
-        break;
-      }
+      if (issue.startsWith(prefix)) { urlTemplate = tpl; matched = true; break; }
     }
     if (!matched) return issue;
   }
-
-  const cleanIssue = issue.startsWith('#') ? issue.slice(1) : issue;
+  const encodedIssue = encodeTrackerIssueToken(issue);
+  const encodedClean = encodeTrackerIssueToken(issue.startsWith('#') ? issue.slice(1) : issue);
+  if (!encodedIssue || !encodedClean) return issue;
+  let expanded: string;
   if (urlTemplate.includes('{id}') || urlTemplate.includes('{}')) {
-    return urlTemplate.replace(PLACEHOLDER_ID_RE, cleanIssue).replace(PLACEHOLDER_EMPTY_RE, issue);
+    expanded = urlTemplate.replace(PLACEHOLDER_ID_RE, () => encodedClean).replace(PLACEHOLDER_EMPTY_RE, () => encodedIssue);
+  } else if (issue.startsWith('#')) {
+    expanded = urlTemplate + encodedClean;
+  } else {
+    expanded = urlTemplate.endsWith('/') ? urlTemplate + encodedIssue : urlTemplate + '/' + encodedIssue;
   }
-  if (issue.startsWith('#')) {
-    return urlTemplate + cleanIssue;
-  }
-  return urlTemplate.endsWith('/') ? urlTemplate + issue : urlTemplate + '/' + issue;
+  return isSafeHttpUrl(expanded) ? expanded : issue;
 }
 
 export function resolveIssueTrackerUrl(issue: string, repoHost: string, repoPath: string, args: CliArgs): string | null {
-  if (issue.startsWith('http://') || issue.startsWith('https://')) return issue;
+  if (issue.startsWith('http://') || issue.startsWith('https://')) return isSafeHttpUrl(issue) ? issue : null;
   if (args['issue-tracker']) {
     const expanded = expandIssueTrackerUrl(issue, args['issue-tracker']);
-    if (expanded !== issue) return expanded;
+    if (expanded !== issue && isSafeHttpUrl(expanded)) return expanded;
   }
 
+  let candidate: string | null = null;
   if (issue.startsWith('#')) {
-    const num = issue.slice(1);
-    if (repoHost === 'gitlab.com') return `https://gitlab.com/${repoPath}/-/issues/${num}`;
-    return `https://${repoHost}/${repoPath}/issues/${num}`;
-  }
-  if (issue.includes('#')) {
+    const cleanRepoPath = sanitizeRepoPathSegments(repoPath);
+    if (isSafeRepoHost(repoHost) && cleanRepoPath) {
+      const num = encodeURIComponent(issue.slice(1));
+      candidate = repoHost === 'gitlab.com' ? `https://gitlab.com/${cleanRepoPath}/-/issues/${num}` : `https://${repoHost}/${cleanRepoPath}/issues/${num}`;
+    }
+  } else if (issue.includes('#')) {
     const hashIdx = issue.indexOf('#');
-    return `https://github.com/${issue.slice(0, hashIdx)}/issues/${issue.slice(hashIdx + 1)}`;
+    const cleanSlug = sanitizeRepoPathSegments(issue.slice(0, hashIdx));
+    if (cleanSlug) candidate = `https://github.com/${cleanSlug}/issues/${encodeURIComponent(issue.slice(hashIdx + 1))}`;
   }
-  return null;
+  return candidate && isSafeHttpUrl(candidate) ? candidate : null;
 }
 
 const NOISE_BASENAMES: ReadonlySet<string> = new Set([
@@ -205,11 +205,11 @@ function getCustomIssueRegex(issuePattern: string): RegExp | null {
   const cached = CUSTOM_ISSUE_REGEX_CACHE.get(issuePattern);
   if (cached !== undefined) return cached;
   let compiled: RegExp | null = null;
-  if (issuePattern.length > MAX_CUSTOM_ISSUE_PATTERN_LENGTH) {
-    console.warn(`[lib-git-history] Warning: issue-pattern exceeds max length (${MAX_CUSTOM_ISSUE_PATTERN_LENGTH} chars); ignoring.`);
+  if (!isSafeCustomIssuePattern(issuePattern, MAX_CUSTOM_ISSUE_PATTERN_LENGTH)) {
+    console.warn(`[lib-git-history] Warning: Unsafe or invalid issue-pattern regex '${sanitizeLogText(issuePattern.slice(0, 64))}'; ignoring.`);
   } else {
     try { compiled = new RegExp(`(?:^|[^\\w])(${issuePattern})\\b`, 'ig'); }
-    catch (err: unknown) { console.warn(`[lib-git-history] Warning: Invalid issue-pattern regex '${issuePattern}': ${err instanceof Error ? err.message : String(err)}`); }
+    catch (err: unknown) { console.warn(`[lib-git-history] Warning: Invalid issue-pattern regex '${sanitizeLogText(issuePattern)}': ${sanitizeLogText(err instanceof Error ? err.message : String(err))}`); }
   }
   if (CUSTOM_ISSUE_REGEX_CACHE.size >= MAX_CUSTOM_REGEX_CACHE) CUSTOM_ISSUE_REGEX_CACHE.clear();
   CUSTOM_ISSUE_REGEX_CACHE.set(issuePattern, compiled);
@@ -237,10 +237,8 @@ function resolvePrecedingAction(safeText: string, lastIndex: number, tokenStart:
 
 function recordIssueMatch(issuesMap: Map<string, string | null>, issue: string | undefined, action: string | null): void {
   if (!issue) return;
-  const flatIssue = flattenString(issue);
-  if (!issuesMap.has(flatIssue) || (action && !issuesMap.get(flatIssue))) {
-    issuesMap.set(flatIssue, action);
-  }
+  const flatIssue = flattenString(issue), hasKey = issuesMap.has(flatIssue);
+  if (hasKey ? Boolean(action && !issuesMap.get(flatIssue)) : issuesMap.size < MAX_ARRAY_LENGTH) issuesMap.set(flatIssue, action);
 }
 
 interface IssueTokenHit {
@@ -269,6 +267,8 @@ function parseHashTokenAt(safeText: string, hashIdx: number): IssueTokenHit | nu
     if (ownerStart < cur && (ownerStart === 0 || !isWordChar(safeText.charCodeAt(ownerStart - 1)))) {
       let repo = safeText.slice(ownerStart, hashIdx);
       if (repo.endsWith('.git')) repo = repo.slice(0, -4);
+      const slash = repo.indexOf('/'), owner = repo.slice(0, slash), name = repo.slice(slash + 1);
+      if (!owner || !name || owner === '.' || owner === '..' || owner === '@' || owner.includes('..') || owner.indexOf('@', 1) !== -1 || name === '.' || name === '..' || name.includes('..')) return null;
       return { start: ownerStart, end: numEnd, issue: `${repo}#${safeText.slice(hashIdx + 1, numEnd)}` };
     }
   }
@@ -336,18 +336,23 @@ function extractActionIssues(safeText: string, getMap: () => Map<string, string 
 
 function extractUrlIssueId(domain: string | undefined, fullPath: string | undefined): string | undefined {
   if (!fullPath) return undefined;
+  let cleanEnd = fullPath.length;
+  while (cleanEnd > 0 && fullPath.charCodeAt(cleanEnd - 1) === 47) cleanEnd--;
+  const cleanPath = cleanEnd === fullPath.length ? fullPath : fullPath.slice(0, cleanEnd);
+  if (!cleanPath) return undefined;
   const normalizedDomain = domain?.toLowerCase();
   if (normalizedDomain === 'github.com' || normalizedDomain === 'gitlab.com' || normalizedDomain === 'bitbucket.org') {
-    const pathMatch = fullPath.match(GIT_HOST_PATH_REGEX);
+    const pathMatch = cleanPath.match(GIT_HOST_PATH_REGEX);
     if (!pathMatch) return undefined;
     let repo = pathMatch[1];
     if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
     return repo ? `${repo}#${pathMatch[2]}` : `#${pathMatch[2]}`;
   }
-  if (normalizedDomain === 'atlassian.net') return fullPath.match(ATLASSIAN_PATH_REGEX)?.[1];
-  if (normalizedDomain === 'linear.app') return fullPath.match(LINEAR_PATH_REGEX)?.[1];
-  if (normalizedDomain === 'slack.com' && fullPath.startsWith('archives/')) return fullPath;
-  if (normalizedDomain === 'notion.so') return fullPath;
+  if (normalizedDomain === 'atlassian.net') return cleanPath.match(ATLASSIAN_PATH_REGEX)?.[1];
+  if (normalizedDomain === 'linear.app') return cleanPath.match(LINEAR_PATH_REGEX)?.[1];
+  if (cleanPath.split('/').some((s) => !s || s === '.' || s === '..')) return undefined;
+  if (normalizedDomain === 'slack.com' && cleanPath.startsWith('archives/')) return cleanPath;
+  if (normalizedDomain === 'notion.so') return cleanPath;
   return undefined;
 }
 
@@ -413,7 +418,7 @@ export const extractIssues = (
   issuesMap: Map<string, string | null>,
   issuePattern?: string,
   includeBuiltins = true,
-) => extractIssuesLazy(text, () => issuesMap, issuePattern, includeBuiltins);
+): void => extractIssuesLazy(text, () => issuesMap, issuePattern, includeBuiltins);
 
 export function iterateChangelog(
   versionMap: Map<string, Map<string, CommitEntry[]>>,

@@ -4,6 +4,15 @@ interface PowershellPair {
   rawVal: string;
 }
 
+const KEY_STRIP_RE = /['"\\\s]/g;
+const ARRAY_UNESCAPE_RE = /\\(["',])/g;
+const VALUE_SPECIAL_RE = /[\\"'`{[\]()}]|,+/g;
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+const isAsciiSpace = (c: number): boolean => c === 32 || (c >= 9 && c <= 13);
+const isKeyStartCode = (c: number): boolean =>
+  (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 34 || c === 39 || c === 92;
+
 interface PairScan {
   content: string;
   knownKeys: readonly string[];
@@ -41,7 +50,7 @@ function consumeStringDelimiter(scan: PairScan, ch: string): boolean {
       scan.inString = false;
       return true;
     }
-    if (scan.inKey && !/\s/.test(ch)) scan.currentKey += ch;
+    if (scan.inKey && !isAsciiSpace(ch.charCodeAt(0))) scan.currentKey += ch;
     return true;
   }
   if (ch === '"' || ch === "'" || ch === '`') {
@@ -65,36 +74,31 @@ function consumeDepthChar(scan: PairScan, ch: string): boolean {
 
 function takePairAtComma(scan: PairScan): void {
   let k = scan.index + 1;
-  while (k < scan.content.length && /\s/.test(scan.content[k] ?? '')) k++;
-  const firstCh = scan.content[k];
-  if (firstCh === undefined || !/[a-zA-Z"'\\]/.test(firstCh)) return;
+  const len = scan.content.length;
+  while (k < len && isAsciiSpace(scan.content.charCodeAt(k))) k++;
+  if (k >= len || !isKeyStartCode(scan.content.charCodeAt(k))) return;
   const rest = scan.content.slice(k, k + 40);
   const matchKey = scan.knownKeys.find(key => keyRestStarts(rest, key));
   if (matchKey === undefined) return;
   const rawVal = scan.content.slice(scan.valStart, scan.index).trim();
-  scan.pairs.push({ key: scan.currentKey.replace(/['"\\\s]/g, ''), rawVal });
+  scan.pairs.push({ key: scan.currentKey.replace(KEY_STRIP_RE, ''), rawVal });
   scan.currentKey = '';
   scan.inKey = true;
-}
-
-function consumeKeyOrComma(scan: PairScan, ch: string): void {
-  if (scan.depth !== 0) return;
-  if (scan.inKey) {
-    if (ch === ':') {
-      scan.inKey = false;
-      scan.valStart = scan.index + 1;
-      return;
-    }
-    if (!/\s/.test(ch)) scan.currentKey += ch;
-    return;
-  }
-  if (ch === ',') takePairAtComma(scan);
 }
 
 function pushTrailingPair(scan: PairScan): void {
   if (scan.inKey || scan.valStart === -1) return;
   const rawVal = scan.content.slice(scan.valStart).trim();
-  scan.pairs.push({ key: scan.currentKey.replace(/['"\\\s]/g, ''), rawVal });
+  scan.pairs.push({ key: scan.currentKey.replace(KEY_STRIP_RE, ''), rawVal });
+}
+
+function handleCommaRun(scan: PairScan, match: RegExpExecArray): number {
+  const lastComma = match.index + match[0].length - 1;
+  if (lastComma + 1 < scan.content.length) {
+    scan.index = lastComma;
+    takePairAtComma(scan);
+  }
+  return lastComma;
 }
 
 function scanPowershellPairs(content: string, knownKeys: readonly string[]): PowershellPair[] {
@@ -110,20 +114,42 @@ function scanPowershellPairs(content: string, knownKeys: readonly string[]): Pow
     pairs: [],
     index: 0,
   };
-  for (scan.index = 0; scan.index < content.length; scan.index++) {
-    const ch = content[scan.index];
-    if (ch === undefined) continue;
+  const len = content.length;
+  for (let i = 0; i < len; i++) {
     if (scan.isEscaped) {
       scan.isEscaped = false;
       continue;
     }
-    if (ch === '\\') {
+    if (!scan.inKey && scan.inString === false && scan.depth === 0) {
+      VALUE_SPECIAL_RE.lastIndex = i;
+      const match = VALUE_SPECIAL_RE.exec(content);
+      if (match === null) break;
+      if (content.charCodeAt(match.index) === 44) {
+        i = handleCommaRun(scan, match);
+        continue;
+      }
+      i = match.index;
+    }
+    const code = content.charCodeAt(i);
+    if (code === 92) {
+      scan.index = i;
       handleBackslash(scan);
       continue;
     }
-    if (consumeStringDelimiter(scan, ch)) continue;
-    if (consumeDepthChar(scan, ch)) continue;
-    consumeKeyOrComma(scan, ch);
+    if (scan.inString !== false || code === 34 || code === 39 || code === 96) {
+      if (consumeStringDelimiter(scan, content[i] ?? '')) continue;
+    }
+    if (code === 123 || code === 91 || code === 40 || code === 125 || code === 93 || code === 41) {
+      consumeDepthChar(scan, content[i] ?? '');
+      continue;
+    }
+    if (scan.depth !== 0 || !scan.inKey) continue;
+    if (code === 58) {
+      scan.inKey = false;
+      scan.valStart = i + 1;
+    } else if (!isAsciiSpace(code)) {
+      scan.currentKey += content[i] ?? '';
+    }
   }
   pushTrailingPair(scan);
   return scan.pairs;
@@ -148,7 +174,7 @@ function cleanArrayItem(item: string): string {
   const doubleQuoted = cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2;
   const singleQuoted = cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length >= 2;
   if (doubleQuoted || singleQuoted) cleaned = cleaned.slice(1, -1);
-  return cleaned.replace(/\\(["',])/g, '$1');
+  return cleaned.replace(ARRAY_UNESCAPE_RE, '$1');
 }
 
 function splitTopLevelArrayItems(inner: string): string[] {
@@ -227,7 +253,6 @@ export function tryPowershellObject(trimmed: string, knownKeys: readonly string[
   try {
     const pairs = scanPowershellPairs(trimmed.slice(1, -1).trim(), knownKeys);
     if (!hasPayloadIdentity(pairs)) return undefined;
-    const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
     const result: Record<string, unknown> = {};
     for (const pair of pairs) {
       if (FORBIDDEN_KEYS.has(pair.key)) continue;

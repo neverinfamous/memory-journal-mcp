@@ -64,6 +64,7 @@ export interface CommitJournalArgs {
 export interface ResolvedJournalTarget {
   workspaceId?: string;
   projectNumber?: number;
+  conflictReason?: string;
 }
 
 export function capitalizeCategory(val: string): string {
@@ -136,11 +137,15 @@ export function resolveJournalTarget(
       const registeredLabel = bestPathMatch.projectNumber !== undefined
         ? `#${String(bestPathMatch.projectNumber)}`
         : 'unassigned project';
-      console.warn(
-        `⚠️ AUTONOMOUS HEALING: --journal-project ${String(explicitProjectNumber)} conflicts with registered workspace '${bestPathMatch.workspaceId}' (${registeredLabel}). Keeping workspace_id unset for fail-closed handling.`
-      );
+      const conflictReason = `--journal-project ${String(explicitProjectNumber)} conflicts with registered workspace '${bestPathMatch.workspaceId}' (${registeredLabel}). Refusing cross-workspace journal write.`;
+      result.workspaceId = bestPathMatch.workspaceId;
+      result.conflictReason = conflictReason;
+      console.warn(`⚠️ AUTONOMOUS HEALING: ${conflictReason}`);
     } else {
-      result.workspaceId = findWorkspaceByProjectNumber(entries, explicitProjectNumber);
+      const matchedWorkspace = findWorkspaceByProjectNumber(entries, explicitProjectNumber);
+      if (matchedWorkspace !== undefined) {
+        result.workspaceId = matchedWorkspace;
+      }
     }
   } else if (bestPathMatch !== undefined) {
     result.workspaceId = bestPathMatch.workspaceId;
@@ -173,11 +178,11 @@ export function parseCategory(history: string, type: string): { category: string
     }
 
     console.warn(`⚠️ AUTONOMOUS HEALING: Unrecognized history category '${matchedCat}'. Falling back to default category.`);
-    const fallbackCategory = Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : 'Changed';
+    const fallbackCategory = (Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : undefined) ?? 'Changed';
     return { category: fallbackCategory, entry: entryBody };
   }
 
-  const category = Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : 'Changed';
+  const category = (Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : undefined) ?? 'Changed';
   return { category, entry: cleanHistory.trim() };
 }
 
@@ -222,12 +227,14 @@ export function generateHistoryEntry(
   if (args.journal) {
     body += `\nHistory-Journal: true`;
     const journalProject =
-      args['journal-project'] ??
-      (resolvedTarget !== undefined
-        ? resolvedTarget.projectNumber
-        : cwd !== undefined
-          ? resolveJournalTarget(cwd).projectNumber
-          : undefined);
+      resolvedTarget?.conflictReason !== undefined
+        ? undefined
+        : args['journal-project'] ??
+          (resolvedTarget !== undefined
+            ? resolvedTarget.projectNumber
+            : cwd !== undefined
+              ? resolveJournalTarget(cwd).projectNumber
+              : undefined);
     if (journalProject !== undefined) {
       body += `\nHistory-Journal-Project: ${journalProject}`;
     }
@@ -320,11 +327,10 @@ export async function createJournalEntry(
   args: CommitJournalArgs,
   historyContent: string,
   cwd: string,
-  _registerTempFile: (filepath: string) => void,
-  _cleanupTempFile: (filepath: string) => void,
   formatError: (error: unknown) => string,
   committedFiles?: readonly string[],
-  resolvedTarget?: ResolvedJournalTarget
+  resolvedTarget?: ResolvedJournalTarget,
+  configPath?: string
 ): Promise<void> {
   if (!args.journal) {
     const ignoredFlags: string[] = [];
@@ -343,15 +349,19 @@ export async function createJournalEntry(
 
   console.log(`\n📓 Creating automated journal entry for ${sha}...`);
   try {
+    const resolved = resolvedTarget ?? resolveJournalTarget(cwd, args['journal-project'], configPath);
+    if (resolved.conflictReason !== undefined) {
+      throw new Error(resolved.conflictReason);
+    }
     const journalContent = buildCommitJournalContent(
       sha,
       header,
       args,
       historyContent,
       cwd,
-      undefined,
+      configPath,
       committedFiles,
-      resolvedTarget
+      resolved
     );
     const { dirPath: journalDir, filePath: journalFile } = createPrivateTempFile(
       JOURNAL_PREFIX,

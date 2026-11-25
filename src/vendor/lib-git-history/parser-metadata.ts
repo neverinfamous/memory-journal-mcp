@@ -191,7 +191,7 @@ function extractStructuredNumber(parsed: unknown): number | undefined {
   return toFiniteNumber(getOwn(parsed, 'trust')) ?? toFiniteNumber(getOwn(parsed, 'impact')) ?? toFiniteNumber(getOwn(parsed, 'confidence'));
 }
 
-const extractMatch = (s: string, regex: RegExp) => {
+const extractMatch = (s: string, regex: RegExp): number | undefined => {
   const m = s.match(regex);
   return (m && m[1] !== undefined) ? Number(m[1]) : undefined;
 };

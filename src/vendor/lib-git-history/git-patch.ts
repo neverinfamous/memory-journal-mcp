@@ -4,6 +4,8 @@ import { spawnGitBinaryStream, PATCH_BOUNDARY_STR } from './git-runner.js';
 import type { CliArgs } from './cli.js';
 import { DEFAULT_MAX_PATCH_LEN, flattenString, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT, truncateSafely, wantsPatchOutput } from './constants.js';
 import { extractShaFromBuffer } from './parser-utils.js';
+import { GIT_LOG_SAFE_CONFIG_ARGS, GIT_LOG_SAFE_POST_ARGS } from './security-git.js';
+import { assertValidDiffContext, assertValidLockedGitArgs, assertValidStdinShas } from './security-utils.js';
 
 export { wantsPatchOutput };
 
@@ -76,7 +78,15 @@ function truncateOversizedPatch(
   return { patch: processedDiffs.filter(Boolean).join('\n'), truncated };
 }
 
-export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string, cwd: string = process.cwd()) {
+export async function getPatchMap(
+  lockedArgs: string[],
+  args: CliArgs,
+  stdinShas?: string,
+  cwd: string = process.cwd(),
+): Promise<Map<string, { patch: string; truncated: boolean }>> {
+  assertValidStdinShas(stdinShas);
+  assertValidLockedGitArgs(lockedArgs);
+  const diffContext = assertValidDiffContext(args['diff-context']);
   if (!wantsPatchOutput(args)) return new Map();
   const patchBaseArgs = [...lockedArgs];
   const excludes = GIT_EXCLUDE_PATTERNS;
@@ -85,7 +95,12 @@ export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas
   } else {
     patchBaseArgs.push('--', ...excludes);
   }
-  const patchArgs = ['--no-pager', '-c', 'core.quotePath=false', 'log', '-p', args['diff-context'] !== undefined ? `-U${args['diff-context']}` : '-U1', `--pretty=format:${PATCH_BOUNDARY_STR}%H%x0A`];
+  const patchArgs = [
+    '--no-pager', ...GIT_LOG_SAFE_CONFIG_ARGS,
+    'log', '-p', '--submodule=short', ...GIT_LOG_SAFE_POST_ARGS,
+    diffContext !== undefined ? `-U${diffContext}` : '-U1',
+    `--pretty=format:${PATCH_BOUNDARY_STR}%H%x0A`,
+  ];
   if (stdinShas) patchArgs.push('--stdin', '--no-walk');
   patchArgs.push(...patchBaseArgs);
 

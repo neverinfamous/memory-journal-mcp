@@ -53,11 +53,25 @@ const MEMORY_JOURNAL_CLI_SEGMENTS: readonly (readonly string[])[] = [
   ['@neverinfamous', 'memory-journal-mcp', 'dist', 'cli.js'],
 ];
 
+function isNonSymlinkDir(dirPath: string): boolean {
+  const stats = fs.lstatSync(dirPath, { throwIfNoEntry: false });
+  return stats !== undefined && !stats.isSymbolicLink() && stats.isDirectory();
+}
+
+function isTrustedPackageCli(cliPath: string, pkgDir: string): boolean {
+  return (
+    isRegularNonSymlinkFile(cliPath) &&
+    isNonSymlinkDir(path.dirname(cliPath)) &&
+    isMemoryJournalPackageDir(pkgDir) &&
+    isContainedInRealDir(cliPath, pkgDir)
+  );
+}
+
 function findCliInNodeModules(nodeModulesDir: string): string | null {
   for (const segments of MEMORY_JOURNAL_CLI_SEGMENTS) {
     const candidate = path.join(nodeModulesDir, ...segments);
     const pkgDir = path.dirname(path.dirname(candidate));
-    if (isRegularNonSymlinkFile(candidate) && isMemoryJournalPackageDir(pkgDir)) {
+    if (isTrustedPackageCli(candidate, pkgDir)) {
       return candidate;
     }
   }
@@ -78,7 +92,8 @@ function isMemoryJournalPackageDir(dirPath: string): boolean {
   let isMemoryJournal: boolean;
   try {
     const rawContent = fs.readFileSync(pkgPath, 'utf-8');
-    const parsedJson: unknown = JSON.parse(rawContent);
+    const cleanContent = rawContent.charCodeAt(0) === 0xfeff ? rawContent.slice(1) : rawContent;
+    const parsedJson: unknown = JSON.parse(cleanContent);
     const parsedPkg = packageJsonNameSchema.safeParse(parsedJson);
     isMemoryJournal =
       parsedPkg.success &&
@@ -107,7 +122,7 @@ function resolveRegistryMemoryJournalCli(configPath?: string): string | null {
   }
   const mjDir = path.resolve(mjEntry.path);
   const cliPath = path.join(mjDir, 'dist', 'cli.js');
-  return isRegularNonSymlinkFile(cliPath) && isMemoryJournalPackageDir(mjDir) ? cliPath : null;
+  return isTrustedPackageCli(cliPath, mjDir) ? cliPath : null;
 }
 
 function resolveSelfPackagedCli(): string | null {
@@ -117,7 +132,7 @@ function resolveSelfPackagedCli(): string | null {
     { pkgDir: path.resolve(selfDir, '..', '..', '..'), cliPath: path.resolve(selfDir, '..', '..', '..', 'dist', 'cli.js') },
   ];
   for (const c of candidates) {
-    if (isRegularNonSymlinkFile(c.cliPath) && isMemoryJournalPackageDir(c.pkgDir)) {
+    if (isTrustedPackageCli(c.cliPath, c.pkgDir)) {
       return c.cliPath;
     }
   }
@@ -195,13 +210,13 @@ export function resolveMemoryJournalCli(
   }
 
   const localCli = path.join(cwd, 'dist', 'cli.js');
-  if (isRegularNonSymlinkFile(localCli) && isMemoryJournalPackageDir(cwd)) {
+  if (isTrustedPackageCli(localCli, cwd)) {
     return { command: 'node', prefixArgs: [localCli] };
   }
 
   const siblingMjDir = path.resolve(cwd, '..', 'memory-journal-mcp');
   const siblingCli = path.join(siblingMjDir, 'dist', 'cli.js');
-  if (isRegularNonSymlinkFile(siblingCli) && isMemoryJournalPackageDir(siblingMjDir)) {
+  if (isTrustedPackageCli(siblingCli, siblingMjDir)) {
     return { command: 'node', prefixArgs: [siblingCli] };
   }
 
@@ -251,8 +266,19 @@ export function resolveInProcessEntryModule(
   if (cliScriptPath === undefined || cliScriptPath.length === 0) {
     return null;
   }
-  const candidate = path.join(path.dirname(cliScriptPath), 'cli', 'commands', 'entry.js');
-  return isRegularNonSymlinkFile(candidate) && isContainedInRealDir(candidate, path.dirname(cliScriptPath))
+  const distDir = path.dirname(cliScriptPath);
+  const pkgDir = path.dirname(distDir);
+  if (!isNonSymlinkDir(distDir) || !isContainedInRealDir(cliScriptPath, pkgDir)) {
+    return null;
+  }
+  const cliDir = path.join(distDir, 'cli');
+  const commandsDir = path.join(cliDir, 'commands');
+  const candidate = path.join(commandsDir, 'entry.js');
+  return isRegularNonSymlinkFile(candidate) &&
+    isNonSymlinkDir(cliDir) &&
+    isNonSymlinkDir(commandsDir) &&
+    isContainedInRealDir(candidate, distDir) &&
+    isContainedInRealDir(candidate, pkgDir)
     ? candidate
     : null;
 }
@@ -262,12 +288,16 @@ type InProcessEntryCreator = (options: {
   dryRunLinks?: boolean | undefined;
 }) => Promise<number>;
 
+function isInProcessEntryCreator(val: unknown): val is InProcessEntryCreator {
+  return typeof val === 'function';
+}
+
 function getInProcessEntryCreator(mod: unknown): InProcessEntryCreator | null {
   if (typeof mod !== 'object' || mod === null || !('createEntryFromFileInProcess' in mod)) {
     return null;
   }
   const candidate = mod.createEntryFromFileInProcess;
-  return typeof candidate === 'function' ? (candidate as InProcessEntryCreator) : null;
+  return isInProcessEntryCreator(candidate) ? candidate : null;
 }
 
 export async function tryCreateJournalEntryInProcess(

@@ -131,16 +131,19 @@ function normalizeCommitMsg(val: unknown): unknown {
 
   const strictMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
   if (strictMatch) {
-    const [, type, scope, bang, subject] = strictMatch;
+    const [, rawType, scope, bang, subject] = strictMatch;
+    const type = rawType ?? '';
     if (type !== type.toLowerCase()) {
-      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang ?? ''}: ${subject}`;
+      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang ?? ''}: ${subject ?? ''}`;
       corrected = true;
     }
   } else {
     const spaceMatch = firstLine.match(SPACE_CONVENTIONAL_RE);
-    if (spaceMatch && VALID_COMMIT_TYPES.has(spaceMatch[1].toLowerCase())) {
-      const [, type, scope, bang, subject] = spaceMatch;
-      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang ?? ''}: ${subject}`;
+    const spaceCandidate = spaceMatch?.[1]?.toLowerCase();
+    if (spaceMatch && spaceCandidate !== undefined && VALID_COMMIT_TYPES.has(spaceCandidate)) {
+      const [, rawType, scope, bang, subject] = spaceMatch;
+      const type = rawType ?? '';
+      firstLine = `${type.toLowerCase()}${scope ? `(${scope})` : ''}${bang ?? ''}: ${subject ?? ''}`;
       corrected = true;
     } else {
       firstLine = matchKeywordPrefix(firstLine);
@@ -196,7 +199,7 @@ export const cliSchema = z.object({
     z.string({ message: 'Missing Commit Message! You must provide a commit message using `--msg "..."` or as the first positional argument.' })
       .max(MAX_MSG_BYTES, `Commit message exceeds maximum size of ${String(MAX_MSG_BYTES)} characters.`)
       .refine((val) => !hasDisallowedControlChars(val), { message: 'Commit message contains disallowed control characters or NUL bytes.' })
-      .refine((val) => val.trim().split('\n')[0].length <= 200, { message: 'Too big: expected commit subject (first line) to be <=200 characters' })
+      .refine((val) => (val.trim().split('\n')[0] ?? '').length <= 200, { message: 'Too big: expected commit subject (first line) to be <=200 characters' })
       .refine((val) => {
         const firstLine = (val.trim().split('\n')[0] ?? '').trim();
         return CONVENTIONAL_COMMIT_REGEX.test(firstLine);
@@ -270,7 +273,7 @@ export const cliSchema = z.object({
   ).optional(),
   tags: z.preprocess((val) => {
     if (val === undefined) return undefined;
-    const rawItems = Array.isArray(val) ? val : [val];
+    const rawItems: unknown[] = Array.isArray(val) ? (val as unknown[]) : [val];
     if (rawItems.length > MAX_ARRAY_ITEMS) return rawItems;
     const normalized: unknown[] = [];
     for (const item of rawItems) {
@@ -357,7 +360,11 @@ function normalizeNegativeAndBulletArgs(rawArgs: string[]): void {
   }
 }
 
-function parseRawCli(rawArgs: string[]) {
+type ParsedRawCli = ReturnType<
+  typeof parseArgs<{ options: typeof CLI_OPTIONS; allowPositionals: true }>
+>;
+
+function parseRawCli(rawArgs: string[]): ParsedRawCli {
   try {
     return parseArgs({ args: rawArgs, options: CLI_OPTIONS, allowPositionals: true });
   } catch (error: unknown) {
@@ -368,9 +375,9 @@ function parseRawCli(rawArgs: string[]) {
 }
 
 function mergeAliasFlagsAndPositionals(
-  values: ReturnType<typeof parseRawCli>['values'],
+  values: ParsedRawCli['values'],
   positionals: string[]
-) {
+): ParsedRawCli['values'] {
   const hasMsg = values.msg !== undefined && values.msg.length > 0;
   const hasAliasMessage = values.message !== undefined && values.message.length > 0;
   const hasAnyMessageFlag = values.msg !== undefined || values.message !== undefined;
@@ -403,7 +410,9 @@ function mergeAliasFlagsAndPositionals(
       console.warn("⚠️ AUTONOMOUS HEALING: Extra positional arguments detected alongside --msg. Assuming these are space-separated files for --add.");
       mergedValues.add = [...(mergedValues.add ?? []), ...positionals];
     } else {
-      mergedValues.msg = positionals[0];
+      const pos0 = positionals[0];
+      if (pos0 !== undefined) mergedValues.msg = pos0;
+      else delete mergedValues.msg;
       if (positionals.length > 1) {
         console.warn("⚠️ AUTONOMOUS HEALING: Multiple positional arguments detected. Assuming the first is the commit message and the rest are space-separated files for --add.");
         mergedValues.add = [...(mergedValues.add ?? []), ...positionals.slice(1)];

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { z } from 'zod';
+import { type z } from 'zod';
 import { match, P } from 'ts-pattern';
 import { VALID_CATEGORIES } from './commit-journal.js';
 import { redactSensitiveText } from './commit-security.js';
@@ -48,7 +48,16 @@ export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     let msg = error.message;
     if ('stderr' in error && error.stderr !== null && error.stderr !== undefined) {
-      msg += '\nSTDERR:\n' + String(error.stderr);
+      const rawStderr = error.stderr;
+      const stderrText =
+        typeof rawStderr === 'string'
+          ? rawStderr
+          : Buffer.isBuffer(rawStderr)
+            ? rawStderr.toString('utf8')
+            : typeof rawStderr === 'number' || typeof rawStderr === 'boolean'
+              ? String(rawStderr)
+              : JSON.stringify(rawStderr);
+      msg += '\nSTDERR:\n' + stderrText;
     }
     return redactSensitiveText(msg);
   }

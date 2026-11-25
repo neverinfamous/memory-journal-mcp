@@ -2,13 +2,10 @@
 import type { CommitEntry, FileStatus } from './schema.js';
 import type { CliArgs } from './cli.js';
 import { isNoiseFile, getSlackMap, getLanguage, truncateSafely, flattenString, hasOwnKeys } from './parser-utils.js';
+import { sanitizeLogText } from './security-utils.js';
 import {
-  DEFAULT_MAX_BODY_LEN,
-  MAX_FILES_PER_COMMIT,
-  MS_PER_DAY,
-  NUMSTAT_MAPS_WITH_ALIASES,
-  wantsPatchOutput,
-  type NumstatCommitMap,
+  DEFAULT_MAX_BODY_LEN, MAX_ARRAY_LENGTH, MAX_FILES_PER_COMMIT, MAX_PARSED_FILES,
+  MS_PER_DAY, NUMSTAT_MAPS_WITH_ALIASES, wantsPatchOutput, type NumstatCommitMap,
 } from './constants.js';
 import type { RawCommitBatchItem } from './parser-record.js';
 
@@ -32,18 +29,29 @@ const FILE_INT_KEYS = ['similarityScore', 'insertions', 'deletions'] as const;
 const META_STR_ARRAY_KEYS = ['category', 'entry'] as const;
 const META_STR_KEYS = ['significance', 'validation'] as const;
 const META_NUM_OR_STR_KEYS = ['impact', 'trust', 'confidence'] as const;
+const ALLOWED_META_KEYS = new Set<string>([...META_STR_ARRAY_KEYS, ...META_STR_KEYS, ...META_NUM_OR_STR_KEYS, 'customTrailers']);
 
 interface ValidationIssue {
   path: (string | number)[];
   message: string;
 }
 
-const isPlainObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isFiniteNumOrStr = (v: unknown): boolean => (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'string';
-const isValidatedEntry = (obj: Record<string, unknown>, issues: ValidationIssue[] | null): obj is CommitEntry => issues === null;
+const MAX_RECORD_KEYS = 256;
+const MAX_RECORD_KEY_LEN = 128;
 
-function isStringArray(v: unknown): boolean {
-  if (!Array.isArray(v)) return false;
+const isPlainObj = (v: unknown): v is Record<string, unknown> => {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+  const proto: unknown = Object.getPrototypeOf(v);
+  return proto === null || proto === Object.prototype;
+};
+const isFiniteNumOrStr = (v: unknown): boolean => (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'string';
+const isNonNegInt = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+const isUnknownArray = (v: unknown): v is unknown[] => Array.isArray(v);
+const isValidatedEntry = (_obj: Record<string, unknown>, issues: ValidationIssue[] | null): _obj is CommitEntry => issues === null;
+
+function isStringArray(v: unknown, maxLen = MAX_ARRAY_LENGTH): boolean {
+  if (!Array.isArray(v) || v.length > maxLen) return false;
   for (let i = 0; i < v.length; i++) if (typeof v[i] !== 'string') return false;
   return true;
 }
@@ -54,20 +62,37 @@ function pushIssue(list: ValidationIssue[] | null, path: (string | number)[], me
   return list;
 }
 
+function validateBoundedRecord(
+  rec: unknown, pathPrefix: string[], checkVal: (v: unknown) => boolean, expectedMsg: string, list: ValidationIssue[] | null,
+): ValidationIssue[] | null {
+  let out = list;
+  if (!isPlainObj(rec)) return pushIssue(out, pathPrefix, 'Expected object');
+  let count = 0;
+  for (const k of Object.getOwnPropertyNames(rec)) {
+    if (FORBIDDEN_KEYS.has(k) || k.length > MAX_RECORD_KEY_LEN) { out = pushIssue(out, [...pathPrefix, k], 'Invalid record key'); continue; }
+    if (++count > MAX_RECORD_KEYS) { out = pushIssue(out, pathPrefix, 'Record exceeds key limit'); break; }
+    if (!checkVal(rec[k])) out = pushIssue(out, [...pathPrefix, k], expectedMsg);
+  }
+  return out;
+}
+
 function validateFileStatusArray(files: unknown, list: ValidationIssue[] | null): ValidationIssue[] | null {
   let out = list;
-  if (!Array.isArray(files)) return pushIssue(out, ['files'], 'Expected array');
+  if (!isUnknownArray(files)) return pushIssue(out, ['files'], 'Expected array');
+  if (files.length > MAX_PARSED_FILES) return pushIssue(out, ['files'], 'Files array exceeds limit');
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     if (!isPlainObj(f)) { out = pushIssue(out, ['files', i], 'Expected object'); continue; }
-    if (typeof f['status'] !== 'string') out = pushIssue(out, ['files', i, 'status'], 'Expected string');
-    if (typeof f['file'] !== 'string') out = pushIssue(out, ['files', i, 'file'], 'Expected string');
+    if (!isNonEmptyString(f['status'])) out = pushIssue(out, ['files', i, 'status'], 'Expected non-empty string');
+    if (!isNonEmptyString(f['file'])) out = pushIssue(out, ['files', i, 'file'], 'Expected non-empty string');
     if (f['oldFile'] !== undefined && typeof f['oldFile'] !== 'string') out = pushIssue(out, ['files', i, 'oldFile'], 'Expected string');
     if (f['language'] !== undefined && typeof f['language'] !== 'string') out = pushIssue(out, ['files', i, 'language'], 'Expected string');
     if (f['isBinary'] !== undefined && typeof f['isBinary'] !== 'boolean') out = pushIssue(out, ['files', i, 'isBinary'], 'Expected boolean');
     for (const k of FILE_INT_KEYS) {
       const val = f[k];
-      if (val !== undefined && (typeof val !== 'number' || !Number.isSafeInteger(val))) out = pushIssue(out, ['files', i, k], 'Expected safe integer');
+      if (val !== undefined && (!isNonNegInt(val) || (k === 'similarityScore' && val > 100))) {
+        out = pushIssue(out, ['files', i, k], 'Expected bounded non-negative safe integer');
+      }
     }
   }
   return out;
@@ -76,13 +101,17 @@ function validateFileStatusArray(files: unknown, list: ValidationIssue[] | null)
 function validateMetadataObj(meta: unknown, list: ValidationIssue[] | null): ValidationIssue[] | null {
   let out = list;
   if (!isPlainObj(meta)) return pushIssue(out, ['metadata'], 'Expected object');
+  let keyCount = 0;
+  for (const k of Object.getOwnPropertyNames(meta)) {
+    if (FORBIDDEN_KEYS.has(k) || !ALLOWED_META_KEYS.has(k)) out = pushIssue(out, ['metadata', k], 'Unexpected metadata key');
+    else if (++keyCount > MAX_RECORD_KEYS) { out = pushIssue(out, ['metadata'], 'Metadata exceeds key limit'); break; }
+  }
   for (const k of META_STR_ARRAY_KEYS) if (meta[k] !== undefined && !isStringArray(meta[k])) out = pushIssue(out, ['metadata', k], 'Expected string array');
   for (const k of META_STR_KEYS) if (meta[k] !== undefined && typeof meta[k] !== 'string') out = pushIssue(out, ['metadata', k], 'Expected string');
   for (const k of META_NUM_OR_STR_KEYS) if (meta[k] !== undefined && !isFiniteNumOrStr(meta[k])) out = pushIssue(out, ['metadata', k], 'Expected finite number or string');
-  const ct = meta['customTrailers'];
-  if (ct === undefined) return out;
-  if (!isPlainObj(ct)) return pushIssue(out, ['metadata', 'customTrailers'], 'Expected object');
-  for (const k in ct) if (Object.hasOwn(ct, k) && !isStringArray(ct[k])) out = pushIssue(out, ['metadata', 'customTrailers', k], 'Expected string array');
+  if (meta['customTrailers'] !== undefined) {
+    out = validateBoundedRecord(meta['customTrailers'], ['metadata', 'customTrailers'], (v) => isStringArray(v), 'Expected bounded string array', out);
+  }
   return out;
 }
 
@@ -92,35 +121,32 @@ function validateExtraFields(obj: Record<string, unknown>, list: ValidationIssue
   if (size !== undefined && (typeof size !== 'string' || !COMMIT_SIZE_SET.has(size))) out = pushIssue(out, ['size'], 'Expected commit size');
   if (obj['files'] !== undefined) out = validateFileStatusArray(obj['files'], out);
   if (obj['metadata'] !== undefined) out = validateMetadataObj(obj['metadata'], out);
-  const trailers = obj['trailersObj'];
-  if (trailers !== undefined) {
-    if (!isPlainObj(trailers)) out = pushIssue(out, ['trailersObj'], 'Expected object');
-    else for (const k in trailers) if (Object.hasOwn(trailers, k) && typeof trailers[k] !== 'string') out = pushIssue(out, ['trailersObj', k], 'Expected string');
-  }
+  if (obj['trailersObj'] !== undefined) out = validateBoundedRecord(obj['trailersObj'], ['trailersObj'], (v) => typeof v === 'string', 'Expected string', out);
   const assoc = obj['associatedIssues'];
   if (assoc !== undefined) {
-    if (!Array.isArray(assoc)) out = pushIssue(out, ['associatedIssues'], 'Expected array');
+    if (!isUnknownArray(assoc) || assoc.length > MAX_ARRAY_LENGTH) out = pushIssue(out, ['associatedIssues'], 'Expected bounded array');
     else for (let i = 0; i < assoc.length; i++) {
       const item = assoc[i];
-      if (!isPlainObj(item) || typeof item['issue'] !== 'string' || (item['action'] !== null && typeof item['action'] !== 'string')) {
+      if (!isPlainObj(item) || !isNonEmptyString(item['issue']) || (item['action'] !== null && typeof item['action'] !== 'string')) {
         out = pushIssue(out, ['associatedIssues', i], 'Expected issue object');
       }
     }
   }
-  if (obj['validationErrors'] !== undefined && !Array.isArray(obj['validationErrors'])) out = pushIssue(out, ['validationErrors'], 'Expected array');
+  if (obj['validationErrors'] !== undefined && (!Array.isArray(obj['validationErrors']) || obj['validationErrors'].length > MAX_ARRAY_LENGTH)) {
+    out = pushIssue(out, ['validationErrors'], 'Expected bounded array');
+  }
   return out;
 }
 
 function collectCommitEntryIssues(obj: Record<string, unknown>): ValidationIssue[] | null {
   let out: ValidationIssue[] | null = null;
-  for (const k of REQUIRED_STRING_KEYS) if (typeof obj[k] !== 'string') out = pushIssue(out, [k], 'Expected string');
+  for (const k of REQUIRED_STRING_KEYS) if (!isNonEmptyString(obj[k])) out = pushIssue(out, [k], 'Expected non-empty string');
   for (const k of OPTIONAL_STRING_KEYS) if (obj[k] !== undefined && typeof obj[k] !== 'string') out = pushIssue(out, [k], 'Expected string');
   for (const k of OPTIONAL_BOOL_KEYS) if (obj[k] !== undefined && typeof obj[k] !== 'boolean') out = pushIssue(out, [k], 'Expected boolean');
   for (const k of OPTIONAL_INT_KEYS) {
-    const val = obj[k];
-    if (val !== undefined && (typeof val !== 'number' || !Number.isSafeInteger(val))) out = pushIssue(out, [k], 'Expected safe integer');
+    if (obj[k] !== undefined && !isNonNegInt(obj[k])) out = pushIssue(out, [k], 'Expected non-negative safe integer');
   }
-  for (const k of OPTIONAL_STR_ARRAY_KEYS) if (obj[k] !== undefined && !isStringArray(obj[k])) out = pushIssue(out, [k], 'Expected string array');
+  for (const k of OPTIONAL_STR_ARRAY_KEYS) if (obj[k] !== undefined && !isStringArray(obj[k])) out = pushIssue(out, [k], 'Expected bounded string array');
   return validateExtraFields(obj, out);
 }
 
@@ -129,10 +155,12 @@ function stripFailedIssue(coercedObj: Record<string, unknown>, issue: Validation
   if (!topKey || FORBIDDEN_KEYS.has(topKey)) return;
   if (topKey === 'metadata' && issue.path.length >= 2) {
     const subKey = String(issue.path[1]);
-    if (FORBIDDEN_KEYS.has(subKey)) return;
     const rawMeta = coercedObj['metadata'];
-    const meta: Record<string, unknown> = isPlainObj(rawMeta) ? { ...rawMeta } : {};
-    delete meta[subKey];
+    if (!isPlainObj(rawMeta)) { delete coercedObj['metadata']; return; }
+    const meta: Record<string, unknown> = {};
+    for (const k of Object.keys(rawMeta)) {
+      if (!FORBIDDEN_KEYS.has(k) && ALLOWED_META_KEYS.has(k) && k !== subKey) meta[k] = rawMeta[k];
+    }
     coercedObj['metadata'] = meta;
   } else {
     delete coercedObj[topKey];
@@ -145,17 +173,18 @@ function parseWithFallbacks(entryObj: Record<string, unknown>, sha: string, subj
 
   const coercedObj: Record<string, unknown> = { ...entryObj };
   for (const issue of issues) stripFailedIssue(coercedObj, issue);
+  const boundedIssues = issues.length > MAX_ARRAY_LENGTH ? issues.slice(0, MAX_ARRAY_LENGTH) : issues;
   if (isValidatedEntry(coercedObj, collectCommitEntryIssues(coercedObj))) {
-    coercedObj.validationErrors = issues;
+    coercedObj.validationErrors = boundedIssues;
     coercedObj.isCorrupted = true;
     return coercedObj;
   }
 
-  coercedObj['commit'] = coercedObj['commit'] || sha || 'unknown_commit';
-  coercedObj['subject'] = coercedObj['subject'] || subject || 'No Subject';
-  coercedObj['date'] = coercedObj['date'] || date || new Date().toISOString();
-  coercedObj['author'] = coercedObj['author'] || authorName || 'Unknown Author';
-  coercedObj['validationErrors'] = issues;
+  coercedObj['commit'] = (typeof coercedObj['commit'] === 'string' && coercedObj['commit'].length > 0 ? coercedObj['commit'] : '') || sha || 'unknown_commit';
+  coercedObj['subject'] = (typeof coercedObj['subject'] === 'string' && coercedObj['subject'].length > 0 ? coercedObj['subject'] : '') || subject || 'No Subject';
+  coercedObj['date'] = (typeof coercedObj['date'] === 'string' && coercedObj['date'].length > 0 ? coercedObj['date'] : '') || date || new Date().toISOString();
+  coercedObj['author'] = (typeof coercedObj['author'] === 'string' && coercedObj['author'].length > 0 ? coercedObj['author'] : '') || authorName || 'Unknown Author';
+  coercedObj['validationErrors'] = boundedIssues;
   coercedObj['isCorrupted'] = true;
   return isValidatedEntry(coercedObj, collectCommitEntryIssues(coercedObj)) ? coercedObj : null;
 }
@@ -216,27 +245,21 @@ function aggregateCommitFileStats(
       uniqueStatsCount++;
       commitInsertions += stats.insertions;
       commitDeletions += stats.deletions;
-      if (
-        nonNoiseInsertions + nonNoiseDeletions < SIZE_L_THRESHOLD &&
-        (stats.insertions > 0 || stats.deletions > 0) &&
-        !isNoiseFile(stats.path)
-      ) {
+      if (nonNoiseInsertions + nonNoiseDeletions < SIZE_L_THRESHOLD && (stats.insertions > 0 || stats.deletions > 0) && !isNoiseFile(stats.path)) {
         nonNoiseInsertions += stats.insertions;
         nonNoiseDeletions += stats.deletions;
       }
     }
   }
 
-  const trueFileCount =
-    b.trueFileCount !== undefined
-      ? Math.max(b.trueFileCount, uniqueStatsCount)
-      : Math.max(b.rawFiles.length, uniqueStatsCount);
+  const trueFileCount = b.trueFileCount !== undefined ? Math.max(b.trueFileCount, uniqueStatsCount) : Math.max(b.rawFiles.length, uniqueStatsCount);
 
   const parsedFiles: FileStatus[] = [];
   if (!omitFiles) {
     const rawLimit = Math.min(b.rawFiles.length, MAX_FILES_PER_COMMIT);
     for (let i = 0; i < rawLimit; i++) {
       const line = b.rawFiles[i];
+      if (line === undefined) continue;
       const { status, file, oldFile, similarityScore } = line;
       const stats = statsForCommit ? (statsForCommit.get(file) ?? (oldFile ? statsForCommit.get(oldFile) : undefined)) : undefined;
       const language = getLanguage(file);
@@ -253,10 +276,7 @@ function aggregateCommitFileStats(
     }
 
     if (trueFileCount > MAX_FILES_PER_COMMIT) {
-      parsedFiles.push({
-        status: 'M',
-        file: `...and ${trueFileCount - parsedFiles.length} more files omitted`,
-      });
+      parsedFiles.push({ status: 'M', file: `...and ${trueFileCount - parsedFiles.length} more files omitted` });
     }
   }
 
@@ -385,15 +405,15 @@ export async function processBatch(
     if (numstatRes.status === 'fulfilled') {
       numstatMap = numstatRes.value;
     } else {
-      const err = numstatRes.reason;
-      console.warn('Warning: Failed to get numstat map (This may cause missing file stats for this batch):', err instanceof Error ? err.message : String(err));
+      const err: unknown = numstatRes.reason;
+      console.warn('Warning: Failed to get numstat map (This may cause missing file stats for this batch):', sanitizeLogText(err instanceof Error ? err.message : String(err)));
     }
 
     if (patchRes.status === 'fulfilled') {
       patchMap = patchRes.value;
     } else {
-      const err = patchRes.reason;
-      console.warn('Warning: Failed to get patch map (This may cause missing patches for this batch):', err instanceof Error ? err.message : String(err));
+      const err: unknown = patchRes.reason;
+      console.warn('Warning: Failed to get patch map (This may cause missing patches for this batch):', sanitizeLogText(err instanceof Error ? err.message : String(err)));
     }
   }
 

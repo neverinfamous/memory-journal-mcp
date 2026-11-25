@@ -65,7 +65,8 @@ function sanitizeProjectRegistry(raw: unknown, configPath: string): ProjectRegis
     console.warn(`⚠️ Ignoring malformed projectRegistry in ${configPath}: expected a JSON object.`);
     return undefined;
   }
-  const clean = Object.create(null) as ProjectRegistry;
+  const clean: ProjectRegistry = {};
+  Object.setPrototypeOf(clean, null);
   const skippedKeys: string[] = [];
   for (const [workspaceId, value] of Object.entries(raw)) {
     if (workspaceId.trim().length === 0 || FORBIDDEN_REGISTRY_KEYS.has(workspaceId)) {
@@ -104,7 +105,8 @@ function readCachedConfigEntry(configPath?: string): CachedConfigEntry | undefin
 
   try {
     const rawContent = fs.readFileSync(effectiveConfigPath, 'utf-8');
-    const parsedJson: unknown = JSON.parse(rawContent);
+    const cleanContent = rawContent.charCodeAt(0) === 0xfeff ? rawContent.slice(1) : rawContent;
+    const parsedJson: unknown = JSON.parse(cleanContent);
     const rawRegistry =
       parsedJson !== null && typeof parsedJson === 'object' && !Array.isArray(parsedJson) && 'projectRegistry' in parsedJson
         ? parsedJson.projectRegistry

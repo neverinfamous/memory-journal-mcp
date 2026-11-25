@@ -42,7 +42,7 @@ export function hasDisallowedControlChars(text: string): boolean {
   return false;
 }
 
-function stripWin32TrailingDotsAndSpaces(seg: string): string {
+export function stripWin32TrailingDotsAndSpaces(seg: string): string {
   let end = seg.length;
   while (end > 0 && (seg[end - 1] === '.' || seg[end - 1] === ' ')) {
     end--;

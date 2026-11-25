@@ -1,6 +1,15 @@
 // @ts-nocheck
 import { flattenString } from './constants.js';
 
+export function assertValidStreamLimits(maxBufferLimit: number, truncateAtBytes?: number): void {
+  if (!Number.isSafeInteger(maxBufferLimit) || maxBufferLimit <= 0) {
+    throw new Error(`Invalid maxBufferLimit: ${String(maxBufferLimit)}`);
+  }
+  if (truncateAtBytes !== undefined && (!Number.isSafeInteger(truncateAtBytes) || truncateAtBytes < 0)) {
+    throw new Error(`Invalid truncateAtBytes: ${String(truncateAtBytes)}`);
+  }
+}
+
 export interface TextStreamState {
   chunks: string[];
   chunksLength: number;
@@ -87,6 +96,8 @@ export function drainTextChunks(
   maxBufferLimit: number,
   recordSeparator: string,
 ): string[] {
+  assertValidStreamLimits(maxBufferLimit);
+  if (recordSeparator.length === 0) throw new Error('recordSeparator must not be empty');
   const records: string[] = [];
   const pending = state.chunks.length === 1 && state.chunks[0] !== undefined ? state.chunks[0] : state.chunks.join('');
   let cursor = 0;
@@ -228,6 +239,8 @@ export function drainBinaryChunks(
   maxBufferLimit: number,
   truncateAtBytes?: number,
 ): Buffer[] {
+  assertValidStreamLimits(maxBufferLimit, truncateAtBytes);
+  if (boundary.length === 0) throw new Error('boundary must not be empty');
   const emitted: Buffer[] = [];
   const pendingBuffer =
     state.chunks.length === 1 && state.chunks[0] !== undefined

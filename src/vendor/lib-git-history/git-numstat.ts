@@ -2,6 +2,8 @@
 
 import { spawnGitBinaryStream } from './git-runner.js';
 import { extractShaFromBuffer } from './parser-utils.js';
+import { GIT_LOG_SAFE_CONFIG_ARGS, GIT_LOG_SAFE_POST_ARGS } from './security-git.js';
+import { assertValidLockedGitArgs, assertValidStdinShas } from './security-utils.js';
 import {
   CHAR_NEWLINE,
   CHAR_NULL,
@@ -40,8 +42,13 @@ function parseNumstatRecord(recordBuf: Buffer, shaEnd: number): NumstatCommitMap
   return currentMap;
 }
 
-export async function getNumstatMap(lockedArgs: string[], stdinShas?: string, cwd: string = process.cwd()) {
-  const numstatArgs = ['--no-pager', '-c', 'core.quotePath=false', 'log', '--numstat', '-z', `--pretty=format:${NUMSTAT_BOUNDARY_STR}%H`];
+export async function getNumstatMap(lockedArgs: string[], stdinShas?: string, cwd: string = process.cwd()): Promise<Map<string, NumstatCommitMap>> {
+  assertValidStdinShas(stdinShas);
+  assertValidLockedGitArgs(lockedArgs);
+  const numstatArgs = [
+    '--no-pager', ...GIT_LOG_SAFE_CONFIG_ARGS,
+    'log', ...GIT_LOG_SAFE_POST_ARGS, '--numstat', '-z', `--pretty=format:${NUMSTAT_BOUNDARY_STR}%H`,
+  ];
   if (stdinShas) numstatArgs.push('--stdin', '--no-walk');
   numstatArgs.push(...lockedArgs);
 

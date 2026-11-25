@@ -22,6 +22,14 @@ const GIT_SUBCMD_VALUE_FLAGS = new Set([
   '-t', '--template', '--cleanup', '--trailer', '--pathspec-from-file',
 ]);
 
+const GIT_TOP_LONG_VALUE_FLAGS: readonly string[] = [...GIT_VALUE_FLAGS].filter((f) => f.startsWith('--'));
+const GIT_SUBCMD_LONG_VALUE_FLAGS: readonly string[] = [...GIT_SUBCMD_VALUE_FLAGS].filter((f) => f.startsWith('--'));
+
+function isLongValueFlagPrefix(arg: string, longFlags: readonly string[]): boolean {
+  if (!arg.startsWith('--') || arg.includes('=') || arg.length < 3) return false;
+  return longFlags.some((flag) => flag.startsWith(arg));
+}
+
 const SUBCMD_SHORT_VALUE_CLUSTER_RE = /^-[a-zA-Z]*[mFCct]$/;
 const DANGEROUS_GIT_CONFIG_RE = /^(?:alias\.|core\.hookspath$|core\.fsmonitor$|core\.sshcommand$|core\.gitproxy$|core\.alternaterefscommand$|core\.askpass$|core\.editor$|sequence\.editor$|credential\.(?:.+\.)?helper$|core\.pager$|pager\.|diff\.external$|diff\..+\.(?:command|textconv)$|merge\..+\.driver$|uploadpack\.|remote\..+\.(?:uploadpack|receivepack)$|protocol\.ext\.allow$|include\.path$|includeif\..+\.path$|filter\..+\.(?:clean|smudge|process)$|gpg\.(?:.+\.)?program$)/i;
 
@@ -123,8 +131,8 @@ function hasGitHelpFlag(args: readonly string[]): boolean {
     if (a === undefined || a === '--') break;
     if (a === '--help' || (!seenSubcmd && a === '-h')) return true;
     if (
-      (!seenSubcmd && (a === '-C' || GIT_VALUE_FLAGS.has(a))) ||
-      (seenSubcmd && (GIT_SUBCMD_VALUE_FLAGS.has(a) || SUBCMD_SHORT_VALUE_CLUSTER_RE.test(a)))
+      (!seenSubcmd && (a === '-C' || GIT_VALUE_FLAGS.has(a) || isLongValueFlagPrefix(a, GIT_TOP_LONG_VALUE_FLAGS))) ||
+      (seenSubcmd && (GIT_SUBCMD_VALUE_FLAGS.has(a) || SUBCMD_SHORT_VALUE_CLUSTER_RE.test(a) || isLongValueFlagPrefix(a, GIT_SUBCMD_LONG_VALUE_FLAGS)))
     ) {
       i++;
       continue;
