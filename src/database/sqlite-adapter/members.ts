@@ -1,31 +1,37 @@
 import { QueryError } from '../../types/errors.js'
+import { isMissingTableError } from './schema-errors.js'
+import { getSingleRow, runImmediateWriteTx } from './row-helpers.js'
 import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfaces.js'
+
+const TEAM_ROLES: readonly TeamRole[] = ['admin', 'member', 'viewer']
+const TEAM_MEMBER_COLUMNS = 'id, author, role, display_name, added_by, created_at, updated_at'
+
+function parseTeamRole(raw: unknown): TeamRole {
+    if (typeof raw === 'string') {
+        const matched = TEAM_ROLES.find((r) => r === raw)
+        if (matched !== undefined) return matched
+    }
+    throw new QueryError(`Invalid team member role in database: ${String(raw)}`)
+}
 
 export class MembersManager {
     private db: IDatabaseConnection
-    private rbacActiveCache: boolean | null = null
+    private rbacActiveCache: { db: object; active: boolean; dataVersion: number } | null = null
 
     constructor(db: IDatabaseConnection) {
         this.db = db
     }
 
-    /**
-     * Helper to retrieve a single query result row safely
-     */
-    private getSingleRow(queryResult: { columns: string[]; values: unknown[][] }[]): Record<string, unknown> | null {
-        if (queryResult.length === 0 || (queryResult[0]?.values.length ?? 0) === 0 || (queryResult[0]?.columns.length ?? 0) === 0) {
+    private readDataVersion(
+        nativeDb: NonNullable<ReturnType<NonNullable<IDatabaseConnection['getNativeDb']>>>
+    ): number | null {
+        if (typeof nativeDb.pragma !== 'function') return null
+        try {
+            const dv: unknown = nativeDb.pragma('data_version', { simple: true })
+            return typeof dv === 'number' && Number.isSafeInteger(dv) ? dv : null
+        } catch {
             return null
         }
-        const row = queryResult[0]?.values[0]
-        if (!row) return null
-        
-        const result: Record<string, unknown> = {}
-        const columns = queryResult[0]?.columns ?? []
-        for (let i = 0; i < columns.length; i++) {
-            const col = columns[i]
-            if (col) result[col] = row[i]
-        }
-        return result
     }
 
     /**
@@ -35,7 +41,7 @@ export class MembersManager {
         return {
             id: Number(row['id']),
             author: String(row['author']),
-            role: String(row['role']) as TeamRole,
+            role: parseTeamRole(row['role']),
             displayName: typeof row['display_name'] === 'string' ? row['display_name'] : null,
             addedBy: typeof row['added_by'] === 'string' ? row['added_by'] : null,
             createdAt: String(row['created_at']),
@@ -45,23 +51,67 @@ export class MembersManager {
 
     addMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember {
         try {
-            if (!this.isRbacActive() && role !== 'admin') {
-                throw new QueryError(
-                    `First team member must be bootstrapped with the 'admin' role (received '${role}')`
-                )
-            }
-            const existing = this.getMember(author)
-            if (existing) {
-                throw new QueryError(`Failed to add team member: Member already exists (${author})`)
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined && typeof nativeDb.transaction === 'function') {
+                runImmediateWriteTx(nativeDb, () => {
+                    const countRow = nativeDb
+                        .prepare<unknown[], { count?: unknown }>(
+                            `SELECT COUNT(*) as count FROM team_members`
+                        )
+                        .get()
+                    const isActive =
+                        typeof countRow?.count === 'number' && countRow.count > 0
+                    if (!isActive && role !== 'admin') {
+                        throw new QueryError(
+                            `First team member must be bootstrapped with the 'admin' role (received '${role}')`
+                        )
+                    }
+                    const existing = nativeDb
+                        .prepare<unknown[], { id?: unknown }>(
+                            `SELECT id FROM team_members WHERE author = ? COLLATE NOCASE`
+                        )
+                        .get(author)
+                    if (existing !== undefined) {
+                        throw new QueryError(
+                            `Failed to add team member: Member already exists (${author})`
+                        )
+                    }
+                    nativeDb
+                        .prepare(
+                            `INSERT INTO team_members (author, role, added_by, display_name)
+                             VALUES (?, ?, ?, ?)`
+                        )
+                        .run(author, role, addedBy ?? null, displayName ?? null)
+                })
+            } else {
+                if (!this.isRbacActive() && role !== 'admin') {
+                    throw new QueryError(
+                        `First team member must be bootstrapped with the 'admin' role (received '${role}')`
+                    )
+                }
+                const existing = this.getMember(author)
+                if (existing) {
+                    throw new QueryError(
+                        `Failed to add team member: Member already exists (${author})`
+                    )
+                }
+                if (nativeDb !== undefined) {
+                    nativeDb
+                        .prepare(
+                            `INSERT INTO team_members (author, role, added_by, display_name)
+                             VALUES (?, ?, ?, ?)`
+                        )
+                        .run(author, role, addedBy ?? null, displayName ?? null)
+                } else {
+                    this.db.run(
+                        `INSERT INTO team_members (author, role, added_by, display_name)
+                         VALUES (?, ?, ?, ?)`,
+                        [author, role, addedBy ?? null, displayName ?? null]
+                    )
+                }
             }
 
-            this.db.run(
-                `INSERT INTO team_members (author, role, added_by, display_name)
-                 VALUES (?, ?, ?, ?)`,
-                [author, role, addedBy ?? null, displayName ?? null]
-            )
-
-            this.rbacActiveCache = true
+            this.invalidateCache()
 
             const member = this.getMember(author)
             if (!member) {
@@ -69,6 +119,7 @@ export class MembersManager {
             }
             return member
         } catch (error) {
+            if (error instanceof QueryError) throw error
             if (error instanceof Error) {
                 throw new QueryError(`Failed to add team member: ${error.message}`)
             }
@@ -78,13 +129,22 @@ export class MembersManager {
 
     removeMember(author: string): boolean {
         try {
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const info = nativeDb
+                    .prepare(`DELETE FROM team_members WHERE author = ? COLLATE NOCASE`)
+                    .run(author)
+                if (info.changes === 0) return false
+                this.invalidateCache()
+                return true
+            }
             const existing = this.getMember(author)
             if (existing === null) {
                 return false
             }
 
             this.db.run(`DELETE FROM team_members WHERE author = ? COLLATE NOCASE`, [author])
-            this.rbacActiveCache = null
+            this.invalidateCache()
             return true
         } catch (error) {
             if (error instanceof Error) {
@@ -96,12 +156,15 @@ export class MembersManager {
 
     updateRole(author: string, newRole: TeamRole): TeamMember | null {
         try {
-            this.db.run(
-                `UPDATE team_members 
+            const sql = `UPDATE team_members 
                  SET role = ?, updated_at = datetime('now') 
-                 WHERE author = ? COLLATE NOCASE`,
-                [newRole, author]
-            )
+                 WHERE author = ? COLLATE NOCASE`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                nativeDb.prepare(sql).run(newRole, author)
+            } else {
+                this.db.run(sql, [newRole, author])
+            }
             return this.getMember(author)
         } catch (error) {
             if (error instanceof Error) {
@@ -113,15 +176,20 @@ export class MembersManager {
 
     getMember(author: string): TeamMember | null {
         try {
-            const results = this.db.exec(
-                `SELECT * FROM team_members WHERE author = ? COLLATE NOCASE`,
-                [author]
-            )
-            const row = this.getSingleRow(results)
+            const sql = `SELECT ${TEAM_MEMBER_COLUMNS} FROM team_members WHERE author = ? COLLATE NOCASE`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const row = nativeDb
+                    .prepare<unknown[], Record<string, unknown>>(sql)
+                    .get(author)
+                return row ? this.mapToTeamMember(row) : null
+            }
+            const results = this.db.exec(sql, [author])
+            const row = getSingleRow(results)
             if (!row) return null
             return this.mapToTeamMember(row)
         } catch (error) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 // Table might not exist yet if legacy DB or schema not fully applied
                 return null
             }
@@ -134,7 +202,13 @@ export class MembersManager {
 
     listMembers(): TeamMember[] {
         try {
-            const results = this.db.exec(`SELECT * FROM team_members ORDER BY author ASC`)
+            const sql = `SELECT ${TEAM_MEMBER_COLUMNS} FROM team_members ORDER BY author ASC`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const rows = nativeDb.prepare<unknown[], Record<string, unknown>>(sql).all()
+                return rows.map((row) => this.mapToTeamMember(row))
+            }
+            const results = this.db.exec(sql)
             if (results.length === 0 || (results[0]?.values.length ?? 0) === 0 || (results[0]?.columns.length ?? 0) === 0) {
                 return []
             }
@@ -151,7 +225,7 @@ export class MembersManager {
                 return this.mapToTeamMember(mappedRow)
             })
         } catch (error) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return []
             }
             if (error instanceof Error) {
@@ -163,11 +237,17 @@ export class MembersManager {
 
     getMemberCount(): number {
         try {
-            const results = this.db.exec(`SELECT COUNT(*) as count FROM team_members`)
-            const row = this.getSingleRow(results)
+            const sql = `SELECT COUNT(*) as count FROM team_members`
+            const nativeDb = this.db.getNativeDb?.()
+            if (nativeDb !== undefined) {
+                const row = nativeDb.prepare<unknown[], { count?: unknown }>(sql).get()
+                return typeof row?.count === 'number' ? row.count : 0
+            }
+            const results = this.db.exec(sql)
+            const row = getSingleRow(results)
             return typeof row?.['count'] === 'number' ? row['count'] : 0
         } catch (error) {
-             if (error instanceof Error && error.message.includes('no such table')) {
+             if (isMissingTableError(error)) {
                 return 0
             }
             if (error instanceof Error) {
@@ -178,12 +258,46 @@ export class MembersManager {
     }
 
     isRbacActive(): boolean {
-        if (this.rbacActiveCache !== null) {
-            return this.rbacActiveCache
+        const nativeDb = this.db.getNativeDb?.()
+        const dv = nativeDb !== undefined ? this.readDataVersion(nativeDb) : null
+        if (
+            dv !== null &&
+            nativeDb !== undefined &&
+            this.rbacActiveCache !== null &&
+            this.rbacActiveCache.db === nativeDb &&
+            this.rbacActiveCache.dataVersion === dv
+        ) {
+            return this.rbacActiveCache.active
         }
-        const isActive = this.getMemberCount() > 0
-        this.rbacActiveCache = isActive
+        let count: number
+        try {
+            const sql = `SELECT COUNT(*) as count FROM team_members`
+            if (nativeDb !== undefined) {
+                const row = nativeDb.prepare<unknown[], { count?: unknown }>(sql).get()
+                count = typeof row?.count === 'number' ? row.count : 0
+            } else {
+                const results = this.db.exec(sql)
+                const row = getSingleRow(results)
+                count = typeof row?.['count'] === 'number' ? row['count'] : 0
+            }
+        } catch (error) {
+            if (isMissingTableError(error)) {
+                return false
+            }
+            if (error instanceof Error) {
+                throw new QueryError(`Failed to count team members: ${error.message}`)
+            }
+            throw error
+        }
+        const isActive = count > 0
+        if (dv !== null && nativeDb !== undefined) {
+            this.rbacActiveCache = { db: nativeDb, active: isActive, dataVersion: dv }
+        }
         return isActive
+    }
+
+    invalidateCache(): void {
+        this.rbacActiveCache = null
     }
 
     resolveRole(author: string, defaultRole: TeamRole | 'denied' = 'denied'): TeamRole | null {

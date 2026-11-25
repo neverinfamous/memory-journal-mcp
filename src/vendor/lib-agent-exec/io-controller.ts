@@ -1,21 +1,30 @@
 // @ts-nocheck
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { Writable } from 'node:stream';
-import { ChildProcess } from 'node:child_process';
+import type * as fs from 'node:fs';
+import { type Writable } from 'node:stream';
+import { type ChildProcess } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import { StreamManager } from './stream-manager.js';
 import { checkPrompt } from './prompt-detector.js';
-import { ExecPayload } from './schema.js';
-import { isEnvelopeObject, extractEnvelope, parseEnvelopeFromTail, createWebhookStream } from './io-utils.js';
+import { type ExecPayload } from './schema.js';
+import {
+  DEFAULT_MAX_BUFFER,
+  INFINITE_MAX_BUFFER,
+  appendOutputTail,
+  closeStreamsWithTimeout,
+  createConfiguredOutputStream,
+  extractEnvelope,
+  hasAnsiTuiSequence,
+  hasWebhookStream,
+  isEnvelopeObject,
+  parseEnvelopeFromTail,
+  pauseStreamUntilDrained,
+} from './io-utils.js';
+import { recordAgentIssue } from './utils.js';
 
 const STDIN_CHUNK_SIZE = 64 * 1024;
+const PROMPT_DEBOUNCE_MS = 250;
 const PROMPT_STALL_TIMEOUT_MS = 2000;
-const TAIL_MAX_LENGTH = 2048;
-const TAIL_TRIM_LENGTH = 1024;
 const FLUSH_TIMEOUT_MS = 200;
-const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
-const INFINITE_MAX_BUFFER = 1024 * 1024 * 1024;
 const PENDING_STDOUT_LIMIT = 1024 * 1024;
 
 export class IOController {
@@ -24,18 +33,22 @@ export class IOController {
   private _stdoutTail = '';
   private _stderrTail = '';
   private _lastParsedEnvelope: Record<string, unknown> | null = null;
+  private consumedEnvelopeIsLatest = false;
   private pendingStdout = '';
   private _lastDataTime = Date.now();
   
-  public get stdoutTail() { return this._stdoutTail; }
-  public get stderrTail() { return this._stderrTail; }
-  public get lastDataTime() { return this._lastDataTime; }
+  public get stdoutTail(): string { return this._stdoutTail; }
+  public get stderrTail(): string { return this._stderrTail; }
+  public get lastDataTime(): number { return this._lastDataTime; }
   
   public getParsedEnvelope(): Record<string, unknown> | null {
     if (!this.payload.expectJsonEnvelope) return null;
     
-    const current = parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
-    if (current) return current;
+    const tailToParse = this.consumedEnvelopeIsLatest ? this.pendingStdout : (this.pendingStdout || this._stdoutTail);
+    if (tailToParse.trim().length > 0) {
+      const current = parseEnvelopeFromTail(tailToParse);
+      if (current) return current;
+    }
     
     return this._lastParsedEnvelope;
   }
@@ -47,6 +60,8 @@ export class IOController {
     this.pendingStdout += decoded;
     
     if (this.pendingStdout.length > PENDING_STDOUT_LIMIT) {
+      this._lastParsedEnvelope = null;
+      this.consumedEnvelopeIsLatest = false;
       const res = this.pendingStdout;
       this.pendingStdout = '';
       return res;
@@ -58,32 +73,34 @@ export class IOController {
        this.pendingStdout = '';
        return res;
     }
-    
+
+    let parsedEnvelope = false;
     const result = extractEnvelope(tail);
     if (result) {
-       this._lastParsedEnvelope = result.parsed;
        const envString = tail.slice(result.start, result.end);
        const idx = this.pendingStdout.lastIndexOf(envString);
-       if (idx !== -1) {
-          const beforeEnv = this.pendingStdout.slice(0, idx);
-          const afterEnv = this.pendingStdout.slice(idx + envString.length);
-          if (afterEnv.trim().length === 0) {
-             this.pendingStdout = beforeEnv;
-          } else {
-             this.pendingStdout = beforeEnv + afterEnv;
-          }
+       const afterEnv = idx === -1 ? tail : this.pendingStdout.slice(idx + envString.length);
+       if (idx !== -1 && afterEnv.trim().length === 0) {
+          parsedEnvelope = true;
+          this._lastParsedEnvelope = result.parsed;
+          this.consumedEnvelopeIsLatest = true;
+          this.pendingStdout = this.pendingStdout.slice(0, idx);
           if (this.pendingStdout.length > 0 && !this.pendingStdout.endsWith('\n')) {
              this.pendingStdout += '\n';
           }
        }
+    }
+    if (!parsedEnvelope) {
+      this._lastParsedEnvelope = null;
+      this.consumedEnvelopeIsLatest = false;
     }
     const res = this.pendingStdout;
     this.pendingStdout = '';
     return res;
   }
   
-  private outStream?: fs.WriteStream | Writable;
-  private errStream?: fs.WriteStream | Writable;
+  private outStream?: fs.WriteStream | Writable | undefined;
+  private errStream?: fs.WriteStream | Writable | undefined;
   
   private stallTimer: NodeJS.Timeout | null = null;
   private promptStallTimer: NodeJS.Timeout | null = null;
@@ -92,6 +109,9 @@ export class IOController {
   
   private isStdinBroken = false;
   private isStdinClosed = false;
+  private stdoutEnded = false;
+  private stderrEnded = false;
+  private aborted = false;
 
   private streamManager: StreamManager;
 
@@ -106,7 +126,7 @@ export class IOController {
     this.streamManager = new StreamManager(payload.truncateOutputLength, undefined, undefined, isJson);
   }
 
-  public setupStreams() {
+  public setupStreams(): void {
     this.setupFileStreams();
     this.setupStdin();
     this.bindStdout();
@@ -114,362 +134,314 @@ export class IOController {
     this.resetStallTimer();
   }
 
-  private setupFileStreams() {
-    const ensureDir = (filePath: string) => {
-      const dir = path.dirname(filePath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    };
-
-    const getStream = (filePath: string) => {
-      if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-        return createWebhookStream(filePath, this.payload);
-      }
-      const outPath = path.resolve(this.cwd, filePath);
-      ensureDir(outPath);
-      return fs.createWriteStream(outPath);
-    };
-
+  private setupFileStreams(): void {
     if (this.payload.stdoutFile) {
-      try {
-        this.outStream = getStream(this.payload.stdoutFile);
-        this.outStream.on('error', (err) => {
-          if (!this.isJson) console.error(`❌ STDOUT File Stream Error: ${err.message}. Agent execution will continue, but output capturing to file may be incomplete.`);
-          this.outStream?.destroy();
-        });
-        if (!this.isJson) console.error(`\n✅ STDOUT successfully streaming to ${this.payload.stdoutFile}`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!this.isJson) console.error(`❌ STDOUT File Setup Error: ${msg}. Output will not be captured to file.`);
-      }
+      this.outStream = createConfiguredOutputStream('STDOUT', this.payload.stdoutFile, this.payload, this.cwd, this.isJson);
     }
     if (this.payload.stderrFile) {
-      try {
-        this.errStream = getStream(this.payload.stderrFile);
-        this.errStream.on('error', (err) => {
-          if (!this.isJson) console.error(`❌ STDERR File Stream Error: ${err.message}. Agent execution will continue, but output capturing to file may be incomplete.`);
-          this.errStream?.destroy();
-        });
-        if (!this.isJson) console.error(`\n✅ STDERR successfully streaming to ${this.payload.stderrFile}`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!this.isJson) console.error(`❌ STDERR File Setup Error: ${msg}. Output will not be captured to file.`);
-      }
+      this.errStream = createConfiguredOutputStream('STDERR', this.payload.stderrFile, this.payload, this.cwd, this.isJson);
     }
 
-    // Re-initialize stream manager with the correct streams
-    this.streamManager = new StreamManager(this.payload.truncateOutputLength, this.outStream, this.errStream, this.isJson);
+    if (this.outStream !== undefined || this.errStream !== undefined) {
+      this.streamManager = new StreamManager(this.payload.truncateOutputLength, this.outStream, this.errStream, this.isJson);
+    }
   }
 
-  private setupStdin() {
+  private setupStdin(): void {
     const input = this.payload.stdin;
-    if (input && this.child.stdin) {
-      this.child.stdin.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EPIPE' || err.code === 'EOF' || err.code === 'ECONNRESET') {
-          this.isStdinBroken = true;
-          try { this.child.stdin!.destroy(); } catch { /* ignore */ }
-        } else {
-          console.error(`❌ STDIN Stream Error:`, err);
+    const stdin = this.child.stdin;
+    if (!stdin) return;
+    stdin.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EPIPE' || err.code === 'EOF' || err.code === 'ECONNRESET') {
+        this.isStdinBroken = true;
+        try { stdin.destroy(); } catch (dErr: unknown) {
+          if (dErr instanceof Error && !this.isJson) console.error(`⚠️ STDIN destroy warning: ${dErr.message}`);
         }
-      });
-
-      const inputBuffer = Buffer.from(input, 'utf8');
-      const chunkSize = STDIN_CHUNK_SIZE;
-      let offset = 0;
-      
-      const writeNextChunk = () => {
-        const stdin = this.child.stdin;
-        if (!stdin || this.isStdinBroken) return;
-        let canWrite = true;
-        try {
-          while (offset < inputBuffer.length && canWrite && !this.isStdinBroken) {
-            const chunk = inputBuffer.subarray(offset, offset + chunkSize);
-            offset += chunkSize;
-            canWrite = stdin.write(chunk);
-          }
-          if (offset >= inputBuffer.length && !this.isStdinBroken) {
-            stdin.end();
-            this.isStdinClosed = true;
-          }
-        } catch {
-          this.isStdinBroken = true;
-        }
-      };
-
-      this.child.stdin.on('drain', writeNextChunk);
-      writeNextChunk();
-    } else if (this.child.stdin) {
-      this.child.stdin.end();
-      this.isStdinClosed = true;
-    }
-  }
-
-  private safelyPauseAndDrain(source: NodeJS.ReadableStream | null | undefined, targets: Writable[]) {
-    if (!source || targets.length === 0 || ('isPaused' in source && typeof source.isPaused === 'function' && source.isPaused())) return;
-    source.pause();
-    let drainCount = targets.length;
-    targets.forEach(target => {
-      let handled = false;
-      const resumeIfDone = () => {
-        if (handled) return;
-        handled = true;
-        target.removeListener('drain', resumeIfDone);
-        target.removeListener('close', resumeIfDone);
-        target.removeListener('error', resumeIfDone);
-        drainCount--;
-        if (drainCount === 0) source.resume();
-      };
-      target.once('drain', resumeIfDone);
-      target.once('close', resumeIfDone);
-      target.once('error', resumeIfDone);
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (this.isJson) recordAgentIssue('IO_STREAM_ERROR', `STDIN Stream Error: ${msg}`, this.payload);
+        else console.error(`❌ STDIN Stream Error:`, err);
+      }
     });
+    if (!input) {
+      stdin.end();
+      this.isStdinClosed = true;
+      return;
+    }
+
+    const inputBuffer = Buffer.from(input, 'utf8');
+    let offset = 0;
+    const writeNextChunk = (): void => {
+      if (this.isStdinBroken) return;
+      let canWrite = true;
+      try {
+        while (offset < inputBuffer.length && canWrite && !this.isStdinBroken) {
+          const chunk = inputBuffer.subarray(offset, offset + STDIN_CHUNK_SIZE);
+          offset += STDIN_CHUNK_SIZE;
+          canWrite = stdin.write(chunk);
+        }
+        if (offset >= inputBuffer.length && !this.isStdinBroken) {
+          stdin.end();
+          this.isStdinClosed = true;
+        }
+      } catch (err: unknown) {
+        this.isStdinBroken = true;
+        const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : undefined;
+        if (code !== 'EPIPE' && code !== 'EOF' && code !== 'ECONNRESET') {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (this.isJson) recordAgentIssue('IO_STREAM_ERROR', `STDIN Stream Error: ${msg}`, this.payload);
+          else console.error('❌ STDIN Stream Error:', err);
+        }
+      }
+    };
+
+    stdin.on('drain', writeNextChunk);
+    writeNextChunk();
   }
 
-  private resetStallTimer() {
+  private resetStallTimer(): void {
     const currentStallTimeoutMs = this.payload.stallTimeoutMs ?? 0;
     if (currentStallTimeoutMs > 0) {
       if (this.stallTimer) clearTimeout(this.stallTimer);
       this.stallTimer = setTimeout(() => {
+        this.aborted = true;
         this.onStall(`Execution stalled: No output received for ${currentStallTimeoutMs}ms.`);
       }, currentStallTimeoutMs);
     }
   }
 
-  // Uses a safer regex that matches incomplete/split ANSI TUI sequences, or just relies on the sliding window
-  private hasTuiSequence(tail: string): boolean {
-    const ESC = String.fromCharCode(27);
-    return tail.includes(`${ESC}[?1049h`) || tail.includes(`${ESC}[?47h`) || 
-           tail.includes(`${ESC}[?1047h`) || tail.includes(`${ESC}[?2004h`);
-  }
-
-  private evaluatePromptStall() {
+  private evaluatePromptStall(decodedChunk: string = this._stdoutTail): void {
     if (this.payload.bypassInterceptors) return;
-    if (!this.payload.stdin || this.isStdinClosed) {
-      if (this.hasTuiSequence(this._stdoutTail) || this.hasTuiSequence(this._stderrTail)) {
-        this.onStall('Execution stalled: Process attempted to enter an interactive alternate screen buffer or TUI.');
-        return;
-      }
-
-      if (this.promptStallTimer) {
-        clearTimeout(this.promptStallTimer);
-        this.promptStallTimer = null;
-      }
-      
+    if (this.payload.stdin && !this.isStdinClosed && !this.isStdinBroken) return;
+    if (decodedChunk.includes('\u001b[?') && hasAnsiTuiSequence(decodedChunk)) {
+      this.aborted = true;
+      this.onStall('Execution stalled: Process attempted to enter an interactive alternate screen buffer or TUI.');
+      return;
+    }
+    if (this.promptStallTimer) { clearTimeout(this.promptStallTimer); this.promptStallTimer = null; }
+    this.promptStallTimer = setTimeout(() => {
+      this.promptStallTimer = null;
+      if (this.aborted || (this.stdoutEnded && this.stderrEnded)) return;
       const isStdoutPrompt = checkPrompt(this._stdoutTail);
-      const isStderrPrompt = checkPrompt(this._stderrTail);
-      
+      const isStderrPrompt = !isStdoutPrompt && checkPrompt(this._stderrTail);
       if (isStdoutPrompt || isStderrPrompt) {
         this.promptStallTimer = setTimeout(() => {
-          const source = isStdoutPrompt ? 'stdout' : 'stderr';
-          this.onStall(`Execution stalled: Process appears to be waiting for interactive input on ${source}.`);
-        }, PROMPT_STALL_TIMEOUT_MS);
+          this.promptStallTimer = null;
+          this.aborted = true;
+          this.onStall(`Execution stalled: Process appears to be waiting for interactive input on ${isStdoutPrompt ? 'stdout' : 'stderr'}.`);
+        }, PROMPT_STALL_TIMEOUT_MS - PROMPT_DEBOUNCE_MS);
       }
-    }
+    }, PROMPT_DEBOUNCE_MS);
   }
 
-  private scheduleStreamFlush(isErr: boolean) {
+  private scheduleStreamFlush(isErr: boolean): void {
     const timer = isErr ? this.stderrFlushTimer : this.stdoutFlushTimer;
     if (timer) return;
-    
     const newTimer = setTimeout(() => {
       if (isErr) this.stderrFlushTimer = null;
       else this.stdoutFlushTimer = null;
+      if (this.aborted) return;
       const str = this.streamManager.flushPendingLine(isErr);
       if (str) {
         this.streamManager.addLength(isErr, str.length);
+        if (!this.enforceBufferLimits()) return;
         const streamsToDrain = this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
         const stream = isErr ? this.child.stderr : this.child.stdout;
-        this.safelyPauseAndDrain(stream, streamsToDrain);
+        pauseStreamUntilDrained(stream, streamsToDrain);
       }
     }, FLUSH_TIMEOUT_MS);
-
     if (isErr) this.stderrFlushTimer = newTimer;
     else this.stdoutFlushTimer = newTimer;
   }
 
-  private processData(isErr: boolean, data: Buffer) {
+  private processEnvelopeStreaming(decoded: string): string {
+    this.pendingStdout += decoded;
+    if (this.pendingStdout.length > PENDING_STDOUT_LIMIT) {
+      const full = this.pendingStdout;
+      this.pendingStdout = '';
+      this._lastParsedEnvelope = null;
+      this.consumedEnvelopeIsLatest = false;
+      return full;
+    }
+    const lastNl = this.pendingStdout.lastIndexOf('\n');
+    const outParts: string[] = [];
+    const clearLastEnvelope = (): void => { this._lastParsedEnvelope = null; this.consumedEnvelopeIsLatest = false; };
+    if (lastNl !== -1) {
+      for (const line of this.pendingStdout.slice(0, lastNl).split('\n')) {
+        if (!this.tryConsumeEnvelopeLine(line)) {
+          if (line.trim().length > 0) clearLastEnvelope();
+          outParts.push(`${line}\n`);
+        }
+      }
+      this.pendingStdout = this.pendingStdout.slice(lastNl + 1);
+    }
+    if (this.pendingStdout.length > 0 && !this.pendingStdout.trimStart().startsWith('{')) {
+      if (this.pendingStdout.trim().length > 0) clearLastEnvelope();
+      outParts.push(this.pendingStdout);
+      this.pendingStdout = '';
+    }
+    return outParts.join('');
+  }
+
+  private tryConsumeEnvelopeLine(line: string): boolean {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return false;
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (!isEnvelopeObject(parsed)) return false;
+      this._lastParsedEnvelope = parsed;
+      this.consumedEnvelopeIsLatest = true;
+      return true;
+    } catch (err: unknown) {
+      if (!(err instanceof SyntaxError)) console.error(`[agent-exec] envelope check error: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+  }
+
+  private enforceBufferLimits(): boolean {
+    if (this.payload.maxBuffer !== undefined) {
+      const totalLen = this.streamManager.getBufferedLength(false) + this.pendingStdout.length + this.streamManager.getBufferedLength(true);
+      if (totalLen > this.payload.maxBuffer) {
+        this.aborted = true;
+        this.onMaxBuffer(`Output exceeded maxBuffer of ${this.payload.maxBuffer} bytes.`);
+        return false;
+      }
+      return true;
+    }
+    if (this.payload.truncateOutputLength !== undefined) return true;
+    const outMax = this.outStream !== undefined ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
+    const errMax = this.errStream !== undefined ? INFINITE_MAX_BUFFER : DEFAULT_MAX_BUFFER;
+    const combinedMax = (this.outStream !== undefined || this.errStream !== undefined) ? (outMax + errMax) : DEFAULT_MAX_BUFFER;
+    const outLen = this.streamManager.getBufferedLength(false) + this.pendingStdout.length;
+    const errLen = this.streamManager.getBufferedLength(true);
+    const exceededLimit =
+      outLen > outMax ? outMax :
+      errLen > errMax ? errMax :
+      (outLen + errLen) > combinedMax ? combinedMax : undefined;
+    if (exceededLimit !== undefined) {
+      this.aborted = true;
+      this.onMaxBuffer(`Output exceeded maxBuffer of ${exceededLimit} bytes.`);
+      return false;
+    }
+    return true;
+  }
+
+  private updateEnvelopeTail(decoded: string): void {
+    this._stdoutTail = appendOutputTail(this._stdoutTail, decoded);
+    if (!this.payload.expectJsonEnvelope) return;
+    const candidate = this.consumedEnvelopeIsLatest ? this.pendingStdout : (this.pendingStdout || this._stdoutTail);
+    if (!candidate.trimEnd().endsWith('}')) return;
+    const parsed = parseEnvelopeFromTail(candidate);
+    if (!parsed) return;
+    this._lastParsedEnvelope = parsed;
+    if (candidate === this._stdoutTail) this.consumedEnvelopeIsLatest = false;
+  }
+
+  private processData(isErr: boolean, data: Buffer): void {
+    if (this.aborted) return;
     this._lastDataTime = Date.now();
     let decoded = isErr ? this.stderrDecoder.write(data) : this.stdoutDecoder.write(data);
-    
     if (!isErr && this.payload.expectJsonEnvelope) {
-       this.pendingStdout += decoded;
-       
-       if (this.pendingStdout.length > PENDING_STDOUT_LIMIT) {
-          decoded = this.pendingStdout;
-          this.pendingStdout = '';
-       } else {
-          const lines = this.pendingStdout.split('\n');
-          let toEmit = '';
-          for (let i = 0; i < lines.length - 1; i++) {
-             const line = lines[i];
-             let isEnvelope = false;
-             const trimmed = line.trim();
-             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-                try {
-                   const parsed = JSON.parse(trimmed);
-                   if (isEnvelopeObject(parsed)) {
-                      isEnvelope = true;
-                      this._lastParsedEnvelope = parsed;
-                   }
-                } catch { /* ignore */ }
-             }
-             if (!isEnvelope) {
-                toEmit += line + '\n';
-             }
-          }
-          this.pendingStdout = lines[lines.length - 1];
-          if (this.pendingStdout.length > 0 && !this.pendingStdout.trimStart().startsWith('{')) {
-             toEmit += this.pendingStdout;
-             this.pendingStdout = '';
-          }
-          decoded = toEmit;
-       }
+      decoded = this.processEnvelopeStreaming(decoded);
     }
-
-    // Robust sliding window for ANSI checking
-    if (isErr) {
-      this._stderrTail += decoded;
-      if (this._stderrTail.length > TAIL_MAX_LENGTH) this._stderrTail = this._stderrTail.slice(-TAIL_TRIM_LENGTH);
-    } else {
-      this._stdoutTail += decoded;
-      if (this.payload.expectJsonEnvelope) {
-         const parsed = parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
-         if (parsed) {
-            this._lastParsedEnvelope = parsed;
-         }
-      }
-      if (this._stdoutTail.length > TAIL_MAX_LENGTH) this._stdoutTail = this._stdoutTail.slice(-TAIL_TRIM_LENGTH);
-    }
-
-    this.evaluatePromptStall();
+    if (isErr) this._stderrTail = appendOutputTail(this._stderrTail, decoded);
+    else this.updateEnvelopeTail(decoded);
+    this.evaluatePromptStall(decoded);
+    if (this.aborted) return;
     this.resetStallTimer();
     this.scheduleStreamFlush(isErr);
 
     const str = this.streamManager.processChunk(isErr, decoded);
     this.streamManager.addLength(isErr, str.length);
-    
-    if (this.payload.maxBuffer !== undefined) {
-      if ((this.streamManager.getBufferedLength(false) + this.streamManager.getBufferedLength(true)) > this.payload.maxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${this.payload.maxBuffer} bytes.`);
-         return;
-      }
-    } else {
-      const stdoutMaxBuffer = this.payload.stdoutFile ? INFINITE_MAX_BUFFER : (this.payload.truncateOutputLength !== undefined ? Infinity : DEFAULT_MAX_BUFFER);
-      const stderrMaxBuffer = this.payload.stderrFile ? INFINITE_MAX_BUFFER : (this.payload.truncateOutputLength !== undefined ? Infinity : DEFAULT_MAX_BUFFER);
-      
-      const combinedMaxBuffer = this.payload.truncateOutputLength !== undefined ? Infinity :
-                              (this.payload.stdoutFile || this.payload.stderrFile) ? (stdoutMaxBuffer + stderrMaxBuffer) 
-                              : DEFAULT_MAX_BUFFER;
+    if (!this.enforceBufferLimits()) return;
 
-      if (this.streamManager.getBufferedLength(false) > stdoutMaxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${stdoutMaxBuffer} bytes.`);
-         return;
-      }
-      if (this.streamManager.getBufferedLength(true) > stderrMaxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${stderrMaxBuffer} bytes.`);
-         return;
-      }
-      if ((this.streamManager.getBufferedLength(false) + this.streamManager.getBufferedLength(true)) > combinedMaxBuffer) {
-         this.onMaxBuffer(`Output exceeded maxBuffer of ${combinedMaxBuffer} bytes.`);
-         return;
-      }
-    }
-    
     const streamsToDrain = this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
     const stream = isErr ? this.child.stderr : this.child.stdout;
-    if (streamsToDrain.length > 0 && stream) {
-       this.safelyPauseAndDrain(stream, streamsToDrain);
-    }
+    pauseStreamUntilDrained(stream, streamsToDrain);
   }
 
-  private processEnd(isErr: boolean) {
+  private processEnd(isErr: boolean): void {
+    if (isErr) this.stderrEnded = true;
+    else this.stdoutEnded = true;
+    if (isErr && this.stderrFlushTimer) { clearTimeout(this.stderrFlushTimer); this.stderrFlushTimer = null; }
+    if (!isErr && this.stdoutFlushTimer) { clearTimeout(this.stdoutFlushTimer); this.stdoutFlushTimer = null; }
+    if (this.stdoutEnded && this.stderrEnded && this.promptStallTimer) { clearTimeout(this.promptStallTimer); this.promptStallTimer = null; }
+    if (this.stdoutEnded && this.stderrEnded && this.stallTimer) { clearTimeout(this.stallTimer); this.stallTimer = null; }
+    if (this.aborted) return;
     let decoded = isErr ? this.stderrDecoder.end() : this.stdoutDecoder.end();
     if (!isErr) {
       decoded = this.finalizeStdout(decoded);
-      this._stdoutTail += decoded;
-      if (this._stdoutTail.length > TAIL_MAX_LENGTH) this._stdoutTail = this._stdoutTail.slice(-TAIL_TRIM_LENGTH);
+      this._stdoutTail = appendOutputTail(this._stdoutTail, decoded);
+    } else if (decoded) {
+      this._stderrTail = appendOutputTail(this._stderrTail, decoded);
     }
     let str = this.streamManager.processChunk(isErr, decoded);
     str += this.streamManager.flushChunk(isErr);
     if (str) {
-       this.streamManager.addLength(isErr, str.length);
-       this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
+      this.streamManager.addLength(isErr, str.length);
+      if (!this.enforceBufferLimits()) return;
+      this.streamManager.writeData(isErr, str, this.payload.stdoutFile, this.payload.stderrFile);
     }
   }
 
-  private bindStdout() {
+  private bindStdout(): void {
     if (this.child.stdout) {
       this.child.stdout.on('data', (data: Buffer) => this.processData(false, data));
       this.child.stdout.on('end', () => this.processEnd(false));
     }
   }
 
-  private bindStderr() {
+  private bindStderr(): void {
     if (this.child.stderr) {
       this.child.stderr.on('data', (data: Buffer) => this.processData(true, data));
       this.child.stderr.on('end', () => this.processEnd(true));
     }
   }
 
-  public flushAll() {
-    if (this.stallTimer) clearTimeout(this.stallTimer);
-    if (this.promptStallTimer) clearTimeout(this.promptStallTimer);
-    if (this.stdoutFlushTimer) clearTimeout(this.stdoutFlushTimer);
-    if (this.stderrFlushTimer) clearTimeout(this.stderrFlushTimer);
+  public flushAll(): void {
+    if (this.stallTimer) { clearTimeout(this.stallTimer); this.stallTimer = null; }
+    if (this.promptStallTimer) { clearTimeout(this.promptStallTimer); this.promptStallTimer = null; }
+    if (this.stdoutFlushTimer) { clearTimeout(this.stdoutFlushTimer); this.stdoutFlushTimer = null; }
+    if (this.stderrFlushTimer) { clearTimeout(this.stderrFlushTimer); this.stderrFlushTimer = null; }
 
     if (this.child.stdout) {
-       if (this.pendingStdout) {
-          const finalStr = this.finalizeStdout('');
-          if (finalStr) {
-             this._stdoutTail += finalStr;
-             if (this._stdoutTail.length > TAIL_MAX_LENGTH) this._stdoutTail = this._stdoutTail.slice(-TAIL_TRIM_LENGTH);
-             const str = this.streamManager.processChunk(false, finalStr);
-             this.streamManager.addLength(false, str.length);
-             this.streamManager.writeData(false, str, this.payload.stdoutFile, this.payload.stderrFile);
-          }
-       }
-       const str = this.streamManager.flushChunk(false);
-       if (str) {
+      if (this.pendingStdout) {
+        const finalStr = this.finalizeStdout('');
+        if (finalStr) {
+          this._stdoutTail = appendOutputTail(this._stdoutTail, finalStr);
+          const str = this.streamManager.processChunk(false, finalStr);
           this.streamManager.addLength(false, str.length);
           this.streamManager.writeData(false, str, this.payload.stdoutFile, this.payload.stderrFile);
-       }
+        }
+      }
+      const str = this.streamManager.flushChunk(false);
+      if (str) {
+        this.streamManager.addLength(false, str.length);
+        this.streamManager.writeData(false, str, this.payload.stdoutFile, this.payload.stderrFile);
+      }
     }
     if (this.child.stderr) {
-       const str = this.streamManager.flushChunk(true);
-       if (str) {
-          this.streamManager.addLength(true, str.length);
-          this.streamManager.writeData(true, str, this.payload.stdoutFile, this.payload.stderrFile);
-       }
+      const str = this.streamManager.flushChunk(true);
+      if (str) {
+        this.streamManager.addLength(true, str.length);
+        this.streamManager.writeData(true, str, this.payload.stdoutFile, this.payload.stderrFile);
+      }
     }
   }
 
   public async closeFileStreams(): Promise<void> {
-    const closePromises: Promise<void>[] = [];
-    
-    const outStream = this.outStream;
-    if (outStream && !outStream.destroyed) {
-      closePromises.push(new Promise(resolve => outStream.end(resolve)));
-    } else if (outStream) {
-      closePromises.push(Promise.resolve());
-    }
-    
-    const errStream = this.errStream;
-    if (errStream && !errStream.destroyed) {
-      closePromises.push(new Promise(resolve => errStream.end(resolve)));
-    } else if (errStream) {
-      closePromises.push(Promise.resolve());
-    }
-
-    try {
-      let timeoutId: NodeJS.Timeout;
-      await Promise.race([
-        Promise.all(closePromises),
-        new Promise(resolve => { timeoutId = setTimeout(resolve, 2000); })
-      ]);
-      clearTimeout(timeoutId!);
-    } catch { /* ignore */ }
+    const timeoutMs = hasWebhookStream(this.payload)
+      ? Math.min(Math.max(2000, (this.payload.webhookTimeoutMs ?? 5000) + 500), 15000)
+      : 2000;
+    await closeStreamsWithTimeout([this.outStream, this.errStream], timeoutMs);
   }
 
-  public destroyStreams() {
+  public destroyStreams(): void {
+    this.aborted = true;
+    if (this.stallTimer) { clearTimeout(this.stallTimer); this.stallTimer = null; }
+    if (this.promptStallTimer) { clearTimeout(this.promptStallTimer); this.promptStallTimer = null; }
+    if (this.stdoutFlushTimer) { clearTimeout(this.stdoutFlushTimer); this.stdoutFlushTimer = null; }
+    if (this.stderrFlushTimer) { clearTimeout(this.stderrFlushTimer); this.stderrFlushTimer = null; }
     if (this.child.stdout) this.child.stdout.destroy();
     if (this.child.stderr) this.child.stderr.destroy();
     if (this.child.stdin) this.child.stdin.destroy();

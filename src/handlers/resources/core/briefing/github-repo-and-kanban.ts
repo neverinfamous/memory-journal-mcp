@@ -4,29 +4,102 @@
 
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { BriefingConfig } from '../../shared.js'
-import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from '../../shared.js'
+import { resolveGitHubRepo, isResourceError, milestoneCompletionPct, sliceUntrustedInline } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import type { ServerRuntime } from '../../../../utils/maintenance-lock.js'
 import type { BriefingGitHub } from './github-section.js'
+
+const MAX_BRIEFING_TITLE_LEN = 120
+const MAX_WORKFLOW_NAME_LEN = 80
+
+export interface WorkflowRunLike {
+    name: string
+    status: string
+    conclusion?: string | null | undefined
+    url?: string | undefined
+    headBranch?: string | null | undefined
+}
 
 export interface CiResult {
     status: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
     ciName?: string | undefined
     ciUpdatedAt?: string | undefined
     workflowSummary?: BriefingGitHub['workflowSummary'] | undefined
+    runs?: WorkflowRunLike[] | undefined
+    ciSuppressed?: boolean | undefined
     degraded?: boolean | undefined
 }
 
 export async function resolveBriefingRepo(
     github: GitHubIntegration,
-    config: BriefingConfig
-): Promise<{ owner: string; repo: string; branch: string | null } | null> {
-    const resolved = await resolveGitHubRepo(github, config)
+    config: BriefingConfig,
+    targetRepo?: string,
+    runtime?: ServerRuntime
+): Promise<{ owner: string; repo: string; branch: string | null; github: GitHubIntegration } | null> {
+    const resolved = await resolveGitHubRepo(github, config, targetRepo, runtime)
     if (isResourceError(resolved)) return null
     return {
         owner: resolved.owner,
         repo: resolved.repo,
         branch: resolved.branch ?? null,
+        github: resolved.github ?? github,
+    }
+}
+
+/** Map a completed run's conclusion onto the CI status vocabulary. */
+function classifyRunConclusion(conclusion: string | null | undefined): CiResult['status'] {
+    switch (conclusion) {
+        case 'success':
+            return 'passing'
+        case 'failure':
+            return 'failing'
+        case 'cancelled':
+            return 'cancelled'
+        case null:
+        case undefined:
+        default:
+            return 'unknown'
+    }
+}
+
+/** Choose the run that best represents CI (a ci/test run, else the latest decisive run). */
+function pickPrimaryRun<T extends WorkflowRunLike>(runs: T[]): T | undefined {
+    const named = runs.find((r) => /\b(?:ci|test|tests|gatekeeper)\b/i.test(r.name))
+    if (named) return named
+    return (
+        runs.find(
+            (r) =>
+                r.status !== 'completed' ||
+                ['success', 'failure', 'cancelled'].includes(r.conclusion ?? '')
+        ) ?? runs[0]
+    )
+}
+
+function buildWorkflowSummary(
+    runs: WorkflowRunLike[],
+    config: BriefingConfig
+): BriefingGitHub['workflowSummary'] {
+    const counts = { passing: 0, failing: 0, pending: 0, cancelled: 0 }
+    for (const run of runs) {
+        if (run.status !== 'completed') {
+            counts.pending++
+            continue
+        }
+        const classified = classifyRunConclusion(run.conclusion)
+        if (classified !== 'unknown') counts[classified]++
+    }
+    return {
+        ...counts,
+        ...(config.workflowCount > 0
+            ? {
+                  runs: runs.slice(0, config.workflowCount).map((r) => ({
+                      name: sliceUntrustedInline(r.name, MAX_WORKFLOW_NAME_LEN, '…'),
+                      conclusion:
+                          r.status !== 'completed' ? 'pending' : (r.conclusion ?? 'unknown'),
+                      ...(r.url !== undefined ? { url: r.url } : {}),
+                  })),
+              }
+            : {}),
     }
 }
 
@@ -36,89 +109,42 @@ export async function fetchCiStatus(
     repo: string,
     config: BriefingConfig
 ): Promise<CiResult> {
+    if (config.workflowCount <= 0 && !config.workflowStatusBreakdown) {
+        return { status: 'unknown', ciSuppressed: true }
+    }
     try {
-        const runLimit = Math.max(5, config.workflowCount, config.workflowStatusBreakdown ? 10 : 1)
+        const includePrs = config.prCount > 0 || config.prStatusBreakdown
+        const runLimit = Math.max(
+            includePrs ? 20 : 5,
+            config.workflowCount,
+            config.workflowStatusBreakdown ? 10 : 1
+        )
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
-        if (runs.length === 0) return { status: 'unknown' }
+        if (runs.length === 0) return { status: 'unknown', runs }
 
-        let primaryRun = runs.find((r) => {
-            const name = r.name.toLowerCase()
-            return name.includes('ci') || name.includes('test') || name.includes('gatekeeper')
-        })
-
-        primaryRun ??=
-            runs.find(
-                (r) =>
-                    r.status !== 'completed' ||
-                    ['success', 'failure', 'cancelled'].includes(r.conclusion ?? '')
-            ) ?? runs[0]
-
-        const latestRun = primaryRun
+        const latestRun = pickPrimaryRun(runs)
         let status: CiResult['status']
         if (!latestRun) {
             status = 'unknown'
         } else if (latestRun.status !== 'completed') {
             status = 'pending'
         } else {
-            switch (latestRun.conclusion) {
-                case 'success':
-                    status = 'passing'
-                    break
-                case 'failure':
-                    status = 'failing'
-                    break
-                case 'cancelled':
-                    status = 'cancelled'
-                    break
-                default:
-                    status = 'unknown'
-            }
+            status = classifyRunConclusion(latestRun.conclusion)
         }
 
-        let workflowSummary: BriefingGitHub['workflowSummary'] | undefined = undefined
-        if (config.workflowStatusBreakdown || config.workflowCount > 0) {
-            const counts = { passing: 0, failing: 0, pending: 0, cancelled: 0 }
-            for (const run of runs) {
-                if (run.status !== 'completed') {
-                    counts.pending++
-                } else {
-                    switch (run.conclusion) {
-                        case 'success':
-                            counts.passing++
-                            break
-                        case 'failure':
-                            counts.failing++
-                            break
-                        case 'cancelled':
-                            counts.cancelled++
-                            break
-                        default:
-                            break
-                    }
-                }
-            }
-            workflowSummary = {
-                ...counts,
-                ...(config.workflowCount > 0
-                    ? {
-                          runs: runs.slice(0, config.workflowCount).map((r) => ({
-                              name: markUntrustedContentInline(r.name),
-                              conclusion:
-                                  r.status !== 'completed'
-                                      ? 'pending'
-                                      : (r.conclusion ?? 'unknown'),
-                              ...(r.url !== undefined ? { url: r.url } : {}),
-                          })),
-                      }
-                    : {}),
-            }
-        }
+        const workflowSummary =
+            config.workflowStatusBreakdown || config.workflowCount > 0
+                ? buildWorkflowSummary(runs, config)
+                : undefined
 
         return {
             status,
-            ciName: latestRun?.name ? markUntrustedContentInline(latestRun.name) : undefined,
+            ciName: latestRun?.name
+                ? sliceUntrustedInline(latestRun.name, MAX_WORKFLOW_NAME_LEN, '…')
+                : undefined,
             ciUpdatedAt: latestRun?.updatedAt,
             workflowSummary,
+            runs,
         }
     } catch (error) {
         logger.debug('Failed to fetch CI status', {
@@ -128,6 +154,15 @@ export async function fetchCiStatus(
         })
         return { status: 'unknown', degraded: true }
     }
+}
+
+function logSettledRejection(operation: string, settled: PromiseSettledResult<unknown>): void {
+    if (settled.status !== 'rejected') return
+    logger.debug(`Briefing ${operation} fetch failed (partial degradation)`, {
+        module: 'BRIEFING',
+        operation,
+        error: settled.reason instanceof Error ? settled.reason.message : String(settled.reason),
+    })
 }
 
 export async function fetchIssuesAndPrs(
@@ -141,47 +176,70 @@ export async function fetchIssuesAndPrs(
     openIssueList?: { number: number; title: string }[] | undefined
     openPrList?: { number: number; title: string; state: string }[] | undefined
     allPrs?:
-        | { number: number; title: string; url: string; state: string; headRef?: string }[]
+        | {
+              number: number
+              title: string
+              url: string
+              state: string
+              headRef?: string | undefined
+          }[]
         | undefined
     degraded?: boolean | undefined
 }> {
+    const includeIssues = config.issueCount > 0
+    const includePrs = config.prCount > 0 || config.prStatusBreakdown
+    if (!includeIssues && !includePrs) {
+        return { openIssues: 0, openPRs: 0 }
+    }
     try {
-        const issueLimit = Math.max(1, config.issueCount || 1)
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
         const prLimit = config.prStatusBreakdown
             ? Math.max(20, config.prCount)
-            : Math.max(1, config.prCount || 1)
+            : config.prCount
 
-        const [issues, prs] = await Promise.all([
-            github.getIssues(owner, repo, 'open', issueLimit),
-            github.getPullRequests(owner, repo, prState, prLimit),
+        // [INTENT] allSettled: an issues failure must not blank the PRs row (and vice versa).
+        const [issuesSettled, prsSettled] = await Promise.allSettled([
+            includeIssues
+                ? github.getIssues(owner, repo, 'open', config.issueCount)
+                : Promise.resolve([]),
+            includePrs
+                ? github.getPullRequests(owner, repo, prState, prLimit)
+                : Promise.resolve([]),
         ])
+        logSettledRejection('issues', issuesSettled)
+        logSettledRejection('prs', prsSettled)
+        const issues = issuesSettled.status === 'fulfilled' ? issuesSettled.value : []
+        const prs = prsSettled.status === 'fulfilled' ? prsSettled.value : []
+        const partialFailure = issuesSettled.status === 'rejected' || prsSettled.status === 'rejected'
 
         const openIssues = issues.length > 0 ? issues.length : 0
         const openIssueList =
             config.issueCount > 0 && issues.length > 0
                 ? issues.slice(0, config.issueCount).map((i) => ({
                       number: i.number,
-                      title: markUntrustedContentInline(i.title),
+                      title: sliceUntrustedInline(i.title, MAX_BRIEFING_TITLE_LEN, '…'),
                   }))
                 : undefined
-
         const openPRs = config.prStatusBreakdown
             ? prs.filter((p) => p.state === 'OPEN').length
-            : prs.length > 0
-              ? prs.length
-              : 0
-
+            : prs.length
         const openPrList =
             config.prCount > 0 && prs.length > 0
                 ? prs.slice(0, config.prCount).map((p) => ({
                       number: p.number,
-                      title: markUntrustedContentInline(p.title),
+                      title: sliceUntrustedInline(p.title, MAX_BRIEFING_TITLE_LEN, '…'),
                       state: p.state,
                   }))
                 : undefined
 
-        return { openIssues, openPRs, openIssueList, openPrList, allPrs: prs }
+        return {
+            openIssues,
+            openPRs,
+            openIssueList,
+            openPrList,
+            ...(prsSettled.status === 'fulfilled' ? { allPrs: prs } : {}),
+            ...(partialFailure ? { degraded: true } : {}),
+        }
     } catch (error) {
         logger.debug('Failed to fetch issues and PRs', {
             module: 'BRIEFING',
@@ -225,7 +283,7 @@ export async function fetchMilestones(
             items: activeMilestones.map((m) => {
                 const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
                 return {
-                    title: markUntrustedContentInline(m.title),
+                    title: sliceUntrustedInline(m.title, MAX_BRIEFING_TITLE_LEN, '…'),
                     progress: `${String(pct)}%`,
                     dueOn: m.dueOn,
                 }
@@ -250,13 +308,17 @@ export async function fetchInsights(
     degraded?: boolean | undefined
 }> {
     try {
-        const [repoStats, trafficResult] = await Promise.all([
-            github.getRepoStats(owner, repo),
+        const [repoStatsResult, trafficResult] = await Promise.all([
+            github
+                .getRepoStats(owner, repo)
+                .then((data) => ({ ok: true as const, data }))
+                .catch((error: unknown) => ({ ok: false as const, error })),
             github
                 .getTrafficData(owner, repo)
                 .then((data) => ({ ok: true as const, data }))
                 .catch((error: unknown) => ({ ok: false as const, error })),
         ])
+        const repoStats = repoStatsResult.ok ? repoStatsResult.data : null
         if (!repoStats) return { degraded: true }
 
         const result: NonNullable<BriefingGitHub['insights']> = {
@@ -292,35 +354,55 @@ export async function fetchInsights(
     }
 }
 
+function aggregateCopilotReviewSummaries(
+    summaries: readonly { state: string; commentCount: number }[]
+): { reviewed: number; approved: number; changesRequested: number; totalComments: number } {
+    let reviewed = 0
+    let approved = 0
+    let changesRequested = 0
+    let totalComments = 0
+    for (const summary of summaries) {
+        if (summary.state === 'none') continue
+        reviewed++
+        if (summary.state === 'approved') approved++
+        else if (summary.state === 'changes_requested') changesRequested++
+        totalComments += summary.commentCount
+    }
+    return { reviewed, approved, changesRequested, totalComments }
+}
+
 export async function fetchCopilotReviews(
     github: GitHubIntegration,
     owner: string,
-    repo: string
+    repo: string,
+    prefetchedPrsPromise?: Promise<
+        | {
+              number: number
+              title: string
+              url: string
+              state: string
+              headRef?: string | undefined
+          }[]
+        | undefined
+    >
 ): Promise<
     { reviews?: BriefingGitHub['copilotReviews'] | undefined; degraded?: boolean | undefined } | undefined
 > {
     try {
-        const recentPrs = await github.getPullRequests(owner, repo, 'all', 10)
-        let reviewed = 0
-        let approved = 0
-        let changesRequested = 0
-        let totalComments = 0
-
-        const summaries = await Promise.all(
+        const prefetchedPrs =
+            prefetchedPrsPromise !== undefined
+                ? await prefetchedPrsPromise.catch(() => undefined)
+                : undefined
+        const recentPrs = prefetchedPrs ?? (await github.getPullRequests(owner, repo, 'all', 10))
+        const settled = await Promise.allSettled(
             recentPrs.slice(0, 5).map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
         )
-        for (const summary of summaries) {
-            if (summary.state !== 'none') {
-                reviewed++
-                if (summary.state === 'approved') approved++
-                else if (summary.state === 'changes_requested') changesRequested++
-                totalComments += summary.commentCount
-            }
-        }
-
-        return reviewed > 0
-            ? { reviews: { reviewed, approved, changesRequested, totalComments } }
-            : undefined
+        for (const outcome of settled) logSettledRejection('copilot-review-pr', outcome)
+        const summaries = settled.flatMap((s) => (s.status === 'fulfilled' ? [s.value] : []))
+        const aggregated = aggregateCopilotReviewSummaries(summaries)
+        const partial = summaries.length < settled.length
+        if (aggregated.reviewed === 0) return partial ? { degraded: true } : undefined
+        return { reviews: aggregated, ...(partial ? { degraded: true } : {}) }
     } catch (error) {
         logger.debug('Failed to fetch Copilot reviews', {
             module: 'BRIEFING',

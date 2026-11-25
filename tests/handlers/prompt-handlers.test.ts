@@ -143,6 +143,7 @@ describe('Prompt Handlers', () => {
         })
 
         it('should return messages for team-session-summary prompt with team target', async () => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
             const result = await getPrompt('team-session-summary', undefined, db, teamDb)
 
             expect(result.messages).toBeDefined()
@@ -153,6 +154,7 @@ describe('Prompt Handlers', () => {
         })
 
         it('should throw ConfigurationError if teamDb is omitted for team-session-summary', async () => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
             await expect(getPrompt('team-session-summary', undefined, db)).rejects.toThrow(
                 'Team database not configured'
             )

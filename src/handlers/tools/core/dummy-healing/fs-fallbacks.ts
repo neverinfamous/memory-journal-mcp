@@ -3,168 +3,28 @@ import * as path from 'node:path'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { getSearchTools } from '../../search/index.js'
-import {
-    assertSafeDirectoryPath,
-    assertSafeFilePath,
-    PathTraversalError,
-} from '../../../../utils/security-utils.js'
+import { findCachedOrFallbackTool } from './cached-tool-lookup.js'
+import { assertSafeDirectoryPath, assertSafeFilePath, PathTraversalError } from '../../../../utils/security-utils.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import {
     DUMMY_GREP_SEARCH_TOOL_NAMES,
     DUMMY_FILE_VIEW_TOOL_NAMES,
     DUMMY_DIR_LIST_TOOL_NAMES,
 } from './alias-catalog.js'
-import { handleReadResource } from './mcp-fallbacks.js'
+import { tryHandleResourceUriFallback } from './mcp-fallbacks.js'
 
 const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 
-export interface GrepMatch {
-    file: string
-    line: number
-    text: string
-}
-
-export interface SearchDirectoryOptions {
-    filePattern?: string | undefined
-    caseInsensitive?: boolean | undefined
-    isRegex?: boolean | undefined
-    maxResults?: number | undefined
-}
-
-const IGNORED_DIRS = new Set([
-    'node_modules', '.git', '.test-output', 'dist', '.cache', 'coverage', '.turbo',
-])
-
-function buildMatcher(query: string, options: SearchDirectoryOptions): RegExp {
-    const flags = options.caseInsensitive === true ? 'i' : ''
-    try {
-        if (options.isRegex === true) return new RegExp(query, flags)
-        return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
-    } catch {
-        return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
-    }
-}
-
-function matchesFilePattern(entryName: string, filePattern?: string): boolean {
-    if (filePattern === undefined || filePattern.length === 0) return true
-    const pattern = filePattern.toLowerCase()
-    const name = entryName.toLowerCase()
-    if (pattern.startsWith('*.')) return name.endsWith(pattern.slice(1))
-    const cleanPattern = pattern.replace(/^\*+/, '').replace(/\*+$/, '')
-    return cleanPattern.length === 0 || name.includes(cleanPattern)
-}
-
-function scanContentLines(
-    fullPath: string,
-    content: string,
-    matcher: RegExp,
-    results: GrepMatch[],
-    maxResults: number
-): void {
-    if (content.length > 2 * 1024 * 1024) return
-    const lines = content.split('\n')
-    for (let i = 0; i < lines.length; i++) {
-        if (results.length >= maxResults) break
-        const line = lines[i]
-        if (typeof line === 'string' && matcher.test(line)) {
-            results.push({ file: fullPath, line: i + 1, text: line.trimEnd() })
-        }
-    }
-}
-
-export async function searchDirectoryAsync(
-    dir: string,
-    query: string,
-    options: SearchDirectoryOptions
-): Promise<GrepMatch[]> {
-    const results: GrepMatch[] = []
-    const maxResults = typeof options.maxResults === 'number' ? options.maxResults : 500
-    const matcher = buildMatcher(query, options)
-
-    async function traverse(currentDir: string): Promise<void> {
-        if (results.length >= maxResults) return
-        let entries: fs.Dirent[]
-        try {
-            entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
-        } catch {
-            return
-        }
-        for (const entry of entries) {
-            if (results.length >= maxResults) break
-            if (entry.isSymbolicLink()) continue
-            const fullPath = path.join(currentDir, entry.name)
-            if (entry.isDirectory()) {
-                if (!IGNORED_DIRS.has(entry.name)) await traverse(fullPath)
-            } else if (entry.isFile() && matchesFilePattern(entry.name, options.filePattern)) {
-                let handle: fs.promises.FileHandle | undefined
-                try {
-                    handle = await fs.promises.open(fullPath, fs.constants.O_RDONLY)
-                    const stat = await handle.stat()
-                    if (stat.size <= 2 * 1024 * 1024) {
-                        const content = await handle.readFile('utf-8')
-                        scanContentLines(fullPath, content, matcher, results, maxResults)
-                    }
-                } catch {
-                    // Skip unreadable or locked files
-                } finally {
-                    await handle?.close()
-                }
-            }
-        }
-    }
-
-    await traverse(dir)
-    return results
-}
-
-export function searchDirectory(
-    dir: string,
-    query: string,
-    options: SearchDirectoryOptions
-): GrepMatch[] {
-    const results: GrepMatch[] = []
-    const maxResults = typeof options.maxResults === 'number' ? options.maxResults : 500
-    const matcher = buildMatcher(query, options)
-
-    function traverse(currentDir: string): void {
-        if (results.length >= maxResults) return
-        let entries: fs.Dirent[]
-        try {
-            entries = fs.readdirSync(currentDir, { withFileTypes: true })
-        } catch {
-            return
-        }
-        for (const entry of entries) {
-            if (results.length >= maxResults) break
-            if (entry.isSymbolicLink()) continue
-            const fullPath = path.join(currentDir, entry.name)
-            if (entry.isDirectory()) {
-                if (!IGNORED_DIRS.has(entry.name)) traverse(fullPath)
-            } else if (entry.isFile() && matchesFilePattern(entry.name, options.filePattern)) {
-                let fd: number | undefined
-                try {
-                    fd = fs.openSync(fullPath, fs.constants.O_RDONLY)
-                    const stat = fs.fstatSync(fd)
-                    if (stat.size <= 2 * 1024 * 1024) {
-                        const content = fs.readFileSync(fd, 'utf-8')
-                        scanContentLines(fullPath, content, matcher, results, maxResults)
-                    }
-                } catch {
-                    // Skip unreadable or locked files
-                } finally {
-                    if (fd !== undefined) fs.closeSync(fd)
-                }
-            }
-        }
-    }
-
-    traverse(dir)
-    return results
-}
+export { searchDirectory, searchDirectoryAsync } from './directory-search.js'
+export type { GrepMatch, SearchDirectoryOptions } from './directory-search.js'
+import { isSafeUserRegex, searchDirectoryAsync, searchSingleFileAsync } from './directory-search.js'
+import { listBoundedDirectoryEntries, readSafeViewFile } from './fs-view-helpers.js'
+import { ValidationError } from '../../../../types/errors.js'
+import { logger } from '../../../../utils/logger.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 
 function normalizeStrippedArgs(params: unknown): Record<string, unknown> {
-    const raw =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
+    const raw = isRecord(params) ? params : {}
     const rawArgs: Record<string, unknown> = { ...raw }
     for (const [k, v] of Object.entries(raw)) {
         const stripped = k.replace(/^_+/, '')
@@ -179,6 +39,143 @@ function pickFirstString(rawArgs: Record<string, unknown>, keys: readonly string
         if (typeof val === 'string') return val
     }
     return undefined
+}
+
+async function runFilesystemGrepSearch(
+    searchPath: string,
+    toolName: string,
+    query: string,
+    filePattern: string | undefined,
+    caseInsensitive: boolean,
+    isRegex: boolean,
+    allowedRoots: string[]
+): Promise<unknown> {
+    let stat: fs.Stats | null
+    try {
+        stat = await fs.promises.lstat(searchPath)
+    } catch {
+        stat = null
+    }
+    // [INVARIANT] M5: an explicit-but-missing search_path is an error, not a silent reroute.
+    if (stat === null) {
+        return {
+            success: false,
+            error: `Search path not found: '${searchPath}'`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            recoverable: true,
+            matches: [],
+            totalMatches: 0,
+            suggestion: "Provide an existing 'search_path', or use 'search_entries' for journal search.",
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was not executed because the explicit search_path does not exist.`,
+        }
+    }
+    try {
+        let matches
+        if (stat.isFile()) {
+            assertSafeFilePath(searchPath, allowedRoots)
+            matches = await searchSingleFileAsync(searchPath, query, {
+                filePattern,
+                caseInsensitive,
+                isRegex,
+            })
+        } else {
+            assertSafeDirectoryPath(searchPath, allowedRoots)
+            matches = await searchDirectoryAsync(searchPath, query, {
+                filePattern,
+                caseInsensitive,
+                isRegex,
+            })
+        }
+        return {
+            success: true,
+            matches,
+            totalMatches: matches.length,
+            searchPath,
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. The search was performed on the filesystem and results returned successfully.`,
+        }
+    } catch (err) {
+        const isValidation = err instanceof ValidationError || err instanceof PathTraversalError
+        return {
+            success: false,
+            error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
+            code:
+                err instanceof PathTraversalError
+                    ? 'PATH_TRAVERSAL'
+                    : err instanceof ValidationError
+                      ? 'VALIDATION_ERROR'
+                      : 'SEARCH_ERROR',
+            category: isValidation ? 'validation' : 'search',
+            recoverable: err instanceof ValidationError,
+        }
+    }
+}
+
+async function tryJournalSearchFallback(
+    context: ToolContext | undefined,
+    rawArgs: Record<string, unknown>,
+    toolName: string,
+    query: string
+): Promise<unknown> {
+    if (context === undefined || query.trim() === '') return undefined
+    const filterConfig = context.config?.filterConfig
+    if (
+        filterConfig !== null &&
+        filterConfig !== undefined &&
+        !filterConfig.enabledTools.has('search_entries')
+    ) {
+        return undefined
+    }
+    const searchTool = findCachedOrFallbackTool(context, 'search_entries', getSearchTools)
+    if (searchTool === undefined) return undefined
+    try {
+        const wsArg = pickFirstString(rawArgs, ['workspace_id', 'workspaceId'])
+        const projArg = rawArgs['project_number'] ?? rawArgs['projectNumber']
+        const searchPayload: Record<string, unknown> = {
+            query,
+            ...(wsArg !== undefined ? { workspace_id: wsArg } : {}),
+            ...(projArg !== undefined ? { project_number: projArg } : {}),
+        }
+        const searchResult = await Promise.resolve(searchTool.handler(searchPayload))
+        if (!isRecord(searchResult)) return undefined
+        if (searchResult['success'] === false) return searchResult
+        return {
+            success: true,
+            ...searchResult,
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked as an MCP tool without a local directory path. It was automatically routed to journal 'search_entries' and executed successfully.`,
+        }
+    } catch (err) {
+        logger.debug('Dummy fs-fallback search_entries routing failed', {
+            module: 'dummy-healing',
+            toolName,
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return undefined
+    }
+}
+
+function validateGrepRegexQuery(query: string): Record<string, unknown> | undefined {
+    if (!isSafeUserRegex(query)) {
+        return {
+            success: false,
+            error: 'Regex query rejected: pattern exceeds length limit (256) or contains unsafe constructs (nested quantifiers / backreferences)',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
+    try {
+        new RegExp(query)
+        return undefined
+    } catch (err) {
+        return {
+            success: false,
+            error: `Invalid regex pattern '${query}': ${err instanceof Error ? err.message : String(err)}`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
 }
 
 export async function handleGrepSearch(
@@ -201,13 +198,16 @@ export async function handleGrepSearch(
     const isRegex =
         rawArgs['is_regex'] === true || rawArgs['IsRegex'] === true || rawArgs['isRegex'] === true
 
-    const allowedRoots = context?.config?.allowedIoRoots ?? []
-    let searchPath = rawPath
-    if (typeof searchPath === 'string' && searchPath.trim() !== '') {
-        searchPath = path.resolve(searchPath.trim())
+    if (isRegex) {
+        const regexError = validateGrepRegexQuery(query)
+        if (regexError !== undefined) return regexError
     }
 
-    if (typeof searchPath === 'string') {
+    const allowedRoots = context?.config?.allowedIoRoots ?? []
+    const trimmedRawPath = typeof rawPath === 'string' ? rawPath.trim() : ''
+    const searchPath = trimmedRawPath !== '' ? path.resolve(trimmedRawPath) : undefined
+
+    if (searchPath !== undefined) {
         try {
             assertSafeDirectoryPath(searchPath, allowedRoots)
         } catch (err) {
@@ -219,70 +219,22 @@ export async function handleGrepSearch(
                 recoverable: false,
             }
         }
+        return await runFilesystemGrepSearch(
+            searchPath,
+            toolName,
+            query,
+            filePattern,
+            caseInsensitive,
+            isRegex,
+            allowedRoots
+        )
     }
 
-    if (typeof searchPath === 'string') {
-        let stat: fs.Stats | null
-        try {
-            stat = await fs.promises.stat(searchPath)
-        } catch {
-            stat = null
-        }
-        if (stat !== null) {
-            try {
-                const targetDir = stat.isDirectory() ? searchPath : path.dirname(searchPath)
-                if (stat.isFile()) assertSafeFilePath(searchPath, allowedRoots)
-                const targetPattern =
-                    stat.isFile() && filePattern === undefined ? path.basename(searchPath) : filePattern
-                const matches = await searchDirectoryAsync(targetDir, query, {
-                    filePattern: targetPattern,
-                    caseInsensitive,
-                    isRegex,
-                })
-                return {
-                    success: true,
-                    matches,
-                    totalMatches: matches.length,
-                    searchPath: targetDir,
-                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. The search was performed on the filesystem and results returned successfully.`,
-                }
-            } catch (err) {
-                return {
-                    success: false,
-                    error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
-                    code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'SEARCH_ERROR',
-                    category: err instanceof PathTraversalError ? 'validation' : 'search',
-                    recoverable: !(err instanceof PathTraversalError),
-                }
-            }
-        }
-    }
-
-    if (context !== undefined && query.trim() !== '') {
-        const searchTools = getSearchTools(context)
-        const searchTool = searchTools.find((t: ToolDefinition) => t.name === 'search_entries')
-        if (searchTool !== undefined) {
-            try {
-                const searchResult = await Promise.resolve(searchTool.handler({ query }))
-                if (
-                    typeof searchResult === 'object' &&
-                    searchResult !== null &&
-                    (searchResult as Record<string, unknown>)['success'] !== false
-                ) {
-                    return {
-                        success: true,
-                        ...(searchResult as Record<string, unknown>),
-                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked as an MCP tool without a local directory path. It was automatically routed to journal 'search_entries' and executed successfully.`,
-                    }
-                }
-            } catch {
-                // Fall through to empty matches
-            }
-        }
-    }
+    const fallbackResult = await tryJournalSearchFallback(context, rawArgs, toolName, query)
+    if (fallbackResult !== undefined) return fallbackResult
 
     return {
-        success: true,
+        success: false,
         matches: [],
         totalMatches: 0,
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was executed, but directory was not found or yielded 0 matches. For codebase search, provide a valid 'search_path'. For journal search, use 'search_entries'.`,
@@ -309,8 +261,8 @@ export async function handleViewFile(
             recoverable: true,
         }
     }
-
-    if (targetPath.includes('://')) return handleReadResource(params, toolName, context)
+    const uriRoute = await tryHandleResourceUriFallback(targetPath, rawArgs, toolName, context)
+    if (uriRoute.handled) return uriRoute.result
 
     const resolved = path.resolve(targetPath.trim())
     const allowedRoots = context?.config?.allowedIoRoots ?? []
@@ -325,69 +277,7 @@ export async function handleViewFile(
             recoverable: false,
         }
     }
-
-    let handle: fs.promises.FileHandle | undefined
-    try {
-        try {
-            handle = await fs.promises.open(resolved, fs.constants.O_RDONLY)
-        } catch {
-            return {
-                success: false,
-                error: `🛠️ AUTONOMOUS HEALING: File not found at '${targetPath}'.`,
-                code: 'NOT_FOUND',
-                category: 'filesystem',
-                recoverable: true,
-            }
-        }
-        const stat = await handle.stat()
-        if (stat.size > 2 * 1024 * 1024) {
-            return {
-                success: false,
-                error: 'File exceeds maximum size limit of 2MB',
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                recoverable: false,
-            }
-        }
-        const content = await handle.readFile('utf-8')
-        const startLine =
-            typeof rawArgs['start_line'] === 'number'
-                ? rawArgs['start_line']
-                : typeof rawArgs['StartLine'] === 'number'
-                  ? rawArgs['StartLine']
-                  : undefined
-        const endLine =
-            typeof rawArgs['end_line'] === 'number'
-                ? rawArgs['end_line']
-                : typeof rawArgs['EndLine'] === 'number'
-                  ? rawArgs['EndLine']
-                  : undefined
-
-        let outputContent = content
-        if (startLine !== undefined || endLine !== undefined) {
-            const lines = content.split('\n')
-            const start = Math.max(1, startLine ?? 1) - 1
-            const end = Math.min(lines.length, endLine ?? lines.length)
-            outputContent = lines.slice(start, end).join('\n')
-        }
-
-        return {
-            success: true,
-            path: resolved,
-            content: outputContent,
-            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. File read successfully from disk.`,
-        }
-    } catch (err) {
-        return {
-            success: false,
-            error: `Failed to read file '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
-            code: 'IO_ERROR',
-            category: 'filesystem',
-            recoverable: true,
-        }
-    } finally {
-        await handle?.close()
-    }
+    return await readSafeViewFile(resolved, targetPath, toolName, rawArgs)
 }
 
 export async function handleListDir(
@@ -399,11 +289,26 @@ export async function handleListDir(
     const targetDir = pickFirstString(rawArgs, [
         'dir_path', 'dirPath', 'path', 'Path', 'directory', 'Directory', 'target', 'Target',
     ])
+    if (targetDir === undefined && Object.keys(rawArgs).length > 0) {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: '${toolName}' requires a directory path parameter ('dir_path' or 'path') when arguments are provided.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        }
+    }
+    if (targetDir?.trim() === '') {
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: '${toolName}' requires a non-empty directory path for 'dir_path' or 'path'.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: false,
+        }
+    }
 
-    const dirToRead =
-        typeof targetDir === 'string' && targetDir.trim() !== ''
-            ? path.resolve(targetDir.trim())
-            : process.cwd()
+    const dirToRead = targetDir !== undefined ? path.resolve(targetDir.trim()) : process.cwd()
     const allowedRoots = context?.config?.allowedIoRoots ?? []
     try {
         assertSafeDirectoryPath(dirToRead, allowedRoots)
@@ -419,23 +324,7 @@ export async function handleListDir(
 
     try {
         await fs.promises.stat(dirToRead)
-    } catch {
-        return {
-            success: false,
-            error: `🛠️ AUTONOMOUS HEALING: Directory not found at '${dirToRead}'.`,
-            code: 'NOT_FOUND',
-            category: 'filesystem',
-            recoverable: true,
-        }
-    }
-
-    try {
-        const dirents = await fs.promises.readdir(dirToRead, { withFileTypes: true })
-        const entries = dirents.map((d) => ({
-            name: d.name,
-            isDirectory: d.isDirectory(),
-            isFile: d.isFile(),
-        }))
+        const entries = await listBoundedDirectoryEntries(dirToRead)
         return {
             success: true,
             path: dirToRead,
@@ -443,10 +332,11 @@ export async function handleListDir(
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. Directory listed successfully from disk.`,
         }
     } catch (err) {
+        const notFound = typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT'
         return {
             success: false,
-            error: `Failed to list directory '${dirToRead}': ${err instanceof Error ? err.message : String(err)}`,
-            code: 'IO_ERROR',
+            error: notFound ? `🛠️ AUTONOMOUS HEALING: Directory not found at '${dirToRead}'.` : `Failed to list directory '${dirToRead}': ${err instanceof Error ? err.message : String(err)}`,
+            code: notFound ? 'NOT_FOUND' : 'IO_ERROR',
             category: 'filesystem',
             recoverable: true,
         }

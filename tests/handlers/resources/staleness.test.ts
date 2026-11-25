@@ -60,6 +60,7 @@ describe('Staleness Resources', () => {
 
             expect(data.active).toHaveLength(1)
             expect(data.active[0].project_number).toBe(1)
+            expect(data.active[0]).not.toHaveProperty('path')
             
             expect(data.recent).toHaveLength(1)
             expect(data.recent[0].project_number).toBe(2)
@@ -82,7 +83,7 @@ describe('Staleness Resources', () => {
             const mockDb = {
                 searchEntries: vi.fn().mockReturnValue({
                     entries: [
-                        { id: 10, timestamp: activeTime, entryType: 'milestone', content: 'some milestone content' },
+                        { id: 10, timestamp: activeTime, entryType: 'milestone', content: 'some milestone at C:\\Users\\alice\\Desktop\\repo' },
                         { id: 9, timestamp: activeTime, entryType: 'note', content: 'some note content' }
                     ]
                 }),
@@ -96,7 +97,8 @@ describe('Staleness Resources', () => {
             }
 
             const context = {
-                db: mockDb
+                db: mockDb,
+                briefingConfig: { projectRegistry: { 'repo-123': { path: '/tmp/repo-123', project_number: 123 } } },
             } as unknown as ResourceContext
 
             const definitions = getStalenessResourceDefinitions()
@@ -108,6 +110,8 @@ describe('Staleness Resources', () => {
             expect(data.project_number).toBe(123)
             expect(data.status).toBe('active')
             expect(data.last_5_entries).toHaveLength(2)
+            expect(data.last_5_entries[0].preview).not.toContain('alice')
+            expect(data.last_5_entries[0].preview).toContain('&lt;desktop&gt;')
             expect(data.tag_breakdown).toEqual({ frontend: 3 })
             expect(data.type_breakdown).toEqual({ milestone: 1, note: 1 })
             expect(data.weekly_trend.new_entries_last_7_days).toBe(3)
@@ -120,6 +124,24 @@ describe('Staleness Resources', () => {
 
             const result = handler('memory://staleness/abc', context) as any
             expect(result.data.error).toBe('Project number must be a valid integer')
+        })
+
+        it('fences non-canonical workspace names in ambiguous project errors', () => {
+            const context = {
+                briefingConfig: {
+                    projectRegistry: {
+                        'ws<evil>': { path: '/tmp/a', project_number: 7 },
+                        'ws-two': { path: '/tmp/b', project_number: 7 },
+                    },
+                },
+            } as unknown as ResourceContext
+            const definitions = getStalenessResourceDefinitions()
+            const handler = definitions.find(d => d.uri === 'memory://staleness/{project_number}')!.handler
+
+            const result = handler('memory://staleness/7', context) as any
+            expect(result.data.status).toBe('ambiguous')
+            expect(result.data.error).toContain('<untrusted_remote_content>ws&lt;evil&gt;</untrusted_remote_content>')
+            expect(result.data.error).toContain('ws-two')
         })
     })
 })

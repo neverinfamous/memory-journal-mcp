@@ -5,19 +5,24 @@
  * Handles resource and prompt registration with the MCP SDK.
  */
 
-import type { McpServer } from '@modelcontextprotocol/server'
+import type { GetPromptResult, McpServer } from '@modelcontextprotocol/server'
 import { ResourceTemplate } from '@modelcontextprotocol/server'
-import type { Variables } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
 import { auditOperation } from '../audit/interceptor.js'
+import { extractAuditScopeFromArgs } from '../audit/audit-query-helpers.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import { isRecord } from '../utils/type-guards.js'
 import { ConfigurationError } from '../types/errors.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
 import type { BriefingConfig } from '../handlers/resources/shared.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
+import {
+    attachResourceQueryHandler,
+    createAuditedResourceCallback,
+} from './resource-query-registration.js'
 
 // ============================================================================
 // Types
@@ -27,9 +32,17 @@ import type { GitHubIntegration } from '../github/github-integration/index.js'
 export interface ResourceDefinition {
     uri: string
     name: string
+    title?: string
     description?: string
     mimeType?: string
     icons?: { src: string; mimeType?: string; sizes?: string[] }[]
+    annotations?: {
+        audience?: ('user' | 'assistant')[]
+        priority?: number
+        lastModified?: string
+        autoRead?: boolean
+        sessionInit?: boolean
+    }
     capabilities?: {
         requiresTeamScope?: boolean
         requiresAdminScope?: boolean
@@ -67,10 +80,85 @@ export type ResourceReadHandler = (
 // Resource Registration
 // ============================================================================
 
+const resourceTemplateCache = new Map<string, ResourceTemplate>()
+const promptArgsSchemaCache = new WeakMap<PromptDefinition, z.ZodObject<Record<string, z.ZodType>>>()
+
+function getCachedResourceTemplate(uri: string): ResourceTemplate {
+    let template = resourceTemplateCache.get(uri)
+    if (template === undefined) {
+        template = new ResourceTemplate(uri, { list: undefined })
+        resourceTemplateCache.set(uri, template)
+    }
+    return template
+}
+
+function getCachedPromptArgsSchema(
+    promptDef: PromptDefinition
+): z.ZodObject<Record<string, z.ZodType>> | undefined {
+    if (promptDef.arguments === undefined || promptDef.arguments.length === 0) {
+        return undefined
+    }
+    let cached = promptArgsSchemaCache.get(promptDef)
+    if (cached === undefined) {
+        const shape: Record<string, z.ZodType> = {}
+        for (const arg of promptDef.arguments) {
+            const described = z.string().max(10_000).describe(arg.description)
+            shape[arg.name] = arg.required === true ? described : described.optional()
+        }
+        cached = z.object(shape)
+        promptArgsSchemaCache.set(promptDef, cached)
+    }
+    return cached
+}
+
+interface ResourceRegistrationMeta {
+    title?: string
+    description: string
+    mimeType: string
+    icons?: ResourceDefinition['icons']
+    annotations?: {
+        audience?: ('user' | 'assistant')[]
+        priority?: number
+        lastModified?: string
+    }
+    _meta?: Record<string, unknown>
+}
+
+function buildResourceRegistrationMeta(
+    resDef: ResourceDefinition,
+    mimeType: string
+): ResourceRegistrationMeta {
+    const rawAnn = resDef.annotations
+    const specAnnotations: {
+        audience?: ('user' | 'assistant')[]
+        priority?: number
+        lastModified?: string
+    } = {}
+    if (rawAnn?.audience !== undefined) specAnnotations.audience = rawAnn.audience
+    if (rawAnn?.priority !== undefined) specAnnotations.priority = rawAnn.priority
+    if (rawAnn?.lastModified !== undefined) specAnnotations.lastModified = rawAnn.lastModified
+    const hasSpecAnnotations = Object.keys(specAnnotations).length > 0
+
+    const customMeta: Record<string, unknown> = {}
+    if (rawAnn?.autoRead !== undefined) customMeta['autoRead'] = rawAnn.autoRead
+    if (rawAnn?.sessionInit !== undefined) customMeta['sessionInit'] = rawAnn.sessionInit
+    const hasCustomMeta = Object.keys(customMeta).length > 0
+
+    return {
+        ...(resDef.title !== undefined ? { title: resDef.title } : {}),
+        description: resDef.description ?? '',
+        mimeType,
+        ...(resDef.icons ? { icons: resDef.icons } : {}),
+        ...(hasSpecAnnotations ? { annotations: specAnnotations } : {}),
+        ...(hasCustomMeta ? { _meta: customMeta } : {}),
+    }
+}
+
 /**
  * Register all resources with the MCP server.
  *
- * Handles both static URIs and template URIs (containing `{variable}` patterns).
+ * Handles both static URIs and template URIs (containing `{variable}` patterns),
+ * and wraps `resources/read` so `?query` parameters match base registrations cleanly.
  */
 export function registerResources(
     server: McpServer,
@@ -80,53 +168,27 @@ export function registerResources(
 ): void {
     for (const resDef of resources) {
         const mimeType = resDef.mimeType ?? 'application/json'
-        const meta = {
-            description: resDef.description ?? '',
+        const meta = buildResourceRegistrationMeta(resDef, mimeType)
+        const readCallback = createAuditedResourceCallback(
+            resDef,
             mimeType,
-            ...(resDef.icons ? { icons: resDef.icons } : {}),
-        }
+            handleResourceRead,
+            runtime
+        )
 
-        // Check if this is a template URI (contains {variable} patterns)
-        const isTemplate = resDef.uri.includes('{')
-
-        if (isTemplate) {
-            const template = new ResourceTemplate(resDef.uri, { list: undefined })
+        if (resDef.uri.includes('{')) {
             server.registerResource(
                 resDef.name,
-                template,
+                getCachedResourceTemplate(resDef.uri),
                 meta,
-                async (uri: URL, _variables: Variables) => {
-                    if (!runtime) {
-                        throw new ConfigurationError(
-                            'ServerRuntime is logically required for secure resource execution.'
-                        )
-                    }
-                    const auditLog = runtime.auditLogger
-                    enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
-                    return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                        return runtime.maintenanceManager.withActiveJob(() =>
-                            handleResourceRead(uri, mimeType)
-                        )
-                    })
-                }
+                readCallback
             )
         } else {
-            server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
-                if (!runtime) {
-                    throw new ConfigurationError(
-                        'ServerRuntime is logically required for secure resource execution.'
-                    )
-                }
-                const auditLog = runtime.auditLogger
-                enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
-                return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                    return runtime.maintenanceManager.withActiveJob(() =>
-                        handleResourceRead(uri, mimeType)
-                    )
-                })
-            })
+            server.registerResource(resDef.name, resDef.uri, meta, readCallback)
         }
     }
+
+    attachResourceQueryHandler(server)
 }
 
 // ============================================================================
@@ -136,11 +198,85 @@ export function registerResources(
 /**
  * Register all prompts with the MCP server.
  *
- * Builds Zod schemas from prompt argument definitions.
- * Only creates argsSchema when there are actual arguments; passing an empty
- * shape causes the SDK to wrap it in z.object({}) which rejects undefined
- * when the client omits arguments (e.g. session-summary with no args).
+ * Builds Zod schemas from prompt argument definitions. Prompts with no
+ * arguments omit argsSchema, because an empty object schema rejects a
+ * missing arguments payload. Prompts whose arguments are all optional still
+ * get a schema of optional strings so prompts/get receives those values.
+ * The SDK validates with `args ?? {}`, so omitting the arguments still works.
  */
+function extractPromptStringArgs(providedArgs: unknown): Record<string, string> {
+    const args: Record<string, string> = {}
+    if (isRecord(providedArgs)) {
+        for (const [k, v] of Object.entries(providedArgs)) {
+            if (typeof v === 'string') {
+                args[k] = v
+            }
+        }
+    }
+    return args
+}
+
+function createPromptCallback(
+    promptDef: PromptDefinition,
+    db: IDatabaseAdapter,
+    teamDb?: IDatabaseAdapter,
+    runtime?: ServerRuntime,
+    github?: GitHubIntegration,
+    briefingConfig?: BriefingConfig | (() => BriefingConfig)
+): (providedArgs: unknown) => Promise<GetPromptResult> {
+    return (providedArgs: unknown): Promise<GetPromptResult> => {
+        if (!runtime) {
+            throw new ConfigurationError(
+                'ServerRuntime is logically required for secure prompt execution.'
+            )
+        }
+        const auditLog = runtime.auditLogger
+        enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
+        const forceAudit =
+            promptDef.capabilities?.requiresTeamScope === true ||
+            promptDef.capabilities?.requiresAuditScope === true ||
+            promptDef.capabilities?.requiresAdminScope === true
+        return auditOperation(
+            auditLog,
+            'prompt',
+            promptDef.name,
+            async () => {
+                const executePrompt = async (): Promise<GetPromptResult> => {
+                    const args = extractPromptStringArgs(providedArgs)
+                    const resolvedBriefingConfig =
+                        typeof briefingConfig === 'function' ? briefingConfig() : briefingConfig
+                    const promptResult = await getPrompt(
+                        promptDef.name,
+                        args,
+                        db,
+                        teamDb,
+                        github,
+                        resolvedBriefingConfig,
+                        runtime
+                    )
+                    return {
+                        messages: promptResult.messages.map((m) => ({
+                            role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+                            content: {
+                                type: 'text' as const,
+                                text: m.content.text,
+                            },
+                        })),
+                    }
+                }
+
+                return await runtime.maintenanceManager.withActiveJob(executePrompt)
+            },
+            {
+                forceAudit,
+                capabilities: promptDef.capabilities,
+                runtime,
+                ...extractAuditScopeFromArgs(providedArgs, undefined, runtime),
+            }
+        )
+    }
+}
+
 export function registerPrompts(
     server: McpServer,
     prompts: PromptDefinition[],
@@ -148,58 +284,19 @@ export function registerPrompts(
     teamDb?: IDatabaseAdapter,
     runtime?: ServerRuntime,
     github?: GitHubIntegration,
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig | (() => BriefingConfig)
 ): void {
     for (const promptDef of prompts) {
-        let argsSchema: Record<string, z.ZodType> | undefined
-        if (promptDef.arguments && promptDef.arguments.length > 0) {
-            const hasRequired = promptDef.arguments.some((a) => a.required)
-            if (hasRequired) {
-                argsSchema = {}
-                for (const arg of promptDef.arguments) {
-                    argsSchema[arg.name] =
-                        arg.required === true
-                            ? z.string().describe(arg.description)
-                            : z.string().optional().describe(arg.description)
-                }
-            }
-        }
+        const argsZodSchema = getCachedPromptArgsSchema(promptDef)
 
         server.registerPrompt(
             promptDef.name,
             {
                 description: promptDef.description ?? '',
-                ...(argsSchema ? { argsSchema: z.object(argsSchema) } : {}),
+                ...(argsZodSchema !== undefined ? { argsSchema: argsZodSchema } : {}),
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
-            (providedArgs) => {
-                if (!runtime) {
-                    throw new ConfigurationError(
-                        'ServerRuntime is logically required for secure prompt execution.'
-                    )
-                }
-                const auditLog = runtime.auditLogger
-                enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
-                return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
-                    const executePrompt = async (): Promise<{
-                        messages: {
-                            role: 'user' | 'assistant'
-                            content: { type: 'text'; text: string }
-                        }[]
-                    }> => {
-                        const args = providedArgs as Record<string, string>
-                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github, briefingConfig)
-                        return {
-                            messages: promptResult.messages.map((m) => ({
-                                role: m.role as 'user' | 'assistant',
-                                content: m.content as { type: 'text'; text: string },
-                            })),
-                        }
-                    }
-
-                    return await runtime.maintenanceManager.withActiveJob(executePrompt)
-                })
-            }
+            createPromptCallback(promptDef, db, teamDb, runtime, github, briefingConfig)
         )
     }
 }

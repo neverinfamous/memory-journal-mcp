@@ -5,65 +5,96 @@
 
 import { wrapResult } from './worker-result-proxy.js'
 import { wrapPromise } from './proxy-helpers.js'
-import { VERSION } from '../version.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../handlers/tools/schemas/constants-and-primitives.js'
+import { deepFreezeContextClone, IMMUTABLE_PROXY_TRAPS } from './worker/result-proxy-aliases.js'
+import { createNullProtoRecord } from '../utils/type-guards.js'
+import { PACKAGE_VERSION } from './package-version.js'
+import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from './api/schema-help.js'
 
 export type InvokeRpcFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 export type SafeRpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 
-const TABLES = [
-    'memory_journal',
+function unavailableTool(tool: string): Promise<unknown> {
+    return wrapPromise(
+        Promise.resolve(
+            wrapResult({
+                success: false,
+                error: `Tool '${tool}' is not available in this sandbox.`,
+                code: 'TOOL_DISABLED',
+                _healing_note: `🛠️ AUTONOMOUS HEALING: 'mj.projects' requires '${tool}' to be enabled in the active tool filter.`,
+            })
+        ),
+        tool
+    )
+}
+
+function compactMethodName(name: string): string {
+    return name.toLowerCase().replace(/[_-]/g, '')
+}
+
+const PROJECT_LIST_METHODS = new Set([
+    'list',
+    'listprojects',
+    'listproject',
+    'getprojects',
+    'all',
+    'getall',
+    'projects',
+])
+const PROJECT_GET_METHODS = new Set(['get', 'getproject', 'find', 'findproject'])
+const PROJECT_UPDATE_METHODS = new Set(['update', 'updateproject', 'edit', 'editproject'])
+const PROJECT_CREATE_METHODS = new Set(['create', 'createproject', 'register', 'registerproject', 'add', 'addproject'])
+const PROJECT_DELETE_METHODS = new Set([
+    'delete',
+    'deleteproject',
+    'deleteall',
+    'remove',
+    'removeproject',
+    'removeall',
+])
+const TAG_LIST_METHODS = new Set([
+    'list',
+    'listtags',
+    'get',
+    'gettags',
+    'all',
+    'search',
+    'find',
     'tags',
-    'entry_tags',
-    'relationships',
-    'entry_anchors',
-    'entry_revisions',
-    'vec_embeddings',
-    'team_flags',
-]
+    'tag',
+])
+const TAG_MERGE_METHODS = new Set(['merge', 'mergetags'])
+const SYSTEM_STATS_METHODS = new Set([
+    'stats',
+    'status',
+    'health',
+    'info',
+    'check',
+    'sys',
+    'system',
+    'diagnostics',
+    'adapters',
+    'getstatistics',
+    'statistics',
+])
 
 /**
  * Builds the `mj.schema` virtual namespace proxy.
  */
-export function createSchemaProxy(safeRpcCall: SafeRpcCallFn): object {
-    const schemaHelp = (): Promise<unknown> =>
-        Promise.resolve({
-            group: 'schema',
-            description:
-                'Memory Journal Schema: Embedded SQLite database storing journal entries, tags, relationships, code anchors, revisions, vector embeddings, and team flags.',
-            tables: TABLES,
-            entrySchema: {
-                id: 'number (auto-increment primary key)',
-                content: 'string (required, markdown body)',
-                entry_type: ENTRY_TYPES.map((t) => `'${t}'`).join(' | '),
-                timestamp: 'string (ISO 8601 timestamp)',
-                is_personal: 'boolean (default: true)',
-                significance_type: `optional (${SIGNIFICANCE_TYPES.map((t) => `'${t}'`).join(' | ')})`,
-                tags: 'string[] (optional array of kebab-case tags)',
-                workspace_id: 'string (required repository/workspace identifier)',
-                project_number: 'number (optional GitHub project number)',
-                impact_score: 'number (0.0-1.0 blast radius score)',
-                trust_score: 'number (0.0-1.0 confidence score)',
-                validation_status: "'passed' | 'none' | 'failed'",
-                auto_context: 'string (optional JSON metadata string, e.g. { "commits": ["<sha>"] })',
-                session_id: 'string (optional session tracking id)',
-                relationships: 'Array<{ targetId: number, relationType?: string }> (optional entry links)',
-                anchors: 'Array<{ anchor_path: string, anchor_type: string, status?: string }> (optional code anchors)',
-            },
-            methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
-            usage: 'Use mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.',
-        })
+export function createSchemaProxy(_safeRpcCall: SafeRpcCallFn): object {
+    const usage =
+        'Use mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.'
+    const schemaHelp = (): Promise<unknown> => getSchemaHelp(usage)
 
-    const schemaCallable = (..._args: unknown[]): Promise<unknown> =>
-        safeRpcCall('analytics', 'get_statistics', []).then(wrapResult)
+    const schemaCallable = (..._args: unknown[]): Promise<unknown> => schemaHelp()
 
     return new Proxy(schemaCallable, {
-        apply: (_t, _thisArg, args) => safeRpcCall('analytics', 'get_statistics', args).then(wrapResult),
+        ...IMMUTABLE_PROXY_TRAPS,
+        apply: () => schemaHelp(),
         get(_t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p === 'help' || p === 'describe' || p === 'describeTable' || p === 'getSchema') return schemaHelp
-            if (p === 'listTables') return () => Promise.resolve({ success: true, tables: TABLES })
-            if (p === 'tables') return TABLES
+            if (p === 'listTables') return listJournalTables
+            if (p === 'tables') return JOURNAL_TABLES
             if (p in Function.prototype) return Reflect.get(Function.prototype, p) as unknown
             return undefined
         },
@@ -79,10 +110,7 @@ export function createProjectsProxy(
 ): object {
     const adminListProjects = methods['admin']?.includes('list_projects')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'list_projects', args)
-        : methods['analytics']?.includes('get_cross_project_insights')
-          ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_cross_project_insights', args)
-          : (): Promise<unknown> =>
-                wrapPromise(Promise.resolve(wrapResult({ success: true, projects: {}, items: [], data: [] })), 'list_projects')
+        : (): Promise<unknown> => unavailableTool('list_projects')
 
     const adminGetProject = methods['admin']?.includes('get_project')
         ? (nameOrParams: unknown): Promise<unknown> => {
@@ -92,19 +120,19 @@ export function createProjectsProxy(
                       : [nameOrParams ?? {}]
               return invokeRpc('admin', 'get_project', params)
           }
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'get_project')
+        : (): Promise<unknown> => unavailableTool('get_project')
 
     const adminRegisterProject = methods['admin']?.includes('register_project')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'register_project', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'register_project')
+        : (): Promise<unknown> => unavailableTool('register_project')
 
     const adminUpdateProject = methods['admin']?.includes('update_project')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'update_project', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'update_project')
+        : (): Promise<unknown> => unavailableTool('update_project')
 
     const adminDeleteProject = methods['admin']?.includes('delete_project')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'delete_project', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'delete_project')
+        : (): Promise<unknown> => unavailableTool('delete_project')
 
     const projectsCallable = (...args: unknown[]): Promise<unknown> => adminListProjects(...args)
     Object.assign(projectsCallable, {
@@ -136,21 +164,20 @@ export function createProjectsProxy(
         removeProject: adminDeleteProject,
     })
     return new Proxy(projectsCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: (_t, _thisArg, args: unknown[]) => adminListProjects(...args),
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
             if (typeof p === 'string') {
-                const low = p.toLowerCase()
-                if (low.includes('list') || low.includes('all') || (low.includes('get') && low.endsWith('s'))) {
-                    return adminListProjects
-                }
-                if (low.includes('get') || low.includes('find')) return adminGetProject
-                if (low.includes('create') || low.includes('register') || low.includes('add')) return adminRegisterProject
-                if (low.includes('update') || low.includes('edit')) return adminUpdateProject
-                if (low.includes('delete') || low.includes('remove')) return adminDeleteProject
+                const compact = compactMethodName(p)
+                if (PROJECT_DELETE_METHODS.has(compact)) return adminDeleteProject
+                if (PROJECT_LIST_METHODS.has(compact)) return adminListProjects
+                if (PROJECT_GET_METHODS.has(compact)) return adminGetProject
+                if (PROJECT_UPDATE_METHODS.has(compact)) return adminUpdateProject
+                if (PROJECT_CREATE_METHODS.has(compact)) return adminRegisterProject
             }
-            return adminListProjects
+            return Reflect.get(t, p) as unknown
         },
     })
 }
@@ -165,11 +192,18 @@ export function createTagsProxy(
     const coreListTags = methods['core']?.includes('list_tags')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('core', 'list_tags', args)
         : (): Promise<unknown> =>
-              wrapPromise(Promise.resolve(wrapResult({ success: true, tags: [], count: 0 })), 'list_tags')
+              wrapPromise(
+                  Promise.resolve(wrapResult({ success: false, code: 'CONFIGURATION_ERROR', error: 'list_tags is not enabled' })),
+                  'list_tags'
+              )
 
     const adminMergeTags = methods['admin']?.includes('merge_tags')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'merge_tags', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'merge_tags')
+        : (): Promise<unknown> =>
+              wrapPromise(
+                  Promise.resolve(wrapResult({ success: false, code: 'CONFIGURATION_ERROR', error: 'merge_tags is not enabled' })),
+                  'merge_tags'
+              )
 
     const tagsCallable = (...args: unknown[]): Promise<unknown> => coreListTags(...args)
     Object.assign(tagsCallable, {
@@ -186,12 +220,17 @@ export function createTagsProxy(
         merge_tags: adminMergeTags,
     })
     return new Proxy(tagsCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: (_t, _thisArg, args: unknown[]) => coreListTags(...args),
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
-            if (typeof p === 'string' && p.toLowerCase().includes('merge')) return adminMergeTags
-            return coreListTags
+            if (typeof p === 'string') {
+                const compact = compactMethodName(p)
+                if (TAG_MERGE_METHODS.has(compact)) return adminMergeTags
+                if (TAG_LIST_METHODS.has(compact)) return coreListTags
+            }
+            return Reflect.get(t, p) as unknown
         },
     })
 }
@@ -205,7 +244,11 @@ export function createSystemProxy(
 ): object {
     const getStats = methods['analytics']?.includes('get_statistics')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_statistics', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'get_statistics')
+        : (): Promise<unknown> =>
+              wrapPromise(
+                  Promise.resolve(wrapResult({ success: false, code: 'CONFIGURATION_ERROR', error: 'get_statistics is not enabled' })),
+                  'get_statistics'
+              )
 
     const systemCallable = (...args: unknown[]): Promise<unknown> => getStats(...args)
     const statsKeys = [
@@ -218,73 +261,132 @@ export function createSystemProxy(
     const systemObj: Record<string, unknown> = {
         ping: (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, status: 'pong' })), 'ping'),
         version: (): Promise<unknown> =>
-            wrapPromise(Promise.resolve(wrapResult({ success: true, version: VERSION, name: 'memory-journal-mcp' })), 'version'),
+            wrapPromise(Promise.resolve(wrapResult({ success: true, version: PACKAGE_VERSION, name: 'memory-journal-mcp' })), 'version'),
     }
     for (const k of statsKeys) systemObj[k] = getStats
     Object.assign(systemCallable, systemObj)
     return new Proxy(systemCallable, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: (_t, _thisArg, args: unknown[]) => getStats(...args),
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
-            return getStats
+            if (typeof p === 'string') {
+                if (SYSTEM_STATS_METHODS.has(compactMethodName(p))) return getStats
+            }
+            return Reflect.get(t, p) as unknown
         },
     })
+}
+
+const CONTEXT_METHOD_KEYS = new Set(['get', 'getContext', 'get_context', 'find', 'list'])
+
+function buildContextProxyHandler(
+    contextData: Record<string, unknown>,
+    getContextRpc: (keyOrObj?: unknown) => Promise<unknown>
+): ProxyHandler<(...args: unknown[]) => Promise<unknown>> {
+    const resolveContextProp = (t: (...args: unknown[]) => Promise<unknown>, p: string): unknown => {
+        if (p === 'length' || p === 'name') return Reflect.get(t, p) as unknown
+        if (CONTEXT_METHOD_KEYS.has(p)) return getContextRpc
+        if (Object.hasOwn(contextData, p)) return contextData[p]
+        return Reflect.get(t, p) as unknown
+    }
+    return {
+        ...IMMUTABLE_PROXY_TRAPS,
+        apply: (_t, _thisArg, args: unknown[]) => getContextRpc(args[0]),
+        get(t, p): unknown {
+            if (typeof p === 'symbol' || p === 'then') return undefined
+            return resolveContextProp(t, p)
+        },
+        has(t, p): boolean {
+            if (typeof p === 'string' && (CONTEXT_METHOD_KEYS.has(p) || Object.hasOwn(contextData, p))) {
+                return true
+            }
+            return Reflect.has(t, p)
+        },
+        ownKeys(t): (string | symbol)[] {
+            return Array.from(
+                new Set<string | symbol>([
+                    ...Reflect.ownKeys(t),
+                    ...CONTEXT_METHOD_KEYS,
+                    ...Object.keys(contextData),
+                ])
+            )
+        },
+        getOwnPropertyDescriptor(t, p): PropertyDescriptor | undefined {
+            if (p === 'length' || p === 'name' || Object.hasOwn(t, p)) {
+                return Reflect.getOwnPropertyDescriptor(t, p)
+            }
+            if (typeof p === 'string' && (CONTEXT_METHOD_KEYS.has(p) || Object.hasOwn(contextData, p))) {
+                return {
+                    enumerable: true,
+                    configurable: true,
+                    writable: false,
+                    value: CONTEXT_METHOD_KEYS.has(p) ? getContextRpc : contextData[p],
+                }
+            }
+            return undefined
+        },
+    }
 }
 
 /**
  * Builds the `mj.context` virtual namespace proxy and `getContext` RPC helper.
  */
-export function createContextNamespaceProxy(contextObj?: Record<string, unknown>): {
+export function createContextNamespaceProxy(
+    contextObj?: Record<string, unknown>,
+    isAlreadyDeepFrozen = false
+): {
     contextProxy: object
     getContextRpc: (keyOrObj?: unknown) => Promise<unknown>
 } {
-    const projNum = contextObj?.['project_number'] ?? contextObj?.['projectNumber'] ?? 1
+    const projNum = contextObj?.['project_number'] ?? contextObj?.['projectNumber']
     const sessId = contextObj?.['session_id'] ?? contextObj?.['sessionId'] ?? 'session-default'
-    const wsId = contextObj?.['workspace_id'] ?? contextObj?.['workspaceId'] ?? 'default'
-    const projId = contextObj?.['project_id'] ?? contextObj?.['projectId'] ?? projNum
-    const contextData: Record<string, unknown> = {
-        success: true,
-        project_number: projNum,
-        projectNumber: projNum,
-        session_id: sessId,
-        sessionId: sessId,
-        workspace_id: wsId,
-        workspaceId: wsId,
-        project_id: projId,
-        projectId: projId,
-        ...(contextObj ?? {}),
-    }
+    const wsId = contextObj?.['workspace_id'] ?? contextObj?.['workspaceId']
+    const rawContextData: Record<string, unknown> = Object.assign(
+        createNullProtoRecord(),
+        {
+            success: true,
+            ...(projNum !== undefined
+                ? { project_number: projNum, projectNumber: projNum, project_id: projNum, projectId: projNum }
+                : {}),
+            session_id: sessId,
+            sessionId: sessId,
+            ...(wsId !== undefined ? { workspace_id: wsId, workspaceId: wsId } : {}),
+        },
+        contextObj ?? {}
+    )
+    const contextData = isAlreadyDeepFrozen
+        ? Object.freeze(rawContextData)
+        : deepFreezeContextClone(rawContextData)
 
     const getContextRpc = (keyOrObj?: unknown): Promise<unknown> => {
-        if (typeof keyOrObj === 'string' && keyOrObj in contextData) {
-            return wrapPromise(Promise.resolve(wrapResult(contextData[keyOrObj])), 'get_context')
+        if (typeof keyOrObj === 'string') {
+            if (Object.hasOwn(contextData, keyOrObj)) {
+                return wrapPromise(Promise.resolve(wrapResult(contextData[keyOrObj])), 'get_context')
+            }
+            const snakeKey = /[A-Z]/.test(keyOrObj)
+                ? keyOrObj.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
+                : undefined
+            if (snakeKey !== undefined && Object.hasOwn(contextData, snakeKey)) {
+                return wrapPromise(Promise.resolve(wrapResult(contextData[snakeKey])), 'get_context')
+            }
+            return wrapPromise(
+                Promise.resolve(
+                    wrapResult({
+                        success: false,
+                        error: `Context key '${keyOrObj}' was not found`,
+                        code: 'RESOURCE_NOT_FOUND',
+                        category: 'resource',
+                        recoverable: true,
+                    })
+                ),
+                'get_context'
+            )
         }
         return wrapPromise(Promise.resolve(wrapResult(contextData)), 'get_context')
     }
 
     const contextCallable = (...args: unknown[]): Promise<unknown> => getContextRpc(args[0])
-    Object.assign(contextCallable, {
-        get: getContextRpc,
-        getContext: getContextRpc,
-        get_context: getContextRpc,
-        find: getContextRpc,
-        list: getContextRpc,
-        ...contextData,
-    })
-
-    const contextProxy = new Proxy(contextCallable, {
-        apply: (_t, _thisArg, args: unknown[]) => getContextRpc(args[0]),
-        get(t, p): unknown {
-            if (typeof p === 'symbol' || p === 'then') return undefined
-            if (p in t) return Reflect.get(t, p) as unknown
-            if (typeof p === 'string') {
-                if (['get', 'getContext', 'get_context', 'find', 'list'].includes(p)) return getContextRpc
-                if (p in contextData) return contextData[p]
-            }
-            return Reflect.get(t, p) as unknown
-        },
-    })
-
-    return { contextProxy, getContextRpc }
+    return { contextProxy: new Proxy(contextCallable, buildContextProxyHandler(contextData, getContextRpc)), getContextRpc }
 }

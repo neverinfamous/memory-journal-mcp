@@ -10,9 +10,11 @@ export {
 } from './crud-write.js'
 export {
     getEntryById,
+    hasActiveEntry,
+    getActiveEntryIds,
     getEntriesByIds,
     getEntryByIdIncludeDeleted,
-    getActiveEntries,
+    getEntriesByIdsIncludeDeleted,
     getActiveEntryCount,
     getDeletedEntries,
 } from './crud-read.js'

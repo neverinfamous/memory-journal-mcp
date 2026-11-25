@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
@@ -74,15 +75,33 @@ describe('Backup Manager Edge Cases', () => {
         expect(result.restoredFrom).toBe(backup.filename)
     })
 
+    it('should reclaim a leftover lock owned by this process during maintenance', async () => {
+        const backup = await db.exportToFile('self-lock')
+        const lockDir = `${testDbPath}.lock.d`
+        const lockFile = path.join(lockDir, 'lock.json')
+        fs.mkdirSync(lockDir, { recursive: true })
+        fs.writeFileSync(
+            lockFile,
+            JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce: 'self' })
+        )
+
+        const runtime = new ServerRuntime()
+        await runtime.maintenanceManager.acquireMaintenanceLock()
+        try {
+            const result = await db.restoreFromFile(backup.filename, runtime)
+            expect(result.restoredFrom).toBe(backup.filename)
+        } finally {
+            runtime.maintenanceManager.releaseMaintenanceLock()
+        }
+    })
+
     it('should rollback on restore failure', async () => {
         const lockDir = `${testDbPath}.lock.d`
         if (fs.existsSync(lockDir)) {
             try {
                 const lockFile = path.join(lockDir, 'lock.json')
-                if (fs.existsSync(lockFile)) {
-                    // Overwrite lock with stale timestamp in case Windows EBUSY prevents rmSync
-                    fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, timestamp: 0, nonce: '123' }))
-                }
+                // Overwrite lock with stale timestamp in case Windows EBUSY prevents rmSync
+                fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, timestamp: 0, nonce: '123' }))
                 fs.rmSync(lockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
             } catch {
                 // ignore cleanup errors in test
@@ -122,6 +141,47 @@ describe('Backup Manager Edge Cases', () => {
         } finally {
             fs.promises.rename = originalRename
             fs.promises.copyFile = originalCopy
+        }
+    })
+
+    it('should not leave orphaned .tmp, .tmp-wal, or .tmp-shm files after exportToFile', async () => {
+        await db.exportToFile('clean-sidecar-test')
+        const backupsDir = path.join(testDir, 'backups')
+        const leftoverTmp = fs
+            .readdirSync(backupsDir)
+            .filter((name) => /\.tmp(?:-(?:wal|shm))?$/i.test(name))
+        expect(leftoverTmp).toEqual([])
+    })
+
+    it('should sweep stale .tmp* files and exclude pre-prune-* from deleteOldBackups keepCount', () => {
+        const backupsDir = path.join(testDir, 'backups')
+        if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true })
+
+        const staleTmp = path.join(backupsDir, 'stale.db.123.tmp-shm')
+        const freshTmp = path.join(backupsDir, 'fresh.db.123.tmp-wal')
+        const prePruneFile = path.join(backupsDir, 'pre-prune-keep.db')
+        const reg1 = path.join(backupsDir, 'backup_keep_newest.db')
+        const reg2 = path.join(backupsDir, 'backup_delete_oldest.db')
+
+        fs.writeFileSync(staleTmp, 'stale')
+        const oldDate = new Date(Date.now() - 30 * 60 * 1000)
+        fs.utimesSync(staleTmp, oldDate, oldDate)
+        fs.writeFileSync(freshTmp, 'fresh')
+        fs.writeFileSync(prePruneFile, 'preprune')
+        fs.writeFileSync(reg2, 'old')
+        const earlier = new Date(Date.now() - 10_000)
+        fs.utimesSync(reg2, earlier, earlier)
+        fs.writeFileSync(reg1, 'new')
+
+        const cleanupRes = db.deleteOldBackups(1)
+        expect(fs.existsSync(staleTmp)).toBe(false)
+        expect(fs.existsSync(freshTmp)).toBe(true)
+        expect(fs.existsSync(prePruneFile)).toBe(true)
+        expect(cleanupRes.deleted).toContain('backup_delete_oldest.db')
+        expect(cleanupRes.deleted).not.toContain('pre-prune-keep.db')
+
+        for (const f of [freshTmp, prePruneFile, reg1]) {
+            if (fs.existsSync(f)) fs.unlinkSync(f)
         }
     })
 })

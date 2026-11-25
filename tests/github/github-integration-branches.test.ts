@@ -372,10 +372,10 @@ describe('InsightsManager — branch coverage', () => {
         expect(result!.views.dailyAvg).toBe(0)
     })
 
-    it('should return empty array when no octokit (getTopReferrers)', async () => {
+    it('should return null when no octokit (getTopReferrers)', async () => {
         client.octokit = null as never
         const result = await manager.getTopReferrers('o', 'r')
-        expect(result).toEqual([])
+        expect(result).toBeNull()
     })
 
     it('should return cached referrers', async () => {
@@ -388,13 +388,13 @@ describe('InsightsManager — branch coverage', () => {
     it('should handle API error in getTopReferrers', async () => {
         client.octokit.rest.repos.getTopReferrers.mockRejectedValue(new Error('fail'))
         const result = await manager.getTopReferrers('o', 'r')
-        expect(result).toEqual([])
+        expect(result).toBeNull()
     })
 
-    it('should return empty array when no octokit (getPopularPaths)', async () => {
+    it('should return null when no octokit (getPopularPaths)', async () => {
         client.octokit = null as never
         const result = await manager.getPopularPaths('o', 'r')
-        expect(result).toEqual([])
+        expect(result).toBeNull()
     })
 
     it('should return cached popular paths', async () => {
@@ -407,7 +407,7 @@ describe('InsightsManager — branch coverage', () => {
     it('should handle API error in getPopularPaths', async () => {
         client.octokit.rest.repos.getTopPaths.mockRejectedValue(new Error('fail'))
         const result = await manager.getPopularPaths('o', 'r')
-        expect(result).toEqual([])
+        expect(result).toBeNull()
     })
 })
 

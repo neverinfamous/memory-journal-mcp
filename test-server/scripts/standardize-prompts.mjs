@@ -42,9 +42,14 @@ function fixFormatting(text) {
   // Clean up edge cases where it appears twice back-to-back
   fixed = fixed.replace(/workspace_id:\s*"test-ws",\s*workspace_id:\s*"test-ws"/g, 'workspace_id: "test-ws"');
   
-  // Fix backslash paths in the standardization script for commit.ts
-  fixed = fixed.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
-  fixed = fixed.replace(/`bun \.\\.agents\\scripts\\commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
+  // Fix backslash paths and rewrite legacy .agents/scripts/commit.ts calls to scripts/commit.ts
+  fixed = fixed.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
+  fixed = fixed.replace(/`bun \.\\.agents\\scripts\\commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
+  fixed = fixed.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
+
+  // Use the repo typecheck script (pnpm-only policy) and explicit staging instead of `npx tsc` / `--add .`
+  fixed = fixed.replace(/\bnpx tsc --noEmit\b/g, 'pnpm run typecheck');
+  fixed = fixed.replace(/--journal --add \.` utility\./g, '--journal --add <path> [--add <path> ...]` utility, staging only the files you changed (never `--add .`).');
   
   return fixed;
 }
@@ -236,8 +241,11 @@ for (const file of files) {
   // Fix hallucinated parameter drift in mutation tests
   updatedContent = updatedContent.replace(/ or `permanent: true`/g, '');
   
-  // Fix hallucinated skill file path to the correct MCP prompt
-  updatedContent = updatedContent.replace(/skills\/mj-mcp-heal\/SKILL\.md/g, '/mcp:memory-journal-mcp:mcp-heal prompt');
+  // Fix legacy healing references to the maintainer skill
+  updatedContent = updatedContent.replace(
+    /(?:the\s+`\/heal-mcp-server`\s+skill|skills\/mj-mcp-heal\/SKILL\.md|\/mcp:memory-journal-mcp:mcp-heal prompt|`?\.agents\/workflows\/heal-mcp-server\.md`?\s*\(`?\/heal-mcp-server`?\))/g,
+    'the `/mcp-audit` anti-hallucination guide (`references/anti-hallucination-healing.md`)'
+  );
   
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
   updatedContent = updatedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
@@ -257,8 +265,8 @@ for (const file of files) {
        let verifText = localVerifMatch[0];
        // Rename 3. and 4. to 1. and 2. 
        verifText = verifText.replace(/^3\./, '1.').replace(/\n4\./, '\n2.');
-       // Update commit args for usability
-       verifText = verifText.replace(/--msg "[^"]+" --impact <0\.1-1\.0> --confidence <0\.1-1\.0> --validation passed --journal --add <path>/, '--msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .');
+       // Update commit args for usability (keep explicit `--add <path>` staging; never emit `--add .`)
+       verifText = verifText.replace(/--msg "[^"]+" --impact <0\.1-1\.0> --confidence <0\.1-1\.0> --validation passed --journal --add <path>/, '--msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add <path>');
        
        // Replace in usability file
        const verifRegex = /1\. Run `pnpm run lint`[\s\S]*?(?=4\. Conclude the test and report your findings\.)/;
@@ -266,8 +274,8 @@ for (const file of files) {
     }
   }
 
-  // Catch any remaining older string patterns and replace them so the regex matches later if needed
-  updatedContent = updatedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
+  // Rewrite any remaining legacy .agents/scripts/commit.ts calls to scripts/commit.ts
+  updatedContent = updatedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`pnpm exec tsx scripts/commit.ts');
   
   // Fix hallucinated project admin parameters
   updatedContent = updatedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
@@ -521,7 +529,7 @@ for (const file of codemodeFiles) {
   let fixedContent = content;
   
   for (const [bad, good] of Object.entries(codemodeHallucinationFixes)) {
-    fixedContent = fixedContent.replace(new RegExp('\\b' + bad.replace(/\./g, '\\.') + '\\b', 'g'), good);
+    fixedContent = fixedContent.replace(new RegExp('\\b' + bad.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&') + '\\b', 'g'), good);
   }
 
   // Fix PowerShell here-string corruption and unescaped characters in markdown files

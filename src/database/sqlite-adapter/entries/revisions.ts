@@ -1,4 +1,5 @@
 import type { EntryRevision } from '../../../types/index.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 import type { EntriesSharedContext } from './shared.js'
 import { getEntryById } from './crud-read.js'
 
@@ -14,13 +15,30 @@ export interface VersionDiff {
     removedLines: string[]
 }
 
+/**
+ * List revisions for an entry. Scoped to `workspaceId` when provided (unless `'*'` is passed).
+ */
 export function getEntryRevisions(
     context: EntriesSharedContext,
-    id: number
+    id: number,
+    workspaceId?: string
 ): EntryRevision[] {
     const { db } = context
 
-    const stmt = db.prepare(`
+    const scopeId = effectiveWorkspace(workspaceId)
+    const existsSql =
+        scopeId !== '*'
+            ? `SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ? LIMIT 1`
+            : `SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL LIMIT 1`
+    const exists =
+        scopeId !== '*'
+            ? db.prepare(existsSql).get(id, scopeId)
+            : db.prepare(existsSql).get(id)
+    if (exists === undefined) {
+        return []
+    }
+
+    const stmt = db.prepare<unknown[], EntryRevision>(`
         SELECT id, entry_id as entryId, revision_number as revisionNumber,
                content_snapshot as contentSnapshot, changed_at as changedAt,
                changed_by as changedBy
@@ -29,7 +47,7 @@ export function getEntryRevisions(
         ORDER BY revision_number DESC
     `)
 
-    return stmt.all(id) as EntryRevision[]
+    return stmt.all(id)
 }
 
 export const getEntryHistory = getEntryRevisions
@@ -38,9 +56,10 @@ export function compareEntryVersions(
     context: EntriesSharedContext,
     entryId: number,
     fromRevision: number,
-    toRevision?: number
+    toRevision?: number,
+    workspaceId?: string
 ): VersionDiff | null {
-    const revisions = getEntryRevisions(context, entryId)
+    const revisions = getEntryRevisions(context, entryId, workspaceId)
     const fromRev = revisions.find((r) => r.revisionNumber === fromRevision)
     if (fromRev === undefined) return null
 
@@ -53,7 +72,7 @@ export function compareEntryVersions(
         toContent = toRev.contentSnapshot
         resolvedTo = toRevision
     } else {
-        const currentEntry = getEntryById(context, entryId, '*')
+        const currentEntry = getEntryById(context, entryId, effectiveWorkspace(workspaceId))
         if (currentEntry === null) return null
         toContent = currentEntry.content
     }
@@ -74,5 +93,44 @@ export function compareEntryVersions(
         toContent,
         addedLines,
         removedLines,
+    }
+}
+
+/** Number of historical revisions retained per entry. */
+const MAX_REVISIONS_PER_ENTRY = 10
+
+/**
+ * Snapshot an entry's previous content as a new revision and evict revisions beyond the retention limit.
+ * Must run inside the caller's transaction.
+ */
+export function snapshotAndEvictRevisions(
+    db: EntriesSharedContext['db'],
+    entryId: number,
+    previousContent: string
+): void {
+    const maxRevRow = db
+        .prepare<unknown[], { maxRev: number | null }>(
+            'SELECT MAX(revision_number) as maxRev FROM entry_revisions WHERE entry_id = ?'
+        )
+        .get(entryId)
+    const nextRev = (maxRevRow?.maxRev ?? 0) + 1
+
+    db.prepare(
+        'INSERT INTO entry_revisions (entry_id, revision_number, content_snapshot, changed_at, changed_by) VALUES (?, ?, ?, ?, ?)'
+    ).run(entryId, nextRev, previousContent, new Date().toISOString(), null)
+
+    if (nextRev > MAX_REVISIONS_PER_ENTRY) {
+        db.prepare(
+            `
+            DELETE FROM entry_revisions
+            WHERE entry_id = ?
+              AND revision_number IN (
+                  SELECT revision_number FROM entry_revisions
+                  WHERE entry_id = ?
+                  ORDER BY revision_number DESC
+                  LIMIT -1 OFFSET ${String(MAX_REVISIONS_PER_ENTRY)}
+              )
+        `
+        ).run(entryId, entryId)
     }
 }

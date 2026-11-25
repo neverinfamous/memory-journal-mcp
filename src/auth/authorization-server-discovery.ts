@@ -11,7 +11,27 @@ import type { AuthorizationServerMetadata, AuthServerDiscoveryConfig } from './t
 import { AuthServerDiscoveryError } from './errors.js'
 import { ConfigurationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
-import * as https from 'node:https'
+import { resolveSafePublicDnsAddresses } from './jwks-ssrf-guard.js'
+import { fetchDiscoveryMetadata } from './discovery-fetch-helpers.js'
+import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
+
+function parseDiscoveryUrl(metadataUrl: string): URL {
+    let parsedUrl: URL
+    try {
+        parsedUrl = new URL(metadataUrl)
+    } catch {
+        throw new ConfigurationError(`Invalid authorization server URL: ${metadataUrl}`)
+    }
+    if (parsedUrl.protocol !== 'https:') {
+        throw new ConfigurationError(`Authorization server URL must use HTTPS: ${metadataUrl}`)
+    }
+    if (parsedUrl.username !== '' || parsedUrl.password !== '') {
+        throw new ConfigurationError(
+            `Authorization server URL must not contain credentials: ${parsedUrl.origin}`
+        )
+    }
+    return parsedUrl
+}
 
 // =============================================================================
 // Authorization Server Discovery
@@ -53,7 +73,6 @@ export class AuthorizationServerDiscovery {
      * @throws AuthServerDiscoveryError if discovery fails
      */
     async discover(): Promise<AuthorizationServerMetadata> {
-        // Check cache
         if (this.cachedMetadata && Date.now() < this.cacheExpiry) {
             logger.info('Using cached authorization server metadata', {
                 module: 'AUTH',
@@ -63,58 +82,11 @@ export class AuthorizationServerDiscovery {
         }
 
         const metadataUrl = `${this.authServerUrl}/.well-known/oauth-authorization-server`
-
-        let parsedUrl: URL
-        try {
-            parsedUrl = new URL(metadataUrl)
-        } catch {
-            throw new ConfigurationError(`Invalid authorization server URL: ${metadataUrl}`)
-        }
-
-        // SSRF Protection: Enforce HTTPS
-        // This acts as the primary mitigation against DNS rebinding (TOCTOU) attacks,
-        // as the target server would need a valid TLS certificate for the requested hostname.
-        if (parsedUrl.protocol !== 'https:') {
-            throw new ConfigurationError(`Authorization server URL must use HTTPS: ${metadataUrl}`)
-        }
-
-        // SSRF Protection: Block private and loopback IP spaces via DNS resolution
-        const host = parsedUrl.hostname.toLowerCase()
-        try {
-            const { promises: dns } = await import('node:dns')
-            const { address } = await dns.lookup(host)
-
-            const normalizedAddr = address.toLowerCase().replace(/^::ffff:/, '')
-            const isLoopback =
-                normalizedAddr === 'localhost' ||
-                normalizedAddr === '127.0.0.1' ||
-                normalizedAddr === '::1' ||
-                normalizedAddr.startsWith('127.') ||
-                normalizedAddr === '0.0.0.0' ||
-                normalizedAddr === '::'
-            const isPrivateV4 =
-                normalizedAddr.startsWith('10.') ||
-                normalizedAddr.startsWith('192.168.') ||
-                /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(normalizedAddr)
-            const isLinkLocal =
-                normalizedAddr.startsWith('169.254.') || normalizedAddr.startsWith('fe80:')
-            const isPrivateV6 = normalizedAddr.startsWith('fc') || normalizedAddr.startsWith('fd')
-
-            if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
-                throw new ConfigurationError(
-                    `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`
-                )
-            }
-
-            // Store the safe resolved IP to pin the connection and prevent TOCTOU
-            parsedUrl.hostname = address
-        } catch (err) {
-            if (err instanceof ConfigurationError) throw err
-            throw new ConfigurationError(`Failed to resolve authorization server hostname: ${host}`)
-        }
-
-        const resolvedAddress = parsedUrl.hostname
-        parsedUrl.hostname = host // restore for the request options
+        const parsedUrl = parseDiscoveryUrl(metadataUrl)
+        const resolvedRecords = await resolveSafePublicDnsAddresses(
+            parsedUrl.hostname.toLowerCase(),
+            'authorization server'
+        )
 
         logger.info(`Fetching authorization server metadata from: ${metadataUrl}`, {
             module: 'AUTH',
@@ -122,72 +94,13 @@ export class AuthorizationServerDiscovery {
         })
 
         try {
-            const metadata = await new Promise<AuthorizationServerMetadata>((resolve, reject) => {
-                const req = https.request(
-                    metadataUrl,
-                    {
-                        method: 'GET',
-                        headers: {
-                            Accept: 'application/json',
-                            Host: parsedUrl.host,
-                        },
-                        lookup: (_hostname, _options, callback) => {
-                            // SSRF Protection: Pin connection to the pre-validated IP to eliminate TOCTOU
-                            callback(null, resolvedAddress, resolvedAddress.includes(':') ? 6 : 4)
-                        },
-                        timeout: this.timeout,
-                    },
-                    (res) => {
-                        if (
-                            res.statusCode === undefined ||
-                            res.statusCode < 200 ||
-                            res.statusCode >= 300
-                        ) {
-                            reject(
-                                new ConfigurationError(
-                                    `HTTP ${String(res.statusCode ?? 'unknown')}: ${res.statusMessage || ''}`
-                                )
-                            )
-                            return
-                        }
-                        const chunks: Buffer[] = []
-                        let totalBytes = 0
-                        const maxBytes = 1024 * 1024 // 1 MB cap
-                        res.on('data', (d: Buffer) => {
-                            totalBytes += d.length
-                            if (totalBytes > maxBytes) {
-                                req.destroy()
-                                reject(new ConfigurationError('Authorization server metadata response exceeded 1MB limit'))
-                                return
-                            }
-                            chunks.push(d)
-                        })
-                        res.on('end', () => {
-                            try {
-                                resolve(
-                                    JSON.parse(
-                                        Buffer.concat(chunks).toString()
-                                    ) as AuthorizationServerMetadata
-                                )
-                            } catch {
-                                reject(new ConfigurationError('Invalid JSON response'))
-                            }
-                        })
-                    }
-                )
-
-                req.on('error', reject)
-                req.on('timeout', () => {
-                    req.destroy()
-                    reject(new Error('Request timeout'))
-                })
-                req.end()
-            })
-
-            // Validate required fields per RFC 8414
+            const metadata = await fetchDiscoveryMetadata(
+                metadataUrl,
+                parsedUrl.host,
+                resolvedRecords,
+                this.timeout
+            )
             this.validateMetadata(metadata)
-
-            // Cache the metadata
             this.cachedMetadata = metadata
             this.cacheExpiry = Date.now() + this.cacheTtl * 1000
 
@@ -201,15 +114,12 @@ export class AuthorizationServerDiscovery {
             if (error instanceof AuthServerDiscoveryError) {
                 throw error
             }
-
             const cause = error instanceof Error ? error : new Error(String(error))
-
             logger.error(`Failed to discover authorization server: ${this.authServerUrl}`, {
                 module: 'AUTH',
                 operation: 'discovery',
                 error: cause.message,
             })
-
             throw new AuthServerDiscoveryError(this.authServerUrl, cause)
         }
     }
@@ -217,6 +127,34 @@ export class AuthorizationServerDiscovery {
     /**
      * Validate required metadata fields per RFC 8414
      */
+    private assertSafeHttpsMetadataEndpoint(rawUrl: string, fieldName: string): void {
+        let parsed: URL
+        try {
+            parsed = new URL(rawUrl)
+        } catch {
+            throw new ConfigurationError(`Invalid ${fieldName} URL in authorization server metadata`)
+        }
+        if (parsed.protocol !== 'https:') {
+            throw new ConfigurationError(`Metadata field '${fieldName}' must use https:`)
+        }
+        if (parsed.username !== '' || parsed.password !== '') {
+            throw new ConfigurationError(`Metadata field '${fieldName}' must not contain credentials`)
+        }
+        const normalizedHost = parsed.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase()
+        if (
+            normalizedHost === '' ||
+            normalizedHost === 'localhost' ||
+            normalizedHost.endsWith('.localhost') ||
+            normalizedHost.endsWith('.local') ||
+            normalizedHost.endsWith('.internal') ||
+            isPrivateOrLoopbackAddress(normalizedHost)
+        ) {
+            throw new ConfigurationError(
+                `Metadata field '${fieldName}' resolves to restricted network address: ${normalizedHost}`
+            )
+        }
+    }
+
     private validateMetadata(metadata: AuthorizationServerMetadata): void {
         if (!metadata.issuer) {
             throw new ConfigurationError('Missing required field: issuer')
@@ -226,15 +164,29 @@ export class AuthorizationServerDiscovery {
             throw new ConfigurationError('Missing required field: token_endpoint')
         }
 
+        this.assertSafeHttpsMetadataEndpoint(metadata.issuer, 'issuer')
+        this.assertSafeHttpsMetadataEndpoint(metadata.token_endpoint, 'token_endpoint')
+        const optionalUrls: [string, string | undefined][] = [
+            ['authorization_endpoint', metadata.authorization_endpoint],
+            ['jwks_uri', metadata.jwks_uri],
+            ['registration_endpoint', metadata.registration_endpoint],
+            ['revocation_endpoint', metadata.revocation_endpoint],
+            ['introspection_endpoint', metadata.introspection_endpoint],
+        ]
+        for (const [field, urlVal] of optionalUrls) {
+            if (urlVal !== undefined) {
+                this.assertSafeHttpsMetadataEndpoint(urlVal, field)
+            }
+        }
+
         // Validate issuer matches the expected URL
-        // Per RFC 8414, issuer MUST be identical to the authorization server URL
+        // Per RFC 8414 §3.3, issuer MUST be identical to the authorization server URL
         const expectedIssuer = this.authServerUrl
-        if (metadata.issuer !== expectedIssuer) {
-            logger.warning(`Issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`, {
-                module: 'AUTH',
-                operation: 'discovery-validation',
-            })
-            // Note: This is a warning, not an error, as some auth servers may use different URLs
+        const actualIssuer = metadata.issuer.replace(/\/+$/, '')
+        if (actualIssuer !== expectedIssuer) {
+            throw new ConfigurationError(
+                `Authorization server issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`
+            )
         }
     }
 

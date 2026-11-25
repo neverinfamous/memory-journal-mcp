@@ -2,313 +2,360 @@
  * Script syntax healing and AST/regex normalization for Code Mode execution payloads.
  */
 
-import * as vm from 'node:vm'
 import { extractAndRecoverJsonCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
+import {
+    buildNonCodeSpans,
+    escapeDelimiterChar,
+    isInsideStringLiteral,
+    isInsideStringOrComment,
+    isValidJsScript,
+    replaceOutsideNonCode,
+    rewriteContextJsonParseCalls,
+    rewriteModuleImportsAndExports,
+} from './code-healer-rewrites.js'
 
-export function isInsideStringLiteral(code: string, offset: number): boolean {
-    let inString: string | null = null
-    let isEscaped = false
-    for (let i = 0; i < offset; i++) {
-        const ch = code[i]
-        if (inString !== null) {
-            if (ch === '\\') {
-                isEscaped = !isEscaped
-            } else {
-                if (ch === inString && !isEscaped) {
-                    inString = null
-                }
-                isEscaped = false
-            }
-        } else {
-            if (ch === "'" || ch === '"' || ch === '`') {
-                inString = ch
-            }
+export { escapeDelimiterChar, isInsideStringLiteral, isInsideStringOrComment, isValidJsScript }
+
+function escapeTemplateInterpolation(content: string): string {
+    return escapeDelimiterChar(content, '`').replace(/(\\*)(\$\{)/g, (_m, slashes: string, token: string) =>
+        slashes.length % 2 === 0 ? `${slashes}\\${token}` : `${slashes}${token}`
+    )
+}
+
+function stripLeadingShimAssignments(src: string): string {
+    let rest = src.trimStart()
+    const lineShimRe =
+        /^(?:const|let|var)\s+(?:\{[^}\n]*\}|[\w$]+)\s*=\s*(?:mj(?:\.[\w$]+)?|__safeFs|path|\(?typeof\s+mj[^\n;]*|await\s+import\([^)\n]+\)|require\([^)\n]+\)|import\([^)\n]+\)|await\s+mcp|mcp);?[ \t]*(?:\r?\n|$)/i
+
+    while (rest.length > 0) {
+        if (rest.startsWith('/*')) {
+            const closeIdx = rest.indexOf('*/', 2)
+            if (closeIdx === -1) break
+            rest = rest.slice(closeIdx + 2).trimStart()
+            continue
         }
-    }
-    return inString !== null
-}
-
-export function isValidJsScript(src: string): boolean {
-    try {
-        new vm.Script(`(async () => {\n${src}\n})()`)
-        return true
-    } catch {
-        return false
-    }
-}
-
-export function escapeDelimiterChar(content: string, delimiter: string): string {
-    let result = ''
-    let i = 0
-    while (i < content.length) {
-        if (content[i] === '\\') {
-            let bsCount = 0
-            while (i < content.length && content[i] === '\\') {
-                bsCount++
-                i++
+        if (rest.startsWith('//')) {
+            const nlIdx = rest.indexOf('\n')
+            if (nlIdx === -1) {
+                rest = ''
+                break
             }
-            if (i < content.length && content[i] === delimiter) {
-                result += `\\${delimiter}`
-                i++
-            } else {
-                result += '\\'.repeat(bsCount)
-            }
-        } else if (content[i] === delimiter) {
-            result += `\\${delimiter}`
-            i++
-        } else {
-            result += content[i]
-            i++
+            rest = rest.slice(nlIdx + 1).trimStart()
+            continue
         }
+        const match = lineShimRe.exec(rest)
+        if (match !== null && match[0].length > 0) {
+            rest = rest.slice(match[0].length).trimStart()
+            continue
+        }
+        break
     }
-    return result
+    return rest
 }
 
-function mapModuleBindingReplacement(varName: string, modName: string, commentTag: string): string {
-    const v = varName.trim()
-    const mod = modName.toLowerCase().replace(/^node:/, '')
-    if (v === 'mj') return `/* auto-healed ${commentTag} */`
-    let targetVar = v
-    if (v.startsWith('* as ')) {
-        targetVar = v.replace(/^\*\s+as\s+/, '')
+const NESTED_EXEC_PREFIX_RE =
+    /^(?:(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*/i
+const NESTED_EXEC_OBJ_PROP_RE = /^\s*(?:code|script)\s*:\s*/i
+const NESTED_EXEC_TRAILING_EMPTY_RE = /^\s*;?\s*$/
+const NESTED_EXEC_TRAILING_RETURN_RE = /^\s*;?\s*return\s+([A-Za-z_$][\w$]*)\s*;?\s*$/
+
+const JS_ESCAPE_CHAR_MAP: Record<string, string> = {
+    n: '\n',
+    r: '\r',
+    t: '\t',
+}
+
+/**
+ * [INVARIANT] Unwrap only single-argument `executeCode(<literal>)` or single-property
+ * `executeCode({ code|script: <literal> })` calls with no sibling options (e.g. `readonly`,
+ * `workspace_id`) and no trailing statements (other than returning the assigned result variable)
+ * so nested isolation bounds cannot be bypassed.
+ */
+function extractSingleExecuteCodeStringArg(stripped: string): string | null {
+    const prefix = NESTED_EXEC_PREFIX_RE.exec(stripped)
+    if (prefix === null) return null
+    const assignedVar = prefix[1]
+    let pos = prefix[0].length
+    let inObject = false
+    if (stripped[pos] === '{') {
+        inObject = true
+        const propMatch = NESTED_EXEC_OBJ_PROP_RE.exec(stripped.slice(pos + 1))
+        if (propMatch === null) return null
+        pos += 1 + propMatch[0].length
     }
-    if (mod === 'fs' || targetVar === 'fs' || targetVar === '__safeFs') {
-        const fsVal = `(typeof mj !== 'undefined' ? (mj.fs || mj) : undefined)`
-        return targetVar === '__safeFs'
-            ? `var __safeFs = ${fsVal};`
-            : `const ${targetVar} = ${fsVal}; var __safeFs = ${fsVal};`
+    const quote = stripped[pos]
+    if (quote !== "'" && quote !== '"' && quote !== '`') return null
+    const chars: string[] = []
+    let i = pos + 1
+    let escaped = false
+    for (; i < stripped.length; i++) {
+        const ch = stripped[i] ?? ''
+        if (escaped) {
+            chars.push(ch === quote || ch === '\\' ? ch : (JS_ESCAPE_CHAR_MAP[ch] ?? `\\${ch}`))
+            escaped = false
+            continue
+        }
+        if (ch === '\\') {
+            escaped = true
+            continue
+        }
+        if (quote === '`' && ch === '$' && stripped[i + 1] === '{') return null
+        if (ch === quote) break
+        chars.push(ch)
     }
-    if (mod === 'path' || targetVar === 'path') {
-        const pathVal = `(typeof mj !== 'undefined' ? (mj.path || mj) : undefined)`
-        return `const ${targetVar} = ${pathVal};`
+    if (i >= stripped.length || stripped[i] !== quote) return null
+    let after = i + 1
+    while (after < stripped.length && /\s/.test(stripped[after] ?? '')) after++
+    if (inObject) {
+        if (stripped[after] === ',') {
+            after++
+            while (after < stripped.length && /\s/.test(stripped[after] ?? '')) after++
+        }
+        if (stripped[after] !== '}') return null
+        after++
+        while (after < stripped.length && /\s/.test(stripped[after] ?? '')) after++
     }
-    if (
-        mod.includes('sqlite') ||
-        mod.includes('database') ||
-        targetVar.toLowerCase().includes('sqlite') ||
-        targetVar.toLowerCase() === 'database'
-    ) {
-        return `const ${targetVar} = mj.sqlite3;`
-    }
-    if (targetVar === 'child_process' || mod.includes('child_process')) {
-        return `const ${targetVar === 'child_process' ? 'cp' : targetVar} = mj;`
-    }
-    if (mod.includes('memory') || mod.includes('journal')) {
-        return `const ${targetVar} = mj;`
-    }
-    if (
-        mod === 'mcp' ||
-        mod.includes('mcp') ||
-        targetVar.toLowerCase() === 'mcp' ||
-        targetVar === '__mcp' ||
-        mod.includes('modelcontextprotocol')
-    ) {
-        return `const ${targetVar} = mj;`
-    }
-    return `const ${targetVar} = mj;`
+    if (stripped[after] !== ')') return null
+    const trailing = stripped.slice(after + 1)
+    if (NESTED_EXEC_TRAILING_EMPTY_RE.test(trailing)) return chars.join('')
+    const retMatch = NESTED_EXEC_TRAILING_RETURN_RE.exec(trailing)
+    return retMatch?.[1] !== undefined && retMatch[1] === assignedVar ? chars.join('') : null
 }
 
 function unwrapNestedExecuteCode(src: string): string {
     const current = src.trim()
-    const stripped = current
-        .replace(
-            /^(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*\n|\s*(?:const|let|var)\s+(?:\{[^}]*\}|[\w$]+)\s*=\s*(?:mj(?:\.[\w$]+)?|__safeFs|path|\(?typeof\s+mj[^\n;]*|await\s+import\([^)]+\)|require\([^)]+\)|import\([^)]+\)|await\s+mcp|mcp);?\s*)+/i,
-            ''
-        )
-        .trim()
-    const nestedMatch =
-        /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*\}?\s*\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(
-            stripped
-        )
-    if (nestedMatch?.[2] !== undefined) {
-        const inner = nestedMatch[2].trim()
-        const isNatural =
-            /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(inner) &&
-            !/\b(const|let|var|function|return|await|import|export|mj\.)\b/.test(inner)
-        if (isNatural || /^(?:create|add|new|record|log)?\s*entry\b/i.test(inner)) {
-            const firstLine = (inner.split('\n')[0] ?? '')
-                .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
-                .replace(/[:.]+$/, '')
-                .trim()
-            const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-            return `return await mj.core.createEntry({\n  title: ${JSON.stringify(title)},\n  content: ${JSON.stringify(inner)},\n  entry_type: "technical_decision"\n});`
-        }
+    const stripped = stripLeadingShimAssignments(current)
+    const rawInner = extractSingleExecuteCodeStringArg(stripped)
+    if (rawInner === null) return current
+    const inner = rawInner.trim()
+    if (isValidJsScript(inner) && !/^[A-Za-z_$][\w$]*$/.test(inner)) {
         return inner
     }
+    const isNatural =
+        /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(inner) &&
+        !/\b(const|let|var|function|return|await|import|export|mj\.)\b/.test(inner)
+    if (isNatural || /^(?:create|add|new|record|log)?\s*entry\b/i.test(inner)) {
+        const firstLine = (inner.split('\n')[0] ?? '')
+            .slice(0, 200)
+            .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
+            .replace(/[:.]+$/, '')
+            .trim()
+        const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
+        return `return await mj.core.createEntry({\n  title: ${JSON.stringify(title)},\n  content: ${JSON.stringify(inner)},\n  entry_type: "technical_note"\n});`
+    }
     return current
+}
+
+const ACCIDENTAL_TAGGED_TEMPLATE_RE =
+    /(?<!\\)`(?:\.[a-zA-Z0-9_$-]+(?:\.[a-zA-Z0-9_$-]+)*|\[[^\]]+\])`/
+const MAX_DELIMITER_HEAL_CANDIDATES = 16
+
+function hasAccidentalTaggedTemplateBackticks(src: string): boolean {
+    if (!ACCIDENTAL_TAGGED_TEMPLATE_RE.test(src)) return false
+    const spans = buildNonCodeSpans(src)
+    const parts: string[] = []
+    let pos = 0
+    for (const [start, end] of spans) {
+        if (start > pos) parts.push(src.slice(pos, start))
+        const first = src[start]
+        if (first === '`' || (first === '}' && src[end - 1] === '`')) {
+            parts.push(src.slice(start, end))
+        } else {
+            parts.push(' ')
+        }
+        pos = end
+    }
+    if (pos < src.length) parts.push(src.slice(pos))
+    return ACCIDENTAL_TAGGED_TEMPLATE_RE.test(parts.join(''))
+}
+
+function shouldLeaveValidSnippetUntouched(snippet: string, isExpression: boolean): boolean {
+    if (hasAccidentalTaggedTemplateBackticks(snippet)) return false
+    const wrapped = isExpression ? `(${snippet})` : snippet
+    return isValidJsScript(wrapped)
+}
+
+function healQuotedPropMatch(match: string, prefix: string, content: string, delim: "'" | '"'): string {
+    if (shouldLeaveValidSnippetUntouched(`{ ${match} }`, true)) return match
+    return content.includes('\n')
+        ? `${prefix}\`${escapeTemplateInterpolation(content)}\``
+        : `${prefix}${delim}${escapeDelimiterChar(content, delim)}${delim}`
+}
+
+function healQuotedCallArgMatch(
+    match: string,
+    prefix: string,
+    content: string,
+    delim: "'" | '"',
+    statementKeywordsOrBraces: RegExp
+): string {
+    if (statementKeywordsOrBraces.test(content)) return match
+    if (!hasAccidentalTaggedTemplateBackticks(match) && isValidJsScript(`${match})`)) return match
+    if (content.includes('\n')) return `${prefix}\`${escapeTemplateInterpolation(content)}\``
+    return `${prefix}${delim}${escapeDelimiterChar(content, delim)}${delim}`
+}
+
+const DELIMITER_HEAL_KEYWORD_RE =
+    /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries|const|let|var)\b/g
+const DELIMITER_HEAL_FAST_RE =
+    /\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading|createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries|const|let|var)\b/
+
+function countRegexMatchesUpTo(src: string, re: RegExp, cap: number): number {
+    let count = 0
+    for (const match of src.matchAll(re)) {
+        if (match[0].length > 0) count++
+        if (count > cap) return count
+    }
+    return count
+}
+
+function applyTemplateAndQuoteDelimiterHealing(
+    src: string,
+    precomputed?: { valid?: boolean; accidentalBackticks?: boolean }
+): string {
+    const accidental = precomputed?.accidentalBackticks ?? hasAccidentalTaggedTemplateBackticks(src)
+    if (!accidental && (precomputed?.valid ?? isValidJsScript(src))) return src
+    if (
+        countRegexMatchesUpTo(
+            src,
+            DELIMITER_HEAL_KEYWORD_RE,
+            MAX_DELIMITER_HEAL_CANDIDATES
+        ) > MAX_DELIMITER_HEAL_CANDIDATES
+    ) {
+        return src
+    }
+    let executionCode = src
+    const statementKeywordsOrBraces =
+        /(?:;\s*\n|\b(?:const|let|var|return|if|for|while|function|switch|class|export|import)\b|\{|\})/
+
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
+        (match: string, prefix: string, content: string): string =>
+            shouldLeaveValidSnippetUntouched(`{ ${match} }`, true) ? match : `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+    )
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
+        (match: string, prefix: string, content: string): string => healQuotedPropMatch(match, prefix, content, "'")
+    )
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/g,
+        (match: string, prefix: string, content: string): string => healQuotedPropMatch(match, prefix, content, '"')
+    )
+
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
+        (match: string, prefix: string, content: string): string =>
+            statementKeywordsOrBraces.test(content)
+                ? match
+                : `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+    )
+
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)'([\s\S]*?)'(?=\s*(?:,\s*|\)))/g,
+        (match: string, prefix: string, content: string): string =>
+            healQuotedCallArgMatch(match, prefix, content, "'", statementKeywordsOrBraces)
+    )
+
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)"([\s\S]*?)"(?=\s*(?:,\s*|\)))/g,
+        (match: string, prefix: string, content: string): string =>
+            healQuotedCallArgMatch(match, prefix, content, '"', statementKeywordsOrBraces)
+    )
+
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=(?:\s*;|[ \t\r]*\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
+        (match: string, prefix: string, content: string): string =>
+            shouldLeaveValidSnippetUntouched(match, false)
+                ? match
+                : `${prefix}\`${escapeDelimiterChar(content, '`')}\``
+    )
+
+    return executionCode
+}
+
+/**
+ * Re-attempt delimiter escaping after a runtime tagged-template `is not a function` failure.
+ */
+export function healTemplateBackticksOnRuntimeError(code: string): string | null {
+    const candidate = applyTemplateAndQuoteDelimiterHealing(code)
+    return candidate !== code && isValidJsScript(candidate) ? candidate : null
+}
+
+function rewriteSandboxNodeAndContextCalls(src: string): string {
+    let executionCode = unwrapNestedExecuteCode(src)
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(?<![.\w$])(?:fs|fs\.promises)\.readFileSync\s*\([^()\n]{0,1000}\)/g,
+        () => '(typeof context !== "undefined" && context.content ? context.content : "")'
+    )
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(?<![.\w$])(?:fs|fs\.promises)\.readFile\s*\([^()\n]{0,1000}\)/g,
+        () =>
+            'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")'
+    )
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(?<![.\w$])fs\.(existsSync|statSync|stat|lstatSync)\s*\(/g,
+        (_match, method: string) => `__safeFs.${method}(`
+    )
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /(?<![.\w$])process\.env\.([a-zA-Z0-9_]+)/g,
+        () => 'undefined'
+    )
+    executionCode = replaceOutsideNonCode(executionCode, /(?<![.\w$])process\.env\b/g, () => '{}')
+    if (
+        executionCode.includes('`') ||
+        executionCode.includes("'") ||
+        executionCode.includes('"')
+    ) {
+        const accidentalBackticks =
+            executionCode.includes('`') && hasAccidentalTaggedTemplateBackticks(executionCode)
+        if (accidentalBackticks) {
+            executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode, {
+                valid: false,
+                accidentalBackticks: true,
+            })
+        } else if (DELIMITER_HEAL_FAST_RE.test(executionCode) && !isValidJsScript(executionCode)) {
+            executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode, {
+                valid: false,
+                accidentalBackticks: false,
+            })
+        }
+    }
+    return rewriteContextJsonParseCalls(executionCode)
 }
 
 /**
  * Auto-heals common syntax, template literal, and LLM formatting errors in Code Mode execution payloads.
  */
 export function healCodeModeScript(code: string): string {
-    if (Buffer.byteLength(code, 'utf-8') > 50 * 1024) {
-        return code
-    }
+    if (Buffer.byteLength(code, 'utf-8') > 50 * 1024) return code
     let executionCode = code
 
     const healedSql = extractAndRecoverSqlCode(executionCode)
     if (healedSql !== null) return healedSql
-
     const healedPrepared = extractAndRecoverPreparedStatementCode(executionCode)
     if (healedPrepared !== null) return healedPrepared
-
     const healedJson = extractAndRecoverJsonCode(executionCode)
     if (healedJson !== null) return healedJson
 
-    executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
-    executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
-    executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
-    executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
-
-    executionCode = executionCode.replace(
-        /export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
-        (_m: string, param: string, body: string): string => {
-            const p = param.trim()
-            const pClause = p ? `${p} = mj` : ''
-            return `(async (${pClause}) => { ${body} })()`
-        }
+    executionCode = replaceOutsideNonCode(
+        executionCode,
+        /<(?:CURRENT_PROJECT_NUMBER|CURRENT_PROJECT_ID|PROJECT_NUMBER|PROJECT_ID)>/g,
+        () => 'undefined'
     )
-    executionCode = executionCode.replace(
-        /export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g,
-        (_m: string, param: string, body: string): string => {
-            const p = param.trim()
-            const pClause = p ? `${p} = mj` : ''
-            return `(async (${pClause}) => { ${body} })()`
-        }
-    )
-    executionCode = executionCode.replace(/export\s+default\s+/g, '')
-    executionCode = executionCode.replace(/\btools\./g, 'mj.')
+    executionCode = rewriteModuleImportsAndExports(executionCode)
+    executionCode = rewriteSandboxNodeAndContextCalls(executionCode)
 
-    // Auto-heal dynamic import(), require(), and static import statements
-    executionCode = executionCode.replace(
-        /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
-        (_m: string, varName: string, modName: string): string =>
-            mapModuleBindingReplacement(varName, modName, 'dynamic import')
-    )
-    executionCode = executionCode.replace(
-        /(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/g,
-        '/* auto-healed dynamic import */'
-    )
-
-    executionCode = executionCode.replace(
-        /(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g,
-        (_m: string, varName: string, modName: string): string =>
-            mapModuleBindingReplacement(varName, modName, 'require')
-    )
-    executionCode = executionCode.replace(
-        /^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/gm,
-        '/* auto-healed require */'
-    )
-
-    executionCode = executionCode.replace(
-        /import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g,
-        (_m: string, varName: string, modName: string): string =>
-            mapModuleBindingReplacement(varName, modName, 'import')
-    )
-
-    executionCode = unwrapNestedExecuteCode(executionCode)
-
-    executionCode = executionCode.replace(
-        /(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g,
-        '(typeof context !== "undefined" && context.content ? context.content : "")'
-    )
-    executionCode = executionCode.replace(
-        /(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g,
-        'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")'
-    )
-    executionCode = executionCode.replace(/\bfs\.(existsSync|statSync|stat|lstatSync)\s*\(/g, '__safeFs.$1(')
-    executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
-    executionCode = executionCode.replace(/process\.env/g, '{}')
-
-    if (!isValidJsScript(executionCode)) {
-        const statementKeywordsOrBraces =
-            /(?:;\s*\n|\b(?:const|let|var|return|if|for|while|function|switch|class|export|import)\b|\{|\})/
-
-        executionCode = executionCode.replace(
-            /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
-            (match: string, prefix: string, content: string, offset: number): string => {
-                if (isInsideStringLiteral(executionCode, offset)) return match
-                return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
-            }
-        )
-
-        executionCode = executionCode.replace(
-            /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
-            (match: string, prefix: string, content: string, offset: number): string => {
-                if (isInsideStringLiteral(executionCode, offset)) return match
-                if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
-                return `${prefix}'${escapeDelimiterChar(content, "'")}'`
-            }
-        )
-
-        executionCode = executionCode.replace(
-            /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
-            (match: string, prefix: string, content: string, offset: number): string => {
-                if (isInsideStringLiteral(executionCode, offset)) return match
-                if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
-                return `${prefix}"${escapeDelimiterChar(content, '"')}"`
-            }
-        )
-
-        executionCode = executionCode.replace(
-            /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
-            (match: string, prefix: string, content: string, offset: number): string => {
-                if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content))
-                    return match
-                return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
-            }
-        )
-
-        executionCode = executionCode.replace(
-            /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)'([\s\S]*?)'(?=\s*(?:,\s*|\)))/g,
-            (match: string, prefix: string, content: string, offset: number): string => {
-                if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content))
-                    return match
-                if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
-                return `${prefix}'${escapeDelimiterChar(content, "'")}'`
-            }
-        )
-        executionCode = executionCode.replace(
-            /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)"([\s\S]*?)"(?=\s*(?:,\s*|\)))/g,
-            (match: string, prefix: string, content: string, offset: number): string => {
-                if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content))
-                    return match
-                if (content.includes('\n')) return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
-                return `${prefix}"${escapeDelimiterChar(content, '"')}"`
-            }
-        )
-
-        executionCode = executionCode.replace(
-            /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=\s*(?:;|\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
-            (match: string, prefix: string, content: string, offset: number): string => {
-                if (isInsideStringLiteral(executionCode, offset)) return match
-                return `${prefix}\`${escapeDelimiterChar(content, '`')}\``
-            }
-        )
-    }
-
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\)/g,
-        '(typeof context === "string" ? JSON.parse(context) : context)'
-    )
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\|\|\s*['"][^'"]*['"]\s*\)/g,
-        '(typeof context === "string" ? JSON.parse(context) : context)'
-    )
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"]*['"]\s*\)/g,
-        '(typeof context === "string" ? JSON.parse(context) : context)'
-    )
-    executionCode = executionCode.replace(
-        /\bJSON\.parse\s*\(\s*(context\.[a-zA-Z0-9_$]+)\s*\)/g,
-        '(typeof $1 === "string" ? JSON.parse($1) : $1)'
-    )
-
-    if (!executionCode.endsWith('\n')) {
-        executionCode += '\n'
-    }
-
-    return executionCode
+    return executionCode.endsWith('\n') ? executionCode : `${executionCode}\n`
 }

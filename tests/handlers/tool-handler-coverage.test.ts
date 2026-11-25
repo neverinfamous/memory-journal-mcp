@@ -129,7 +129,12 @@ describe('Tool Handler Coverage', () => {
             const entry = db.createEntry({ content: 'For invalid type test' })
             const result = (await callTool(
                 'update_entry',
-                { entry_id: entry.id, project_number: 1, entry_type: 'completely_invalid_type' },
+                {
+                    entry_id: entry.id,
+                    project_number: 1,
+                    entry_type: 'completely_invalid_type',
+                    tags: ['existing-tag'],
+                },
                 db
             )) as { success: boolean; entry: { entryType: string; tags: string[] }; error?: string }
 
@@ -137,6 +142,7 @@ describe('Tool Handler Coverage', () => {
             expect(result.success).toBe(true)
             expect(result.entry.entryType).toBe('other')
             expect(result.entry.tags).toContain('completely-invalid-type')
+            expect(result.entry.tags).toContain('existing-tag')
         })
     })
 

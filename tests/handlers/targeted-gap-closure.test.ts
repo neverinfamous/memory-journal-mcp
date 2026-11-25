@@ -289,10 +289,11 @@ describe('Targeted Gap Closure', () => {
             expect(result.success !== undefined || result.author !== undefined).toBe(true)
         })
 
-        it('should handle invalid entry_type', async () => {
-            const result = (await callTool(
+        it('should auto-heal invalid entry_type and reject empty content', async () => {
+            const healed = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default', 
+                {
+                    workspace_id: 'default',
                     project_number: 1,
                     content: 'Bad type entry',
                     entry_type: 'invalid_type_xyz',
@@ -303,9 +304,24 @@ describe('Targeted Gap Closure', () => {
                 undefined,
                 undefined,
                 teamDb
+            )) as { success: boolean; entry?: { entryType: string; tags: string[] } }
+
+            expect(healed.success).toBe(true)
+            expect(healed.entry?.entryType).toBe('other')
+            expect(healed.entry?.tags).toContain('invalid-type-xyz')
+
+            const rejected = (await callTool(
+                'team_create_entry',
+                { workspace_id: 'default', project_number: 1, content: '' },
+                db,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as { error: string }
 
-            expect(result.error).toBeDefined()
+            expect(rejected.error).toBeDefined()
         })
     })
 

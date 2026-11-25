@@ -5,12 +5,13 @@ import { stripVTControlCharacters } from 'node:util';
 const ESC = String.fromCharCode(27);
 const CSI = String.fromCharCode(155);
 const BEL = String.fromCharCode(7);
-const ANSI_REGEX_K0 = new RegExp(`${ESC}\\[[0]?K`, 'g');
-const ANSI_REGEX_K2 = new RegExp(`${ESC}\\[2K`, 'g');
-const ANSI_REGEX_J2 = new RegExp(`${ESC}\\[2J`, 'g');
-const ANSI_REGEX_H = new RegExp(`${ESC}\\[H`, 'g');
+const ANSI_TRANSLATE_REGEX = new RegExp(`${ESC}\\[(?:([0]?K)|(2K)|(2J)|(H))`, 'g');
+const LONG_CSI_REGEX = new RegExp(`[${ESC}${CSI}]\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
+const OSC_REGEX = new RegExp(`[${ESC}${CSI}]][^\\x07${ESC}]*(?:\\x07|${ESC}\\\\)`, 'g');
 const COMPLETE_OSC_REGEX = new RegExp(`^[${ESC}${CSI}]][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`);
-const COMPLETE_CSI_REGEX = new RegExp(`^(?:[${ESC}${CSI}]\\[|${CSI})[()#;?]*[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`);
+const COMPLETE_CSI_REGEX = new RegExp(`^(?:[${ESC}${CSI}]\\[|${CSI})[()#]*[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`);
+const DCS_START_REGEX = new RegExp(`^[${ESC}${CSI}][PX^_]`);
+const DCS_COMPLETE_REGEX = new RegExp(`^[${ESC}${CSI}][PX^_].*?(?:${ESC}\\\\|\\x07)`, 's');
 
 const DEFENSIVE_LINE_LIMIT = 2 * 1024 * 1024;
 const DEFAULT_MAX_OUTPUT_LENGTH = 1024 * 1024 * 1024;
@@ -21,6 +22,7 @@ const MAX_ANSI_SEQ_LENGTH_CSI = 50;
 interface StreamState {
   ansiBuffer: string;
   lineBuffer: string;
+  lineDirty: boolean;
   flushedResolved: string;
   length: number;
   truncated: boolean;
@@ -28,8 +30,8 @@ interface StreamState {
 
 export class StreamManager {
   private state = {
-    out: { ansiBuffer: '', lineBuffer: '', flushedResolved: '', length: 0, truncated: false } as StreamState,
-    err: { ansiBuffer: '', lineBuffer: '', flushedResolved: '', length: 0, truncated: false } as StreamState
+    out: { ansiBuffer: '', lineBuffer: '', lineDirty: false, flushedResolved: '', length: 0, truncated: false } as StreamState,
+    err: { ansiBuffer: '', lineBuffer: '', lineDirty: false, flushedResolved: '', length: 0, truncated: false } as StreamState
   };
 
   constructor(
@@ -48,19 +50,26 @@ export class StreamManager {
   }
 
   private stripAnsi(str: string): string {
+    if (!str.includes(ESC) && !str.includes(CSI)) {
+      return str;
+    }
+
     // Preserve Erase in Line/Whole Line semantics by translating them to \u001A (Substitute)
     // before stripping ANSI codes, so they can be processed dynamically in resolveCarriageReturns
-    let preProcessed = str.replace(ANSI_REGEX_K0, '\u001A');
-    preProcessed = preProcessed.replace(ANSI_REGEX_K2, '\r\u001A');
-    preProcessed = preProcessed.replace(ANSI_REGEX_J2, '\n--- [Screen Cleared] ---\n');
-    preProcessed = preProcessed.replace(ANSI_REGEX_H, '\n--- [Cursor Home] ---\n');
-    
+    let preProcessed = str.replace(
+      ANSI_TRANSLATE_REGEX,
+      (_m, k0: string | undefined, k2: string | undefined, j2: string | undefined) => {
+        if (k0 !== undefined) return '\u001A';
+        if (k2 !== undefined) return '\r\u001A';
+        if (j2 !== undefined) return '\n--- [Screen Cleared] ---\n';
+        return '\n--- [Cursor Home] ---\n';
+      },
+    );
+
     // Node's stripVTControlCharacters restricts number length to 4 chars. Add a broad pass to catch overlong edge-cases.
-    const e=String.fromCharCode(27), c=String.fromCharCode(155); const longCsi = new RegExp(`[${e}${c}]\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
-    const osc = new RegExp(`[${e}${c}]][^\\x07${e}]*(?:\\x07|${e}\\\\)`, 'g');
-    preProcessed = preProcessed.replace(longCsi, '');
-    preProcessed = preProcessed.replace(osc, '');
-    
+    preProcessed = preProcessed.replace(LONG_CSI_REGEX, '');
+    preProcessed = preProcessed.replace(OSC_REGEX, '');
+
     return stripVTControlCharacters(preProcessed);
   }
 
@@ -96,105 +105,83 @@ export class StreamManager {
     return chars.join('');
   }
 
-  public processChunk(isErr: boolean, data: string): string {
-    const s = this.getState(isErr);
-    s.ansiBuffer += data;
-    
-    let safeStr = s.ansiBuffer;
-    const lastEscapeIdx = Math.max(s.ansiBuffer.lastIndexOf('\u001b'), s.ansiBuffer.lastIndexOf('\u009b'));
-    
-    if (lastEscapeIdx !== -1) {
-      const potentialSeq = s.ansiBuffer.substring(lastEscapeIdx);
-      
-      if (potentialSeq.startsWith('\u001b]') || potentialSeq.startsWith('\u009b]')) {
-        const isComplete = COMPLETE_OSC_REGEX.test(potentialSeq);
-        if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-        } else {
-          s.ansiBuffer = '';
-        }
-      } else if (potentialSeq.startsWith('\u001b[') || potentialSeq.startsWith('\u009b[')) {
-        const isComplete = COMPLETE_CSI_REGEX.test(potentialSeq);
-        if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-        } else {
-          s.ansiBuffer = '';
-        }
-      } else if (new RegExp('^[' + String.fromCharCode(0x1b) + String.fromCharCode(0x9b) + '][PX^_]').test(potentialSeq)) {
-        const isComplete = new RegExp('^[' + String.fromCharCode(0x1b) + String.fromCharCode(0x9b) + '][PX^_].*?(?:' + String.fromCharCode(0x1b) + '\\\\|' + String.fromCharCode(0x07) + ')', 's').test(potentialSeq);
-        if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-        } else {
-          s.ansiBuffer = '';
-        }
-      } else if (potentialSeq.length < 3) {
-          safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
-          s.ansiBuffer = potentialSeq;
-      } else {
-          s.ansiBuffer = '';
-      }
-    } else {
-      s.ansiBuffer = '';
-    }
+  private splitIncompleteAnsiSuffix(ansiBuffer: string): { safeStr: string; remainder: string } {
+    const lastEscapeIdx = Math.max(ansiBuffer.lastIndexOf('\u001b'), ansiBuffer.lastIndexOf('\u009b'));
+    if (lastEscapeIdx === -1) return { safeStr: ansiBuffer, remainder: '' };
 
-    const stripped = this.stripAnsi(safeStr);
-    
-    s.lineBuffer += stripped;
-    
-    // Defensive memory limit: force a newline if the line exceeds 2MB
-    if (s.lineBuffer.length > DEFENSIVE_LINE_LIMIT) {
-      s.lineBuffer += '\n';
+    const potentialSeq = ansiBuffer.substring(lastEscapeIdx);
+    const isOsc = potentialSeq.startsWith('\u001b]') || potentialSeq.startsWith('\u009b]');
+    const isCsi = potentialSeq.startsWith('\u001b[') || potentialSeq.startsWith('\u009b[');
+    const incomplete =
+      (isOsc && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC && !COMPLETE_OSC_REGEX.test(potentialSeq)) ||
+      (isCsi && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI && !COMPLETE_CSI_REGEX.test(potentialSeq)) ||
+      (potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC && DCS_START_REGEX.test(potentialSeq) && !DCS_COMPLETE_REGEX.test(potentialSeq)) ||
+      (!isOsc && !isCsi && !DCS_START_REGEX.test(potentialSeq) && !potentialSeq.startsWith('\u001b\\') && potentialSeq.length < 3);
+
+    if (incomplete) {
+      return { safeStr: ansiBuffer.substring(0, lastEscapeIdx), remainder: potentialSeq };
     }
-    
-    const lines = s.lineBuffer.split('\n');
-    s.lineBuffer = lines.pop() || '';
-    
-    if (lines.length === 0) return '';
-    
+    return { safeStr: ansiBuffer, remainder: '' };
+  }
+
+  private diffAgainstFlushed(resolved: string, flushed: string): string {
+    if (resolved.startsWith(flushed)) {
+      return resolved.substring(flushed.length);
+    }
+    const padding = ' '.repeat(Math.max(0, flushed.length - resolved.length));
+    let diff = `\r${resolved}${padding}`;
+    if (padding.length > 0) diff += `\r${resolved}`;
+    return diff;
+  }
+
+  private resolveMergedLines(lines: readonly string[], s: StreamState): string {
     let result = '';
     for (let i = 0; i < lines.length; i++) {
-      const resolved = this.resolveCarriageReturns(lines[i]);
+      const resolved = this.resolveCarriageReturns(lines[i] ?? '');
       if (i === 0 && s.flushedResolved) {
-        if (resolved.startsWith(s.flushedResolved)) {
-          result += resolved.substring(s.flushedResolved.length) + '\n';
-        } else {
-          const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - resolved.length));
-          result += '\r' + resolved + padding;
-          if (padding.length > 0) {
-             result += '\r' + resolved;
-          }
-          result += '\n';
-        }
+        result += `${this.diffAgainstFlushed(resolved, s.flushedResolved)}\n`;
         s.flushedResolved = '';
       } else {
-        result += resolved + '\n';
+        result += `${resolved}\n`;
       }
     }
     return result;
   }
 
+  public processChunk(isErr: boolean, data: string): string {
+    const s = this.getState(isErr);
+    const targetStream = isErr ? this.errStream : this.outStream;
+    if (this.truncateOutputLength !== undefined && s.truncated && !targetStream) {
+      return '';
+    }
+    s.ansiBuffer += data;
+    const { safeStr, remainder } = this.splitIncompleteAnsiSuffix(s.ansiBuffer);
+    s.ansiBuffer = remainder;
+
+    const stripped = this.stripAnsi(safeStr);
+    if (stripped.length > 0) {
+      s.lineBuffer += stripped;
+      s.lineDirty = true;
+    }
+    if (!stripped.includes('\n') && s.lineBuffer.length <= DEFENSIVE_LINE_LIMIT) {
+      return '';
+    }
+    if (s.lineBuffer.length > DEFENSIVE_LINE_LIMIT) {
+      s.lineBuffer += '\n';
+    }
+    const lines = s.lineBuffer.split('\n');
+    s.lineBuffer = lines.pop() ?? '';
+    s.lineDirty = s.lineBuffer.length > 0;
+    return lines.length === 0 ? '' : this.resolveMergedLines(lines, s);
+  }
+
   public flushPendingLine(isErr: boolean): string {
     const s = this.getState(isErr);
-    if (!s.lineBuffer) return '';
+    if (!s.lineBuffer || !s.lineDirty) return '';
     
     const res = this.resolveCarriageReturns(s.lineBuffer);
-    let toReturn: string;
-    if (s.flushedResolved) {
-      if (res.startsWith(s.flushedResolved)) {
-        toReturn = res.substring(s.flushedResolved.length);
-      } else {
-        const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - res.length));
-        toReturn = '\r' + res + padding;
-        if (padding.length > 0) {
-           toReturn += '\r' + res;
-        }
-      }
-    } else {
-      toReturn = res;
-    }
+    const toReturn = s.flushedResolved ? this.diffAgainstFlushed(res, s.flushedResolved) : res;
+    s.lineDirty = false;
     
     if (toReturn) {
       s.flushedResolved = res;
@@ -212,21 +199,14 @@ export class StreamManager {
     s.lineBuffer += stripped;
     const resLine = s.lineBuffer;
     s.lineBuffer = '';
+    s.lineDirty = false;
     
     if (!resLine) return '';
     const res = this.resolveCarriageReturns(resLine);
     
     let toReturn: string;
     if (s.flushedResolved) {
-      if (res.startsWith(s.flushedResolved)) {
-        toReturn = res.substring(s.flushedResolved.length);
-      } else {
-        const padding = ' '.repeat(Math.max(0, s.flushedResolved.length - res.length));
-        toReturn = '\r' + res + padding;
-        if (padding.length > 0) {
-           toReturn += '\r' + res;
-        }
-      }
+      toReturn = this.diffAgainstFlushed(res, s.flushedResolved);
       s.flushedResolved = '';
     } else {
       toReturn = res;
@@ -241,12 +221,12 @@ export class StreamManager {
     const targetStream = isErr ? this.errStream : this.outStream;
     const stdStream = isErr ? process.stderr : process.stdout;
 
-    if (targetStream && !targetStream.destroyed) {
+    if (targetStream && !targetStream.destroyed && !targetStream.writableEnded) {
       const canWrite = targetStream.write(str);
       if (!canWrite) streamsToDrain.push(targetStream);
     }
 
-    if (!this.truncateOutputLength) {
+    if (this.truncateOutputLength === undefined || this.truncateOutputLength <= 0) {
        if (!targetStream && !this.isJson && stdStream instanceof Writable && !stdStream.destroyed) {
          const canWriteStd = stdStream.write(str);
          if (!canWriteStd) streamsToDrain.push(stdStream);
@@ -282,7 +262,7 @@ export class StreamManager {
     return streamsToDrain;
   }
 
-  public addLength(isErr: boolean, length: number) {
+  public addLength(isErr: boolean, length: number): void {
     this.getState(isErr).length += length;
   }
 
@@ -290,10 +270,15 @@ export class StreamManager {
     return this.getState(isErr).length;
   }
 
-  public getBufferedLength(isErr: boolean): number {
+  public getRawBufferedLength(isErr: boolean): number {
     const s = this.getState(isErr);
-    const rawLen = s.length + s.lineBuffer.length;
-    if (this.truncateOutputLength) {
+    return s.length + Math.max(0, s.lineBuffer.length - s.flushedResolved.length);
+  }
+
+  public getBufferedLength(isErr: boolean): number {
+    const rawLen = this.getRawBufferedLength(isErr);
+    const targetStream = isErr ? this.errStream : this.outStream;
+    if (this.truncateOutputLength !== undefined && this.truncateOutputLength > 0 && !targetStream) {
       return Math.min(rawLen, this.truncateOutputLength);
     }
     return rawLen;

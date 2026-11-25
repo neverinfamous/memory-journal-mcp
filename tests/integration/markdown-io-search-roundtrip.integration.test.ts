@@ -210,9 +210,9 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['tag-keep', 'tag-drop'],
             workspaceId: 'ws-beta',
         })
-        expect(sourceDb.listTags().find((t) => t.name === 'tag-drop')?.usageCount).toBe(1)
+        expect(sourceDb.listTags('ws-beta').find((t) => t.name === 'tag-drop')?.usageCount).toBe(1)
         sourceDb.updateEntry(entry.id, { tags: ['tag-keep', 'tag-added'], workspaceId: 'ws-beta' })
-        const tagsAfter = sourceDb.listTags()
+        const tagsAfter = sourceDb.listTags('ws-beta')
         expect(tagsAfter.find((t) => t.name === 'tag-keep')?.usageCount).toBe(1)
         expect(tagsAfter.find((t) => t.name === 'tag-drop')?.usageCount ?? 0).toBe(0)
         expect(tagsAfter.find((t) => t.name === 'tag-added')?.usageCount).toBe(1)
@@ -355,6 +355,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['runbook', 'deployment'],
             author: 'alice',
             workspaceId: 'ws-alpha',
+            projectNumber: 101,
         })
         extraTeamEngDb.createEntry({
             content: 'Engineering team deployment architecture for blue-green rollout.',
@@ -362,6 +363,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['engineering', 'deployment'],
             author: 'bob',
             workspaceId: 'ws-alpha',
+            projectNumber: 101,
         })
         extraTeamOpsDb.createEntry({
             content: 'Operations team deployment checklist and incident rollback plan.',
@@ -369,6 +371,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['ops', 'deployment'],
             author: 'carol',
             workspaceId: 'ws-alpha',
+            projectNumber: 101,
         })
         extraTeamOpsDb.createEntry({
             content: 'Operations team deployment secret in ws-beta.',
@@ -376,6 +379,7 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['ops', 'deployment'],
             author: 'carol',
             workspaceId: 'ws-beta',
+            projectNumber: 202,
         })
 
         const crossRes = await callTool(

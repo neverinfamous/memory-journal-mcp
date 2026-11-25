@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { applyArgInterceptions } from '../../src/codemode/param-normalizer.js'
 import { wrapResult } from '../../src/codemode/worker-result-proxy.js'
+import { createContextProxy } from '../../src/codemode/worker/namespace-shims.js'
 import { JournalApi } from '../../src/codemode/api/journal-api.js'
 import type { ToolDefinition } from '../../src/types/index.js'
 
@@ -71,10 +72,11 @@ describe('Anti-Hallucination Fixes', () => {
             const rawResult = { success: true, entries: [{ id: 1 }, { id: 2 }], count: 2 }
             const wrapped = wrapResult(rawResult) as Record<string, unknown> & { slice: (start?: number, end?: number) => unknown }
 
-            expect(wrapped.data).toBe(rawResult.entries)
-            expect(wrapped.items).toBe(rawResult.entries)
-            expect(wrapped.rows).toBe(rawResult.entries)
-            expect((wrapped.result as any).entries).toBe(rawResult.entries)
+            expect(wrapped.data).toEqual(rawResult.entries)
+            expect(wrapped.data).toBe(wrapped.entries)
+            expect(wrapped.items).toBe(wrapped.entries)
+            expect(wrapped.rows).toBe(wrapped.entries)
+            expect((wrapped.result as Record<string, unknown>)['entries']).toBe(wrapped.entries)
         })
 
         it('should allow calling array methods via result proxy when accessed via alias', () => {
@@ -124,7 +126,7 @@ describe('Anti-Hallucination Fixes', () => {
                 success: true,
                 project: {
                     name: 'mysql-mcp',
-                    path: 'C:/Users/chris/Desktop/mysql-mcp',
+                    path: 'C:/workspace/mysql-mcp',
                     project_number: 2,
                     id: 2,
                 },
@@ -133,7 +135,7 @@ describe('Anti-Hallucination Fixes', () => {
 
             expect(wrapped.project_number).toBe(2)
             expect(wrapped.name).toBe('mysql-mcp')
-            expect(wrapped.path).toBe('C:/Users/chris/Desktop/mysql-mcp')
+            expect(wrapped.path).toBe('C:/workspace/mysql-mcp')
         })
     })
 
@@ -149,10 +151,10 @@ describe('Anti-Hallucination Fixes', () => {
 
             expect(wrapped.success).toBe(false)
             expect(wrapped.error).toBe('[ENTRY_NOT_FOUND] Entry 6259 not found')
-            expect(wrapped.relationships).toEqual([])
-            expect(wrapped.entries).toEqual([])
+            expect(() => wrapped.relationships).toThrow('Entry 6259 not found')
+            expect(() => wrapped.entries).toThrow('Entry 6259 not found')
             expect(typeof wrapped.map).toBe('function')
-            expect((wrapped.map as () => unknown[])()).toEqual([])
+            expect(() => (wrapped.map as () => unknown[])()).toThrow('Entry 6259 not found')
         })
     })
 
@@ -174,6 +176,22 @@ describe('Anti-Hallucination Fixes', () => {
             expect(instance).toBe(bindings)
             expect(typeof instance['searchEntries']).toBe('function')
             expect(typeof instance['createEntry']).toBe('function')
+        })
+    })
+
+    describe('Context Proxy camelCase-to-snake_case Fallback', () => {
+        it('should resolve camelCase property reads and context.get() against snake_case keys normalized by MCP', async () => {
+            const proxy = createContextProxy({
+                platform_arch_content: '# Architecture Decision',
+                directKey: 'exact',
+            })
+
+            expect(proxy['platformArchContent']).toBe('# Architecture Decision')
+            expect(proxy['platform_arch_content']).toBe('# Architecture Decision')
+            expect(proxy['directKey']).toBe('exact')
+
+            const getFn = proxy['get'] as (key?: string) => Promise<unknown>
+            await expect(getFn('platformArchContent')).resolves.toBe('# Architecture Decision')
         })
     })
 })

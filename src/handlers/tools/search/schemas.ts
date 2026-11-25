@@ -1,24 +1,30 @@
 import { z } from 'zod'
 import {
     ENTRY_TYPES,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     EntryOutputSchema,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     MAX_QUERY_LIMIT,
-    healAgentHallucinations,
+    healSearchPayload,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+
+function preprocessSearchPayload(val: unknown): unknown {
+    return healSearchPayload(val)
+}
 
 // Input Schemas
 // ============================================================================
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SearchEntriesSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
-    cursor: z.string().optional().describe('Cursor for pagination'),
+    cursor: z.string().max(500).optional().describe('Cursor for pagination'),
     mode: z
         .enum(['auto', 'fts', 'semantic', 'hybrid'])
         .optional()
@@ -26,23 +32,28 @@ export const SearchEntriesSchema = z.preprocess(
         .describe(
             'Search strategy: auto (default, heuristic-based), fts (FTS5 keyword), semantic (vector), hybrid (RRF fusion of FTS5+vector)'
         ),
-    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
-    workspace_id: z.string().optional(),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(10),
+    workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional(),
-    issue_number: z.number().optional(),
-    pr_number: z.number().optional(),
+    project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-    workflow_run_id: z.number().optional(),
-    tags: z.array(z.string()).optional(),
+    workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
+    exclude_tags: z
+        .array(z.string().max(100))
+        .max(100)
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
     sort_by: z
-        .enum(['timestamp', 'importance'])
+        .enum(['timestamp', 'importance', 'blended'])
         .optional()
         .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
+        .describe('Sort results by timestamp (default), importance score, or blended score'),
     include_team: z
         .boolean()
         .optional()
@@ -51,8 +62,16 @@ export const SearchEntriesSchema = z.preprocess(
     include_archived: z.boolean().optional().default(false),
     include_facets: z.boolean().optional().default(false).describe('Include facet distributions (tags, entry types) for the search results'),
     include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
-    fts_weight: z.number().optional().default(1.0).describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
-    semantic_weight: z.number().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
+    fts_weight: z
+        .preprocess(coerceFiniteNumberString, z.number().min(0).max(100))
+        .optional()
+        .default(1.0)
+        .describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
+    semantic_weight: z
+        .preprocess(coerceFiniteNumberString, z.number().min(0).max(100))
+        .optional()
+        .default(1.0)
+        .describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
     exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
@@ -60,7 +79,7 @@ export const SearchEntriesSchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 export const SearchEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
@@ -79,7 +98,12 @@ export const SearchEntriesSchemaMcp = z.preprocess(
     pr_number: relaxedNumber().optional(),
     pr_status: z.string().optional(),
     workflow_run_id: relaxedNumber().optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
+    exclude_tags: z
+        .array(z.string().max(100))
+        .max(100)
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
@@ -87,12 +111,11 @@ export const SearchEntriesSchemaMcp = z.preprocess(
         .string()
         .optional()
         .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
+        .describe('Sort results by timestamp (default), importance score, or blended score'),
     include_team: z
         .boolean()
         .optional()
-        .default(true)
-        .describe('Include team entries in the search results'),
+        .describe('Include team entries in the search results (default: true)'),
     include_archived: z.boolean().optional().default(false),
     include_facets: z.boolean().optional().default(false).describe('Include facet distributions (tags, entry types) for the search results'),
     include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
@@ -105,20 +128,41 @@ export const SearchEntriesSchemaMcp = z.preprocess(
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SearchByDateRangeSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('Start date (use `start_date`, not `start`)'),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('End date (use `end_date`, not `end`)'),
+    start_date: z
+        .string({
+            error: (issue) =>
+                issue.input === undefined
+                    ? "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). Pass start_date: '1970-01-01' for open-ended queries, or use search_entries / get_recent_entries."
+                    : undefined,
+        })
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
+        .describe('Start date (use `start_date`, not `start`)'),
+    end_date: z
+        .string({
+            error: (issue) =>
+                issue.input === undefined
+                    ? "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). Pass start_date: '1970-01-01' for open-ended queries, or use search_entries / get_recent_entries."
+                    : undefined,
+        })
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
+        .describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
-    tags: z.array(z.string()).optional(),
-    workspace_id: z.string().optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
+    exclude_tags: z
+        .array(z.string().max(100))
+        .max(100)
+        .optional()
+        .describe('Exclude entries having any of these tags'),
+    workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional(),
-    issue_number: z.number().optional(),
-    pr_number: z.number().optional(),
-    workflow_run_id: z.number().optional(),
-    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(500),
+    project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(500),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -134,7 +178,7 @@ export const SearchByDateRangeSchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 export const SearchByDateRangeSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     start_date: z.string().optional().refine(
         (val): val is string => val !== undefined,
@@ -146,7 +190,12 @@ export const SearchByDateRangeSchemaMcp = z.preprocess(
     ).describe('[REQUIRED] End date (use `end_date`, not `end`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
+    exclude_tags: z
+        .array(z.string().max(100))
+        .max(100)
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     is_personal: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
@@ -162,40 +211,55 @@ export const SearchByDateRangeSchemaMcp = z.preprocess(
     include_team: z
         .boolean()
         .optional()
-        .default(true)
-        .describe('Include team entries in the search results'),
+        .describe('Include team entries in the search results (default: true)'),
     include_archived: z.boolean().optional().default(false),
 }).strict())
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SemanticSearchSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: z
-        .number()
+        .preprocess(coerceIntString, z.number().int().positive())
         .optional()
         .describe(
             'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
         ),
-    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
-    similarity_threshold: z.number().optional().default(0.25),
-    workspace_id: z.string().optional(),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(10),
+    similarity_threshold: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional().default(0.25),
+    workspace_id: z.string().max(255).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional().describe('Filter results by project number'),
-    issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
-    pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
-    workflow_run_id: z.number().optional().describe('Filter results by GitHub Actions workflow run ID'),
+    project_number: z
+        .preprocess(coerceIntString, z.number().int().positive())
+        .optional()
+        .describe('Filter results by project number'),
+    issue_number: z
+        .preprocess(coerceIntString, z.number().int().positive())
+        .optional()
+        .describe('Filter results by GitHub issue number'),
+    pr_number: z
+        .preprocess(coerceIntString, z.number().int().positive())
+        .optional()
+        .describe('Filter results by GitHub PR number'),
+    workflow_run_id: z
+        .preprocess(coerceIntString, z.number().int().positive())
+        .optional()
+        .describe('Filter results by GitHub Actions workflow run ID'),
     tags: z.array(z.string()).optional().describe('Filter results by tags'),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.enum(ENTRY_TYPES).optional().describe('Filter results by entry type'),
     start_date: z
         .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('Filter results from this date (YYYY-MM-DD)'),
     end_date: z
         .string()
-        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .refine(isValidCalendarDate, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('Filter results until this date (YYYY-MM-DD)'),
     hint_on_empty: z
@@ -213,7 +277,7 @@ export const SemanticSearchSchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 export const SemanticSearchSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: relaxedNumber()
@@ -230,6 +294,10 @@ export const SemanticSearchSchemaMcp = z.preprocess(
     pr_number: relaxedNumber().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: relaxedNumber().optional().describe('Filter results by GitHub Actions workflow run ID'),
     tags: z.array(z.string()).optional().describe('Filter results by tags'),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.string().optional().describe('Filter results by entry type'),
     start_date: z.string().optional().describe('Filter results from this date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('Filter results until this date (YYYY-MM-DD)'),
@@ -241,8 +309,7 @@ export const SemanticSearchSchemaMcp = z.preprocess(
     include_team: z
         .boolean()
         .optional()
-        .default(true)
-        .describe('Include team entries in the search results'),
+        .describe('Include team entries in the search results (default: true)'),
     include_archived: z.boolean().optional().default(false),
 }).strict())
 
@@ -268,9 +335,9 @@ export const SemanticSearchOutputSchema = z
 
 export const VectorStatsOutputSchema = z
     .object({
-        available: z.boolean(),
+        available: z.boolean().optional(),
         error: z.string().optional(),
-        itemCount: z.number().optional(),
+        itemCount: z.number().nullable().optional(),
         modelName: z.string().optional(),
         dimensions: z.number().optional(),
         success: z.boolean().optional(),

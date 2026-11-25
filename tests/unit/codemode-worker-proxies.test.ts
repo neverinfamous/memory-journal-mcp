@@ -10,6 +10,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { createSafeFsShim, consoleShim } from '../../src/codemode/worker/node-shims.js'
 import {
     DB_TO_JOURNAL,
+    isDbMaintenanceCall,
+    createMaintenanceUnavailableFn,
     createCallableShim,
     createUpdateMemoryFn,
     wrapDelegatingTool,
@@ -62,6 +64,7 @@ describe('Code Mode Worker Proxies & Globals', () => {
                 updateEntry: updateEntryMock,
                 deleteEntry: deleteEntryMock,
                 updateConfiguration: updateConfigMock,
+                listProjects: vi.fn().mockResolvedValue({ success: true, projects: {} }),
             },
             search: {
                 searchEntries: searchEntriesMock,
@@ -125,7 +128,21 @@ describe('Code Mode Worker Proxies & Globals', () => {
         expect(await umWithMeta.schema()).toBe('{ content: string }')
 
         // 3. createSchemaShim & schemaHelpFn
-        expect(DB_TO_JOURNAL['listTables']).toEqual(['analytics', 'getStatistics'])
+        expect(DB_TO_JOURNAL['listTables']).toBeUndefined()
+        expect(DB_TO_JOURNAL['describeTable']).toBeUndefined()
+        expect(DB_TO_JOURNAL['count']).toEqual(['analytics', 'getStatistics'])
+        expect(isDbMaintenanceCall('listTables')).toBe(true)
+        await expect(createMaintenanceUnavailableFn('listTables')()).resolves.toEqual({
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: "Schema operation 'listTables' did not run",
+        })
+        expect(isDbMaintenanceCall('describeTable')).toBe(true)
+        await expect(createMaintenanceUnavailableFn('describeTable')()).resolves.toEqual({
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: "Schema operation 'describeTable' did not run",
+        })
         const sHelp = (await schemaHelpFn()) as { group: string }
         expect(sHelp.group).toBe('schema')
         const schemaShim = createSchemaShim(shimMj) as unknown as {
@@ -134,8 +151,9 @@ describe('Code Mode Worker Proxies & Globals', () => {
             tables: string[]
             entries: Promise<string>
         }
-        await schemaShim()
-        expect(getStatsMock).toHaveBeenCalled()
+        const schemaResult = (await schemaShim()) as { group: string }
+        expect(schemaResult.group).toBe('schema')
+        expect(getStatsMock).not.toHaveBeenCalled()
         expect((await schemaShim.listTables()).tables).toContain('memory_journal')
         expect(schemaShim.tables).toContain('tags')
         expect(await schemaShim.entries).toBe('{ content: string }')
@@ -193,6 +211,16 @@ describe('Code Mode Worker Proxies & Globals', () => {
         expect(entriesDomain['fetchById']).toBe(getEntryByIdMock)
         expect(entriesDomain['patchEntry']).toBe(updateEntryMock)
         expect(entriesDomain['removeItem']).toBe(deleteEntryMock)
+        const listDeleted = entriesDomain['listDeletedEntries'] as () => Promise<{
+            success: boolean
+            code: string
+        }>
+        expect(listDeleted).not.toBe(getRecentEntriesMock)
+        expect(listDeleted).not.toBe(deleteEntryMock)
+        await expect(listDeleted()).resolves.toMatchObject({
+            success: false,
+            code: 'VALIDATION_ERROR',
+        })
         expect(entriesDomain['listAll']).toBe(getRecentEntriesMock)
 
         const getRead = createGetReadFindInterceptor(mjApi, shimMj)
@@ -207,6 +235,11 @@ describe('Code Mode Worker Proxies & Globals', () => {
         await expect(projDomain()).resolves.toMatchObject({ success: true })
         await (projDomain['insights'] as () => Promise<unknown>)()
         expect(getInsightsMock).toHaveBeenCalled()
+        const disabledProjDomain = createShimProjectsDomain({}, shimMj) as () => Promise<Record<string, unknown>>
+        const disabledProjRes = await disabledProjDomain()
+        expect(disabledProjRes['success']).toBe(false)
+        expect(disabledProjRes['code']).toBe('TOOL_DISABLED')
+        expect(() => disabledProjRes['items']).toThrow(/not available in this sandbox/i)
 
         const dbDomain = createDbDomainProxy(mjApi, shimMj) as Record<string, unknown>
         await expect((dbDomain['ping'] as () => Promise<unknown>)()).resolves.toEqual({
@@ -218,7 +251,7 @@ describe('Code Mode Worker Proxies & Globals', () => {
         ).resolves.toMatchObject({
             success: true,
         })
-        expect((dbDomain['close'] as () => { success: boolean })().success).toBe(true)
+        expect((dbDomain['close'] as () => { success: boolean })().success).toBe(false)
         expect((dbDomain['getDb'] as () => unknown)()).toBe(shimMj)
         const unknownDbCall = await (dbDomain['rawCustom'] as () => Promise<{
             success: boolean
@@ -242,7 +275,6 @@ describe('Code Mode Worker Proxies & Globals', () => {
             type: 'bug_fix',
             tags: ['tagA'],
             content: '{"key":"val"}',
-            metadata: { extra: 1 },
         })
 
         await (shimMj['loadBriefing'] as (a?: Record<string, unknown>) => Promise<unknown>)({
@@ -252,16 +284,26 @@ describe('Code Mode Worker Proxies & Globals', () => {
             limit: 3,
             sort_by: 'importance',
         })
-        expect((shimMj['close'] as () => { success: boolean })().success).toBe(true)
-        expect((shimMj['execSync'] as () => string)()).toBe('')
+        expect((shimMj['close'] as () => { success: boolean })().success).toBe(false)
+        expect(() => (shimMj['execSync'] as () => string)()).toThrow(/VALIDATION_ERROR/)
         const spawnRes = (shimMj['spawn'] as (c: string, cb: () => void) => { kill: () => boolean })(
             'ls',
             () => undefined
         )
-        expect(spawnRes.kill()).toBe(true)
+        expect(spawnRes.kill()).toBe(false)
         expect((shimMj['join'] as (...p: string[]) => string)('x', 'y')).toBe('x/y')
         expect((shimMj['format'] as (...a: unknown[]) => string)('hi', 5)).toBe('hi 5')
-        expect(shimMj['list_tables']).toBe(getStatsMock)
+        const listTables = shimMj['list_tables'] as () => Promise<{
+            success: boolean
+            code: string
+            error: string
+        }>
+        expect(listTables).not.toBe(getStatsMock)
+        await expect(listTables()).resolves.toEqual({
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: "Schema operation 'listTables' did not run",
+        })
 
         // 6. buildSandboxGlobals
         const activeTimers = new Set<NodeJS.Timeout>()
@@ -306,6 +348,11 @@ describe('Code Mode Worker Proxies & Globals', () => {
         const procObj = globals['process'] as {
             exit: (c?: number) => { exited: boolean; exitCode: number }
         }
-        expect(procObj.exit(0)).toEqual({ success: true, exited: true, exitCode: 0 })
+        expect(procObj.exit(0)).toEqual({
+            success: false,
+            exited: false,
+            exitCode: 0,
+            error: 'process.exit is disabled in the sandbox',
+        })
     })
 })

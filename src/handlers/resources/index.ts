@@ -8,13 +8,12 @@
 import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
-import type { Scheduler } from '../../server/scheduler.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { BriefingConfig } from './shared.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
 
 // Re-export shared types
+export { getBaseUri } from './shared.js'
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
 
 import { getCoreResourceDefinitions } from './core/index.js'
@@ -22,12 +21,20 @@ import { getDynamicGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
 import { getAgentContextResource, getAgentIdResource } from './core/agent-context.js'
-import { getTeamResourceDefinitions } from './team.js'
+import { enforceTeamResourceRbac, getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import { getInsightResourceDefinitions } from './insights.js'
 import { getStalenessResourceDefinitions } from './staleness.js'
 import { getToolsCatalogResourceDefinitions } from './tools-catalog.js'
-import type { InternalResourceDef, ResourceResult } from './shared.js'
+import {
+    getBaseUri,
+    resourceWorkspace,
+    type BriefingConfig,
+    type InternalResourceDef,
+    type ResourceContext,
+    type ResourceResult,
+} from './shared.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
 
@@ -50,22 +57,43 @@ function getTemplateRegex(uriTemplate: string): RegExp {
     return regex
 }
 
-let cachedStaticResources: InternalResourceDef[] | null = null
-const runtimeResourcesCache = new WeakMap<ServerRuntime, InternalResourceDef[]>()
+interface IndexedResourceSet {
+    all: InternalResourceDef[]
+    exactMap: Map<string, InternalResourceDef>
+    templates: InternalResourceDef[]
+}
+
+let cachedStaticResources: IndexedResourceSet | null = null
+let cachedPublicResources: object[] | null = null
+const runtimeResourcesCache = new WeakMap<ServerRuntime, IndexedResourceSet>()
+
+function buildIndexedResourceSet(all: InternalResourceDef[]): IndexedResourceSet {
+    const exactMap = new Map<string, InternalResourceDef>()
+    const templates: InternalResourceDef[] = []
+    for (const resource of all) {
+        if (!exactMap.has(resource.uri)) exactMap.set(resource.uri, resource)
+        if (resource.uri.includes('{')) templates.push(resource)
+    }
+    return { all, exactMap, templates }
+}
 
 /**
  * Get all resource definitions for MCP list
  */
 export function getResources(): object[] {
-    const resources = getAllResourceDefinitions()
-    return resources.map((r) => ({
+    if (cachedPublicResources !== null) return cachedPublicResources
+    const { all } = getAllResourceDefinitions()
+    cachedPublicResources = all.map((r) => ({
         uri: r.uri,
         name: r.name,
+        ...(r.title !== undefined ? { title: r.title } : {}),
         description: r.description,
         mimeType: r.mimeType,
         annotations: r.annotations,
         icons: r.icons,
+        ...(r.capabilities !== undefined ? { capabilities: r.capabilities } : {}),
     }))
+    return cachedPublicResources
 }
 
 /**
@@ -81,34 +109,6 @@ function isResourceResult(result: unknown): result is ResourceResult {
 }
 
 /**
- * Extract base URI without query parameters for matching
- */
-export function getBaseUri(uri: string): string {
-    // Handle memory:// URIs specially since URL parser treats the path as host
-    if (uri.startsWith('memory://')) {
-        const withoutScheme = uri.slice('memory://'.length)
-        const queryIndex = withoutScheme.indexOf('?')
-        const hashIndex = withoutScheme.indexOf('#')
-
-        // Find first delimiter (query or hash)
-        let endIndex = withoutScheme.length
-        if (queryIndex !== -1 && queryIndex < endIndex) endIndex = queryIndex
-        if (hashIndex !== -1 && hashIndex < endIndex) endIndex = hashIndex
-
-        return 'memory://' + withoutScheme.slice(0, endIndex)
-    }
-
-    // Fallback for other URI schemes
-    try {
-        const url = new URL(uri)
-        return `${url.protocol}//${url.host}${url.pathname}`
-    } catch {
-        // Invalid URL, return original
-        return uri
-    }
-}
-
-/**
  * Read a resource by URI - returns data and optional annotations
  */
 export async function readResource(
@@ -117,19 +117,23 @@ export async function readResource(
     vectorManager?: VectorSearchManager,
     filterConfig?: ToolFilterConfig | null,
     github?: GitHubIntegration | null,
-    scheduler?: Scheduler | null,
     teamDb?: IDatabaseAdapter,
     briefingConfig?: BriefingConfig,
     runtime?: ServerRuntime
-): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
-    const resources = getAllResourceDefinitions(runtime)
+): Promise<{ data: unknown; annotations?: { lastModified?: string | undefined } | undefined }> {
+    if (Buffer.byteLength(uri, 'utf8') > 8192) {
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Resource URI exceeds maximum length of 8192 bytes'
+        )
+    }
+    const { all: resources, exactMap, templates } = getAllResourceDefinitions(runtime)
     const context = {
         db,
         teamDb,
         vectorManager,
         filterConfig,
         github,
-        scheduler,
         briefingConfig,
         runtime,
         resourceCount: resources.length,
@@ -139,7 +143,7 @@ export async function readResource(
     const baseUri = getBaseUri(uri)
 
     // Check for exact match first (using base URI without query params)
-    const exactMatch = resources.find((r) => r.uri === baseUri)
+    const exactMatch = exactMap.get(baseUri)
     if (exactMatch) {
         // Authorization Hook: Enforce scope if auth context exists
         enforceAccessBoundary(baseUri, 'resource', exactMatch.capabilities, runtime?.auditLogger)
@@ -153,24 +157,21 @@ export async function readResource(
     }
 
     // Check for template matches (also use base URI)
-    for (const resource of resources) {
-        if (resource.uri.includes('{')) {
-            if (getTemplateRegex(resource.uri).test(baseUri)) {
-                // Authorization Hook: Enforce scope if auth context exists
-                enforceAccessBoundary(
-                    baseUri,
-                    'resource',
-                    resource.capabilities,
-                    runtime?.auditLogger
-                )
+    const templateMatch = templates.find((resource) => getTemplateRegex(resource.uri).test(baseUri))
+    if (templateMatch !== undefined) {
+        // Authorization Hook: Enforce scope if auth context exists
+        enforceAccessBoundary(
+            baseUri,
+            'resource',
+            templateMatch.capabilities,
+            runtime?.auditLogger
+        )
 
-                const result = await Promise.resolve(resource.handler(uri, context))
-                if (isResourceResult(result)) {
-                    return { data: result.data, annotations: result.annotations }
-                }
-                return { data: result }
-            }
+        const result = await Promise.resolve(templateMatch.handler(uri, context))
+        if (isResourceResult(result)) {
+            return { data: result.data, annotations: result.annotations }
         }
+        return { data: result }
     }
 
     throw new ResourceNotFoundError('Resource', uri)
@@ -208,12 +209,16 @@ function generateResourceAliases(resources: InternalResourceDef[]): InternalReso
             return false
         })
         if (canonical !== undefined) {
+            const aliasName =
+                aliasUri === 'memory://agent-id'
+                    ? 'Agent ID (alias)'
+                    : `${canonical.name} (alias)`
             aliases.push({
                 ...canonical,
                 uri: aliasUri,
-                name: `${canonical.name} (alias)`,
-                // Delegate to canonical handler with the canonical URI
-                handler: (_uri, context) => canonical.handler(canonicalUri, context),
+                name: aliasName,
+                // Delegate to canonical handler with caller's URI so bare aliases resolve context without forcing `/default` (H17)
+                handler: (uri, context) => canonical.handler(uri, context),
             })
         }
     }
@@ -223,7 +228,7 @@ function generateResourceAliases(resources: InternalResourceDef[]): InternalReso
 /**
  * Get all resource definitions by composing sub-module definitions
  */
-function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef[] {
+function getAllResourceDefinitions(runtime?: ServerRuntime): IndexedResourceSet {
     if (runtime !== undefined) {
         const cached = runtimeResourcesCache.get(runtime)
         if (cached !== undefined) return cached
@@ -247,40 +252,63 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]
     const all = [...coreResources, ...generateResourceAliases(coreResources)]
+    const indexed = buildIndexedResourceSet(all)
     if (runtime !== undefined) {
-        runtimeResourcesCache.set(runtime, all)
+        runtimeResourcesCache.set(runtime, indexed)
     } else {
-        cachedStaticResources = all
+        cachedStaticResources = indexed
     }
-    return all
+    return indexed
 }
 
 /**
  * Validates whether the current request is authorized to subscribe to a resource.
  * Throws an error if the URI is not found or the user lacks the required scope.
  */
-export function validateResourceSubscription(uri: string, runtime?: ServerRuntime): void {
-    const resources = getAllResourceDefinitions(runtime)
+export function validateResourceSubscription(
+    uri: string,
+    runtime?: ServerRuntime,
+    teamDb?: IDatabaseAdapter,
+    briefingConfig?: BriefingConfig
+): void {
+    if (Buffer.byteLength(uri, 'utf8') > 8192) {
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Resource URI exceeds maximum length of 8192 bytes'
+        )
+    }
+    const { exactMap, templates } = getAllResourceDefinitions(runtime)
     const baseUri = getBaseUri(uri)
 
-    const exactMatch = resources.find((r) => r.uri === baseUri)
+    const checkTeamSubscriptionRbac = (capabilities: InternalResourceDef['capabilities']): void => {
+        if (capabilities?.requiresTeamScope !== true || teamDb === undefined) return
+        const subCtx: ResourceContext = {
+            db: teamDb,
+            teamDb,
+            ...(briefingConfig !== undefined ? { briefingConfig } : {}),
+            ...(runtime !== undefined ? { runtime } : {}),
+        }
+        enforceTeamResourceRbac(subCtx, resourceWorkspace(subCtx))
+    }
+
+    const exactMatch = exactMap.get(baseUri)
     if (exactMatch) {
         enforceAccessBoundary(baseUri, 'resource', exactMatch.capabilities, runtime?.auditLogger)
+        checkTeamSubscriptionRbac(exactMatch.capabilities)
         return
     }
 
     // Check for template matches
-    for (const resource of resources) {
-        if (resource.uri.includes('{')) {
-            if (getTemplateRegex(resource.uri).test(baseUri)) {
-                enforceAccessBoundary(
-                    baseUri,
-                    'resource',
-                    resource.capabilities,
-                    runtime?.auditLogger
-                )
-                return
-            }
+    for (const resource of templates) {
+        if (getTemplateRegex(resource.uri).test(baseUri)) {
+            enforceAccessBoundary(
+                baseUri,
+                'resource',
+                resource.capabilities,
+                runtime?.auditLogger
+            )
+            checkTeamSubscriptionRbac(resource.capabilities)
+            return
         }
     }
 

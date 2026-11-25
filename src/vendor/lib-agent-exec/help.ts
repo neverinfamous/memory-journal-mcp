@@ -12,9 +12,9 @@ const manualData = {
       "Session-Wide Toggle: Disable-AgentExec / Enable-AgentExec"
     ],
     powershellHallucinations: [
-      "curl & wget: PowerShell aliases these to Invoke-WebRequest. Use native read_url_content tool instead.",
-      "cat, ls, grep: Do NOT use these aliases. Use view_file, list_dir, grep_search tools.",
-      "node -e: Fails often due to quoting bugs. Use an 'eval' payload with 'interpreter': 'node'.",
+      "curl & wget: PowerShell aliases these to Invoke-WebRequest. Use native search_web or WSL2 curl.",
+      "cat, ls, grep: Do NOT rely on interactive PowerShell aliases. Use read_file, Get-ChildItem, or rg.",
+      "node -e / tsx <scratch_dir>\\script.ts: Write multi-line snippets to <scratch_dir>\\script.ts or use an 'eval' payload with 'interpreter': 'node'.",
       "gh run view --log: Exits 1 if still running. Use 'schedule' tool, do not poll in a loop."
     ]
   },
@@ -47,7 +47,7 @@ const manualData = {
     }
   },
   payloadSchemas: {
-    command: { type: "command", command: "git", args: ["log", "-n", "5"] },
+    command: { type: "command", command: "bun", args: ["run", "typecheck"] },
     script: { type: "script", scriptPath: "C:\\path\\to\\script.ts", args: ["--flag", "value"] },
     eval: { type: "eval", code: "console.log('Hello');", interpreter: "bun" }
   }
@@ -81,9 +81,14 @@ export function showHelp(asJson: boolean): never {
 
   console.error(pc.bold('Options:'));
   console.error(`  -p, --payload <json|file> Payload JSON string or path to JSON file`);
+  console.error(`  --base64 <b64>            Base64-encoded UTF-8 JSON payload string`);
   console.error(`  -t, --target <wsl2|win>   Target runtime environment (windows, wsl2)`);
+  console.error(`  --cwd <dir>               Working directory override for execution`);
+  console.error(`  --timeout, --timeoutMs    Execution timeout override in milliseconds`);
+  console.error(`  --plugin <path>           Path to a workspace interceptor plugin module`);
   console.error(`  --interceptors <path>     Path to a custom interceptor module`);
   console.error(`  --payloadPath <path>      Explicit path to the payload JSON file`);
+  console.error(`  -v, -V, --version         Show CLI version`);
   console.error(`  -h, --help                Show this manual`);
   console.error(`  --json                    Output this manual as structured JSON\n`);
 

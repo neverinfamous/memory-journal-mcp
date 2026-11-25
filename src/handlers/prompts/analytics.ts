@@ -1,44 +1,41 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import { parseDigestSnapshot } from '../../database/sqlite-adapter/entries/digest.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
-import { markUntrustedContentInline } from '../../utils/security-utils.js'
+import { resourceWorkspace, sliceUntrustedInline, type BriefingConfig } from '../resources/shared.js'
 
 /**
  * Build a concise analytics signal string for injection into standup/retro prompts.
  * Returns empty string when no digest is available (graceful degradation).
  */
-export function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
-    const snapshot = db.getLatestAnalyticsSnapshot?.('digest')
+export function buildDigestSignalForPrompt(db: IDatabaseAdapter, workspaceId?: string): string {
+    const snapshot = db.getLatestAnalyticsSnapshot?.('digest', workspaceId)
     if (!snapshot) return ''
 
-    const data = snapshot.data
+    const parsed = parseDigestSnapshot(snapshot.data)
+    if (parsed === null) return ''
     const lines: string[] = ['[Analytics Context]']
 
     // Activity trend
-    const growth = data['activityGrowthPercent'] as number | null | undefined
-    const currentEntries = data['currentPeriodEntries'] as number | undefined
-    if (growth !== null && growth !== undefined) {
+    const growth = parsed.activityGrowthPercent
+    if (growth !== null) {
         const sign = growth >= 0 ? '+' : ''
         lines.push(
-            `Activity: ${sign}${String(growth)}% vs. last period (${String(currentEntries)} entries)`
+            `Activity: ${sign}${String(growth)}% vs. last period (${String(parsed.currentPeriodEntries)} entries)`
         )
     }
 
     // Significance spike
-    const sigMultiplier = data['significanceMultiplier'] as number | null | undefined
-    const sigCount = data['currentPeriodSignificant'] as number | undefined
-    if (sigMultiplier !== null && sigMultiplier !== undefined && sigMultiplier > 1.5) {
+    const sigMultiplier = parsed.significanceMultiplier
+    if (sigMultiplier !== null && sigMultiplier > 1.5) {
         lines.push(
-            `Significance: ${String(sigCount)} significant entries (${String(sigMultiplier)}× historical avg)`
+            `Significance: ${String(parsed.currentPeriodSignificant)} significant entries (${String(sigMultiplier)}× historical avg)`
         )
     }
 
     // Stale projects
-    const stale = data['staleProjects'] as
-        | { projectNumber: number; daysSilent: number }[]
-        | undefined
-    if (stale && stale.length > 0) {
-        const staleStr = stale
+    if (parsed.staleProjects.length > 0) {
+        const staleStr = parsed.staleProjects
             .map((p) => `P${String(p.projectNumber)} (${String(p.daysSilent)}d silent)`)
             .join(', ')
         lines.push(`⚠ Stale: ${staleStr}`)
@@ -49,108 +46,116 @@ export function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
     return lines.join('\n') + '\n\n'
 }
 
+function buildDigestAnalyticsPrompt(spec: {
+    name: string
+    description: string
+    headline: string
+    summaryTask: string
+}): InternalPromptDef {
+    return {
+        name: spec.name,
+        description: spec.description,
+        icons: [ICON_PROMPT],
+        handler: (
+            _args: Record<string, string> | undefined,
+            db: IDatabaseAdapter,
+            _teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: Partial<BriefingConfig>,
+            runtime?: object | null
+        ) => {
+            const digestSignal = buildDigestSignalForPrompt(
+                db,
+                resourceWorkspace({
+                    briefingConfig,
+                    ...(runtime !== undefined ? { runtime } : {}),
+                })
+            )
+
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `${digestSignal}${spec.headline}\n${spec.summaryTask}\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
+                        },
+                    },
+                ],
+            }
+        },
+    }
+}
+
+function buildGoalTrackerPrompt(): InternalPromptDef {
+    return {
+        name: 'goal-tracker',
+        description: 'Milestone and achievement tracking',
+        icons: [ICON_PROMPT],
+        handler: (
+            _args: Record<string, string> | undefined,
+            db: IDatabaseAdapter,
+            _teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: Partial<BriefingConfig>,
+            runtime?: object | null
+        ) => {
+            const entries = db.getSignificantEntries(
+                20,
+                undefined,
+                resourceWorkspace({
+                    briefingConfig,
+                    ...(runtime !== undefined ? { runtime } : {}),
+                })
+            )
+
+            const mappedEntries = entries.map((e) => ({
+                id: e.id,
+                type: e.entryType,
+                timestamp: e.timestamp,
+                content: sliceUntrustedInline(e.content, 250, '...'),
+            }))
+
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `Track goals and milestones based on significant entries.\nSummarize progress toward goals and highlight achievements.\n\nSources:\n${JSON.stringify(mappedEntries, null, 2)}`,
+                        },
+                    },
+                ],
+            }
+        },
+    }
+}
+
 /**
  * Get analytical workflow prompt definitions
  */
 export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
     return [
-        {
+        buildDigestAnalyticsPrompt({
             name: 'prepare-standup',
             description: 'Prepare a daily standup summary (Yesterday, Today, Blockers)',
-            icons: [ICON_PROMPT],
-            handler: (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter
-            ) => {
-                const digestSignal = buildDigestSignalForPrompt(db)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}Execute a standup analysis.\nPrepare a daily standup summary (Yesterday, Today, Blockers).\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
+            headline: 'Execute a standup analysis.',
+            summaryTask: 'Prepare a daily standup summary (Yesterday, Today, Blockers).',
+        }),
+        buildDigestAnalyticsPrompt({
             name: 'prepare-retro',
-            description: 'Prepare a sprint retrospective (What went well, What could improve, Action items)',
-            icons: [ICON_PROMPT],
-            handler: (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter
-            ) => {
-                const digestSignal = buildDigestSignalForPrompt(db)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}Execute a retro analysis.\nPrepare a sprint retrospective (What went well, What could improve, Action items).\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
+            description:
+                'Prepare a sprint retrospective (What went well, What could improve, Action items)',
+            headline: 'Execute a retro analysis.',
+            summaryTask:
+                'Prepare a sprint retrospective (What went well, What could improve, Action items).',
+        }),
+        buildDigestAnalyticsPrompt({
             name: 'weekly-digest',
             description: 'Create a weekly digest formatted day-by-day',
-            icons: [ICON_PROMPT],
-            handler: (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter
-            ) => {
-                const digestSignal = buildDigestSignalForPrompt(db)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}Execute a weekly digest analysis.\nCreate a weekly digest formatted day-by-day.\n\nTo complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'goal-tracker',
-            description: 'Milestone and achievement tracking',
-            icons: [ICON_PROMPT],
-            handler: (_args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const entries = db.getSignificantEntries(20)
-
-                const mappedEntries = entries.map((e) => ({
-                    id: e.id,
-                    type: e.entryType,
-                    timestamp: e.timestamp,
-                    content: markUntrustedContentInline(
-                        e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
-                    ),
-                }))
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Track goals and milestones based on significant entries.\nSummarize progress toward goals and highlight achievements.\n\nSources:\n${JSON.stringify(mappedEntries, null, 2)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
+            headline: 'Execute a weekly digest analysis.',
+            summaryTask: 'Create a weekly digest formatted day-by-day.',
+        }),
+        buildGoalTrackerPrompt(),
     ]
 }

@@ -1,43 +1,73 @@
 import { spawnSync } from 'node:child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { writeFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
+import { join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const testOutputDir = join(process.cwd(), '.test-output')
 const healthStatusFile = join(testOutputDir, 'health-status.json')
+const normPath = (p: string): string =>
+    process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
+const isMain =
+    process.argv[1] !== undefined &&
+    normPath(process.argv[1]) === normPath(fileURLToPath(import.meta.url))
 
-const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
+export const IGNORE_DIR_REGEX =
+    /(?:^|[/\\])(\.git|vendor|third_party|node_modules|dist|coverage|build|\.next|out|\.wrangler|\.turbo|\.output|\.svelte-kit|\.test-output)(?:[/\\]|$)/
 
-function runCommand(command: string, args: string[]): boolean {
-    const fullCommand = `${command} ${args.join(' ')}`
-    const result = spawnSync(fullCommand, { stdio: 'inherit', shell: true })
+function isEnoent(error: unknown): boolean {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+}
+
+function runNodeBin(binSegments: string[], args: string[]): boolean {
+    const binPath = resolve(process.cwd(), ...binSegments)
+    const result = spawnSync(process.execPath, [binPath, ...args], {
+        stdio: 'inherit',
+        shell: false,
+    })
     return result.status === 0
 }
 
 function checkFileLengths(): boolean {
     const warnings: { path: string; lines: number }[] = []
     const violations: { path: string; lines: number }[] = []
+    let largeTestFiles = 0
 
     const walk = (dir: string): void => {
-        if (!existsSync(dir)) return
-        for (const entry of readdirSync(dir)) {
-            const fullPath = join(dir, entry)
-            if (/[/\\](vendor|node_modules|dist)[/\\]?/.test(fullPath)) continue
-            const stat = statSync(fullPath)
-            if (stat.isDirectory()) {
+        let entries
+        try {
+            entries = readdirSync(dir, { withFileTypes: true })
+        } catch (error) {
+            if (isEnoent(error)) return
+            throw error
+        }
+        for (const entry of entries) {
+            if (entry.isSymbolicLink()) continue
+            const fullPath = join(dir, entry.name)
+            if (IGNORE_DIR_REGEX.test(fullPath)) continue
+            if (entry.isDirectory()) {
                 walk(fullPath)
             } else if (
-                /\.(ts|tsx|js|mjs|cjs)$/.test(entry) &&
-                !/\.(test|spec)\./.test(entry)
+                entry.isFile() &&
+                (/\.(ts|tsx|js|mjs|cjs)$/.test(entry.name) ||
+                    ((dir === 'skills' || dir.startsWith(`skills${sep}`)) &&
+                        entry.name.endsWith('.md'))) &&
+                !entry.name.endsWith('.d.ts')
             ) {
                 const content = readFileSync(fullPath, 'utf-8')
-                const lines = content.split(/\r?\n/).length
+                const segments = content.split(/\r?\n/)
+                // [INVARIANT] A trailing newline does not start a new line (parity with editor/PowerShell counts).
+                const lines = segments.at(-1) === '' ? segments.length - 1 : segments.length
+                if (/\.(test|spec|bench)\./.test(entry.name)) {
+                    if (lines > 500) largeTestFiles++
+                    continue
+                }
                 if (lines > 500) {
                     violations.push({ path: fullPath, lines })
-                } else if (lines >= 450) {
+                } else if (lines > 475) {
                     warnings.push({ path: fullPath, lines })
                 }
                 if (
-                    dir.startsWith('src') &&
+                    (dir === 'src' || dir.startsWith(`src${sep}`)) &&
                     /(?:realpathSync|path\.resolve)\([^)]*\)(?:(?!path\.relative)[\s\S]){0,120}\.startsWith\((?!['"]\.\.['"])/.test(
                         content
                     )
@@ -52,6 +82,14 @@ function checkFileLengths(): boolean {
 
     walk('src')
     walk('scripts')
+    walk('skills')
+    walk('tests')
+
+    if (largeTestFiles > 0) {
+        console.log(
+            `ℹ️  Advisory: ${String(largeTestFiles)} legacy test file(s) exceed 500 lines (non-test helpers in tests/ remain capped at 500 lines).`
+        )
+    }
 
     for (const w of warnings.sort((a, b) => b.lines - a.lines)) {
         console.warn(`⚠️  File approaching 500-line ceiling (${String(w.lines)} lines): ${w.path}`)
@@ -64,11 +102,52 @@ function checkFileLengths(): boolean {
     return violations.length === 0
 }
 
-let lintOk = true
-let typecheckOk = true
+function hasLintableSkillFiles(dir = 'skills'): boolean {
+    let entries
+    try {
+        entries = readdirSync(dir, { withFileTypes: true })
+    } catch (error) {
+        if (isEnoent(error)) return false
+        throw error
+    }
+    for (const entry of entries) {
+        if (entry.isSymbolicLink()) continue
+        const fullPath = join(dir, entry.name)
+        if (IGNORE_DIR_REGEX.test(fullPath)) continue
+        if (entry.isDirectory()) {
+            if (hasLintableSkillFiles(fullPath)) return true
+        } else if (entry.isFile() && /\.(?:ts|mjs)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
+            return true
+        }
+    }
+    return false
+}
 
-// Load existing state if available
-if (existsSync(healthStatusFile)) {
+function runFullSuiteFollowupChecks(): boolean {
+    console.log('Running code-map generation...')
+    const codeMapPassed = runNodeBin(
+        ['node_modules', 'tsx', 'dist', 'cli.mjs'],
+        ['scripts/update-code-map.ts']
+    )
+    console.log('Running workspace isolation check...')
+    const unassignedPassed = runNodeBin(
+        ['node_modules', 'tsx', 'dist', 'cli.mjs'],
+        ['scripts/check-unassigned-entries.ts']
+    )
+    return codeMapPassed && unassignedPassed
+}
+
+function runChecksMain(): void {
+    const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
+    if (target !== undefined && target !== 'lint' && target !== 'typecheck') {
+        console.error(`Unknown check target '${target}'. Expected lint or typecheck.`)
+        process.exit(1)
+    }
+
+    let lintOk = true
+    let typecheckOk = true
+
+    // Load existing state if available
     try {
         const existing = JSON.parse(readFileSync(healthStatusFile, 'utf-8')) as {
             lintOk?: boolean
@@ -76,55 +155,67 @@ if (existsSync(healthStatusFile)) {
         }
         lintOk = existing.lintOk ?? true
         typecheckOk = existing.typecheckOk ?? true
-    } catch {
-        // ignore
+    } catch (error) {
+        if (!isEnoent(error)) throw error
+    }
+
+    mkdirSync(testOutputDir, { recursive: true })
+
+    let success = true
+
+    if (!target || target === 'lint') {
+        console.log('Running lint...')
+        const lintDirs = ['src/', 'tests/', 'scripts/', ...(hasLintableSkillFiles() ? ['skills/'] : [])]
+        const passed = runNodeBin(
+            ['node_modules', 'eslint', 'bin', 'eslint.js'],
+            [
+                '--cache',
+                '--cache-location',
+                'node_modules/.cache/eslintcache',
+                ...lintDirs,
+            ]
+        )
+        console.log('Checking file lengths (<= 500 lines)...')
+        const lengthsPassed = checkFileLengths()
+        lintOk = passed && lengthsPassed
+        if (!passed || !lengthsPassed) success = false
+    }
+
+    if (!target || target === 'typecheck') {
+        console.log('Running typecheck...')
+        const passed =
+            runNodeBin(
+                ['node_modules', '@typescript', 'native-preview', 'lib', 'tsgo.js'],
+                ['--noEmit']
+            ) &&
+            runNodeBin(
+                ['node_modules', '@typescript', 'native-preview', 'lib', 'tsgo.js'],
+                ['-p', 'tsconfig.scripts.json', '--noEmit']
+            )
+        typecheckOk = passed
+        if (!passed) success = false
+    }
+
+    if (!target) {
+        if (!runFullSuiteFollowupChecks()) success = false
+    }
+
+    console.log(success ? 'Checks passed!' : 'Checks failed!')
+    // [INVARIANT] `ok` reflects every tracked gate, so a partial run cannot mask a previously failed gate.
+    writeFileSync(
+        healthStatusFile,
+        JSON.stringify(
+            { ok: success && lintOk && typecheckOk, lintOk, typecheckOk, timestamp: Date.now() },
+            null,
+            2
+        )
+    )
+
+    if (!success) {
+        process.exit(1)
     }
 }
 
-mkdirSync(testOutputDir, { recursive: true })
-
-let success = true
-
-if (!target || target === 'lint') {
-    console.log('Running lint...')
-    const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/'])
-    console.log('Checking file lengths (<= 500 lines)...')
-    const lengthsPassed = checkFileLengths()
-    lintOk = passed && lengthsPassed
-    if (!passed || !lengthsPassed) success = false
-}
-
-if (!target || target === 'typecheck') {
-    console.log('Running typecheck...')
-    const passed = runCommand('pnpm', ['exec', 'tsc', '--noEmit'])
-    typecheckOk = passed
-    if (!passed) success = false
-}
-
-if (!target) {
-    // Also run code-map if running all
-    console.log('Running code-map generation...')
-    const codeMapPassed = runCommand('pnpm', ['exec', 'tsx', 'scripts/update-code-map.ts'])
-    if (!codeMapPassed) success = false
-
-    // Run workspace isolation check
-    console.log('Running workspace isolation check...')
-    const unassignedPassed = runCommand('pnpm', [
-        'exec',
-        'tsx',
-        'scripts/check-unassigned-entries.ts',
-    ])
-    if (!unassignedPassed) success = false
-}
-
-const overallOk = lintOk && typecheckOk
-
-console.log(success ? 'Checks passed!' : 'Checks failed!')
-writeFileSync(
-    healthStatusFile,
-    JSON.stringify({ ok: overallOk, lintOk, typecheckOk, timestamp: Date.now() }, null, 2)
-)
-
-if (!success) {
-    process.exit(1)
+if (isMain) {
+    runChecksMain()
 }

@@ -30,6 +30,7 @@ vi.mock('@huggingface/transformers', () => ({
 
 // Import AFTER mocks are set up
 import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
+import { clearSharedEmbeddingCache } from '../../src/vector/vector-search-manager/embedding-cache.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 import type { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
@@ -54,7 +55,13 @@ function createMockDbAdapter() {
         getRawDb: vi.fn().mockReturnValue(mockDb),
         getActiveEntryCount: vi.fn().mockReturnValue(0),
         getEntriesPage: vi.fn().mockReturnValue({ entries: [] }),
-        getEntryById: vi.fn().mockImplementation((id: number) => ({ id, content: `Entry ${id}`, entryType: 'note', tags: [] })),
+        getEntryById: vi.fn().mockImplementation((id: number) => ({
+            id,
+            content: `Entry ${id}`,
+            entryType: 'note',
+            tags: [],
+            workspaceId: 'default',
+        })),
 
         // Proxy new adapter primitives to the original test assertions
         getVector: (entryId: number) => {
@@ -79,9 +86,10 @@ function createMockDbAdapter() {
                 mockRun(BigInt(vec.entryId), vec.embedding)
             }
         },
-        deleteVector: (entryId: number) => {
+        deleteVector: (entryId: number): boolean => {
             mockPrepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
             mockRun(BigInt(entryId))
+            return true
         },
         clearVectors: () => mockPrepare('DELETE FROM vec_embeddings'),
         cleanupStaleVectors: () => {
@@ -125,6 +133,7 @@ describe('VectorSearchManager', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        clearSharedEmbeddingCache()
         const mocks = createMockDbAdapter()
         adapter = mocks.adapter
         vm = new VectorSearchManager(adapter)
@@ -380,7 +389,7 @@ describe('VectorSearchManager', () => {
         it('should return zero count when no db', async () => {
             const vmLocal = new VectorSearchManager(undefined as any)
             const stats = await vmLocal.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
         })
 
         it('should return zero count on error', async () => {
@@ -390,7 +399,7 @@ describe('VectorSearchManager', () => {
             })
 
             const stats = await vm.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
         })
     })
 
@@ -561,7 +570,7 @@ describe('VectorSearchManager', () => {
             } as any
             const freshVm = new VectorSearchManager(fakeAdapter)
             const stats = freshVm.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
             expect(stats.dimensions).toBe(0)
         })
 
@@ -578,7 +587,7 @@ describe('VectorSearchManager', () => {
                 throw 'stats fail string error'
             })
             const stats = vm.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
         })
     })
 })

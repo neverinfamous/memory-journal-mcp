@@ -10,18 +10,21 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
-// removed transformEntryRow
+import { resourceWorkspace, withResourceTokenMeta } from '../shared.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
+import { assertSafeFilePath } from '../../../utils/security-utils.js'
+import { logger } from '../../../utils/logger.js'
 import {
-    assertSafeFilePath,
-    assertSafeDirectoryPath,
-    markUntrustedContentInline,
-} from '../../../utils/security-utils.js'
+    assertOperatorPathNotSymlinkEscape,
+    READ_NOFOLLOW_FLAGS,
+    skillsResource,
+} from './utilities-skills.js'
+
+export { skillsResource }
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -32,19 +35,17 @@ export const recentResource: InternalResourceDef = {
     icons: [ICON_CLOCK],
     annotations: withPriority(0.8, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
-        const { entries } = context.db.getRecentEntries(10)
+        const { entries } = context.db.getRecentEntries(10, undefined, 'timestamp', undefined, false, resourceWorkspace(context))
         const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
         const payloadData = { entries, count: entries.length }
-        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
         return {
-            data: {
-                ...payloadData,
-                _meta: { tokenEstimate },
-            },
+            data: withResourceTokenMeta(payloadData),
             annotations: { lastModified },
         }
     },
 }
+
+const CAUSAL_REL_TYPES = new Set(['blocked_by', 'resolved', 'caused'])
 
 export const significantResource: InternalResourceDef = {
     uri: 'memory://significant',
@@ -56,7 +57,8 @@ export const significantResource: InternalResourceDef = {
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext) => {
         // Importance weights mirror importance.ts constants (significance 0.3, relationships 0.35, causal 0.2, recency 0.15)
-        const entries = context.db.getSignificantEntries(100)
+        const wsId = resourceWorkspace(context)
+        const entries = context.db.getSignificantEntries(100, undefined, wsId)
 
         const now = Date.now()
         const MS_PER_DAY = 86_400_000
@@ -65,18 +67,20 @@ export const significantResource: InternalResourceDef = {
         const MAX_CAUSAL_SCORE_AT = 3
 
         const entryIds = entries.map((e) => e.id)
-        const relationshipsMap = context.db.getRelationshipsForEntries(entryIds)
+        const relationshipsMap = context.db.getRelationshipsForEntries(entryIds, wsId)
 
         const entriesWithImportance = entries.map((entry) => {
             const relationships = relationshipsMap.get(entry.id) ?? []
             const relCount = relationships.length
             const causalCount = relationships.filter((r) =>
-                ['blocked_by', 'resolved', 'caused'].includes(r.relationshipType)
+                CAUSAL_REL_TYPES.has(r.relationshipType)
             ).length
 
-            const timestampMs = new Date(entry.timestamp).getTime()
-            const daysSince = Math.floor((now - timestampMs) / MS_PER_DAY)
-            const recency = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
+            const rawTimestampMs = new Date(entry.timestamp).getTime()
+            const hasValidTimestamp = Number.isFinite(rawTimestampMs)
+            const timestampMs = hasValidTimestamp ? rawTimestampMs : 0
+            const daysSince = hasValidTimestamp ? Math.floor((now - timestampMs) / MS_PER_DAY) : RECENCY_WINDOW_DAYS
+            const recency = hasValidTimestamp ? Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS) : 0
 
             const importance =
                 Math.round(
@@ -98,12 +102,8 @@ export const significantResource: InternalResourceDef = {
         })
         const top20 = entriesWithImportance.slice(0, 20)
         const payloadData = { entries: top20, count: top20.length }
-        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
-        return { 
-            data: { 
-                ...payloadData, 
-                _meta: { tokenEstimate } 
-            } 
+        return {
+            data: withResourceTokenMeta(payloadData),
         }
     },
 }
@@ -113,9 +113,51 @@ export const significantResource: InternalResourceDef = {
 interface CachedRuleEntry {
     content: string
     timestamp: number
+    mtimeMs: number
 }
 const cachedRulesMap = new Map<string, CachedRuleEntry>()
 const RULES_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+async function readRulesFileContent(rulesPath: string): Promise<ResourceResult> {
+    const cached = cachedRulesMap.get(rulesPath)
+    if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
+        const stat = await fs.promises.stat(rulesPath).catch(() => null)
+        if (stat !== null && stat.mtimeMs === cached.mtimeMs) {
+            return {
+                data: cached.content,
+                annotations: { lastModified: new Date(stat.mtimeMs).toISOString() },
+            }
+        }
+    }
+
+    const file = await fs.promises.open(rulesPath, READ_NOFOLLOW_FLAGS)
+    try {
+        const stat = await file.stat()
+        if (typeof stat.isFile === 'function' && !stat.isFile()) {
+            throw new Error('Rules path is not a regular file')
+        }
+        if (stat.size > 1024 * 1024) {
+            throw new Error('Rules file exceeds 1MB limit')
+        }
+        const content = await file.readFile('utf8')
+        const mtimeMs = typeof stat.mtimeMs === 'number' ? stat.mtimeMs : Date.now()
+        cachedRulesMap.set(rulesPath, { content, timestamp: Date.now(), mtimeMs })
+        if (cachedRulesMap.size > 100) {
+            const firstKey = cachedRulesMap.keys().next().value
+            if (firstKey) cachedRulesMap.delete(firstKey)
+        }
+    } finally {
+        await Promise.resolve(file.close()).catch(() => undefined)
+    }
+
+    const cachedData = cachedRulesMap.get(rulesPath)
+    return {
+        data: cachedData ? cachedData.content : '',
+        annotations: {
+            lastModified: new Date(cachedData ? cachedData.mtimeMs : Date.now()).toISOString(),
+        },
+    }
+}
 
 export const rulesResource: InternalResourceDef = {
     uri: 'memory://rules',
@@ -128,69 +170,34 @@ export const rulesResource: InternalResourceDef = {
     handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
         const rulesPath = context.briefingConfig?.rulesFilePath ?? process.env['RULES_FILE_PATH']
         if (!rulesPath) {
-            throw new ProtocolError(ProtocolErrorCode.InternalError, 
+            throw new ProtocolError(
+                ProtocolErrorCode.InternalError,
                 'RULES_FILE_PATH is not configured. Set this env var to serve rules content.'
             )
         }
         try {
             const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
-            // Add explicitly configured rules directory to allowed roots for this check
-            const expandedRoots = [...allowedRoots, path.dirname(rulesPath)]
-            assertSafeFilePath(rulesPath, expandedRoots)
+            assertOperatorPathNotSymlinkEscape(rulesPath, allowedRoots, false)
+            assertSafeFilePath(rulesPath, [...allowedRoots, path.dirname(rulesPath)])
         } catch (err) {
-            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
-                err instanceof Error ? err.message : String(err)
+            logger.warning('Configured RULES_FILE_PATH failed path safety validation', {
+                module: 'UtilitiesResource',
+                error: err instanceof Error ? err.message : String(err),
+            })
+            throw new ProtocolError(
+                ProtocolErrorCode.InvalidParams,
+                'Configured RULES_FILE_PATH failed path safety validation.'
             )
         }
 
         try {
-            const cached = cachedRulesMap.get(rulesPath)
-            if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
-                const stat = await fs.promises
-                    .stat(rulesPath)
-                    .catch(() => ({ mtimeMs: Date.now() }))
-                return {
-                    data: cached.content,
-                    annotations: {
-                        lastModified: new Date(stat.mtimeMs).toISOString(),
-                    },
-                }
-            }
-
-            const file = await fs.promises.open(rulesPath, 'r')
-            try {
-                const stat = await file.stat()
-                if (stat.size > 1024 * 1024) {
-                    throw new Error('Rules file exceeds 1MB limit')
-                }
-                const content = await file.readFile('utf8')
-
-                cachedRulesMap.set(rulesPath, {
-                    content,
-                    timestamp: Date.now(),
-                })
-
-                // Bounded cache
-                if (cachedRulesMap.size > 100) {
-                    const firstKey = cachedRulesMap.keys().next().value
-                    if (firstKey) cachedRulesMap.delete(firstKey)
-                }
-            } finally {
-                await file.close()
-            }
-
-            const cachedData = cachedRulesMap.get(rulesPath)
-            return {
-                data: cachedData ? cachedData.content : '',
-                annotations: {
-                    lastModified: new Date(
-                        cachedData ? cachedData.timestamp : Date.now()
-                    ).toISOString(),
-                },
-            }
+            return await readRulesFileContent(rulesPath)
         } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not read rules file: ${message}`)
+            logger.warning('Could not read rules file', {
+                module: 'UtilitiesResource',
+                error: err instanceof Error ? err.message : String(err),
+            })
+            throw new ProtocolError(ProtocolErrorCode.InternalError, 'Could not read rules file')
         }
     },
 }
@@ -199,7 +206,8 @@ export const workflowsResource: InternalResourceDef = {
     uri: 'memory://workflows',
     name: 'Workflows',
     title: 'Agent Workflow Summaries',
-    description: 'Summary of available agent workflows from the configured workflow directory',
+    description:
+        'Configured agent workflow summary string (from --workflow-summary, workflowSummary, or MEMORY_JOURNAL_WORKFLOW_SUMMARY)',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.6, ASSISTANT_FOCUSED),
@@ -219,192 +227,8 @@ export const workflowsResource: InternalResourceDef = {
             configured: true,
             summary: workflowSummary,
         }
-        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
         return {
-            data: {
-                ...payloadData,
-                _meta: { tokenEstimate }
-            },
-        }
-    },
-}
-
-interface CachedSkillEntry {
-    skills: { name: string; path: string; excerpt: string; source: string }[]
-    timestamp: number
-}
-const cachedSkillsMap = new Map<string, CachedSkillEntry>()
-const SKILLS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-
-/** Resolve the package's own skills/ directory (ships with npm package). */
-function getShippedSkillsDir(): string | undefined {
-    try {
-        const thisFile = fileURLToPath(import.meta.url)
-        let dir = path.dirname(thisFile)
-
-        // Find the closest package.json
-        while (true) {
-            const pkgJsonPath = path.join(dir, 'package.json')
-            if (fs.existsSync(pkgJsonPath)) {
-                const shipped = path.join(dir, 'skills')
-                return fs.existsSync(shipped) ? shipped : undefined
-            }
-
-            const parent = path.dirname(dir)
-            if (parent === dir) {
-                // Reached filesystem root
-                break
-            }
-            dir = parent
-        }
-
-        return undefined
-    } catch {
-        return undefined
-    }
-}
-
-/** Scan a single skills directory and return skill entries. */
-async function scanSkillsDir(
-    dir: string,
-    source: string
-): Promise<{ name: string; path: string; excerpt: string; source: string }[]> {
-    if (!fs.existsSync(dir)) return []
-    const entries = await fs.promises.readdir(dir, { withFileTypes: true })
-    const skills: { name: string; path: string; excerpt: string; source: string }[] = []
-
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const skillMdPath = path.join(dir, entry.name, 'SKILL.md')
-        if (!fs.existsSync(skillMdPath)) continue
-
-        const content = await fs.promises.readFile(skillMdPath, 'utf8')
-        // Extract first non-empty non-header line as excerpt (up to 160 chars)
-        const lines = content.split('\n')
-        const excerptLine = lines.find(
-            (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
-        )
-        const excerpt = excerptLine
-            ? markUntrustedContentInline(excerptLine.trim().slice(0, 160))
-            : ''
-
-        skills.push({ name: entry.name, path: skillMdPath, excerpt, source })
-    }
-    return skills
-}
-
-export const skillsResource: InternalResourceDef = {
-    uri: 'memory://skills',
-    name: 'Skills',
-    title: 'Agent Skills Index',
-    description: 'Index of available agent skills (shipped + user-configured via SKILLS_DIR_PATH)',
-    mimeType: 'application/json',
-    icons: [ICON_BRIEFING],
-    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
-    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-        const userSkillsDir =
-            context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
-        const shippedSkillsDir = getShippedSkillsDir()
-        const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
-
-        if (userSkillsDir) {
-            try {
-                const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
-                // Add explicitly configured skills directory to allowed roots for this check
-                const expandedRoots = [...allowedRoots, userSkillsDir]
-                assertSafeDirectoryPath(userSkillsDir, expandedRoots)
-                if (!fs.existsSync(userSkillsDir)) {
-                    throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
-                }
-            } catch (err) {
-                throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
-                    err instanceof Error ? err.message : String(err)
-                )
-            }
-        }
-
-        if (!hasAnySource) {
-            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
-                'No skills available. Set SKILLS_DIR_PATH to index user skills.'
-            )
-        }
-
-        try {
-            const currentDirs = `${userSkillsDir ?? ''}|${shippedSkillsDir ?? ''}`
-
-            const cached = cachedSkillsMap.get(currentDirs)
-            if (cached && Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS) {
-                const payloadData = {
-                    configured: true,
-                    // Prevent path disclosure of host directories
-                    skills: cached.skills.map((s) => ({
-                        name: s.name,
-                        excerpt: s.excerpt,
-                        source: s.source,
-                    })),
-                    count: cached.skills.length,
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
-                return {
-                    data: {
-                        ...payloadData,
-                        _meta: { tokenEstimate }
-                    },
-                }
-            }
-
-            // Scan shipped skills first, then user skills.
-            // User skills override shipped skills with the same name.
-            const skillMap = new Map<
-                string,
-                { name: string; path: string; excerpt: string; source: string }
-            >()
-
-            if (shippedSkillsDir) {
-                for (const skill of await scanSkillsDir(shippedSkillsDir, 'shipped')) {
-                    skillMap.set(skill.name, skill)
-                }
-            }
-            if (userSkillsDir) {
-                for (const skill of await scanSkillsDir(userSkillsDir, 'user')) {
-                    skillMap.set(skill.name, skill) // user overrides shipped
-                }
-            }
-
-            const skills = [...skillMap.values()].sort((a, b) => a.name.localeCompare(b.name))
-
-            cachedSkillsMap.set(currentDirs, {
-                skills,
-                timestamp: Date.now(),
-            })
-
-            // Bounded cache
-            if (cachedSkillsMap.size > 100) {
-                const firstKey = cachedSkillsMap.keys().next().value
-                if (firstKey) cachedSkillsMap.delete(firstKey)
-            }
-
-            const payloadData = {
-                configured: true,
-                // Prevent path disclosure of host directories
-                skills: skills.map((s) => ({
-                    name: s.name,
-                    excerpt: s.excerpt,
-                    source: s.source,
-                })),
-                count: skills.length,
-            }
-            const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
-
-            return {
-                data: {
-                    ...payloadData,
-                    _meta: { tokenEstimate }
-                },
-            }
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not scan skills directory: ${message}`)
+            data: withResourceTokenMeta(payloadData),
         }
     },
 }

@@ -1,14 +1,236 @@
 import { logger } from '../../utils/logger.js'
+import { HOST_FILESYSTEM_PATH_RE } from '../../utils/error-helpers.js'
+import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 import type { GitHubClient } from './client.js'
-import type {
-    KanbanBoard,
-    KanbanColumn,
-    ProjectV2Item,
-    ProjectV2StatusOption,
-} from '../../types/index.js'
+import { groupItemsIntoColumns, type ProjectV2Data } from './kanban-columns.js'
+import type { KanbanBoard, ProjectV2StatusOption } from '../../types/index.js'
+import { isCachedKanbanBoard } from './cache-helpers.js'
+
+function toSafeGitHubError(error: unknown): string {
+    const raw = error instanceof Error ? error.message : String(error)
+    return sanitizeErrorForLogging(raw).replace(HOST_FILESYSTEM_PATH_RE, '<sanitized_path>')
+}
+
+interface UserProjectResponse {
+    user: { projectV2: ProjectV2Data | null } | null
+}
+interface RepoProjectResponse {
+    repository: { projectV2: ProjectV2Data | null } | null
+}
+interface OrgProjectResponse {
+    organization: { projectV2: ProjectV2Data | null } | null
+}
+
+function projectLookupMiss(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return /not found|could not resolve|could not be found/i.test(message)
+}
+
+const PROJECT_DATA_FRAGMENT = `
+    fragment ProjectData on ProjectV2 {
+        id
+        title
+        fields(first: 20) {
+            nodes {
+                ... on ProjectV2SingleSelectField {
+                    id
+                    name
+                    options {
+                        id
+                        name
+                        color
+                    }
+                }
+            }
+        }
+        items(first: $itemLimit) {
+            pageInfo {
+                hasNextPage
+            }
+            nodes {
+                id
+                type
+                createdAt
+                updatedAt
+                fieldValues(first: 10) {
+                    nodes {
+                        ... on ProjectV2ItemFieldSingleSelectValue {
+                            name
+                            field {
+                                ... on ProjectV2SingleSelectField {
+                                    name
+                                }
+                            }
+                        }
+                    }
+                }
+                content {
+                    ... on Issue {
+                        number
+                        title
+                        url
+                        labels(first: 5) {
+                            nodes { name }
+                        }
+                        assignees(first: 5) {
+                            nodes { login }
+                        }
+                    }
+                    ... on PullRequest {
+                        number
+                        title
+                        url
+                        labels(first: 5) {
+                            nodes { name }
+                        }
+                        assignees(first: 5) {
+                            nodes { login }
+                        }
+                    }
+                    ... on DraftIssue {
+                        title
+                    }
+                }
+            }
+        }
+    }
+`
+
+const USER_PROJECT_QUERY = `
+    ${PROJECT_DATA_FRAGMENT}
+    query($owner: String!, $number: Int!, $itemLimit: Int!) {
+        user(login: $owner) {
+            projectV2(number: $number) {
+                ...ProjectData
+            }
+        }
+    }
+`
+
+const REPO_PROJECT_QUERY = `
+    ${PROJECT_DATA_FRAGMENT}
+    query($owner: String!, $repo: String!, $number: Int!, $itemLimit: Int!) {
+        repository(owner: $owner, name: $repo) {
+            projectV2(number: $number) {
+                ...ProjectData
+            }
+        }
+    }
+`
+
+const ORG_PROJECT_QUERY = `
+    ${PROJECT_DATA_FRAGMENT}
+    query($owner: String!, $number: Int!, $itemLimit: Int!) {
+        organization(login: $owner) {
+            projectV2(number: $number) {
+                ...ProjectData
+            }
+        }
+    }
+`
+
+type ProjectSourceKind = 'user' | 'repository' | 'organization'
+const MAX_PROJECT_SOURCE_CACHE = 128
 
 export class ProjectsManager {
+    private readonly projectSourceCache = new Map<string, ProjectSourceKind>()
+
     constructor(private client: GitHubClient) {}
+
+    private rememberProjectSource(cacheKey: string, source: ProjectSourceKind): void {
+        if (this.projectSourceCache.has(cacheKey)) {
+            this.projectSourceCache.delete(cacheKey)
+        } else if (this.projectSourceCache.size >= MAX_PROJECT_SOURCE_CACHE) {
+            const oldestKey = this.projectSourceCache.keys().next().value
+            if (oldestKey !== undefined) this.projectSourceCache.delete(oldestKey)
+        }
+        this.projectSourceCache.set(cacheKey, source)
+    }
+
+    private async probeProjectSource(
+        source: ProjectSourceKind,
+        owner: string,
+        projectNumber: number,
+        repo?: string,
+        abortSignal?: AbortSignal
+    ): Promise<ProjectV2Data | null> {
+        const graphql = this.client.graphqlWithAuth
+        if (!graphql) return null
+        if (source === 'user') {
+            const response = await graphql<UserProjectResponse>(USER_PROJECT_QUERY, {
+                owner,
+                number: projectNumber,
+                itemLimit: 100,
+                request: { signal: abortSignal },
+            })
+            return response.user?.projectV2 ?? null
+        }
+        if (source === 'repository') {
+            if (!repo) return null
+            const response = await graphql<RepoProjectResponse>(REPO_PROJECT_QUERY, {
+                owner,
+                repo,
+                number: projectNumber,
+                itemLimit: 100,
+                request: { signal: abortSignal },
+            })
+            return response.repository?.projectV2 ?? null
+        }
+        const response = await graphql<OrgProjectResponse>(ORG_PROJECT_QUERY, {
+            owner,
+            number: projectNumber,
+            itemLimit: 100,
+            request: { signal: abortSignal },
+        })
+        return response.organization?.projectV2 ?? null
+    }
+
+    private async fetchProjectV2FromSources(
+        owner: string,
+        projectNumber: number,
+        repo?: string,
+        abortSignal?: AbortSignal
+    ): Promise<{ project: ProjectV2Data | null; source: string }> {
+        if (!this.client.graphqlWithAuth) return { project: null, source: '' }
+
+        const cacheKey = `${owner}:${String(projectNumber)}:${repo ?? ''}`
+        const defaultOrder: ProjectSourceKind[] = repo
+            ? ['user', 'repository', 'organization']
+            : ['user', 'organization']
+        const cachedSource = this.projectSourceCache.get(cacheKey)
+        const probeOrder: ProjectSourceKind[] =
+            cachedSource !== undefined && defaultOrder.includes(cachedSource)
+                ? [cachedSource, ...defaultOrder.filter((s) => s !== cachedSource)]
+                : defaultOrder
+
+        const probeAt = async (
+            index: number
+        ): Promise<{ project: ProjectV2Data | null; source: string }> => {
+            const source = probeOrder[index]
+            if (source === undefined) return { project: null, source: '' }
+            try {
+                const project = await this.probeProjectSource(
+                    source,
+                    owner,
+                    projectNumber,
+                    repo,
+                    abortSignal
+                )
+                if (project) {
+                    this.rememberProjectSource(cacheKey, source)
+                    return { project, source }
+                }
+            } catch (error) {
+                if (!projectLookupMiss(error)) throw error
+                logger.debug(`${source} project not found, trying next source...`, {
+                    module: 'GitHub',
+                })
+            }
+            return probeAt(index + 1)
+        }
+
+        return probeAt(0)
+    }
 
     async getProjectKanban(
         owner: string,
@@ -23,215 +245,16 @@ export class ProjectsManager {
 
         const cacheKey = `kanban:${owner}:${String(projectNumber)}:${repo ?? ''}`
         if (typeof this.client.getCached === 'function') {
-            const cached = this.client.getCached(cacheKey) as KanbanBoard | undefined
-            if (cached !== undefined) return cached
+            const cached = this.client.getCached(cacheKey)
+            if (isCachedKanbanBoard(cached)) return cached
         }
 
-        const projectFragment = `
-            fragment ProjectData on ProjectV2 {
-                id
-                title
-                fields(first: 20) {
-                    nodes {
-                        ... on ProjectV2SingleSelectField {
-                            id
-                            name
-                            options {
-                                id
-                                name
-                                color
-                            }
-                        }
-                    }
-                }
-                items(first: $itemLimit) {
-                    pageInfo {
-                        hasNextPage
-                    }
-                    nodes {
-                        id
-                        type
-                        createdAt
-                        updatedAt
-                        fieldValues(first: 10) {
-                            nodes {
-                                ... on ProjectV2ItemFieldSingleSelectValue {
-                                    name
-                                    field {
-                                        ... on ProjectV2SingleSelectField {
-                                            name
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        content {
-                            ... on Issue {
-                                number
-                                title
-                                url
-                                labels(first: 5) {
-                                    nodes { name }
-                                }
-                                assignees(first: 5) {
-                                    nodes { login }
-                                }
-                            }
-                            ... on PullRequest {
-                                number
-                                title
-                                url
-                                labels(first: 5) {
-                                    nodes { name }
-                                }
-                                assignees(first: 5) {
-                                    nodes { login }
-                                }
-                            }
-                            ... on DraftIssue {
-                                title
-                            }
-                        }
-                    }
-                }
-            }
-        `
-
-        const userQuery = `
-            ${projectFragment}
-            query($owner: String!, $number: Int!, $itemLimit: Int!) {
-                user(login: $owner) {
-                    projectV2(number: $number) {
-                        ...ProjectData
-                    }
-                }
-            }
-        `
-
-        const repoQuery = `
-            ${projectFragment}
-            query($owner: String!, $repo: String!, $number: Int!, $itemLimit: Int!) {
-                repository(owner: $owner, name: $repo) {
-                    projectV2(number: $number) {
-                        ...ProjectData
-                    }
-                }
-            }
-        `
-
-        const orgQuery = `
-            ${projectFragment}
-            query($owner: String!, $number: Int!, $itemLimit: Int!) {
-                organization(login: $owner) {
-                    projectV2(number: $number) {
-                        ...ProjectData
-                    }
-                }
-            }
-        `
-
-        interface ProjectV2Data {
-            id: string
-            title: string
-            fields: {
-                nodes: {
-                    id?: string
-                    name?: string
-                    options?: {
-                        id: string
-                        name: string
-                        color?: string
-                    }[]
-                }[]
-            }
-            items: {
-                pageInfo?: { hasNextPage: boolean }
-                nodes: {
-                    id: string
-                    type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE'
-                    createdAt: string
-                    updatedAt: string
-                    fieldValues: {
-                        nodes: {
-                            name?: string
-                            field?: { name?: string }
-                        }[]
-                    }
-                    content: {
-                        number?: number
-                        title?: string
-                        url?: string
-                        labels?: { nodes: { name: string }[] }
-                        assignees?: { nodes: { login: string }[] }
-                    } | null
-                }[]
-            }
-        }
-
-        interface UserResponse {
-            user: { projectV2: ProjectV2Data | null } | null
-        }
-        interface RepoResponse {
-            repository: { projectV2: ProjectV2Data | null } | null
-        }
-        interface OrgResponse {
-            organization: { projectV2: ProjectV2Data | null } | null
-        }
-
-        let project: ProjectV2Data | null = null
-        let source = ''
-
-        try {
-            const response = await this.client.graphqlWithAuth<UserResponse>(userQuery, {
-                owner,
-                number: projectNumber,
-                itemLimit: 100,
-                request: { signal: abortSignal },
-            })
-            if (response.user?.projectV2) {
-                project = response.user.projectV2
-                source = 'user'
-            }
-        } catch {
-            logger.debug('User project not found, trying repository...', { module: 'GitHub' })
-        }
-
-        if (!project && repo) {
-            try {
-                const response = await this.client.graphqlWithAuth<RepoResponse>(repoQuery, {
-                    owner,
-                    repo,
-                    number: projectNumber,
-                    itemLimit: 100,
-                    request: { signal: abortSignal },
-                })
-                if (response.repository?.projectV2) {
-                    project = response.repository.projectV2
-                    source = 'repository'
-                }
-            } catch {
-                logger.debug('Repository project not found, trying organization...', {
-                    module: 'GitHub',
-                })
-            }
-        }
-
-        if (!project) {
-            try {
-                const response = await this.client.graphqlWithAuth<OrgResponse>(orgQuery, {
-                    owner,
-                    number: projectNumber,
-                    itemLimit: 100,
-                    request: { signal: abortSignal },
-                })
-                if (response.organization?.projectV2) {
-                    project = response.organization.projectV2
-                    source = 'organization'
-                }
-            } catch {
-                logger.debug('Organization project not found', { module: 'GitHub' })
-            }
-        }
+        const { project, source } = await this.fetchProjectV2FromSources(
+            owner,
+            projectNumber,
+            repo,
+            abortSignal
+        )
 
         if (!project) {
             logger.warning('Project not found', { module: 'GitHub', entityId: projectNumber })
@@ -256,57 +279,7 @@ export class ProjectsManager {
             color: opt.color,
         }))
 
-        const columnMap = new Map<string, ProjectV2Item[]>()
-
-        for (const opt of statusOptions) {
-            columnMap.set(opt.name, [])
-        }
-        columnMap.set('No Status', [])
-
-        for (const item of project.items.nodes) {
-            const statusValue = item.fieldValues.nodes.find((fv) => fv.field?.name === 'Status')
-            const status = statusValue?.name ?? 'No Status'
-
-            const content = item.content
-            const projectItem: ProjectV2Item = {
-                id: item.id,
-                title: content?.title ?? 'Draft Issue',
-                url: content?.url ?? '',
-                type: item.type,
-                status,
-                number: content?.number,
-                labels: content?.labels?.nodes.map((l) => l.name) ?? [],
-                assignees: content?.assignees?.nodes.map((a) => a.login) ?? [],
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
-            }
-
-            const column = columnMap.get(status)
-            if (column) {
-                column.push(projectItem)
-            } else {
-                columnMap.get('No Status')?.push(projectItem)
-            }
-        }
-
-        const columns: KanbanColumn[] = []
-        for (const opt of statusOptions) {
-            const items = columnMap.get(opt.name) ?? []
-            columns.push({
-                status: opt.name,
-                statusOptionId: opt.id,
-                items,
-            })
-        }
-
-        const noStatusItems = columnMap.get('No Status') ?? []
-        if (noStatusItems.length > 0) {
-            columns.push({
-                status: 'No Status',
-                statusOptionId: '',
-                items: noStatusItems,
-            })
-        }
+        const columns = groupItemsIntoColumns(statusOptions, project.items.nodes)
 
         const totalItems = project.items.nodes.length
         const truncated = project.items.pageInfo?.hasNextPage ?? false
@@ -382,7 +355,7 @@ export class ProjectsManager {
 
             return { success: true }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
+            const errorMessage = toSafeGitHubError(error)
             logger.error('Failed to move project item', {
                 module: 'GitHub',
                 entityId: itemId,
@@ -433,14 +406,13 @@ export class ProjectsManager {
                 context: { projectId, contentId, itemId },
             })
 
+            if (typeof itemId !== 'string' || itemId.length === 0) {
+                return { success: false, error: 'GitHub did not return a project item id' }
+            }
             return { success: true, itemId }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
-            logger.error('Failed to add item to project', {
-                module: 'GitHub',
-                context: { projectId, contentId },
-                error: errorMessage,
-            })
+            const errorMessage = toSafeGitHubError(error)
+            logger.error('Failed to add item to project', { module: 'GitHub', context: { projectId, contentId }, error: errorMessage })
             return { success: false, error: errorMessage }
         } finally {
             if (typeof this.client.invalidateCache === 'function') {
@@ -458,41 +430,20 @@ export class ProjectsManager {
         }
 
         try {
-            const mutation = `
-                mutation($projectId: ID!, $itemId: ID!) {
-                    deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
-                        deletedItemId
-                    }
-                }
-            `
-
+            const mutation =
+                'mutation($projectId: ID!, $itemId: ID!) { deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) { deletedItemId } }'
             if (typeof this.client.invalidateCache === 'function') {
                 this.client.invalidateCache('kanban:')
             }
-
-            await this.client.graphqlWithAuth(mutation, {
-                projectId,
-                itemId,
-            })
-
-            logger.info('Deleted project item', {
-                module: 'GitHub',
-                context: { projectId, itemId },
-            })
-
+            await this.client.graphqlWithAuth(mutation, { projectId, itemId })
+            logger.info('Deleted project item', { module: 'GitHub', context: { projectId, itemId } })
             return { success: true }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
-            logger.error('Failed to delete item from project', {
-                module: 'GitHub',
-                context: { projectId, itemId },
-                error: errorMessage,
-            })
+            const errorMessage = toSafeGitHubError(error)
+            logger.error('Failed to delete item from project', { module: 'GitHub', context: { projectId, itemId }, error: errorMessage })
             return { success: false, error: errorMessage }
         } finally {
-            if (typeof this.client.invalidateCache === 'function') {
-                this.client.invalidateCache('kanban:')
-            }
+            if (typeof this.client.invalidateCache === 'function') this.client.invalidateCache('kanban:')
         }
     }
 }

@@ -13,16 +13,16 @@ This directory contains the core modular test files for `memory-journal-mcp`. Ex
 
 The exhaustive list of test files, their sequence (Dependency DAG), and the coordinator workflow are maintained in the [`coordinator-workflow.md`](./coordinator-workflow.md) file. Please refer to that document for the canonical list of tests and the proper execution sequence.
 
-## Node.js Helper Scripts
+## Automated Boundary & Protocol Specs
 
-Certain boundary tests (e.g., massive payload execution) exceed typical token context windows and cannot be efficiently run directly via MCP tool payloads. We provide raw Node.js scripts in `test-server/scripts/` to supplement the markdown test workflows:
+Certain boundary and transport checks (such as 50 KB+ payloads, stdio pipe framing, and wire `outputSchema` checks) are automated directly in Vitest and Playwright rather than run interactively as agent MCP calls:
 
-| Script               | Purpose                                                                                                      | Associated Workflow |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `test-http.mjs`      | Verifies HTTP transport 413 Payload Too Large limits                                                         | `test-integrity-part1.md` |
-| `test-long-mcp.mjs`  | Verifies the maximum `content` length capacity limits (50k/100k boundaries)                                  | `test-integrity-part2.md` |
-| `verify-schemas.mjs` | Programmatically verifies that all output schemas are strictly defined for `structuredContent` compatibility | `test-schemas.md`   |
-| `test-subscribe.mjs` | Validates MCP real-time resource subscriptions and scope-based authorization boundaries                      | `test-core-infra.md`|
+| Automated Spec | Purpose | Associated Workflow |
+| --- | --- | --- |
+| `tests/e2e/boundary.spec.ts` + `tests/e2e/security.spec.ts` | Verifies HTTP `413 Payload Too Large` (`> 1 MB`) and `create_entry` `50k`/`50,001`/`100k` length + type-mismatch boundaries | `test-integrity-part1.md` |
+| `tests/e2e/stdio-transport.spec.ts` | Verifies stdio pipe `content` capacity (`50k`/`50,001`/`100k`) and SDK/team Zod coercion boundaries without `-32602` leakage | `test-integrity-part2.md` |
+| `tests/handlers/tool-output-schemas.test.ts` + `tests/e2e/tools.spec.ts` | Verifies all 107 standard tools define `outputSchema` and advertise schemas/annotations over MCP `tools/list` | `test-schemas.md` |
+| `tests/e2e/subscriptions.spec.ts` | Validates MCP real-time resource subscriptions on `memory://recent` and `memory://briefing` | `test-core-infra.md` |
 
 ## Track Token Consumption
 

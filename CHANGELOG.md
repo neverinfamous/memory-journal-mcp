@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to this project are documented in this file.
-This changelog is auto-generated from Git history using [lib-git-history](https://github.com/neverinfamous/adamic).
+This changelog is auto-generated from Git history using lib-git-history.
 
 ## [v9.1.0]
 

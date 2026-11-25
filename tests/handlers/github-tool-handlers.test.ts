@@ -379,7 +379,7 @@ describe('GitHub Tool Handlers', () => {
             )) as { success: boolean; milestone: { title: string } }
 
             expect(result.success).toBe(true)
-            expect(result.milestone.title).toBe('v1.1')
+            expect(result.milestone.title).toBe('<untrusted_remote_content>v1.1</untrusted_remote_content>')
         })
     })
 
@@ -819,6 +819,36 @@ describe('GitHub Tool Handlers', () => {
             expect(result['referrers']).toBeDefined()
         })
 
+        it('returns GITHUB_API_ERROR when referrers fail, including an all-section request', async () => {
+            const github = createMockGitHub({
+                getRepoStats: vi.fn().mockResolvedValue({
+                    stars: 1,
+                    forks: 0,
+                    watchers: 0,
+                    openIssues: 0,
+                    size: 1,
+                    defaultBranch: 'main',
+                }),
+                getTrafficData: vi.fn().mockResolvedValue({
+                    clones: { total: 0, unique: 0, dailyAvg: 0 },
+                    views: { total: 0, unique: 0, dailyAvg: 0 },
+                    period: '14 days',
+                }),
+                getTopReferrers: vi.fn().mockResolvedValue(null),
+                getPopularPaths: vi.fn().mockResolvedValue([]),
+            })
+            const result = (await callTool(
+                'get_repo_insights',
+                { sections: 'all' },
+                db,
+                undefined,
+                github
+            )) as Record<string, unknown>
+            expect(result['success']).toBe(false)
+            expect(result['code']).toBe('GITHUB_API_ERROR')
+            expect(result['error']).toContain('referrers')
+        })
+
         it('should return paths section', async () => {
             const github = createMockGitHub({
                 getPopularPaths: vi
@@ -1141,7 +1171,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; project?: { added: boolean; error: string } }
 
-            expect(result.success).toBe(true) // Issue still created
+            expect(result.success).toBe(false)
             expect(result.project?.added).toBe(false)
             expect(result.project?.error).toContain('not found')
         })
@@ -1173,7 +1203,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; project?: { added: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.project?.added).toBe(false)
         })
 
@@ -1206,10 +1236,12 @@ describe('GitHub Tool Handlers', () => {
                 project?: { added: boolean; initialStatus?: { set: boolean; error: string } }
             }
 
-            expect(result.success).toBe(true)
+            // [H11] An explicit initial_status that cannot be applied is surfaced, not a false success.
+            expect(result.success).toBe(false)
             expect(result.project?.added).toBe(true)
             expect(result.project?.initialStatus?.set).toBe(false)
             expect(result.project?.initialStatus?.error).toContain('not found')
+            expect((result as { projectItemError?: string }).projectItemError).toContain('not found')
         })
 
         it('should handle moveProjectItem failure for initial status', async () => {
@@ -1244,7 +1276,7 @@ describe('GitHub Tool Handlers', () => {
                 project?: { added: boolean; initialStatus?: { set: boolean; error: string } }
             }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.project?.initialStatus?.set).toBe(false)
         })
 
@@ -1286,7 +1318,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true) // Issue still closes
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('project_number required')
         })
@@ -1309,7 +1341,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('not found')
         })
@@ -1342,7 +1374,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('Item add failed')
         })
@@ -1384,7 +1416,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('"Done" status column not found')
         })

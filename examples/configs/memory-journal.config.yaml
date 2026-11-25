@@ -1,0 +1,87 @@
+# Portable Multi-Repo Configuration for memory-journal-mcp
+# Load explicitly via: memory-journal-mcp serve --config /path/to/memory-journal.config.yaml
+# Or auto-discover by placing memory-journal.config.yaml in CWD or ~/.gemini/config/
+#
+# Precedence: CLI flags > Environment Variables > Config File > Defaults
+# Inspect the merged configuration (with secrets redacted) via:
+#   memory-journal-mcp --dump-config
+
+# Databases (keep SQLCipher DB_ENCRYPTION_KEY / GITHUB_TOKEN / MCP_AUTH_TOKEN in env or secrets.env)
+dbPath: /path/to/data/memory_journal.db
+teamDbPath: /path/to/data/memory_journal_team.db
+additionalTeamDbs:
+  partner-team: /path/to/data/partner_team.db
+teamDefaultRole: viewer
+teamAdmin: your_username
+
+# Multi-Tenant Workspace & Project Registry Routing
+defaultWorkspaceId: default
+defaultProjectNumber: 1
+projectRegistry:
+  my-repo:
+    path: /path/to/projects/my-repo
+    project_number: 1
+  other-repo:
+    path: /path/to/projects/other-repo
+    project_number: 2
+
+# Tool Exposure & Code Mode Sandbox
+# Runtime hot-reloadable via fs.watch or update_configuration (codemodeInternalFullAccess can only tighten unless started true)
+toolFilter: codemode
+codemodeInternalFullAccess: true
+codemodeMaxResultSize: 102400
+
+# Security & I/O Boundaries (fail-closed if omitted)
+allowedIoRoots:
+  - /path/to/projects
+  - /path/to/data
+  - /path/to/skills
+agentHealing: true
+maxToolInputElements: 25000
+
+# Semantic Vector Search
+embeddingModel: Xenova/all-MiniLM-L6-v2
+autoRebuildIndex: false
+
+# Session Briefing Defaults (hot-reloadable via update_configuration or config edits)
+briefingEntries: 3
+briefingCommits: 5
+briefingSummaries: 1
+briefingImportanceThreshold: 0.3
+briefingIncludeTeam: true
+briefingIssues: 0
+briefingPrs: 0
+briefingPrStatus: false
+briefingMilestones: 1
+briefingWorkflows: 0
+briefingWorkflowStatus: false
+briefingCopilot: false
+briefingGraph: true
+briefingInsights: true
+
+# Ambient Context Injections (memory://rules, memory://skills, memory://workflows)
+rulesFile: /path/to/AGENTS.md
+skillsDir: /path/to/skills
+workflowSummary: "/bump-deploy: version bump + PR deploy | /update-deps: dependency + CVE updates"
+
+# Audit & Prometheus Telemetry (startup-only)
+auditLog: /path/to/logs/mcp-audit.jsonl
+auditRedact: true
+auditReads: false
+auditLogMaxSize: 10485760
+metricsExport: prometheus
+metricsPort: 9465
+persistMetrics: false
+
+# Lifecycle Archiving & Auto-Pruning (0 = disabled)
+archiveOlderThanDays: 0
+pruneOlderThanDays: 0
+hardDeleteOlderThanDays: 0
+pruneImportanceThreshold: 0.15
+pruneDryRun: false
+pruneExcludeTags:
+  - architecture
+  - important
+  - keep
+  - never-prune
+  - reference

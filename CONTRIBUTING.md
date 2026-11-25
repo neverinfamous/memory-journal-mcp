@@ -38,7 +38,7 @@ pnpm test
 pnpm run test:e2e
 
 # Run the full quality check
-pnpm run check # or: pnpm run lint && pnpm run typecheck
+pnpm run check
 ```
 
 ### Docker Development (Optional)
@@ -179,7 +179,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 ### Before Submitting
 
 - [ ] **Fork** the repository and create a feature branch
-- [ ] **Test** your changes (`pnpm test`, `pnpm run test:e2e`, `pnpm run check` or `pnpm run lint && pnpm run typecheck`)
+- [ ] **Test** your changes (`pnpm test` and `pnpm run test:e2e`). `pnpm run check` covers lint, the 500-line ceiling, typecheck, the code map, and the unassigned-entry check in addition to those tests
 - [ ] **Auto-fix lint issues** if needed (`pnpm run lint:fix`)
 - [ ] **Update documentation** if you changed APIs or behavior
 - [ ] **Add examples** for new features
@@ -236,9 +236,7 @@ src/
 ├── server/
 │   ├── mcp-server/             # MCP server setup
 │   ├── auto-prune.ts           # Automated entry retention and pruning lifecycle
-│   ├── digest-reporter.ts      # Scheduled digest report generation and webhook dispatch
 │   ├── registration.ts         # Tool/resource/prompt registration
-│   ├── scheduler.ts            # Recurring task scheduler
 │   └── subscription-manager.ts # Resource subscription management
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions

@@ -10,16 +10,11 @@ import {
     parseScopes,
     hasScope,
     hasAnyScope,
-    hasAllScopes,
     hasAdminScope,
     hasWriteScope,
     hasReadScope,
     isValidScope,
-    getScopeForToolGroup,
-    getScopeDisplayName,
-    getRequiredScopeForGroup,
     getAccessibleToolGroups,
-    getAccessibleTools,
     TOOL_GROUP_SCOPES,
     READ_SCOPE_GROUPS,
     WRITE_SCOPE_GROUPS,
@@ -90,7 +85,7 @@ describe('hasScope', () => {
 })
 
 // =============================================================================
-// hasAnyScope / hasAllScopes
+// hasAnyScope
 // =============================================================================
 
 describe('hasAnyScope', () => {
@@ -104,20 +99,6 @@ describe('hasAnyScope', () => {
 
     it('should handle hierarchy (full grants any)', () => {
         expect(hasAnyScope(['full'], ['admin'])).toBe(true)
-    })
-})
-
-describe('hasAllScopes', () => {
-    it('should return true if all scopes match', () => {
-        expect(hasAllScopes(['read', 'write', 'admin'], ['read', 'write'])).toBe(true)
-    })
-
-    it('should return false if not all scopes match', () => {
-        expect(hasAllScopes(['read'], ['read', 'write'])).toBe(false)
-    })
-
-    it('should respect hierarchy for all checks', () => {
-        expect(hasAllScopes(['full'], ['read', 'write', 'admin'])).toBe(true)
     })
 })
 
@@ -192,7 +173,7 @@ describe('isValidScope', () => {
 })
 
 // =============================================================================
-// TOOL_GROUP_SCOPES & getScopeForToolGroup
+// TOOL_GROUP_SCOPES
 // =============================================================================
 
 describe('TOOL_GROUP_SCOPES', () => {
@@ -218,14 +199,6 @@ describe('TOOL_GROUP_SCOPES', () => {
         expect(TOOL_GROUP_SCOPES['admin']).toBe(SCOPES.ADMIN)
         expect(TOOL_GROUP_SCOPES['backup']).toBe(SCOPES.ADMIN)
         expect(TOOL_GROUP_SCOPES['codemode']).toBe(SCOPES.ADMIN)
-    })
-})
-
-describe('getScopeForToolGroup', () => {
-    it('should return correct scope for each group', () => {
-        expect(getScopeForToolGroup('core')).toBe('read')
-        expect(getScopeForToolGroup('github')).toBe('write')
-        expect(getScopeForToolGroup('admin')).toBe('admin')
     })
 })
 
@@ -259,23 +232,8 @@ describe('scope group arrays', () => {
 })
 
 // =============================================================================
-// getRequiredScopeForGroup / getAccessibleToolGroups
+// getAccessibleToolGroups
 // =============================================================================
-
-describe('getRequiredScopeForGroup', () => {
-    it('should return read for read-only groups', () => {
-        expect(getRequiredScopeForGroup('core')).toBe('read')
-    })
-
-    it('should return write for write groups', () => {
-        expect(getRequiredScopeForGroup('github')).toBe('write')
-    })
-
-    it('should return admin for admin groups', () => {
-        expect(getRequiredScopeForGroup('admin')).toBe('admin')
-        expect(getRequiredScopeForGroup('codemode')).toBe('admin')
-    })
-})
 
 describe('getAccessibleToolGroups', () => {
     it('should return all groups for full scope', () => {
@@ -308,47 +266,5 @@ describe('getAccessibleToolGroups', () => {
 
     it('should return empty for no scopes', () => {
         expect(getAccessibleToolGroups([])).toEqual([])
-    })
-})
-
-// =============================================================================
-// getAccessibleTools
-// =============================================================================
-
-describe('getAccessibleTools', () => {
-    it('should return tools for accessible groups', () => {
-        const tools = getAccessibleTools(['read'])
-        expect(tools.length).toBeGreaterThan(0)
-        // Should include core tools
-        expect(tools).toContain('create_entry')
-    })
-
-    it('should return all tools for full scope', () => {
-        const tools = getAccessibleTools(['full'])
-        expect(tools).toContain('create_entry') // core
-        expect(tools).toContain('mj_execute_code') // codemode
-    })
-
-    it('should deduplicate tools', () => {
-        const tools = getAccessibleTools(['full'])
-        const uniqueTools = [...new Set(tools)]
-        expect(tools.length).toBe(uniqueTools.length)
-    })
-})
-
-// =============================================================================
-// getScopeDisplayName
-// =============================================================================
-
-describe('getScopeDisplayName', () => {
-    it('should return display names for standard scopes', () => {
-        expect(getScopeDisplayName('read')).toBe('Read Only')
-        expect(getScopeDisplayName('write')).toBe('Read/Write')
-        expect(getScopeDisplayName('admin')).toBe('Administrative')
-        expect(getScopeDisplayName('full')).toBe('Full Access')
-    })
-
-    it('should return unknown scopes as-is', () => {
-        expect(getScopeDisplayName('custom_scope')).toBe('custom_scope')
     })
 })

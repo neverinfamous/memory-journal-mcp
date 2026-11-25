@@ -14,9 +14,9 @@
 
 1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
 2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
-3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
+3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `pnpm run typecheck`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
    - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
-4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
+4. **Commit**: Immediately commit passing changes using the `pnpm exec tsx scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path> [--add <path> ...]` utility, staging only the files you changed (never `--add .`). Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `pnpm run typecheck` yourself, you are autonomous.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 ---
@@ -26,12 +26,12 @@
 ### 11.1 Prompt Handler Validation
 
 > [!NOTE]
-> Prompts are tested via the existing script `test-server/scripts/test-prompts.mjs`. Run it directly — do **not** use a browser or try to invoke `get_prompt` through the MCP client.
+> Prompts are tested automatically via Playwright in [prompts.spec.ts](../../tests/e2e/prompts.spec.ts) and [prompts-expanded.spec.ts](../../tests/e2e/prompts-expanded.spec.ts). Run `pnpm run test:prompts` — do **not** use a browser or try to invoke `get_prompt` through the MCP client.
 
 **Command:**
 
-```
-node test-server/scripts/test-prompts.mjs
+```bash
+pnpm run test:prompts
 ```
 
 | Test                         | Expected Result                                                     |
@@ -59,6 +59,6 @@ Every tool must return `{success: false, error, code, category, suggestion, reco
 | **team**   | `team_create_entry(workspace_id: "test-ws")` | `type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
 | **team**   | `team_update_entry(workspace_id: "test-ws")` | `id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
 
-*Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified by executing `node test-server/scripts/test-sdk-boundaries.mjs`.*
+*Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified automatically by running `pnpm exec playwright test tests/e2e/stdio-transport.spec.ts`.*
 
 \n\n## Success Criteria\n- Agent reports the Total Token Estimate...

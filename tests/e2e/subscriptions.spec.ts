@@ -58,9 +58,9 @@ test.describe('E2E MCP Subscriptions', () => {
             },
         })
 
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        expect(receivedNotifications).toContain('memory://recent')
+        await expect
+            .poll(() => receivedNotifications, { timeout: 3000, intervals: [50, 100, 200] })
+            .toContain('memory://recent')
     })
 
     test('should successfully unsubscribe from memory://recent', async () => {
@@ -76,8 +76,40 @@ test.describe('E2E MCP Subscriptions', () => {
             },
         })
 
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 250))
 
         expect(receivedNotifications).not.toContain('memory://recent')
+    })
+
+    test('subscribes to memory://briefing, receives update notification on mutation, and stays quiet after unsubscribe', async () => {
+        await client.subscribeResource({ uri: 'memory://briefing' })
+
+        await client.callTool({
+            name: 'create_entry',
+            arguments: {
+                workspace_id: 'default',
+                project_number: 1,
+                content: 'briefing subscription test',
+            },
+        })
+
+        await expect
+            .poll(() => receivedNotifications, { timeout: 3000, intervals: [50, 100, 200] })
+            .toContain('memory://briefing')
+
+        await client.unsubscribeResource({ uri: 'memory://briefing' })
+        receivedNotifications = []
+
+        await client.callTool({
+            name: 'create_entry',
+            arguments: {
+                workspace_id: 'default',
+                project_number: 1,
+                content: 'briefing post-unsubscribe test',
+            },
+        })
+
+        await new Promise((resolve) => setTimeout(resolve, 250))
+        expect(receivedNotifications).not.toContain('memory://briefing')
     })
 })

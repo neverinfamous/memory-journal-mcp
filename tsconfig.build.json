@@ -2,6 +2,10 @@
     "extends": "./tsconfig.json",
     "compilerOptions": {
         "ignoreDeprecations": "6.0",
-        "types": ["node"]
-    }
+        "types": ["node"],
+        "declarationMap": false,
+        "incremental": false
+    },
+    "files": ["src/index.ts"],
+    "include": []
 }

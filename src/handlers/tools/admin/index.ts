@@ -25,10 +25,20 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'update_configuration',
             title: 'Update Server Configuration',
-            description: 'Dynamically update the MCP server configuration (instruction level, tool filters, briefing preferences) without restarting the server.',
+            description: 'Dynamically update the MCP server configuration (tool filters, briefing preferences, and default workspace/project scope) without restarting the server.',
             group: 'admin',
             inputSchema: updateConfigurationSchemaMcp,
-            outputSchema: z.object({ success: z.boolean(), updated: z.array(z.string()), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
+            outputSchema: z
+                .object({
+                    success: z.boolean().optional(),
+                    updated: z.array(z.string()).optional(),
+                    // [INTENT] M5: surface non-fatal persistence warnings instead of stripping them.
+                    warning: z.string().optional(),
+                    persisted: z.boolean().optional(),
+                    partial: z.boolean().optional(),
+                    error: z.string().optional(),
+                })
+                .extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,

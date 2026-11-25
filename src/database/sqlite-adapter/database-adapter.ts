@@ -9,6 +9,8 @@ import type {
 import type { IDatabaseAdapter, CreateEntryInput } from '../core/interfaces.js'
 import type { EntriesManager } from './entries/index.js'
 import { AdapterDelegates } from './adapter-delegates.js'
+import { getMirrorOrigins } from './entries/mirror-origins.js'
+import { logger } from '../../utils/logger.js'
 
 /**
  * SQLite Database Adapter for Memory Journal using better-sqlite3 native driver
@@ -18,30 +20,51 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.createEntry(input)
     }
 
+    /** Team DB: team entry ID -> origin personal ID for mirrored rows (empty when unsupported). */
+    getMirrorOrigins(entryIds: number[]): Map<number, number> {
+        return getMirrorOrigins(this.connection.getNativeDb(), entryIds)
+    }
+
     getEntryById(id: number, workspaceId?: string): JournalEntry | null {
         return this.entriesMgr.getEntryById(id, workspaceId)
     }
 
-    getEntryHistory(id: number): EntryRevision[] {
-        return this.entriesMgr.getEntryHistory(id)
+    hasActiveEntry(id: number): boolean {
+        return this.entriesMgr.hasActiveEntry(id)
+    }
+
+    getActiveEntryIds(ids: readonly number[]): Set<number> {
+        return this.entriesMgr.getActiveEntryIds(ids)
+    }
+
+    getEntryHistory(id: number, workspaceId?: string): EntryRevision[] {
+        return this.entriesMgr.getEntryHistory(id, workspaceId)
     }
 
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
         return this.entriesMgr.getEntryByIdIncludeDeleted(id, workspaceId)
     }
 
-    getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
-        return this.entriesMgr.getEntriesByIds(ids)
+    getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return this.entriesMgr.getEntriesByIds(ids, workspaceId)
     }
 
     getEntriesByIdsWithImportance(
-        ids: number[]
+        ids: number[],
+        workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
-        return this.entriesMgr.getEntriesByIdsWithImportance(ids)
+        return this.entriesMgr.getEntriesByIdsWithImportance(ids, workspaceId)
     }
 
-    calculateImportance(entryId: number): ImportanceResult {
-        return this.entriesMgr.calculateImportance(entryId)
+    getImportanceScoresByIds(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, ImportanceResult> {
+        return this.entriesMgr.getImportanceScoresByIds(entryIds, workspaceId)
+    }
+
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult | null {
+        return this.entriesMgr.calculateImportance(entryId, workspaceId)
     }
 
     getRecentEntries(
@@ -53,7 +76,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         workspaceId?: string,
         projectNumber?: number,
         offset?: number
-    ): { entries: JournalEntry[]; nextCursor?: string } {
+    ): { entries: JournalEntry[]; nextCursor?: string | undefined } {
         return this.entriesMgr.getRecentEntries(
             limit ?? 10,
             isPersonal,
@@ -66,12 +89,26 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         )
     }
 
-    getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string } {
-        return this.entriesMgr.getEntriesPage(offset, limit)
+    getEntriesPage(
+        offset: number,
+        limit: number,
+        workspaceId = 'default',
+        projectNumber?: number
+    ): { entries: JournalEntry[]; nextCursor?: string } {
+        return this.entriesMgr.getEntriesPage(offset, limit, 'desc', workspaceId, projectNumber)
     }
 
-    getActiveEntryCount(workspaceId?: string): number {
-        return this.entriesMgr.getActiveEntryCount(workspaceId)
+    getEntriesAfter(
+        limit: number,
+        workspaceId = 'default',
+        projectNumber?: number,
+        cursor?: { timestamp: string; id: number }
+    ): JournalEntry[] {
+        return this.entriesMgr.getEntriesAfter(limit, 'desc', workspaceId, projectNumber, cursor)
+    }
+
+    getActiveEntryCount(workspaceId?: string, projectNumber?: number): number {
+        return this.entriesMgr.getActiveEntryCount(workspaceId, projectNumber)
     }
 
     updateEntry(
@@ -100,28 +137,51 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             validationStatus?: 'passed' | 'failed' | 'none'
             workspaceId?: string
             targetWorkspaceId?: string
-            sessionId?: string
+            sessionId?: string | null
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
     }
 
-    deleteEntry(id: number, permanent = false, workspaceId?: string): boolean {
+    deleteEntry(id: number, permanent = false, workspaceId?: string): { success: boolean; warning?: string } {
         return this.executeInTransaction(() => {
             const success = this.entriesMgr.deleteEntry(id, permanent, workspaceId)
-            if (success) {
+            if (!success) return { success: false }
+            try {
                 this.deleteVector(id)
+                return { success: true }
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err)
+                logger.warning('Failed to delete vector for deleted entry', {
+                    module: 'SqliteAdapter',
+                    entryId: id,
+                    error: message,
+                })
+                return { success: true, warning: `Vector delete failed: ${message}` }
             }
-            return success
         })
     }
 
-    updateAnchorStatus(id: number, status: AnchorStatus): void {
-        this.entriesMgr.updateAnchorStatus(id, status)
+    updateAnchorStatus(
+        id: number,
+        status: AnchorStatus,
+        workspaceId?: string,
+        projectNumber?: number
+    ): boolean {
+        return this.entriesMgr.updateAnchorStatus(id, status, workspaceId, projectNumber)
     }
 
-    getAnchorsByEntryId(entryId: number): Anchor[] {
-        return this.entriesMgr.getAnchorsByEntryId(entryId)
+    getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[] {
+        return this.entriesMgr.getAnchorsByEntryId(entryId, workspaceId)
+    }
+
+    getAnchorsByEntryIds(entryIds: number[], workspaceId?: string): Map<number, Anchor[]> {
+        return this.entriesMgr.getAnchorsByEntryIds(entryIds, workspaceId)
+    }
+
+    getEntriesByIdsIncludeDeleted(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return this.entriesMgr.getEntriesByIdsIncludeDeleted(ids, workspaceId)
     }
 
     restoreEntry(id: number, workspaceId?: string): boolean {
@@ -132,6 +192,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         limit?: number
         offset?: number
         workspaceId?: string
+        projectNumber?: number
     }): { entries: JournalEntry[]; count: number } {
         return this.entriesMgr.getDeletedEntries(options)
     }
@@ -165,10 +226,12 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
-            sessionId?: string
+            sessionId?: string | null
+            targetWorkspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.entriesMgr.updateEntries(updates)
@@ -178,17 +241,28 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         ids: number[],
         permanent = false,
         workspaceId?: string
-    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[]; warning?: string } {
         return this.executeInTransaction(() => {
             const result = this.entriesMgr.deleteEntries(ids, permanent, workspaceId)
-            for (const id of result.deleted) {
+            const vectorFailures: string[] = []
+            if (result.deleted.length > 0) {
                 try {
-                    this.deleteVector(id)
-                } catch {
-                    // Vectors failure shouldn't fail the entry deletion
+                    this.deleteVectors(result.deleted)
+                } catch (error: unknown) {
+                    const message = error instanceof Error ? error.message : String(error)
+                    // A vector failure must not fail the entry deletion, but leaves orphans to reconcile
+                    logger.warning(`Vector batch delete failed: ${message}`, {
+                        module: 'DatabaseAdapter',
+                        count: result.deleted.length,
+                    })
+                    vectorFailures.push(message)
                 }
             }
-            return result
+            if (vectorFailures.length === 0) return result
+            return {
+                ...result,
+                warning: `Vector delete failed: ${vectorFailures.join('; ')}`,
+            }
         })
     }
 
@@ -203,24 +277,26 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             prStatus?: string
             workflowRunId?: number
             tags?: string[]
+            excludeTags?: string[]
             entryType?: EntryType
             startDate?: string
             endDate?: string
-            sortBy?: 'timestamp' | 'importance'
+            sortBy?: 'timestamp' | 'importance' | 'blended'
             cursor?: string
             includeArchived?: boolean
             includeHighlights?: boolean
             fuzzy_match?: boolean
             auto_correct?: boolean
             workspaceId?: string
+            offset?: number
         }
     ): {
         entries: JournalEntry[]
-        nextCursor?: string
-        degraded?: boolean
-        highlights?: { id: number; snippet: string }[]
-        suggestions?: string[]
-        correctedQuery?: string
+        nextCursor?: string | undefined
+        degraded?: boolean | undefined
+        highlights?: { id: number; snippet: string }[] | undefined
+        suggestions?: string[] | undefined
+        correctedQuery?: string | undefined
     } {
         return this.entriesMgr.searchEntries(query, options)
     }
@@ -235,13 +311,14 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             prStatus?: string
             workflowRunId?: number
             tags?: string[]
+            excludeTags?: string[]
             entryType?: EntryType
             startDate?: string
             endDate?: string
             includeArchived?: boolean
             workspaceId?: string
         }
-    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
         return this.entriesMgr.getSearchFacets(query, options)
     }
 
@@ -251,13 +328,14 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         options?: {
             entryType?: EntryType
             tags?: string[]
+            excludeTags?: string[]
             isPersonal?: boolean
             projectNumber?: number
             issueNumber?: number
             prNumber?: number
             workflowRunId?: number
             limit?: number
-            sortBy?: 'timestamp' | 'importance'
+            sortBy?: 'timestamp' | 'importance' | 'blended'
             cursor?: string
             includeArchived?: boolean
             workspaceId?: string
@@ -271,14 +349,16 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         startDate?: string,
         endDate?: string,
         projectBreakdown?: boolean,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): ReturnType<EntriesManager['getStatistics']> {
         return this.entriesMgr.getStatistics(
             groupBy,
             startDate,
             endDate,
             projectBreakdown,
-            workspaceId
+            workspaceId,
+            projectNumber
         )
     }
 
@@ -304,5 +384,9 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
 
     getEntriesBySession(sessionId: string, limit?: number, workspaceId?: string): JournalEntry[] {
         return this.entriesMgr.getEntriesBySession(sessionId, limit, workspaceId)
+    }
+
+    getLatestEntryPerProject(): Map<string, { id: number; timestamp: string; entryType: string }> {
+        return this.entriesMgr.getLatestEntryPerProject()
     }
 }

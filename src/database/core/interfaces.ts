@@ -1,3 +1,4 @@
+import type { Database } from 'better-sqlite3'
 import type {
     JournalEntry,
     Tag,
@@ -8,11 +9,19 @@ import type {
     EntryRevision,
     AnchorStatus,
     Anchor,
-    CreateEntryInput,
-    CreateTeamEntryInput,
+    CreateEntryInput as BaseCreateEntryInput,
+    CreateTeamEntryInput as BaseCreateTeamEntryInput,
 } from '../../types/index.js'
+import type { IDatabaseVectorAndAdminAdapter } from './vector-and-admin-interfaces.js'
 
-export type { CreateEntryInput, CreateTeamEntryInput }
+export type * from './vector-and-admin-interfaces.js'
+
+export type CreateEntryInput = Omit<BaseCreateEntryInput, 'anchors'> & {
+    anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
+}
+export type CreateTeamEntryInput = Omit<BaseCreateTeamEntryInput, 'anchors'> & {
+    anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
+}
 
 export type TeamRole = 'admin' | 'member' | 'viewer'
 
@@ -96,27 +105,35 @@ export interface IDatabaseConnection {
      */
     closeDbBeforeRestore(): void
     setDbAndInitialized(db: unknown): void
+    getNativeDb?(): Database
 }
 
 /**
  * The public facade representing the capabilities of any memory-journal DB adapter
  */
-export interface IDatabaseAdapter {
+export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
     initialize(): Promise<void>
     applyTeamSchema(): void
     flushSave(): void
     close(): void
+    getDbPath(): string
 
     // Entries Manager
     createEntry(input: CreateEntryInput): JournalEntry
     getEntryById(id: number, workspaceId?: string): JournalEntry | null
+    hasActiveEntry?(id: number): boolean
+    getActiveEntryIds?(ids: readonly number[]): Set<number>
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null
-    getEntryHistory(id: number): EntryRevision[]
-    getEntriesByIds(ids: number[]): Map<number, JournalEntry>
+    getEntriesByIdsIncludeDeleted?(ids: number[], workspaceId?: string): Map<number, JournalEntry>
+    getAnchorsByEntryIds?(entryIds: number[], workspaceId?: string): Map<number, Anchor[]>
+    getImportanceScoresByIds?(entryIds: number[], workspaceId?: string): Map<number, ImportanceResult>
+    getEntryHistory(id: number, workspaceId?: string): EntryRevision[]
+    getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry>
     getEntriesByIdsWithImportance(
-        ids: number[]
+        ids: number[],
+        workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }>
-    calculateImportance(entryId: number): ImportanceResult
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult | null
     getRecentEntries(
         limit?: number,
         isPersonal?: boolean,
@@ -126,41 +143,54 @@ export interface IDatabaseAdapter {
         workspaceId?: string,
         projectNumber?: number,
         offset?: number
-    ): { entries: JournalEntry[]; nextCursor?: string }
-    getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
-    getActiveEntryCount(workspaceId?: string): number
+    ): { entries: JournalEntry[]; nextCursor?: string | undefined }
+    getEntriesPage(offset: number, limit: number, workspaceId?: string, projectNumber?: number): { entries: JournalEntry[]; nextCursor?: string }
+    getEntriesAfter?(
+        limit: number,
+        workspaceId?: string,
+        projectNumber?: number,
+        cursor?: { timestamp: string; id: number }
+    ): JournalEntry[]
+    getLatestEntryPerProject?(): Map<string, { id: number; timestamp: string; entryType: string }>
+    getActiveEntryCount(workspaceId?: string, projectNumber?: number): number
     updateEntry(
         id: number,
         updates: {
-            content?: string
-            entryType?: EntryType
-            tags?: string[]
-            isPersonal?: boolean
-            significanceType?: string | null
-            autoContext?: string | null
-            projectNumber?: number | null
-            projectOwner?: string | null
-            issueNumber?: number | null
-            issueUrl?: string | null
-            prNumber?: number | null
-            prUrl?: string | null
-            prStatus?: string | null
-            workflowRunId?: number | null
-            workflowName?: string | null
-            workflowStatus?: string | null
-            isArchived?: boolean
-            expectedVersion?: number
-            workspaceId?: string
-            trustScore?: number
-            impactScore?: number
-            validationStatus?: 'passed' | 'failed' | 'none'
-            sessionId?: string
-            targetWorkspaceId?: string
+            content?: string | undefined
+            entryType?: EntryType | undefined
+            tags?: string[] | undefined
+            isPersonal?: boolean | undefined
+            significanceType?: string | null | undefined
+            autoContext?: string | null | undefined
+            projectNumber?: number | null | undefined
+            projectOwner?: string | null | undefined
+            issueNumber?: number | null | undefined
+            issueUrl?: string | null | undefined
+            prNumber?: number | null | undefined
+            prUrl?: string | null | undefined
+            prStatus?: string | null | undefined
+            workflowRunId?: number | null | undefined
+            workflowName?: string | null | undefined
+            workflowStatus?: string | null | undefined
+            isArchived?: boolean | undefined
+            expectedVersion?: number | undefined
+            workspaceId?: string | undefined
+            trustScore?: number | undefined
+            impactScore?: number | undefined
+            validationStatus?: 'passed' | 'failed' | 'none' | undefined
+            sessionId?: string | null | undefined
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
+            targetWorkspaceId?: string | undefined
         }
     ): JournalEntry | null
-    deleteEntry(id: number, permanent?: boolean, workspaceId?: string): boolean
-    getAnchorsByEntryId(entryId: number): Anchor[]
-    updateAnchorStatus(id: number, status: AnchorStatus): void
+    deleteEntry(id: number, permanent?: boolean, workspaceId?: string): { success: boolean; warning?: string }
+    getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[]
+    updateAnchorStatus(
+        id: number,
+        status: AnchorStatus,
+        workspaceId?: string,
+        projectNumber?: number
+    ): boolean
 
     // Team Membership (RBAC)
     addTeamMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember
@@ -171,111 +201,117 @@ export interface IDatabaseAdapter {
     getTeamMemberCount(): number
     isTeamRbacActive(): boolean
     resolveTeamRole(author: string, defaultRole?: TeamRole | 'denied'): TeamRole | null
-    
+
     // Author Aliases (Level 2 Identity)
-    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string): AuthorAlias
-    removeAuthorAlias(alias: string): boolean
-    listAuthorAliases(canonicalAuthor?: string): AuthorAlias[]
-    resolveAuthor(rawAuthor: string): string
-    resolveAuthors(rawAuthors: string[]): Map<string, string>
-    consolidateAuthors(canonicalAuthor: string): number
+    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string, workspaceId?: string): AuthorAlias
+    removeAuthorAlias(alias: string, workspaceId?: string): boolean
+    listAuthorAliases(canonicalAuthor?: string, workspaceId?: string): AuthorAlias[]
+    resolveAuthor(rawAuthor: string, workspaceId?: string): string
+    resolveAuthors(rawAuthors: string[], workspaceId?: string): Map<string, string>
+    consolidateAuthors(canonicalAuthor: string, workspaceId?: string, projectNumber?: number | null): number
 
     // Soft-Delete Recovery
     restoreEntry(id: number, workspaceId?: string): boolean
-    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number }
-    
+    getDeletedEntries(options?: { limit?: number | undefined; offset?: number | undefined; workspaceId?: string | undefined; projectNumber?: number | undefined }): { entries: JournalEntry[]; count: number }
+
     // Batch Operations
     createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] }
     updateEntries(
         updates: {
             id: number
-            content?: string
-            entryType?: EntryType
-            tags?: string[]
-            isPersonal?: boolean
-            significanceType?: string | null
-            autoContext?: string | null
-            projectNumber?: number | null
-            projectOwner?: string | null
-            issueNumber?: number | null
-            issueUrl?: string | null
-            prNumber?: number | null
-            prUrl?: string | null
-            prStatus?: string | null
-            workflowRunId?: number | null
-            workflowName?: string | null
-            workflowStatus?: string | null
-            isArchived?: boolean
-            expectedVersion?: number
-            workspaceId?: string
-            trustScore?: number
-            impactScore?: number
-            validationStatus?: 'passed' | 'failed' | 'none'
-            sessionId?: string
+            content?: string | undefined
+            entryType?: EntryType | undefined
+            tags?: string[] | undefined
+            isPersonal?: boolean | undefined
+            significanceType?: string | null | undefined
+            autoContext?: string | null | undefined
+            projectNumber?: number | null | undefined
+            projectOwner?: string | null | undefined
+            issueNumber?: number | null | undefined
+            issueUrl?: string | null | undefined
+            prNumber?: number | null | undefined
+            prUrl?: string | null | undefined
+            prStatus?: string | null | undefined
+            workflowRunId?: number | null | undefined
+            workflowName?: string | null | undefined
+            workflowStatus?: string | null | undefined
+            isArchived?: boolean | undefined
+            expectedVersion?: number | undefined
+            workspaceId?: string | undefined
+            trustScore?: number | undefined
+            impactScore?: number | undefined
+            validationStatus?: 'passed' | 'failed' | 'none' | undefined
+            sessionId?: string | null | undefined
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
+            targetWorkspaceId?: string | undefined
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }
     deleteEntries(
         ids: number[],
         permanent?: boolean,
         workspaceId?: string
-    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] }
+    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[]; warning?: string }
 
     searchEntries(
         query: string,
         options?: {
-            limit?: number
-            cursor?: string
-            isPersonal?: boolean
-            projectNumber?: number
-            issueNumber?: number
-            prNumber?: number
-            prStatus?: string
-            workflowRunId?: number
-            tags?: string[]
-            entryType?: EntryType
-            startDate?: string
-            endDate?: string
-            sortBy?: 'timestamp' | 'importance'
-            includeArchived?: boolean
-            includeHighlights?: boolean
-            fuzzy_match?: boolean
-            auto_correct?: boolean
-            workspaceId?: string
+            limit?: number | undefined
+            cursor?: string | undefined
+            isPersonal?: boolean | undefined
+            projectNumber?: number | undefined
+            issueNumber?: number | undefined
+            prNumber?: number | undefined
+            prStatus?: string | undefined
+            workflowRunId?: number | undefined
+            tags?: string[] | undefined
+            excludeTags?: string[] | undefined
+            entryType?: EntryType | undefined
+            startDate?: string | undefined
+            endDate?: string | undefined
+            sortBy?: 'timestamp' | 'importance' | 'blended' | undefined
+            includeArchived?: boolean | undefined
+            includeHighlights?: boolean | undefined
+            fuzzy_match?: boolean | undefined
+            auto_correct?: boolean | undefined
+            workspaceId?: string | undefined
+            offset?: number | undefined
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string }
+    ): { entries: JournalEntry[]; nextCursor?: string | undefined; degraded?: boolean | undefined; highlights?: { id: number; snippet: string }[] | undefined; suggestions?: string[] | undefined; correctedQuery?: string | undefined }
     getSearchFacets(
         query: string,
         options?: {
-            isPersonal?: boolean
-            projectNumber?: number
-            issueNumber?: number
-            prNumber?: number
-            prStatus?: string
-            workflowRunId?: number
-            tags?: string[]
-            entryType?: EntryType
-            startDate?: string
-            endDate?: string
-            includeArchived?: boolean
-            workspaceId?: string
+            isPersonal?: boolean | undefined
+            projectNumber?: number | undefined
+            issueNumber?: number | undefined
+            prNumber?: number | undefined
+            prStatus?: string | undefined
+            workflowRunId?: number | undefined
+            tags?: string[] | undefined
+            excludeTags?: string[] | undefined
+            entryType?: EntryType | undefined
+            startDate?: string | undefined
+            endDate?: string | undefined
+            includeArchived?: boolean | undefined
+            workspaceId?: string | undefined
         }
-    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] }
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean }
     searchByDateRange(
         startDate: string,
         endDate: string,
         options?: {
-            entryType?: EntryType
-            tags?: string[]
-            cursor?: string
-            isPersonal?: boolean
-            projectNumber?: number
-            issueNumber?: number
-            prNumber?: number
-            workflowRunId?: number
-            limit?: number
-            sortBy?: 'timestamp' | 'importance'
-            includeArchived?: boolean
-            workspaceId?: string
+            entryType?: EntryType | undefined
+            tags?: string[] | undefined
+            excludeTags?: string[] | undefined
+            cursor?: string | undefined
+            isPersonal?: boolean | undefined
+            projectNumber?: number | undefined
+            issueNumber?: number | undefined
+            prNumber?: number | undefined
+            workflowRunId?: number | undefined
+            limit?: number | undefined
+            sortBy?: 'timestamp' | 'importance' | 'blended' | undefined
+            includeArchived?: boolean | undefined
+            workspaceId?: string | undefined
         }
     ): { entries: JournalEntry[]; nextCursor?: string }
     getStatistics(
@@ -283,18 +319,23 @@ export interface IDatabaseAdapter {
         startDate?: string,
         endDate?: string,
         projectBreakdown?: boolean,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): Record<string, unknown>
-    getAuthorStatistics(workspaceId?: string): { author: string; count: number }[]
+    getAuthorStatistics(workspaceId?: string, projectNumber?: number): { author: string; count: number }[]
     getAuthorsForEntries(entryIds: number[]): Map<number, string | null>
 
     // Tags Manager
     getTagsForEntry(entryId: number): string[]
     getTagsForEntries(entryIds: number[]): Map<number, string[]>
-    listTags(): Tag[]
+    /** Team DB only: team entry ID -> origin personal ID for mirrored rows (migration 020). */
+    getMirrorOrigins?(entryIds: number[]): Map<number, number>
+    listTags(workspaceId?: string, projectNumber?: number): Tag[]
     mergeTags(
         sourceTag: string,
-        targetTag: string
+        targetTag: string,
+        workspaceId?: string,
+        projectNumber?: number
     ): { entriesUpdated: number; sourceDeleted: boolean }
 
     // Relationships Manager
@@ -302,140 +343,12 @@ export interface IDatabaseAdapter {
         fromEntryId: number,
         toEntryId: number,
         relationshipType: RelationshipType,
-        description?: string
-    ): Relationship
-    getRelationships(entryId: number): Relationship[]
-    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]>
-
-    // Backup Manager
-    getBackupsDir(): string
-    exportToFile(
-        backupName?: string
-    ): Promise<{ filename: string; path: string; sizeBytes: number }>
-    listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[]
-    deleteOldBackups(keepCount: number): { deleted: string[]; kept: number }
-    restoreFromFile(
-        filename: string,
-        runtime?: unknown
-    ): Promise<{
-        restoredFrom: string
-        previousEntryCount: number
-        newEntryCount: number
-    }>
-    getHealthStatus(): {
-        database: {
-            path: string
-            sizeBytes: number
-            entryCount: number
-            deletedEntryCount: number
-            relationshipCount: number
-            tagCount: number
-        }
-        backups: {
-            directory: string
-            count: number
-            lastBackup: { filename: string; createdAt: string; sizeBytes: number } | null
-        }
-    }
-
-    // Analytics Snapshots
-    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number
-    getLatestAnalyticsSnapshot(
-        type: string
-    ): { id: number; createdAt: string; data: Record<string, unknown> } | null
-    getAnalyticsSnapshots(
-        type: string,
-        limit?: number
-    ): { id: number; createdAt: string; data: Record<string, unknown> }[]
-    computeDigest(workspaceId?: string): Record<string, unknown>
-
-    pragma(command: string): void
-
-    // Advanced Analytic and Relationship queries (Replaces raw queries)
-    getCrossProjectInsights(options: {
-        startDate?: string
-        endDate?: string
-        minEntries: number
-        inactiveThresholdDays: number
+        description?: string,
         workspaceId?: string
-    }): {
-        projects: Record<string, unknown>[]
-        inactiveProjects: { project_number: number; last_entry_date: string }[]
-    }
-
-    visualizeRelationships(options: {
-        entryId?: number
-        tags?: string[]
-        relationshipType?: string
-        depth: number
-        limit: number
-    }): {
-        nodes: {
-            id: string | number
-            label: string
-            group: string
-            metadata?: Record<string, unknown>
-        }[]
-        edges: { from: string | number; to: string | number; label: string; type: string }[]
-    }
-
-    getTeamCollaborationMatrix(options: { period: string; limit: number }): {
-        totalAuthors: number
-        totalEntries: number
-        authorActivity: { author: string; period: string; entryCount: number }[]
-        crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[]
-        impactFactor: { author: string; inboundLinks: number }[]
-    }
-
-    getWorkflowActionEntries(limit: number, workspaceId?: string): JournalEntry[]
-    getSignificantEntries(limit: number, projectNumber?: number, workspaceId?: string): JournalEntry[]
-    getRecentGraphRelationships(limit: number): {
-        from_entry_id: number
-        to_entry_id: number
-        relationship_type: string
-        from_content: string
-        to_content: string
-    }[]
-
-    // ========================================================================
-    // Vector Search Primitives
-    // ========================================================================
-
-    getVectorMetadata(key: string): string | undefined
-    setVectorMetadata(key: string, value: string): void
-    createVecTable(dimensions: number): void
-    dropVecTable(): void
-
-    upsertVector(entryId: number, embedding: Float32Array): void
-    upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void
-    searchVectors(embedding: Float32Array, limit: number): { entry_id: number; distance: number }[]
-    getVector(entryId: number): Float32Array | null
-    deleteVector(entryId: number): void
-    clearVectors(): void
-    getVectorCount(): number
-    cleanupStaleVectors(): void
-
-    // Auto-Prune
-    executeDataLifecycle(options: {
-        archiveOlderThanDays: number
-        pruneOlderThanDays: number
-        hardDeleteOlderThanDays: number
-        importanceThreshold: number
-        dryRun?: boolean
-        excludeTags?: string[]
-    }): {
-        archivedCount: number
-        prunedCount: number
-        hardDeletedCount: number
-        candidates?: {
-            archived: { id: number; importance_score: number }[]
-            pruned: { id: number; importance_score: number }[]
-            hardDeleted: { id: number; age_days: number }[]
-        }
-    }
-
-    executeInTransaction<T>(cb: () => T): T
-
-    getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[]
-    getOrphanCount(workspaceId?: string): number
+    ): Relationship
+    getRelationships(entryId: number, workspaceId?: string): Relationship[]
+    getRelationshipsForEntries(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, Relationship[]>
 }

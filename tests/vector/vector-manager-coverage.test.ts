@@ -105,6 +105,6 @@ describe('VectorSearchManager - error coverage', () => {
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         const stats = manager.getStats()
-        expect(stats.itemCount).toBe(0)
+        expect(stats.itemCount).toBeNull()
     })
 })

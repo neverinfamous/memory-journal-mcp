@@ -65,6 +65,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             return await new jose.SignJWT({ scope })
                 .setProtectedHeader({ alg: 'RS256', kid: 'test-kid-1' })
                 .setIssuedAt()
+                .setSubject('e2e-test-user')
                 .setIssuer(issuer)
                 .setAudience(audience)
                 .setExpirationTime('1h')
@@ -114,15 +115,17 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         serverProcess.stderr?.on('data', (d) => console.error('E2E SERVER STDERR:', d.toString()))
         serverProcess.stdout?.on('data', (d) => console.log('E2E SERVER STDOUT:', d.toString()))
         let ready = false
-        for (let i = 0; i < 120; i++) {
+        for (let i = 0; i < 600; i++) {
             try {
-                const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`)
+                const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`, {
+                    signal: AbortSignal.timeout(1000),
+                })
                 if (res.ok) {
                     ready = true
                     break
                 }
             } catch {}
-            await delay(500)
+            await delay(50)
         }
         if (!ready) throw new Error('MCP server failed to start within 60 seconds')
     })
@@ -223,7 +226,8 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             }
         } else {
             expect(body.error).toBeUndefined()
-            expect(body.result?.isError).not.toBe(true)
+            const allowedText = body.result?.content?.[0]?.text ?? ''
+            expect(allowedText).not.toMatch(/scope|denied|unauthorized|Access/i)
         }
     }
 

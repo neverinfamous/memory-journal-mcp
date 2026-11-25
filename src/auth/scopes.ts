@@ -10,7 +10,6 @@
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 
 // =============================================================================
 // Scope Constants
@@ -78,12 +77,27 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     import_markdown: SCOPES.WRITE,
     import_external: SCOPES.WRITE,
     mark_anchors_stale: SCOPES.WRITE,
+    check_entry_staleness: SCOPES.WRITE,
+    search_audit_log: SCOPES.AUDIT,
     team_import_markdown: SCOPES.TEAM,
+    team_add_member: SCOPES.ADMIN,
+    team_remove_member: SCOPES.ADMIN,
+    team_update_member_role: SCOPES.ADMIN,
+    team_backup: SCOPES.ADMIN,
+    team_merge_tags: SCOPES.ADMIN,
+    team_rebuild_vector_index: SCOPES.ADMIN,
+    team_export_markdown: SCOPES.ADMIN,
+    team_add_author_alias: SCOPES.ADMIN,
+    team_remove_author_alias: SCOPES.ADMIN,
+    team_list_author_aliases: SCOPES.ADMIN,
+    team_resolve_author: SCOPES.ADMIN,
+    team_consolidate_authors: SCOPES.ADMIN,
     mj_execute_code: SCOPES.ADMIN,
     create_entry: SCOPES.WRITE,
     create_entry_minimal: SCOPES.WRITE,
     link_entries: SCOPES.WRITE,
     export_markdown: SCOPES.WRITE,
+    cross_team_search: SCOPES.TEAM,
 
     // Synthetic & healing fallback tools
     read_resource: SCOPES.READ,
@@ -107,19 +121,35 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     'mj.core.delete_entry': SCOPES.ADMIN,
     'mj.core.listProjects': SCOPES.READ,
     'mj.core.list_projects': SCOPES.READ,
+    'mj.core.getProject': SCOPES.READ,
+    'mj.core.get_project': SCOPES.READ,
+    'mj.core.getProjects': SCOPES.READ,
+    'mj.core.get_projects': SCOPES.READ,
     'mj.admin.getProject': SCOPES.READ,
     'mj.admin.get_project': SCOPES.READ,
+    'mj.admin.getProjects': SCOPES.READ,
+    'mj.admin.get_projects': SCOPES.READ,
     'mj.admin.listProjects': SCOPES.READ,
     'mj.admin.list_projects': SCOPES.READ,
+    'mj.projects': SCOPES.READ,
+    'mj.projects.list': SCOPES.READ,
     'mj.projects.listProjects': SCOPES.READ,
     'mj.projects.list_projects': SCOPES.READ,
+    'mj.projects.getProject': SCOPES.READ,
+    'mj.projects.get_project': SCOPES.READ,
+    'mj.projects.getProjects': SCOPES.READ,
+    'mj.projects.get_projects': SCOPES.READ,
 
     // Prefixed Code Mode fallback tools
     mj_core_create_entry: SCOPES.WRITE,
     mj_core_search_entries: SCOPES.READ,
     mj_core_get_recent_entries: SCOPES.READ,
     mj_core_get_entry_by_id: SCOPES.READ,
+    mj_core_get_project: SCOPES.READ,
+    mj_core_list_projects: SCOPES.READ,
+    mj_core_get_projects: SCOPES.READ,
     mj_admin_get_project: SCOPES.READ,
+    mj_admin_get_projects: SCOPES.READ,
     mj_admin_list_projects: SCOPES.READ,
     
     // Project tool fallbacks
@@ -131,11 +161,8 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     getProject: SCOPES.READ,
 }
 
-/**
- * Get the required scope for a tool group.
- */
-export function getScopeForToolGroup(group: ToolGroup): StandardScope {
-    return TOOL_GROUP_SCOPES[group] ?? SCOPES.READ
+export function isToolGroup(key: string): key is ToolGroup {
+    return Object.hasOwn(TOOL_GROUP_SCOPES, key)
 }
 
 // Derived arrays for backward compatibility
@@ -149,9 +176,13 @@ const groupsForScope = (maxScope: StandardScope): ToolGroup[] => {
         full: 3,
     }
     const maxLevel = hierarchy[maxScope]
-    return (Object.entries(TOOL_GROUP_SCOPES) as [ToolGroup, StandardScope][])
-        .filter(([, scope]) => hierarchy[scope] <= maxLevel)
-        .map(([group]) => group)
+    const result: ToolGroup[] = []
+    for (const [group, scope] of Object.entries(TOOL_GROUP_SCOPES)) {
+        if (isToolGroup(group) && hierarchy[scope] <= maxLevel) {
+            result.push(group)
+        }
+    }
+    return result
 }
 
 /**
@@ -181,6 +212,23 @@ export function parseScopes(scopeString: string): string[] {
         .split(/\s+/)
         .map((s) => s.trim())
         .filter((s) => s.length > 0)
+}
+
+/**
+ * Resolve configured bearer/metrics auth scopes from `MCP_AUTH_SCOPES` (comma/whitespace-delimited),
+ * defaulting to `['read']` when unset or when any invalid scope is present.
+ */
+export function resolveEnvAuthScopes(
+    envScopes: string | undefined = process.env['MCP_AUTH_SCOPES']
+): string[] {
+    const parsed = envScopes
+        ? envScopes
+              .split(/[\s,]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+        : []
+    if (parsed.length === 0) return [SCOPES.READ]
+    return parsed.every((s) => isValidScope(s)) ? parsed : [SCOPES.READ]
 }
 
 // =============================================================================
@@ -239,13 +287,6 @@ export function hasAnyScope(grantedScopes: string[], requiredScopes: string[]): 
 }
 
 /**
- * Check if granted scopes include all of the required scopes
- */
-export function hasAllScopes(grantedScopes: string[], requiredScopes: string[]): boolean {
-    return requiredScopes.every((scope) => hasScope(grantedScopes, scope))
-}
-
-/**
  * Check if scopes include admin access
  */
 export function hasAdminScope(scopes: string[]): boolean {
@@ -271,65 +312,19 @@ export function hasReadScope(scopes: string[]): boolean {
 // =============================================================================
 
 /**
- * Get the required minimum scope for a tool group
- */
-export function getRequiredScopeForGroup(group: ToolGroup): string {
-    return TOOL_GROUP_SCOPES[group] ?? SCOPES.READ
-}
-
-/**
  * Get tool groups accessible with given scopes
  */
 export function getAccessibleToolGroups(scopes: string[]): ToolGroup[] {
     if (scopes.includes(SCOPES.FULL) || hasAdminScope(scopes)) {
         return [...ADMIN_SCOPE_GROUPS]
     }
-    if (hasWriteScope(scopes)) {
-        return [...WRITE_SCOPE_GROUPS]
+    const groups = hasWriteScope(scopes)
+        ? [...WRITE_SCOPE_GROUPS]
+        : hasReadScope(scopes)
+          ? [...READ_SCOPE_GROUPS]
+          : []
+    if (scopes.includes(SCOPES.TEAM) && !groups.includes('team')) {
+        groups.push('team')
     }
-    if (hasReadScope(scopes)) {
-        return [...READ_SCOPE_GROUPS]
-    }
-    return []
-}
-
-/**
- * Get all tools accessible with given scopes
- */
-export function getAccessibleTools(scopes: string[]): string[] {
-    const groups = getAccessibleToolGroups(scopes)
-    const allTools: string[] = []
-
-    for (const group of groups) {
-        const groupTools = TOOL_GROUPS[group] ?? []
-        allTools.push(...groupTools)
-    }
-
-    return [...new Set(allTools)]
-}
-
-// =============================================================================
-// Display Utilities
-// =============================================================================
-
-/**
- * Get human-readable display name for a scope
- */
-export function getScopeDisplayName(scope: string): string {
-    switch (scope) {
-        case SCOPES.READ:
-            return 'Read Only'
-        case SCOPES.WRITE:
-            return 'Read/Write'
-        case SCOPES.ADMIN:
-            return 'Administrative'
-        case SCOPES.FULL:
-            return 'Full Access'
-        case SCOPES.TEAM:
-            return 'Team Access'
-        case SCOPES.AUDIT:
-            return 'Audit Log Access'
-        default:
-            return scope
-    }
+    return groups
 }

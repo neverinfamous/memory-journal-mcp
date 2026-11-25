@@ -2,377 +2,422 @@
  * JSON and Entry payload recovery helpers for Code Mode execution payloads.
  */
 
-import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import {
+    recoverStructuredJsonCode,
+    recoverStructuredRecord,
+    resolveRepoWorkspace,
+} from './json-entry-structured.js'
+import {
+    findBalancedDelimitedBlockEnd,
+    scanFallbackContentField,
+    scanQuotedFieldLinear,
+    stripJsCommentsPreservingStrings,
+    stripNestedPropBlocks,
+    type FieldMatchSpan,
+} from './json-entry-field-scanner.js'
+import { stripCommentsAndStrings } from '../../../codemode/security.js'
+import {
+    parseCanonicalPositiveInt,
+    parsePositiveProjectNumber,
+} from '../../../utils/safe-positive-int.js'
 
 /**
  * Auto-heals raw JSON objects or stringified JSON passed as Code Mode execution payloads,
  * translating them into type-safe mj.* Code Mode API calls.
  */
 export function extractAndRecoverJsonCode(code: string): string | null {
-    if (!code || typeof code !== 'string') return null
-    const trimmed = code.trim()
-    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null
+    return recoverStructuredJsonCode(code)
+}
 
-    let parsed: unknown
+/** Auto-heals an already-parsed candidate record without JSON stringify/parse round-trip. */
+export function extractAndRecoverRecordCode(
+    record: Record<string, unknown>,
+    outerFallback?: Record<string, unknown>
+): string | null {
+    return recoverStructuredRecord(record, outerFallback)
+}
+
+function detectRecoverableEntryCall(
+    code: string
+): { isUpdate: boolean; isLegacyUpdateAlias: boolean; isTeamCall: boolean } | null {
+    // Reject multi-call scripts so scope/id fields from an earlier statement are never stolen.
+    const strippedCode = stripCommentsAndStrings(code)
+    const callMatches = strippedCode.match(
+        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory|save_memory|updateEntry|teamUpdateEntry|update_entry|team_update_entry|updateMemory|searchEntries|deleteEntry|getEntryById|listTags|getRecentEntries)\s*\(/gi
+    )
+    if (callMatches !== null && callMatches.length > 1) return null
+
+    const isCreate =
+        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory)\b/i.test(
+            strippedCode
+        )
+    const isStrictUpdate =
+        /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(strippedCode)
+    const isLegacyUpdateAlias = !isStrictUpdate && /\b(?:updateMemory|saveMemory|save_memory)\b/i.test(strippedCode)
+    const isUpdate =
+        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|entryId|id)\s*:\s*-?\d+/i.test(strippedCode))
+    const isTeamCall =
+        /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(
+            strippedCode
+        )
+
+    if (!isCreate && !isStrictUpdate && !isLegacyUpdateAlias) return null
+    return { isUpdate, isLegacyUpdateAlias, isTeamCall }
+}
+
+function unescapeQuotes(value: string): string {
+    return value.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
+}
+
+const MAX_FUZZY_ENTRY_RECOVERY_LENGTH = 32_768
+const MAX_ENTRY_FIELD_CANDIDATES = 16
+
+function regexToSpan(content: string, match: RegExpExecArray): { content: string; span: FieldMatchSpan } {
+    return {
+        content,
+        span: { content, start: match.index, end: match.index + match[0].length },
+    }
+}
+
+function extractContentField(
+    code: string
+): { content: string; span: FieldMatchSpan } | null {
+    const backtickMatch =
+        /\bcontent\s*:\s*`((?:[^`\\]|\\[\s\S])*)`(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+            code
+        )
+    if (backtickMatch?.[1] !== undefined) return regexToSpan(backtickMatch[1], backtickMatch)
+    const singleMatch =
+        /\bcontent\s*:\s*'((?:[^'\\]|\\[\s\S])*)'(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+            code
+        )
+    if (singleMatch?.[1] !== undefined) return regexToSpan(singleMatch[1], singleMatch)
+    const doubleMatch =
+        /\bcontent\s*:\s*"((?:[^"\\]|\\[\s\S])*)"(?=\s*(?:(?:,\s*|\s+)[a-zA-Z_$][\w$]*\s*:|,\s*\}|\}|\)))/i.exec(
+            code
+        )
+    if (doubleMatch?.[1] !== undefined) return regexToSpan(doubleMatch[1], doubleMatch)
+
+    const fallbackSpan = scanFallbackContentField(code)
+    if (fallbackSpan !== null) return { content: fallbackSpan.content, span: fallbackSpan }
+
+    const altBacktickSpan = scanQuotedFieldLinear(code, /\bcontent\s*:\s*(`)/i, 'prop-or-brace')
+    if (altBacktickSpan !== null) return { content: altBacktickSpan.content, span: altBacktickSpan }
+
+    const descSpan = scanQuotedFieldLinear(
+        code,
+        /\b(?:description|summary)\s*:\s*(['"`])/i,
+        'prop-brace-or-paren'
+    )
+    if (descSpan !== null) return { content: descSpan.content, span: descSpan }
+    return null
+}
+
+function removeSpan(text: string, span: { start: number; end: number }): string {
+    return `${text.slice(0, span.start)}${text.slice(span.end)}`
+}
+
+function extractRecoveredEntryContentAndTitle(
+    code: string
+): { content: string; title: string | undefined; scanCode: string } | null {
+    const fieldCandidates = code.match(/\b(?:content|description|summary)\s*:/gi)
+    if (fieldCandidates !== null && fieldCandidates.length > MAX_ENTRY_FIELD_CANDIDATES) {
+        return null
+    }
+    const extractedContent = extractContentField(code)
+    if (extractedContent === null || extractedContent.content === '') return null
+
+    // [C4] Field regexes scan the code with content and title match spans removed by exact index,
+    // so `content: 'default', workspace_id: 'default'` never erases `workspace_id`.
+    const scanWithTitle = removeSpan(code, extractedContent.span)
+    const titleCandidates = scanWithTitle.match(/\btitle\s*:/gi)
+    let titleSpan: { content: string; start: number; end: number } | null = null
+    if (titleCandidates === null || titleCandidates.length <= MAX_ENTRY_FIELD_CANDIDATES) {
+        titleSpan = scanQuotedFieldLinear(
+            scanWithTitle,
+            /\btitle\s*:\s*(['"`])/i,
+            'prop-brace-or-paren'
+        )
+        if (titleSpan === null) {
+            const shortTitleMatch = /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
+            if (shortTitleMatch?.[2] !== undefined) {
+                titleSpan = {
+                    content: shortTitleMatch[2],
+                    start: shortTitleMatch.index,
+                    end: shortTitleMatch.index + shortTitleMatch[0].length,
+                }
+            }
+        }
+    }
+    const scanCode = titleSpan !== null ? removeSpan(scanWithTitle, titleSpan) : scanWithTitle
+
+    return {
+        content: unescapeQuotes(extractedContent.content),
+        title: titleSpan !== null ? unescapeQuotes(titleSpan.content) : undefined,
+        scanCode,
+    }
+}
+
+function toUnknownArray(arr: readonly unknown[]): unknown[] {
+    const out: unknown[] = []
+    for (const item of arr) out.push(item)
+    return out
+}
+
+function parseRelaxedJsonArray(rawArr: string): unknown[] | undefined {
     try {
-        parsed = JSON.parse(trimmed)
+        const parsed: unknown = JSON.parse(rawArr)
+        if (Array.isArray(parsed)) return toUnknownArray(parsed)
     } catch {
-        return null
+        try {
+            const normalized = rawArr
+                .replace(/'([^']*)'/g, '"$1"')
+                .replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
+            const parsed: unknown = JSON.parse(normalized)
+            if (Array.isArray(parsed)) return toUnknownArray(parsed)
+        } catch {
+            return undefined
+        }
     }
+    return undefined
+}
 
-    if (!isRecord(parsed)) {
-        return null
+function parseRelaxedAutoContext(rawAutoContext: string): unknown {
+    try {
+        return JSON.parse(rawAutoContext)
+    } catch {
+        try {
+            const normalized = rawAutoContext.replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
+            return JSON.parse(normalized)
+        } catch {
+            return undefined
+        }
     }
+}
 
-    // Unwrap nested container if caller wrapped payload/entry/input
-    let target: Record<string, unknown> = parsed
-    if (isRecord(parsed['payload'])) {
-        target = parsed['payload']
-    } else if (isRecord(parsed['entry'])) {
-        target = parsed['entry']
-    } else if (isRecord(parsed['input'])) {
-        target = parsed['input']
+function extractBalancedArrayBlock(
+    source: string,
+    candidateRe: RegExp,
+    startRe: RegExp
+): string | undefined {
+    const candidates = source.match(candidateRe)
+    if (candidates !== null && candidates.length > MAX_ENTRY_FIELD_CANDIDATES) return undefined
+    const m = startRe.exec(source)
+    if (m === null) return undefined
+    const openIdx = m.index + m[0].length - 1
+    const endIdx = findBalancedDelimitedBlockEnd(source, openIdx, '[', ']')
+    const candidateSlice = source.slice(openIdx, endIdx)
+    return candidateSlice.endsWith(']') ? candidateSlice : undefined
+}
+
+function populateRecoveredTags(payload: Record<string, unknown>, topLevelScanCode: string): void {
+    const rawTagsBlock = extractBalancedArrayBlock(topLevelScanCode, /\btags\s*:/gi, /\btags\s*:\s*\[/i)
+    if (rawTagsBlock === undefined) return
+    const parsedTags = parseRelaxedJsonArray(rawTagsBlock)
+    if (parsedTags?.every((t): t is string => typeof t === 'string') === true) {
+        payload['tags'] = parsedTags.map((t) => t.trim()).filter(Boolean)
+        return
     }
+    payload['tags'] = rawTagsBlock
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean)
+}
 
-    // Check if target has an explicit tool/method call invocation
-    const toolName =
-        typeof target['tool'] === 'string'
-            ? target['tool']
-            : typeof target['method'] === 'string'
-              ? target['method']
-              : typeof target['function'] === 'string'
-                ? target['function']
-                : undefined
-    if (toolName !== undefined && toolName !== '') {
-        const toolParams = isRecord(target['params'])
-            ? target['params']
-            : isRecord(target['args'])
-              ? target['args']
-              : {}
-        const cleanTool = toolName.replace(/^mj[._]/, '')
-        return `return await (mj.${cleanTool} || mj.core.${cleanTool} || mj.${toolName})(${JSON.stringify(toolParams)});`
+function populateRecoveredAutoContext(payload: Record<string, unknown>, scanCode: string): void {
+    const autoContextCandidates = scanCode.match(/\b(?:auto_context|autoContext)\s*:/gi)
+    const autoContextStartMatch =
+        autoContextCandidates !== null && autoContextCandidates.length > MAX_ENTRY_FIELD_CANDIDATES
+            ? null
+            : /\b(?:auto_context|autoContext)\s*:\s*(\{)/i.exec(scanCode)
+    if (autoContextStartMatch === null) return
+    const openBraceIdx = autoContextStartMatch.index + autoContextStartMatch[0].length - 1
+    const endBraceIdx = findBalancedDelimitedBlockEnd(scanCode, openBraceIdx, '{', '}')
+    const candidateSlice = scanCode.slice(openBraceIdx, endBraceIdx)
+    if (!candidateSlice.endsWith('}')) return
+    const parsedAutoContext = parseRelaxedAutoContext(candidateSlice)
+    if (parsedAutoContext !== undefined) payload['auto_context'] = parsedAutoContext
+}
+
+function populateRecoveredArrayAndContextFields(
+    payload: Record<string, unknown>,
+    scanCode: string,
+    topLevelScanCode: string
+): void {
+    const arraySpecs = [
+        ['relationships', /\brelationships\s*:/gi, /\brelationships\s*:\s*\[/i],
+        ['anchors', /\banchors\s*:/gi, /\banchors\s*:\s*\[/i],
+    ] as const
+    for (const [key, candRe, startRe] of arraySpecs) {
+        const rawArr = extractBalancedArrayBlock(scanCode, candRe, startRe)
+        if (rawArr === undefined) continue
+        const parsed = parseRelaxedJsonArray(rawArr)
+        if (parsed !== undefined) payload[key] = parsed
     }
+    populateRecoveredTags(payload, topLevelScanCode)
+    populateRecoveredAutoContext(payload, scanCode)
+}
 
-    // Check if target is a search/query request
-    const isSearchAction = target['action'] === 'search' || target['operation'] === 'search' || target['op'] === 'search'
-    if (
-        isSearchAction ||
-        (typeof target['query'] === 'string' &&
-            target['content'] === undefined &&
-            target['notes'] === undefined &&
-            target['changes'] === undefined &&
-            target['task'] === undefined)
-    ) {
-        const queryStr =
-            typeof target['query'] === 'string'
-                ? target['query']
-                : typeof target['search'] === 'string'
-                  ? target['search']
-                  : ''
-        const searchParams: Record<string, unknown> = { query: queryStr }
-        if (typeof target['limit'] === 'number') searchParams['limit'] = target['limit']
-        if (typeof target['project_number'] === 'number') searchParams['project_number'] = target['project_number']
-        return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
+function populateRecoveredEntryFlags(payload: Record<string, unknown>, topLevelScanCode: string): void {
+    const isArchivedMatch = /\b(?:is_archived|isArchived)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
+    if (isArchivedMatch?.[1] !== undefined) {
+        payload['is_archived'] = isArchivedMatch[1].toLowerCase() === 'true'
     }
-
-    // Check if target is purely a read/get entry by ID
-    const entryId =
-        typeof target['entry_id'] === 'number'
-            ? target['entry_id']
-            : typeof target['id'] === 'number'
-              ? target['id']
-              : typeof target['entry_id'] === 'string' && !Number.isNaN(Number(target['entry_id']))
-                ? Number(target['entry_id'])
-                : undefined
-
-    const op =
-        typeof target['operation'] === 'string'
-            ? target['operation']
-            : typeof target['op'] === 'string'
-              ? target['op']
-              : typeof target['action'] === 'string'
-                ? target['action']
-                : ''
-
-    const isDelete = op === 'delete' || op === 'delete_entry'
-    if (isDelete && entryId !== undefined) {
-        return `return await mj.core.deleteEntry({ entry_id: ${entryId} });`
+    const autoLinkMatch = /\b(?:auto_link|autoLink)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
+    if (autoLinkMatch?.[1] !== undefined) {
+        payload['auto_link'] = autoLinkMatch[1].toLowerCase() === 'true'
     }
-
-    const hasContent = typeof target['content'] === 'string' && target['content'].trim().length > 0
-    const hasNotes = typeof target['notes'] === 'string' && target['notes'].trim().length > 0
-    const hasChanges =
-        (Array.isArray(target['changes']) && target['changes'].length > 0) ||
-        (typeof target['changes'] === 'string' && target['changes'].trim().length > 0)
-    const hasTask = typeof target['task'] === 'string' && target['task'].trim().length > 0
-    const hasTitle = typeof target['title'] === 'string' && target['title'].trim().length > 0
-    const hasSummary = typeof target['summary'] === 'string' && target['summary'].trim().length > 0
-    const hasDescription = typeof target['description'] === 'string' && target['description'].trim().length > 0
-    const hasFindings =
-        (Array.isArray(target['findings']) && target['findings'].length > 0) ||
-        (typeof target['findings'] === 'string' && target['findings'].trim().length > 0)
-    const hasDetails = typeof target['details'] === 'string' && target['details'].trim().length > 0
-    const hasStatus = typeof target['status'] === 'string' && target['status'].trim().length > 0
-    const hasType =
-        typeof target['type'] === 'string' ||
-        typeof target['entry_type'] === 'string' ||
-        typeof target['category'] === 'string'
-    const hasOp = op === 'create_entry' || op === 'add_entry' || op === 'create' || op === 'update_entry' || op === 'update'
-
-    if (
-        !hasContent &&
-        !hasNotes &&
-        !hasChanges &&
-        !hasTask &&
-        !hasTitle &&
-        !hasSummary &&
-        !hasDescription &&
-        !hasFindings &&
-        !hasDetails &&
-        !hasType &&
-        !hasOp &&
-        entryId !== undefined
-    ) {
-        return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
-    }
-
-    if (
-        !hasContent &&
-        !hasNotes &&
-        !hasChanges &&
-        !hasTask &&
-        !hasTitle &&
-        !hasSummary &&
-        !hasDescription &&
-        !hasFindings &&
-        !hasDetails &&
-        !hasType &&
-        !hasOp
-    ) {
-        return null
-    }
-
-    const contentSections: string[] = []
-    if (hasContent) contentSections.push(String(target['content']).trim())
-    if (hasNotes) contentSections.push(String(target['notes']).trim())
-    if (hasSummary && target['summary'] !== target['title'] && target['summary'] !== target['task']) {
-        contentSections.push(String(target['summary']).trim())
-    }
-    if (hasDescription) contentSections.push(String(target['description']).trim())
-    if (hasDetails) contentSections.push(String(target['details']).trim())
-    if (hasChanges) {
-        if (Array.isArray(target['changes'])) {
-            const list = target['changes'].map((c) => `- ${String(c)}`).join('\n')
-            contentSections.push(`**Changes:**\n${list}`)
+    const verMatch =
+        /\b(?:expected_version|expectedVersion)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
+            topLevelScanCode
+        )
+    const rawVer = verMatch?.[1] ?? verMatch?.[3]?.trim()
+    if (rawVer !== undefined && rawVer !== '') {
+        const parsedVer = parseCanonicalPositiveInt(rawVer)
+        if (parsedVer !== undefined) {
+            payload['expected_version'] = parsedVer
+        } else if (verMatch?.[1] !== undefined) {
+            const numVer = Number(rawVer)
+            payload['expected_version'] = Number.isFinite(numVer) ? numVer : rawVer
         } else {
-            contentSections.push(`**Changes:**\n${String(target['changes']).trim()}`)
+            payload['expected_version'] = rawVer
         }
     }
-    if (hasFindings) {
-        if (Array.isArray(target['findings'])) {
-            const list = target['findings'].map((f) => `- ${String(f)}`).join('\n')
-            contentSections.push(`**Findings:**\n${list}`)
-        } else {
-            contentSections.push(`**Findings:**\n${String(target['findings']).trim()}`)
+}
+
+function populateRecoveredEntryIdField(
+    payload: Record<string, unknown>,
+    topLevelScanCode: string
+): void {
+    const entryIdMatch =
+        /\b(?:entry_id|entryId|id)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
+            topLevelScanCode
+        )
+    const rawEntryId = entryIdMatch?.[1] ?? entryIdMatch?.[3]?.trim()
+    if (rawEntryId === undefined || rawEntryId === '') return
+    const eid = parseCanonicalPositiveInt(rawEntryId)
+    if (eid !== undefined) {
+        payload['entry_id'] = eid
+    } else if (entryIdMatch?.[1] !== undefined) {
+        const numEid = Number(rawEntryId)
+        payload['entry_id'] = Number.isFinite(numEid) ? numEid : rawEntryId
+    } else {
+        payload['entry_id'] = rawEntryId
+    }
+}
+
+function populateRecoveredIdsAndScope(payload: Record<string, unknown>, topLevelScanCode: string): void {
+    populateRecoveredEntryIdField(payload, topLevelScanCode)
+    const projectMatch =
+        /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(-?\d+(?:\.\d+)?)|(['"`])([^'"`]+)\2)/i.exec(
+            topLevelScanCode
+        )
+    const workspaceMatch =
+        /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    const repoMatch =
+        /\b(?:repo|repo_name|repoName|repository)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    const targetWorkspaceMatch =
+        /\b(?:target_workspace_id|targetWorkspaceId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    if (projectMatch?.[1] !== undefined) {
+        const parsedProj = parsePositiveProjectNumber(projectMatch[1])
+        if (parsedProj !== undefined) payload['project_number'] = parsedProj
+        else {
+            const numProj = Number(projectMatch[1])
+            payload['project_number'] = Number.isFinite(numProj) ? numProj : projectMatch[1]
         }
+    } else if (projectMatch?.[3] !== undefined && projectMatch[3].trim() !== '') {
+        payload['project_number'] = projectMatch[3].trim()
     }
-    if (hasStatus) {
-        contentSections.push(`**Status:** ${String(target['status']).trim()}`)
+    if (workspaceMatch?.[2] !== undefined) payload['workspace_id'] = workspaceMatch[2]
+    else if (repoMatch?.[2] !== undefined) {
+        const resolvedRepoWs = resolveRepoWorkspace(repoMatch[2])
+        if (resolvedRepoWs !== undefined) payload['workspace_id'] = resolvedRepoWs
     }
+    if (targetWorkspaceMatch?.[2] !== undefined && targetWorkspaceMatch[2].trim() !== '') {
+        payload['target_workspace_id'] = targetWorkspaceMatch[2].trim()
+    }
+    if (sessionMatch?.[2] !== undefined) payload['session_id'] = sessionMatch[2]
+}
 
-    let finalContent = contentSections.filter(Boolean).join('\n\n')
-    if (finalContent === '' && (hasTask || hasTitle)) {
-        finalContent = String(target['task'] ?? target['title'])
-    }
-    if (finalContent === '') {
-        finalContent = 'Recorded via Code Mode payload'
-    }
+function populateRecoveredScoresAndStatuses(
+    payload: Record<string, unknown>,
+    topLevelScanCode: string
+): void {
+    const impactMatch = /\b(?:impact_score|impactScore|impact)\s*:\s*([0-9.]+)/i.exec(topLevelScanCode)
+    const trustMatch = /\b(?:trust_score|trustScore|trust)\s*:\s*([0-9.]+)/i.exec(topLevelScanCode)
+    const validationMatch =
+        /\b(?:validation_status|validationStatus)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    const sigMatch =
+        /\b(?:significance_type|significanceType)\s*:\s*(['"`])([^'"`]+)\1/i.exec(topLevelScanCode)
+    const isPersonalMatch = /\b(?:is_personal|isPersonal)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
+    const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
+    const useTestDbMatch = /\b(?:use_test_db|useTestDb)\s*:\s*(true|false)\b/i.exec(topLevelScanCode)
 
-    let title: string
-    if (hasTitle) title = String(target['title']).trim()
-    else if (hasTask) title = String(target['task']).trim()
-    else if (hasSummary) title = String(target['summary']).trim().slice(0, 80)
-    else title = 'Journal Entry'
+    if (impactMatch?.[1] !== undefined) {
+        const parsedImpact = Number(impactMatch[1])
+        if (Number.isFinite(parsedImpact)) payload['impact_score'] = parsedImpact
+    }
+    if (trustMatch?.[1] !== undefined) {
+        const parsedTrust = Number(trustMatch[1])
+        if (Number.isFinite(parsedTrust)) payload['trust_score'] = parsedTrust
+    }
+    if (validationMatch?.[2] !== undefined) payload['validation_status'] = validationMatch[2]
+    if (sigMatch?.[2] !== undefined) payload['significance_type'] = sigMatch[2]
+    if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
+    if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
+    if (useTestDbMatch?.[1]?.toLowerCase() === 'true') payload['use_test_db'] = true
+}
 
-    const rawType = target['entry_type'] ?? target['type'] ?? target['category']
-    let entryType = 'technical_decision'
-    if (typeof rawType === 'string') {
-        const low = rawType.toLowerCase()
-        if (low === 'code' || low === 'coding' || low === 'technical' || low === 'task') {
-            entryType = 'technical_decision'
-        } else {
-            entryType = low
-        }
-    }
-
-    const tags: string[] = []
-    if (Array.isArray(target['tags'])) {
-        for (const t of target['tags']) {
-            if (typeof t === 'string' && t.trim().length > 0 && !tags.includes(t.trim())) {
-                tags.push(t.trim())
-            }
-        }
-    } else if (typeof target['tags'] === 'string') {
-        for (const t of target['tags'].split(',')) {
-            const trimmedTag = t.trim()
-            if (trimmedTag.length > 0 && !tags.includes(trimmedTag)) {
-                tags.push(trimmedTag)
-            }
-        }
-    }
-    if (
-        typeof target['project'] === 'string' &&
-        target['project'].trim().length > 0 &&
-        !tags.includes(target['project'].trim())
-    ) {
-        tags.push(target['project'].trim())
-    }
-
-    const autoContext: Record<string, unknown> = {}
-    for (const key of [
-        'task',
-        'status',
-        'changes',
-        'notes',
-        'details',
-        'action',
-        'component',
-        'pr_link',
-        'issue_link',
-        'validation_status',
-    ]) {
-        if (target[key] !== undefined) {
-            autoContext[key] = target[key]
-        }
-    }
-
-    const entryParams: Record<string, unknown> = {
-        title,
-        content: finalContent,
-        entry_type: entryType,
-        tags,
-    }
-    if (Object.keys(autoContext).length > 0) {
-        entryParams['auto_context'] = autoContext
-    }
-    if (typeof target['workspace_id'] === 'string') entryParams['workspace_id'] = target['workspace_id']
-    if (typeof target['session_id'] === 'string') entryParams['session_id'] = target['session_id']
-    if (typeof target['project_number'] === 'number') entryParams['project_number'] = target['project_number']
-    if (typeof target['impact'] === 'number') entryParams['impact'] = target['impact']
-    if (typeof target['trust'] === 'number') entryParams['trust'] = target['trust']
-    if (typeof target['validation_status'] === 'string') entryParams['validation_status'] = target['validation_status']
-
-    const isUpdate = op === 'update_entry' || op === 'update' || (entryId !== undefined && !hasOp)
-    if (isUpdate && entryId !== undefined) {
-        entryParams['entry_id'] = entryId
-        return `return await mj.admin.updateEntry(${JSON.stringify(entryParams)});`
-    }
-
-    return `return await mj.core.createEntry(${JSON.stringify(entryParams)});`
+function populateRecoveredEntryMetadata(
+    payload: Record<string, unknown>,
+    scanCode: string,
+    preStrippedTopLevel?: string
+): void {
+    const topLevelScanCode = preStrippedTopLevel ?? stripNestedPropBlocks(scanCode)
+    populateRecoveredIdsAndScope(payload, topLevelScanCode)
+    populateRecoveredScoresAndStatuses(payload, topLevelScanCode)
+    populateRecoveredEntryFlags(payload, topLevelScanCode)
+    populateRecoveredArrayAndContextFields(payload, scanCode, topLevelScanCode)
 }
 
 /**
  * Attempt fuzzy recovery of an entry creation or update call from broken/mangled code
  */
 export function extractAndRecoverEntryCode(code: string): string | null {
-    if (!code || typeof code !== 'string') return null
+    if (!code || typeof code !== 'string' || code.length > 50_000) return null
 
     const jsonRecovered = extractAndRecoverJsonCode(code)
     if (jsonRecovered !== null) return jsonRecovered
+    if (code.length > MAX_FUZZY_ENTRY_RECOVERY_LENGTH) return null
 
-    const isCreate =
-        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory)\b/i.test(
-            code
-        )
-    const isUpdate = /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry|updateMemory)\b/i.test(code)
+    const detected = detectRecoverableEntryCall(code)
+    if (detected === null) return null
 
-    if (!isCreate && !isUpdate) return null
+    const commentFreeCode = stripJsCommentsPreservingStrings(code)
+    const extracted = extractRecoveredEntryContentAndTitle(commentFreeCode)
+    if (extracted === null) return null
 
-    const backtickMatch =
-        /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
-    const singleMatch =
-        /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
-    const doubleMatch =
-        /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
-    const fallbackMatch =
-        /\bcontent\s*:\s*[`'"]([\s\S]*?)(?:[`'"]\s*)?(?=,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\))/i.exec(
-            code
-        )
-
-    let content: string | undefined =
-        backtickMatch?.[1] ?? singleMatch?.[1] ?? doubleMatch?.[1] ?? fallbackMatch?.[1]
-
-    if (content === undefined) {
-        const altMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)
-        if (altMatch?.[1] !== undefined) content = altMatch[1]
-    }
-
-    if (content === undefined) {
-        const descMatch =
-            /\b(?:description|summary)\s*:\s*[`'"]([\s\S]*?)[`'"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
-                code
-            )
-        if (descMatch?.[1] !== undefined) content = descMatch[1]
-    }
-
-    if (content === undefined || content === '') return null
-
-    content = content.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
-
-    const typeMatch = /\b(?:entry_type|type)\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const titleMatch =
-        /\btitle\s*:\s*[`'"]([\s\S]*?)`['"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code) ??
-        /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const projectMatch = /\b(?:project_number|project)\s*:\s*(\d+)/i.exec(code)
-    const sessionMatch = /\bsession_id\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const impactMatch = /\bimpact\s*:\s*([0-9.]+)/i.exec(code)
-    const trustMatch = /\btrust\s*:\s*([0-9.]+)/i.exec(code)
-    const validationMatch = /\bvalidation_status\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const tagsMatch = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(code)
-    const autoContextMatch = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(code)
-
+    const cleanScanCode = extracted.scanCode
+    const topLevelScanCode = stripNestedPropBlocks(cleanScanCode)
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(topLevelScanCode)
     const payload: Record<string, unknown> = {
-        content,
-        entry_type: typeMatch?.[1] ?? 'technical_decision',
+        content: extracted.content,
+    }
+    if (extracted.title !== undefined && extracted.title !== '') payload['title'] = extracted.title
+
+    populateRecoveredEntryMetadata(payload, cleanScanCode, topLevelScanCode)
+    const isUpdate =
+        detected.isUpdate || (detected.isLegacyUpdateAlias && payload['entry_id'] !== undefined)
+    if (typeMatch?.[2] !== undefined) {
+        payload['entry_type'] = typeMatch[2]
+    } else if (!isUpdate) {
+        payload['entry_type'] = 'technical_note'
     }
 
-    const title = titleMatch?.[1]?.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
-    if (title !== undefined && title !== '') payload['title'] = title
-
-    const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(code)
-    if (entryIdMatch?.[1] !== undefined) payload['entry_id'] = parseInt(entryIdMatch[1], 10)
-    if (projectMatch?.[1] !== undefined) payload['project_number'] = parseInt(projectMatch[1], 10)
-    if (sessionMatch?.[1] !== undefined) payload['session_id'] = sessionMatch[1]
-    if (impactMatch?.[1] !== undefined) payload['impact'] = parseFloat(impactMatch[1])
-    if (trustMatch?.[1] !== undefined) payload['trust'] = parseFloat(trustMatch[1])
-    if (validationMatch?.[1] !== undefined) payload['validation_status'] = validationMatch[1]
-
-    const rawTags = tagsMatch?.[1]
-    if (rawTags !== undefined) {
-        try {
-            payload['tags'] = rawTags
-                .split(',')
-                .map((s: string): string => s.trim().replace(/^['"]|['"]$/g, ''))
-                .filter(Boolean)
-        } catch {
-            // Ignore tag parse error
-        }
-    }
-
-    const rawAutoContext = autoContextMatch?.[1]
-    if (rawAutoContext !== undefined) {
-        try {
-            payload['auto_context'] = JSON.parse(rawAutoContext)
-        } catch {
-            try {
-                const normalizedJson = rawAutoContext.replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
-                payload['auto_context'] = JSON.parse(normalizedJson)
-            } catch {
-                // Ignore auto_context parse error
-            }
-        }
-    }
-
-    const fnName = isUpdate && payload['entry_id'] !== undefined ? 'mj.updateEntry' : 'mj.createEntry'
+    const fnName = isUpdate
+        ? detected.isTeamCall ? 'mj.team.teamUpdateEntry' : 'mj.updateEntry'
+        : detected.isTeamCall ? 'mj.team.teamCreateEntry' : 'mj.createEntry'
     return `return await ${fnName}(${JSON.stringify(payload)});`
 }

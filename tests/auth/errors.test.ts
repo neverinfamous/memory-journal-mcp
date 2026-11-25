@@ -14,7 +14,6 @@ import {
     JwksFetchError,
     ClientRegistrationError,
     isOAuthError,
-    getWWWAuthenticateHeader,
 } from '../../src/auth/errors.js'
 import { MemoryJournalMcpError } from '../../src/types/errors.js'
 
@@ -151,19 +150,5 @@ describe('isOAuthError', () => {
         expect(isOAuthError(new Error('generic'))).toBe(false)
         expect(isOAuthError('string')).toBe(false)
         expect(isOAuthError(null)).toBe(false)
-    })
-})
-
-describe('getWWWAuthenticateHeader', () => {
-    it('should return error WWW-Authenticate when available', () => {
-        const error = new TokenMissingError()
-        const header = getWWWAuthenticateHeader(error)
-        expect(header).toContain('Bearer')
-    })
-
-    it('should fall back to realm when no WWW-Authenticate', () => {
-        const error = new AuthServerDiscoveryError('https://auth.example.com')
-        const header = getWWWAuthenticateHeader(error, 'test-realm')
-        expect(header).toContain('test-realm')
     })
 })

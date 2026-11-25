@@ -1,6 +1,23 @@
 import { z } from 'zod'
 
 import { relaxedNumber } from '../schemas.js'
+import { isRecord } from '../../../utils/type-guards.js'
+
+/**
+ * [M10] Null/empty/non-numeric/non-positive timeouts resolve to `undefined` (server default)
+ * instead of `z.coerce.number()` turning `null`/`""` into a 0ms timeout.
+ */
+const POSITIVE_TIMEOUT = z.preprocess((val) => {
+    if (val === undefined || val === null) return undefined
+    if (typeof val === 'string' && val.trim() === '') return undefined
+    const num =
+        typeof val === 'number'
+            ? val
+            : typeof val === 'string' && /^\d+(?:\.\d+)?$/.test(val.trim())
+              ? Number(val.trim())
+              : Number.NaN
+    return Number.isFinite(num) && num > 0 ? Math.max(1, Math.ceil(num)) : undefined
+}, z.number().int().positive().optional())
 
 // ============================================================================
 // Tool Classification Sets
@@ -23,6 +40,11 @@ export const VERSION_AWARE_TOOL_NAMES = new Set([
 
 export const ExecuteCodeSchema = z.preprocess((val) => {
     if (typeof val === 'string') return { code: val }
+    if (isRecord(val)) {
+        if (val['dry_run'] === undefined && val['dryRun'] !== undefined) {
+            return { ...val, dry_run: val['dryRun'] }
+        }
+    }
     return val
 }, z.object({
     code: z.string().optional(),
@@ -63,15 +85,29 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     insight: z.string().optional(),
     knowledge: z.string().optional(),
     entry: z.unknown().optional(),
-    auto_version: z.boolean().optional().default(true),
+    auto_version: z.boolean().optional(),
+    autoVersion: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
-    workspace_id: z.string().optional(),
+    projectNumber: relaxedNumber().optional(),
+    workspace_id: z.string().max(255).optional(),
+    workspaceId: z.string().max(255).optional(),
     repo: z.string().optional(),
+    repo_name: z.string().optional(),
+    repoName: z.string().optional(),
+    repository: z.string().optional(),
+    session_id: z.string().optional(),
+    sessionId: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
+    dryRun: z.boolean().optional(),
     context: z.unknown().optional(),
-    timeout_ms: z.coerce.number().optional(),
-    timeout: z.coerce.number().optional(),
+    timeout_ms: POSITIVE_TIMEOUT,
+    timeoutMs: POSITIVE_TIMEOUT,
+    timeout: POSITIVE_TIMEOUT,
     readonly: z.boolean().optional(),
+    read_only: z.boolean().optional(),
+    readOnly: z.boolean().optional(),
+    use_test_db: z.boolean().optional().describe('Route Code Mode calls to the isolated test database when configured.'),
+    useTestDb: z.boolean().optional().describe('Compatibility alias for use_test_db.'),
     max_result_size: relaxedNumber().optional(),
     maxResultSize: relaxedNumber().optional(),
     max_result_size_kb: relaxedNumber().optional(),
@@ -106,17 +142,16 @@ export const ExecuteCodeSchemaMcp = z.object({
     auto_version: z
         .boolean()
         .optional()
-        .default(true)
         .describe('Automatically inject expected_version for optimistic concurrency on updates/deletes'),
     project_number: relaxedNumber().optional()
-        .optional()
         .describe(
             'Numeric project ID to bind to all tool calls in this sandbox. ' +
             'Repo name strings (e.g., "mysql-mcp") are auto-resolved via the project registry. ' +
-            'Falls back to DEFAULT_PROJECT_NUMBER if unspecified. Find it by querying memory://agent-id.'
+            'Falls back to DEFAULT_PROJECT_NUMBER if unspecified. Find it by querying memory://agent-context/<repo>.'
         ),
     workspace_id: z
         .string()
+        .max(255)
         .optional()
         .describe(
             'Target workspace ID to isolate data. If omitted, uses defaultWorkspaceId if configured.'
@@ -127,10 +162,17 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
         ),
+    repo_name: z
+        .string()
+        .optional()
+        .describe('Compatibility alias for repo.'),
+    session_id: z
+        .string()
+        .optional()
+        .describe('Optional session identifier to associate with sandbox entries and telemetry.'),
     dry_run: z
         .boolean()
         .optional()
-        .default(false)
         .describe(
             'If true, state-modifying API calls (create_entry, update_entry, etc.) will be skipped, returning simulated success.'
         ),
@@ -145,15 +187,17 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'If true, execution is restricted to read-only operations. Write tools will be filtered out of the API bridge.'
         ),
-    timeout: z.preprocess(
-        (val) => {
-            if (val === undefined || val === null) return undefined;
-            const num = Number(val);
-            return Number.isNaN(num) ? undefined : num;
-        },
-        z.number().optional()
-    ).describe(
+    readOnly: z.boolean().optional().describe('Compatibility alias for readonly.'),
+    read_only: z.boolean().optional().describe('Compatibility alias for readonly.'),
+    use_test_db: z
+        .boolean()
+        .optional()
+        .describe('Route Code Mode calls to the isolated test database when configured.'),
+    timeout: POSITIVE_TIMEOUT.describe(
         'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
+    ),
+    timeout_ms: POSITIVE_TIMEOUT.describe(
+        'Alias for timeout (maximum execution time in milliseconds, max: 30000ms).'
     ),
     max_result_size: relaxedNumber()
         .optional()
@@ -163,4 +207,10 @@ export const ExecuteCodeSchemaMcp = z.object({
     maxResultSize: relaxedNumber()
         .optional()
         .describe('Alias for max_result_size.'),
+    max_result_size_kb: relaxedNumber()
+        .optional()
+        .describe('Alias for max_result_size specified in kilobytes (multiplied by 1024).'),
+    max_result_size_bytes: relaxedNumber()
+        .optional()
+        .describe('Alias for max_result_size specified in bytes.'),
 })

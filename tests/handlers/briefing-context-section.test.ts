@@ -160,6 +160,17 @@ describe('buildJournalContext', () => {
 
         expect(result.latestEntries[0]!.preview).toBe('')
     })
+
+    it('skips searchEntries queries when entryCount and summaryCount are 0', () => {
+        const db = createMockDb()
+        const config = createMockConfig({ entryCount: 0, summaryCount: 0 })
+        const result = buildJournalContext({ db } as never, config as never)
+
+        expect(db.searchEntries).not.toHaveBeenCalled()
+        expect(result.totalEntries).toBe(42)
+        expect(result.latestEntries).toEqual([])
+        expect(result.sessionSummaries).toBeUndefined()
+    })
 })
 
 // ============================================================================
@@ -274,6 +285,21 @@ describe('buildTeamContext', () => {
         // Unicode ellipsis (…) instead of ASCII dots (...)
         expect(result!.teamInfo.latestPreview).toContain('\u2026')
         expect(result!.teamLatestEntries![0]!.preview).toContain('\u2026')
+    })
+
+    it('skips importance hydration and caps searchEntries fetch limit when briefingImportanceThreshold is 0', () => {
+        const calculateImportance = vi.fn().mockReturnValue({ score: 0.9 })
+        const db = createMockDb({ calculateImportance })
+        const context = { db } as never
+        const config = createMockConfig({ briefingImportanceThreshold: 0, entryCount: 3, summaryCount: 1 })
+
+        const result = buildJournalContext(context, config as never, undefined, 'ws')
+        expect(result.latestEntries.length).toBeGreaterThan(0)
+        expect(calculateImportance).not.toHaveBeenCalled()
+        expect(db.searchEntries).toHaveBeenCalledWith(
+            '',
+            expect.objectContaining({ limit: 10, sortBy: 'timestamp' })
+        )
     })
 })
 

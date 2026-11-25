@@ -5,13 +5,13 @@
  * Deterministic filenames allow re-export to overwrite identically.
  */
 
-import { mkdir, open } from 'node:fs/promises'
+import { lstat, mkdir, open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { constants, realpathSync } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
-import type { FrontmatterData } from './frontmatter.js'
+import type { FrontmatterAnchor, FrontmatterData } from './frontmatter.js'
 import { logger } from '../utils/logger.js'
 
 import { assertSafeDirectoryPath } from '../utils/security-utils.js'
@@ -27,8 +27,10 @@ export interface ExportableEntry {
     entryType: string
     timestamp: string
     tags: string[]
-    significance?: string
-    author?: string
+    significance?: string | undefined
+    author?: string | undefined
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 /** Result of an export operation */
@@ -38,6 +40,7 @@ export interface ExportResult {
     output_dir: string
     files: string[]
     skipped: number
+    errors?: { file: string; error: string }[]
 }
 
 // ============================================================================
@@ -75,6 +78,263 @@ export function generateFilename(id: number, content: string): string {
 // Exporter
 // ============================================================================
 
+interface ExportRelationshipRef {
+    relationshipType: string
+    fromEntryId: number
+    toEntryId: number
+}
+
+function buildExportFileContent(
+    entry: ExportableEntry,
+    relationships: readonly ExportRelationshipRef[],
+    anchors?: readonly FrontmatterAnchor[]
+): string {
+    const fmData: FrontmatterData = {
+        mj_id: entry.id,
+        entry_type: entry.entryType,
+        timestamp: entry.timestamp,
+        // [INVARIANT] Emit 'default' explicitly so round-trip imports cannot be re-scoped by CWD/keywords.
+        ...(entry.workspaceId !== undefined && entry.workspaceId.trim() !== ''
+            ? { workspace_id: entry.workspaceId }
+            : {}),
+        ...(entry.projectNumber !== undefined &&
+        Number.isSafeInteger(entry.projectNumber) &&
+        entry.projectNumber > 0
+            ? { project_number: entry.projectNumber }
+            : {}),
+        source: 'memory-journal-mcp',
+    }
+    if (entry.tags !== undefined && entry.tags.length > 0) {
+        fmData.tags = entry.tags
+    }
+    if (entry.significance !== undefined) {
+        fmData.significance = entry.significance
+    }
+    if (entry.author !== undefined) {
+        fmData.author = entry.author
+    }
+    const outgoing = relationships.filter((r) => r.fromEntryId === entry.id)
+    if (outgoing.length > 0) {
+        fmData.relationships = outgoing.map((r) => ({
+            type: r.relationshipType,
+            target_id: r.toEntryId,
+        }))
+    }
+    if (anchors !== undefined && anchors.length > 0) {
+        fmData.anchors = [...anchors]
+    }
+    return serializeFrontmatter(fmData) + '\n' + entry.content + '\n'
+}
+
+function filesystemErrorCode(err: unknown): string | undefined {
+    if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
+    const code = err.code
+    return typeof code === 'string' ? code : undefined
+}
+
+async function writeExportFile(
+    resolvedOutputDir: string,
+    filename: string,
+    fileContent: string
+): Promise<'written' | { error: string }> {
+    const filepath = join(resolvedOutputDir, filename)
+    try {
+        const preStat = await lstat(filepath)
+        if (
+            preStat.isSymbolicLink() ||
+            (typeof preStat.isFile === 'function' && !preStat.isFile())
+        ) {
+            logger.warning('Refusing to overwrite symlink during export', { module: 'Exporter', filepath })
+            return { error: 'Refusing to overwrite symlink during export' }
+        }
+    } catch (statErr: unknown) {
+        if (filesystemErrorCode(statErr) !== 'ENOENT') {
+            const errMessage = statErr instanceof Error ? statErr.message : String(statErr)
+            logger.error('Failed to write markdown file', {
+                module: 'Exporter',
+                filepath,
+                error: errMessage,
+            })
+            return { error: errMessage }
+        }
+    }
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+        handle = await open(
+            filepath,
+            constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0),
+            0o600
+        )
+        const openStat = await handle.stat()
+        if (!openStat.isFile()) {
+            logger.warning('Refusing to overwrite non-regular file during export', {
+                module: 'Exporter',
+                filepath,
+            })
+            return { error: 'Refusing to overwrite non-regular file during export' }
+        }
+        await handle.writeFile(fileContent, 'utf-8')
+        return 'written'
+    } catch (err: unknown) {
+        const code = filesystemErrorCode(err)
+        const errMessage =
+            code === 'ELOOP' || code === 'EEXIST'
+                ? 'Refusing to overwrite symlink during export'
+                : err instanceof Error
+                  ? err.message
+                  : String(err)
+        if (code === 'ELOOP' || code === 'EEXIST') {
+            logger.warning('Refusing to overwrite symlink during export', { module: 'Exporter', filepath })
+        } else {
+            logger.error('Failed to write markdown file', {
+                module: 'Exporter',
+                filepath,
+                error: errMessage,
+            })
+        }
+        return { error: errMessage }
+    } finally {
+        if (handle !== undefined) {
+            await Promise.resolve(handle.close()).catch((closeErr: unknown) => {
+                logger.debug('Failed to close export file handle', {
+                    module: 'Exporter',
+                    filepath,
+                    error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                })
+            })
+        }
+    }
+}
+
+function loadExportRelationships(
+    db: IDatabaseAdapter,
+    entries: ExportableEntry[]
+): ReturnType<IDatabaseAdapter['getRelationshipsForEntries']> {
+    const idsByWorkspace = new Map<string, number[]>()
+    for (const entry of entries) {
+        const workspaceId = entry.workspaceId ?? 'default'
+        const ids = idsByWorkspace.get(workspaceId)
+        if (ids === undefined) idsByWorkspace.set(workspaceId, [entry.id])
+        else ids.push(entry.id)
+    }
+
+    if (idsByWorkspace.size <= 1) {
+        const onlyWorkspace = idsByWorkspace.keys().next().value
+        const scope = typeof onlyWorkspace === 'string' ? onlyWorkspace : '*'
+        return db.getRelationshipsForEntries(
+            entries.map((entry) => entry.id),
+            scope
+        )
+    }
+
+    const merged: ReturnType<IDatabaseAdapter['getRelationshipsForEntries']> = new Map()
+    for (const [workspaceId, ids] of idsByWorkspace) {
+        const part = db.getRelationshipsForEntries(ids, workspaceId)
+        for (const [entryId, relationships] of part) {
+            const existing = merged.get(entryId)
+            if (existing === undefined) merged.set(entryId, [...relationships])
+            else existing.push(...relationships)
+        }
+    }
+    return merged
+}
+
+function loadExportAnchors(
+    db: IDatabaseAdapter,
+    entries: ExportableEntry[]
+): Map<number, FrontmatterAnchor[]> {
+    const result = new Map<number, FrontmatterAnchor[]>()
+    if (entries.length === 0 || typeof db.getAnchorsByEntryIds !== 'function') return result
+
+    const idsByWorkspace = new Map<string, number[]>()
+    for (const entry of entries) {
+        const workspaceId = entry.workspaceId ?? 'default'
+        const ids = idsByWorkspace.get(workspaceId)
+        if (ids === undefined) idsByWorkspace.set(workspaceId, [entry.id])
+        else ids.push(entry.id)
+    }
+
+    for (const [workspaceId, ids] of idsByWorkspace) {
+        const part = db.getAnchorsByEntryIds(ids, workspaceId)
+        for (const [entryId, anchors] of part) {
+            const serializedAnchors: FrontmatterAnchor[] = anchors.map((a) => {
+                if (
+                    a.anchorType === 'file' &&
+                    !a.anchorPath.includes('#') &&
+                    (typeof a.status !== 'string' || a.status === 'pending')
+                ) {
+                    return a.anchorPath
+                }
+                return {
+                    anchor_path: a.anchorPath,
+                    anchor_type: a.anchorType,
+                    ...(typeof a.status === 'string' ? { status: a.status } : {}),
+                }
+            })
+            if (serializedAnchors.length === 0) continue
+            const existing = result.get(entryId)
+            if (existing === undefined) result.set(entryId, serializedAnchors)
+            else existing.push(...serializedAnchors)
+        }
+    }
+    return result
+}
+
+async function prepareSafeExportDir(
+    outputDir: string,
+    allowedRoots: string[]
+): Promise<{ resolvedOutputDir: string; pinnedRealDir: string }> {
+    assertSafeDirectoryPath(outputDir, allowedRoots)
+
+    const resolvedOutputDir = resolve(outputDir)
+    const resolvedTmpDir = resolve(tmpdir())
+    let realTmpDir = resolvedTmpDir
+    try {
+        realTmpDir = realpathSync.native(resolvedTmpDir)
+    } catch {
+        // Use resolvedTmpDir when realpath lookup fails
+    }
+    const isWin32 = process.platform === 'win32'
+    const isInsideTmp = (candidate: string): boolean => {
+        for (const tmpRoot of [resolvedTmpDir, realTmpDir]) {
+            const relToTmp = relative(
+                isWin32 ? tmpRoot.toLowerCase() : tmpRoot,
+                isWin32 ? candidate.toLowerCase() : candidate
+            )
+            if (
+                relToTmp === '' ||
+                (relToTmp !== '..' && !relToTmp.startsWith('..' + sep) && !isAbsolute(relToTmp))
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+    const resolveNearestExistingRealPath = (target: string): string => {
+        let cur = target
+        while (true) {
+            try {
+                return realpathSync.native(cur)
+            } catch {
+                const parent = resolve(cur, '..')
+                if (parent === cur) return cur
+                cur = parent
+            }
+        }
+    }
+    if (isInsideTmp(resolvedOutputDir) || isInsideTmp(resolveNearestExistingRealPath(resolvedOutputDir))) {
+        throw new Error('Refusing to export markdown files into the OS temporary directory')
+    }
+
+    await mkdir(resolvedOutputDir, { recursive: true })
+    const postMkdirReal = realpathSync.native(resolvedOutputDir)
+    assertSafeDirectoryPath(postMkdirReal, allowedRoots)
+    if (isInsideTmp(postMkdirReal)) {
+        throw new Error('Refusing to export markdown files into the OS temporary directory')
+    }
+    return { resolvedOutputDir, pinnedRealDir: postMkdirReal }
+}
+
 /**
  * Export journal entries to frontmattered markdown files.
  *
@@ -94,144 +354,64 @@ export async function exportEntriesToMarkdown(
     db: IDatabaseAdapter,
     allowedRoots: string[]
 ): Promise<ExportResult> {
-    // Dynamically enforce bounded root
-    assertSafeDirectoryPath(outputDir, allowedRoots)
-
-    // Guard: refuse to export into the OS temporary directory (CodeQL js/insecure-temporary-file)
-    const resolvedOutputDir = resolve(outputDir)
-    const resolvedTmpDir = resolve(tmpdir())
-    const tmpPrefix = resolvedTmpDir.endsWith(sep) ? resolvedTmpDir : resolvedTmpDir + sep
-    if (resolvedOutputDir === resolvedTmpDir || resolvedOutputDir.startsWith(tmpPrefix)) {
-        throw new Error('Refusing to export markdown files into the OS temporary directory')
-    }
-
-    await mkdir(resolvedOutputDir, { recursive: true })
+    const { resolvedOutputDir, pinnedRealDir } = await prepareSafeExportDir(outputDir, allowedRoots)
 
     const files: string[] = []
+    const errors: { file: string; error: string }[] = []
     let skipped = 0
 
     const validEntries = entries.filter((e) => e.content.trim())
     skipped += entries.length - validEntries.length
 
-    // Batch fetch relationships
-    // We do not catch and swallow errors here. If relationship fetch fails, we must
-    // explicitly fail the export to prevent generating corrupt files that lack their
-    // associated relationship data, preserving interchange fidelity.
-    const relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
+    const relationshipsMap = loadExportRelationships(db, validEntries)
+    const anchorsMap = loadExportAnchors(db, validEntries)
 
     const CHUNK_SIZE = 50
-    for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
-        const chunk = validEntries.slice(i, i + CHUNK_SIZE)
+    const exportChunkAt = async (index: number): Promise<void> => {
+        if (index >= validEntries.length) return
+        const chunk = validEntries.slice(index, index + CHUNK_SIZE)
         const preChunkRealpath = realpathSync.native(resolvedOutputDir)
-        let directorySwapped = false
+        if (preChunkRealpath !== pinnedRealDir) {
+            throw new Error(
+                'Directory swapped during export operation! Aborting to prevent path traversal.'
+            )
+        }
+        assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
 
         await Promise.all(
             chunk.map(async (entry) => {
-                // Build frontmatter data
-                const fmData: FrontmatterData = {
-                    mj_id: entry.id,
-                    entry_type: entry.entryType,
-                    timestamp: entry.timestamp,
-                    source: 'memory-journal-mcp',
-                }
-
-                if (entry.tags !== undefined && entry.tags.length > 0) {
-                    fmData.tags = entry.tags
-                }
-
-                if (entry.significance !== undefined) {
-                    fmData.significance = entry.significance
-                }
-
-                if (entry.author !== undefined) {
-                    fmData.author = entry.author
-                }
-
-                // Apply pre-fetched relationships for this entry
                 const relationships = relationshipsMap.get(entry.id) ?? []
-                if (relationships.length > 0) {
-                    fmData.relationships = relationships.map((r) => ({
-                        type: r.relationshipType,
-                        target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
-                    }))
-                }
-
-                // Generate file content
-                const frontmatter = serializeFrontmatter(fmData)
-                const fileContent = frontmatter + '\n' + entry.content + '\n'
-
-                // Write file atomically preventing symlink traversal via O_NOFOLLOW
+                const anchors = anchorsMap.get(entry.id)
+                const fileContent = buildExportFileContent(entry, relationships, anchors)
                 const filename = generateFilename(entry.id, entry.content)
-                const filepath = join(resolvedOutputDir, filename)
-
-                let handle
-                try {
-                    // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
-                    handle = await open(
-                        filepath,
-                        constants.O_WRONLY |
-                            constants.O_CREAT |
-                            constants.O_TRUNC |
-                            constants.O_NOFOLLOW,
-                        0o600
-                    )
-
-                    // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
-                    const postRealpath = realpathSync.native(resolvedOutputDir)
-                    if (preChunkRealpath !== postRealpath) {
-                        directorySwapped = true
-                        throw new Error(
-                            `Directory swapped during export operation! Aborting to prevent path traversal.`
-                        )
-                    }
-
-                    await handle.writeFile(fileContent, 'utf-8')
+                const outcome = await writeExportFile(preChunkRealpath, filename, fileContent)
+                if (outcome === 'written') {
                     files.push(filename)
-                } catch (err: unknown) {
-                    if (
-                        err instanceof Error &&
-                        (err.message.includes('became a symlink') ||
-                            err.message.includes('Directory swapped'))
-                    ) {
-                        throw err
-                    }
-
-                    const code =
-                        err instanceof Error && 'code' in err
-                            ? (err as { code?: string }).code
-                            : undefined
-                    if (code === 'ELOOP' || code === 'EEXIST') {
-                        logger.warning('Refusing to overwrite symlink during export', {
-                            module: 'Exporter',
-                            filepath,
-                        })
-                        skipped++
-                    } else {
-                        logger.error('Failed to write markdown file', {
-                            module: 'Exporter',
-                            filepath,
-                            error: err instanceof Error ? err.message : String(err),
-                        })
-                        skipped++
-                    }
-                } finally {
-                    if (handle) {
-                        await handle.close()
-                    }
+                } else {
+                    skipped++
+                    errors.push({ file: filename, error: outcome.error })
                 }
             })
         )
 
-        if (!directorySwapped) {
-            assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
+        const postChunkRealpath = realpathSync.native(resolvedOutputDir)
+        if (preChunkRealpath !== postChunkRealpath) {
+            throw new Error(
+                'Directory swapped during export operation! Aborting to prevent path traversal.'
+            )
         }
+        assertSafeDirectoryPath(postChunkRealpath, allowedRoots)
+        return exportChunkAt(index + CHUNK_SIZE)
     }
 
+    await exportChunkAt(0)
+
     return {
-        success: true,
+        success: errors.length === 0,
         exported_count: files.length,
         output_dir: resolvedOutputDir,
         files,
         skipped,
+        ...(errors.length > 0 ? { errors } : {}),
     }
 }

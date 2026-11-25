@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { validateResourceSubscription } from '../../src/handlers/resources/index.js'
 import { ResourceNotFoundError, PermissionError } from '../../src/types/errors.js'
-import { withAuthContext } from '../../src/auth/auth-context.js'
+import { runWithAuthContext } from '../../src/auth/auth-context.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import { AuditLogger } from '../../src/audit/index.js'
 
@@ -46,7 +46,7 @@ describe('validateResourceSubscription', () => {
 
     describe('with OAuth context', () => {
         it('throws PermissionError when accessing audit resource with only read scope', () => {
-            withAuthContext(
+            runWithAuthContext(
                 { authenticated: true, scopes: ['read'], claims: { sub: 'user1', scopes: ['read'], exp: 9999999999, iat: 1234567890 } },
                 () => {
                     expect(() => {
@@ -62,7 +62,7 @@ describe('validateResourceSubscription', () => {
         })
 
         it('passes validation when accessing audit resource with audit scope', () => {
-            withAuthContext(
+            runWithAuthContext(
                 { authenticated: true, scopes: ['audit'], claims: { sub: 'user1', scopes: ['audit'], exp: 9999999999, iat: 1234567890 } },
                 () => {
                     expect(() => {
@@ -73,7 +73,7 @@ describe('validateResourceSubscription', () => {
         })
 
         it('throws PermissionError when accessing team resource with only read scope', () => {
-            withAuthContext(
+            runWithAuthContext(
                 { authenticated: true, scopes: ['read'], claims: { sub: 'user1', scopes: ['read'], exp: 9999999999, iat: 1234567890 } },
                 () => {
                     expect(() => {
@@ -84,7 +84,7 @@ describe('validateResourceSubscription', () => {
         })
 
         it('passes validation when accessing team resource with team scope', () => {
-            withAuthContext(
+            runWithAuthContext(
                 { authenticated: true, scopes: ['team'], claims: { sub: 'user1', scopes: ['team'], exp: 9999999999, iat: 1234567890 } },
                 () => {
                     expect(() => {
@@ -95,7 +95,7 @@ describe('validateResourceSubscription', () => {
         })
 
         it('passes validation when accessing admin resource with admin scope', () => {
-            withAuthContext(
+            runWithAuthContext(
                 { authenticated: true, scopes: ['admin'], claims: { sub: 'user1', scopes: ['admin'], exp: 9999999999, iat: 1234567890 } },
                 () => {
                     expect(() => {

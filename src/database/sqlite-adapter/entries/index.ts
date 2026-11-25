@@ -7,8 +7,11 @@ import type { EntriesSharedContext } from './shared.js'
 import {
     createEntry,
     getEntryById,
+    hasActiveEntry,
+    getActiveEntryIds,
     getEntriesByIds,
     getEntryByIdIncludeDeleted,
+    getEntriesByIdsIncludeDeleted,
     getActiveEntryCount,
     updateEntry,
     deleteEntry,
@@ -22,6 +25,7 @@ import {
 import {
     getRecentEntries as getRecentEntriesQuery,
     getEntriesPage,
+    getEntriesAfter,
     searchEntries,
     getSearchFacets,
     searchByDateRange,
@@ -30,12 +34,13 @@ import {
     getEntriesByPR,
     getEntriesByWorkflowRun,
     getEntriesBySession,
+    getLatestEntryPerProject,
     type SortBy,
 } from './search/index.js'
 export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
-import { calculateImportance, getEntriesByIdsWithImportance } from './importance.js'
+import { calculateImportance, getEntriesByIdsWithImportance, getImportanceScoresByIds } from './importance.js'
 import { getStatistics } from './statistics.js'
-import { updateAnchorStatus, getAnchorsByEntryId } from './anchors.js'
+import { updateAnchorStatus, getAnchorsByEntryId, getAnchorsByEntryIds } from './anchors.js'
 
 export class EntriesManager {
     private sharedContext: EntriesSharedContext
@@ -59,22 +64,42 @@ export class EntriesManager {
         return getEntryById(this.sharedContext, id, workspaceId)
     }
 
-    getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
-        return getEntriesByIds(this.sharedContext, ids)
+    hasActiveEntry(id: number): boolean {
+        return hasActiveEntry(this.sharedContext, id)
+    }
+
+    getActiveEntryIds(ids: readonly number[]): Set<number> {
+        return getActiveEntryIds(this.sharedContext, ids)
+    }
+
+    getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return getEntriesByIds(this.sharedContext, ids, workspaceId)
     }
 
     getEntriesByIdsWithImportance(
-        ids: number[]
+        ids: number[],
+        workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
-        return getEntriesByIdsWithImportance(this.sharedContext, ids)
+        return getEntriesByIdsWithImportance(this.sharedContext, ids, workspaceId)
+    }
+
+    getImportanceScoresByIds(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, ImportanceResult> {
+        return getImportanceScoresByIds(this.sharedContext, entryIds, workspaceId)
     }
 
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
         return getEntryByIdIncludeDeleted(this.sharedContext, id, workspaceId)
     }
 
-    getActiveEntryCount(workspaceId?: string): number {
-        return getActiveEntryCount(this.sharedContext, workspaceId)
+    getEntriesByIdsIncludeDeleted(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return getEntriesByIdsIncludeDeleted(this.sharedContext, ids, workspaceId)
+    }
+
+    getActiveEntryCount(workspaceId?: string, projectNumber?: number): number {
+        return getActiveEntryCount(this.sharedContext, workspaceId, projectNumber)
     }
 
     updateEntry(
@@ -96,11 +121,14 @@ export class EntriesManager {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            sessionId?: string | null
             targetWorkspaceId?: string
         }
     ): JournalEntry | null {
@@ -134,11 +162,15 @@ export class EntriesManager {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[]
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            sessionId?: string | null
+            targetWorkspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return updateEntries(this.sharedContext, updates)
@@ -148,15 +180,32 @@ export class EntriesManager {
         return deleteEntries(this.sharedContext, ids, permanent, workspaceId)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number, offset?: number): { entries: JournalEntry[]; nextCursor?: string } {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number, offset?: number): { entries: JournalEntry[]; nextCursor?: string | undefined } {
         if (isPersonal !== undefined) {
             return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
+        const recentSortBy: SortBy = sortBy === 'blended' ? 'importance' : (sortBy ?? 'timestamp')
+        return getRecentEntriesQuery(this.sharedContext, limit, recentSortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
     }
 
-    getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): { entries: JournalEntry[]; nextCursor?: string } {
-        return getEntriesPage(this.sharedContext, offset, limit, order)
+    getEntriesPage(
+        offset: number,
+        limit: number,
+        order: 'asc' | 'desc' = 'desc',
+        workspaceId = 'default',
+        projectNumber?: number
+    ): { entries: JournalEntry[]; nextCursor?: string } {
+        return getEntriesPage(this.sharedContext, offset, limit, order, workspaceId, projectNumber)
+    }
+
+    getEntriesAfter(
+        limit: number,
+        order: 'asc' | 'desc' = 'desc',
+        workspaceId = 'default',
+        projectNumber?: number,
+        cursor?: { timestamp: string; id: number }
+    ): JournalEntry[] {
+        return getEntriesAfter(this.sharedContext, limit, order, workspaceId, projectNumber, cursor)
     }
 
     searchEntries(
@@ -169,6 +218,11 @@ export class EntriesManager {
             prNumber?: number
             prStatus?: string
             workflowRunId?: number
+            tags?: string[]
+            excludeTags?: string[]
+            entryType?: EntryType
+            startDate?: string
+            endDate?: string
             sortBy?: SortBy
             cursor?: string
             includeArchived?: boolean
@@ -178,7 +232,7 @@ export class EntriesManager {
             workspaceId?: string
             offset?: number
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
+    ): { entries: JournalEntry[]; nextCursor?: string | undefined; degraded?: boolean | undefined; highlights?: { id: number; snippet: string }[] | undefined; suggestions?: string[] | undefined; correctedQuery?: string | undefined } {
         return searchEntries(this.sharedContext, queryStr, options)
     }
 
@@ -192,13 +246,14 @@ export class EntriesManager {
             prStatus?: string
             workflowRunId?: number
             tags?: string[]
+            excludeTags?: string[]
             entryType?: EntryType
             startDate?: string
             endDate?: string
             includeArchived?: boolean
             workspaceId?: string
         }
-    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[]; degraded?: boolean } {
         return getSearchFacets(this.sharedContext, queryStr, options)
     }
 
@@ -208,6 +263,7 @@ export class EntriesManager {
         options?: {
             entryType?: EntryType
             tags?: string[]
+            excludeTags?: string[]
             isPersonal?: boolean
             projectNumber?: number
             issueNumber?: number
@@ -223,8 +279,8 @@ export class EntriesManager {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
     }
 
-    calculateImportance(entryId: number): ImportanceResult {
-        return calculateImportance(this.sharedContext, entryId)
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult | null {
+        return calculateImportance(this.sharedContext, entryId, workspaceId)
     }
 
     getStatistics(
@@ -232,29 +288,47 @@ export class EntriesManager {
         startDate?: string,
         endDate?: string,
         projectBreakdown?: boolean,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): Record<string, unknown> {
-        return getStatistics(this.sharedContext, timeframe, startDate, endDate, projectBreakdown, workspaceId)
+        return getStatistics(
+            this.sharedContext,
+            timeframe,
+            startDate,
+            endDate,
+            projectBreakdown,
+            workspaceId,
+            projectNumber
+        )
     }
 
-    getEntryHistory(id: number): EntryRevision[] {
-        return getEntryHistory(this.sharedContext, id)
+    getEntryHistory(id: number, workspaceId?: string): EntryRevision[] {
+        return getEntryHistory(this.sharedContext, id, workspaceId)
     }
 
     restoreEntry(id: number, workspaceId?: string): boolean {
         return restoreEntry(this.sharedContext, id, workspaceId)
     }
 
-    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number } {
+    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string; projectNumber?: number }): { entries: JournalEntry[]; count: number } {
         return getDeletedEntries(this.sharedContext, options)
     }
 
-    updateAnchorStatus(id: number, status: AnchorStatus): void {
-        updateAnchorStatus(this.sharedContext, id, status)
+    updateAnchorStatus(
+        id: number,
+        status: AnchorStatus,
+        workspaceId?: string,
+        projectNumber?: number
+    ): boolean {
+        return updateAnchorStatus(this.sharedContext, id, status, workspaceId, projectNumber)
     }
 
-    getAnchorsByEntryId(entryId: number): Anchor[] {
-        return getAnchorsByEntryId(this.sharedContext, entryId)
+    getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[] {
+        return getAnchorsByEntryId(this.sharedContext, entryId, workspaceId)
+    }
+
+    getAnchorsByEntryIds(entryIds: number[], workspaceId?: string): Map<number, Anchor[]> {
+        return getAnchorsByEntryIds(this.sharedContext, entryIds, workspaceId)
     }
 
     getEntriesByProject(projectNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {
@@ -275,5 +349,9 @@ export class EntriesManager {
 
     getEntriesBySession(sessionId: string, limit = 50, workspaceId?: string): JournalEntry[] {
         return getEntriesBySession(this.sharedContext, sessionId, limit, workspaceId)
+    }
+
+    getLatestEntryPerProject(): Map<string, { id: number; timestamp: string; entryType: string }> {
+        return getLatestEntryPerProject(this.sharedContext)
     }
 }

@@ -2,6 +2,8 @@
  * Dummy Healing Tool Alias Catalog
  */
 
+import { methodTokens } from '../../../../codemode/method-tokens.js'
+
 export const DUMMY_DOTTED_TOOL_NAMES = [
     'mj.core.createEntry',
     'mj.core.create_entry',
@@ -50,12 +52,6 @@ export const DUMMY_PROMPT_TOOL_NAMES = [
     'prepare_retro',
     'weekly-digest',
     'weekly_digest',
-    'git-impact-search',
-    'git_impact_search',
-    'git-velocity-report',
-    'git_velocity_report',
-    'git-audit-trust',
-    'git_audit_trust',
 ]
 
 export const DUMMY_RESOURCE_TOOL_NAMES = [
@@ -73,6 +69,7 @@ export const DUMMY_RESOURCE_TOOL_NAMES = [
     'memoryGetResource',
     'mj_get_resource',
     'mjGetResource',
+    'mjReadResource',
     'read_memory_resource',
 ]
 
@@ -204,6 +201,7 @@ export const DUMMY_SERVER_INFO_TOOL_NAMES = [
 ]
 
 export const DUMMY_PROJECT_TOOL_NAMES = [
+    'projects',
     'list_projects',
     'listProjects',
     'list-projects',
@@ -302,3 +300,50 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     ...DUMMY_MJ_FUNC_TOOL_NAMES,
     ...DUMMY_DOTTED_TOOL_NAMES,
 ])
+
+/** Namespace prefixes stripped before exact alias lookup (`mj.core.getProjects` -> `get_projects`). */
+const PROJECT_ALIAS_PREFIX_TOKENS = new Set(['mj', 'core', 'admin', 'search'])
+
+/**
+ * [INVARIANT] Exact alias sets — no fuzzy token matching, so names like `delete_projects`,
+ * `update_projects`, `get_cross_project_insights`, `get_project_kanban` are never misrouted.
+ */
+const GET_PROJECT_ALIASES = new Set([
+    'get_project',
+    'find_project',
+    'project_get',
+    'projects_get',
+    'projects_get_project',
+    'projects_find',
+    'project_find',
+])
+const LIST_PROJECTS_ALIASES = new Set([
+    'projects',
+    'get_projects',
+    'list_projects',
+    'list_project',
+    'find_projects',
+    'all_projects',
+    'get_all_projects',
+    'list_all_projects',
+    'projects_list',
+    'projects_list_projects',
+    'projects_get_projects',
+    'projects_all',
+])
+
+export const DUMMY_URI_CANDIDATE_KEYS = [
+    'uri', 'Uri', '_uri', 'resourceUri', 'resource_uri', 'resource', 'Resource',
+    'url', 'Url', 'path', 'Path', 'name', 'Name',
+    'target', 'Target', 'ServerName', 'server_name',
+] as const
+
+export function projectAliasTarget(name: string): 'get_project' | 'list_projects' | undefined {
+    const tokens = methodTokens(name)
+    let start = 0
+    while (start < tokens.length - 1 && PROJECT_ALIAS_PREFIX_TOKENS.has(tokens[start] ?? '')) start++
+    const key = tokens.slice(start).join('_')
+    if (GET_PROJECT_ALIASES.has(key)) return 'get_project'
+    if (LIST_PROJECTS_ALIASES.has(key)) return 'list_projects'
+    return undefined
+}

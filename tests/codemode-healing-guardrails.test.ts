@@ -29,7 +29,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 '## Context for Next Session',
                 '- The repository is completely up to date, typechecked, linted, and ready for deployment.',
                 '- The next session will focus on deploying the new version.',
-                '- Remember to configure the custom logo URL using \\`https://d1.adamic.tech/favicon.svg\\` once deployed.`,',
+                '- Remember to configure the custom logo URL using \\`https://example.com/favicon.svg\\` once deployed.`,',
                 '    project_number: 1,',
                 '    session_id: "2026-08-19-maintenance"',
                 '})'
@@ -70,7 +70,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     })
 
     describe('Layer 3: Worker Result Proxy Failed Result Safety', () => {
-        it('should safely return empty arrays and 0 length on failed result object without throwing', () => {
+        it('throws from array methods on a failed result instead of pretending the call returned no rows', () => {
             const failedResult = wrapResult({
                 success: false,
                 error: 'Entry 9999 not found',
@@ -78,12 +78,15 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }) as Record<string, unknown>
 
             expect(failedResult['success']).toBe(false)
-            expect(failedResult['relationships']).toEqual([])
-            expect(failedResult['entries']).toEqual([])
-            expect(failedResult['projects']).toEqual([])
-            expect(failedResult['length']).toBe(0)
+            expect(() => failedResult['relationships']).toThrow('Entry 9999 not found')
+            expect(() => failedResult['entries']).toThrow('Entry 9999 not found')
+            expect(() => failedResult['items']).toThrow('Entry 9999 not found')
+            expect(() => failedResult['deleted']).toThrow('Entry 9999 not found')
+            expect(() => [...(failedResult as unknown as Iterable<unknown>)]).toThrow('Entry 9999 not found')
+            expect(() => failedResult['projects']).toThrow('Entry 9999 not found')
+            expect(() => failedResult['length']).toThrow('Entry 9999 not found')
             expect(typeof failedResult['map']).toBe('function')
-            expect((failedResult['map'] as (fn: (x: unknown) => unknown) => unknown[])(() => 1)).toEqual([])
+            expect(() => (failedResult['map'] as () => unknown)()).toThrow('Entry 9999 not found')
         })
     })
 
@@ -102,7 +105,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     describe('Layer 2: Empty Payload Auto-Healing Interceptor', () => {
         it('should parse empty objects with default values', () => {
             const parsed = ExecuteCodeSchema.parse({})
-            expect(parsed['auto_version']).toBe(true)
+            expect(parsed['auto_version']).toBeUndefined()
             expect(parsed['dry_run']).toBe(false)
             expect(parsed['code']).toBeUndefined()
         })
@@ -155,9 +158,9 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(String(resPrompts['_healing_note'])).toContain('AUTONOMOUS HEALING')
 
             const resTools = await listToolsTool!.handler({}) as Record<string, unknown>
-            expect(resTools['success']).toBe(true)
+            expect(resTools['success']).toBe(false)
             expect(Array.isArray(resTools['tools'])).toBe(true)
-            expect(String(resTools['_healing_note'])).toContain('AUTONOMOUS HEALING')
+            expect(String(resTools['_healing_note'])).toContain('was not built')
         })
 
         it('should have load-briefing and mj_session_summary dummy prompt handlers', async () => {
@@ -197,30 +200,12 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     })
 
     describe('Layer 2: SQL Query Code Mode Auto-Healing (agent-issues.jsonl regression)', () => {
-        it('should auto-heal raw SELECT queries from agent issues into valid Code Mode calls', () => {
+        it('leaves an unmatched SELECT as SQL instead of reading recent entries', () => {
             const rawSql = 'SELECT id, type, content, metadata FROM journal_entries ORDER BY id DESC LIMIT 10;'
             const healed = healCodeModeScript(rawSql)
 
-            expect(healed).toBeDefined()
-            expect(healed).toContain('mj.core.getRecentEntries')
-            expect(healed).toContain('"limit":10')
-
-            // Verify healed code compiles and executes in a VM script
-            const wrapped = `(async () => {
-                let calledWith = null;
-                const mj = {
-                    core: {
-                        getRecentEntries: async (params) => {
-                            calledWith = params;
-                            return { success: true, entries: [] };
-                        }
-                    }
-                };
-                ${healed}
-            })()`
-            expect(() => {
-                new vm.Script(wrapped)
-            }).not.toThrow()
+            expect(healed).not.toContain('mj.core.getRecentEntries')
+            expect(healed).toContain('SELECT')
         })
 
         it('should auto-heal SELECT by ID queries', () => {
@@ -241,12 +226,12 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(healed).toContain('authentication')
         })
 
-        it('should auto-heal COUNT(*) queries into analytics statistics calls', () => {
+        it('leaves a COUNT query as SQL instead of calling statistics', () => {
             const rawSql = 'SELECT count(*) FROM journal_entries;'
             const healed = healCodeModeScript(rawSql)
 
-            expect(healed).toBeDefined()
-            expect(healed).toContain('mj.analytics.getStatistics')
+            expect(healed).not.toContain('mj.analytics.getStatistics')
+            expect(healed).toContain('count(*)')
         })
 
         it('should auto-heal queries on tags table into listTags', () => {
@@ -257,14 +242,31 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(healed).toContain('mj.core.listTags')
         })
 
-        it('should auto-heal PRAGMA and SHOW commands into getStatistics', () => {
+        it('keeps workspace_id on a healed DELETE and ignores a later numeric bind for a literal id', async () => {
+            const { extractAndRecoverPreparedStatementCode, extractAndRecoverSqlCode } = await import(
+                '../src/handlers/tools/codemode/sql-recovery.js'
+            )
+            const deleted = extractAndRecoverSqlCode(
+                "DELETE FROM memory_journal WHERE id = 12 AND workspace_id = 'core-platform'"
+            )
+            expect(deleted).toContain('"workspace_id":"core-platform"')
+            expect(deleted).toContain('"entry_id":12')
+
+            const updated = extractAndRecoverPreparedStatementCode(
+                'db.prepare("UPDATE memory_journal SET content = ? WHERE id = 44").run("hello", 9);'
+            )
+            expect(updated).toContain('"entry_id":44')
+            expect(updated).not.toContain('"entry_id":9')
+        })
+
+        it('should not rewrite PRAGMA and SHOW commands into getStatistics', () => {
             const pragmaSql = 'PRAGMA table_info(journal_entries);'
             const healedPragma = healCodeModeScript(pragmaSql)
-            expect(healedPragma).toContain('mj.analytics.getStatistics')
+            expect(healedPragma).not.toContain('mj.analytics.getStatistics')
 
             const showSql = 'SHOW TABLES;'
             const healedShow = healCodeModeScript(showSql)
-            expect(healedShow).toContain('mj.analytics.getStatistics')
+            expect(healedShow).not.toContain('mj.analytics.getStatistics')
         })
     })
 
@@ -272,7 +274,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should auto-heal better-sqlite3 require and constructor calls into safe execution', () => {
             const sqliteCode = [
                 'const sqlite3 = require("better-sqlite3");',
-                'const db = new sqlite3("C:/Users/chris/Desktop/db-mcp/data/test-backup.db");',
+                'const db = new sqlite3("C:/workspace/db-mcp/data/test-backup.db");',
                 'db.exec("CREATE TABLE test (id INT); INSERT INTO test VALUES (1);");',
                 'db.close();',
                 'return { success: true };',
@@ -309,7 +311,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should auto-heal child_process require and execSync calls into safe execution', () => {
             const cpCode = [
                 "const cp = require('child_process');",
-                'cp.execSync(\'sqlite3 C:/Users/chris/Desktop/db-mcp/data/test-backup.db "CREATE TABLE test (id INT); INSERT INTO test VALUES (1);"\');',
+                'cp.execSync(\'sqlite3 C:/workspace/db-mcp/data/test-backup.db "CREATE TABLE test (id INT); INSERT INTO test VALUES (1);"\');',
                 'return { success: true };',
             ].join('\n')
 
@@ -385,8 +387,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             const dictResult = {
                 success: true,
                 projects: {
-                    'db-mcp': { path: 'C:/Users/chris/Desktop/db-mcp', project_number: 1 },
-                    'memory-journal-mcp': { path: 'C:/Users/chris/Desktop/memory-journal-mcp', project_number: 2 },
+                    'db-mcp': { path: 'C:/workspace/db-mcp', project_number: 1 },
+                    'memory-journal-mcp': { path: 'C:/workspace/memory-journal-mcp', project_number: 2 },
                 },
             }
             const wrapped = wrapResult(dictResult) as Record<string, unknown>
@@ -424,8 +426,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             const listResult = {
                 success: true,
                 projects: {
-                    'db-mcp': { path: 'C:/Users/chris/Desktop/db-mcp', project_number: 15 },
-                    'memory-journal-mcp': { path: 'C:/Users/chris/Desktop/memory-journal-mcp', project_number: 5 },
+                    'db-mcp': { path: 'C:/workspace/db-mcp', project_number: 15 },
+                    'memory-journal-mcp': { path: 'C:/workspace/memory-journal-mcp', project_number: 5 },
                 },
             }
             const wrapped = wrapResult(listResult) as Record<string, unknown>
@@ -511,15 +513,16 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         })
 
         it('should auto-resolve db-mcp project_number from sqlite keywords in tags or content (agent-issues.jsonl Records 1, 2, 4 regression)', async () => {
+            const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
             const { resolveProjectContext } = await import('../src/utils/workspace-resolver.js')
             const mockConfig = {
                 projectRegistry: {
                     'db-mcp': {
-                        path: 'C:/Users/chris/Desktop/db-mcp',
+                        path: 'C:/workspace/db-mcp',
                         project_number: 15
                     },
                     'memory-journal-mcp': {
-                        path: 'C:/Users/chris/Desktop/memory-journal-mcp',
+                        path: 'C:/workspace/memory-journal-mcp',
                         project_number: 5
                     }
                 }
@@ -548,22 +551,24 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
             expect(res4.workspaceId).toBe('db-mcp')
             expect(res4.projectNumber).toBe(15)
+            cwdSpy.mockRestore()
         })
 
         it('should auto-resolve project_number from snake_case keywords and tokenized tags (Issue 1 regression)', async () => {
+            const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
             const { resolveProjectContext } = await import('../src/utils/workspace-resolver.js')
             const mockConfig = {
                 projectRegistry: {
                     'db-mcp': {
-                        path: 'C:/Users/chris/Desktop/db-mcp',
+                        path: 'C:/workspace/db-mcp',
                         project_number: 15
                     },
-                    'adamic': {
-                        path: 'C:/Users/chris/Desktop/adamic',
+                    'core-platform': {
+                        path: 'C:/workspace/core-platform',
                         project_number: 16
                     },
-                    'adamic-blog': {
-                        path: 'C:/Users/chris/Desktop/adamic-blog',
+                    'core-platform-blog': {
+                        path: 'C:/workspace/core-platform-blog',
                         project_number: 22
                     }
                 }
@@ -586,17 +591,18 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
             // Compound project names should be evaluated by length descending
             const res3 = resolveProjectContext({
-                content: "Updated adamic-blog to latest version"
+                content: "Updated core-platform-blog to latest version"
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
-            expect(res3.workspaceId).toBe('adamic-blog')
+            expect(res3.workspaceId).toBe('core-platform-blog')
             expect(res3.projectNumber).toBe(22)
-            
+
             // Shorter project name should still match if only it is present
             const res4 = resolveProjectContext({
-                content: "Updated adamic to latest version"
+                content: "Updated core-platform to latest version"
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
-            expect(res4.workspaceId).toBe('adamic')
+            expect(res4.workspaceId).toBe('core-platform')
             expect(res4.projectNumber).toBe(16)
+            cwdSpy.mockRestore()
         })
 
         it('should support mj.search.queryEntries and aliases via METHOD_ALIASES (agent-issues.jsonl Record 1 regression)', async () => {
@@ -652,7 +658,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should auto-heal name and type in CreateEntrySchema (agent-issues.jsonl Record 5 regression)', async () => {
             const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
             const rawPayload = {
-                content: 'Fix duplicate error message in `sqlite.json.validatePath` tool handler.\n- Removed redundant `!path.startsWith("$")` check in `C:\\Users\\chris\\Desktop\\db-mcp\\src\\adapters\\sqlite\\tools\\json-helpers\\read.ts` since `validateJsonPath` already performs this validation and throws an appropriate `ValidationError` containing the exact same message.',
+                content: 'Fix duplicate error message in `sqlite.json.validatePath` tool handler.\n- Removed redundant `!path.startsWith("$")` check in `C:\\workspace\\db-mcp\\src\\adapters\\sqlite\\tools\\json-helpers\\read.ts` since `validateJsonPath` already performs this validation and throws an appropriate `ValidationError` containing the exact same message.',
                 name: 'db-mcp_json_validatePath_duplicate_error_fix',
                 type: 'concept'
             }
@@ -734,21 +740,21 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }
         })
 
-        it('should heal schema, .schema, tables, and \\d inspection commands to getStatistics', async () => {
+        it('should not heal schema, .schema, tables, and \\d inspection commands to getStatistics', async () => {
             const { extractAndRecoverSqlCode } = await import('../src/handlers/tools/codemode/handler.js')
-            expect(extractAndRecoverSqlCode('schema')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('SCHEMA')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('.schema')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('tables')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('.tables')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('\\d')).toBe('return await mj.analytics.getStatistics({});')
+            expect(extractAndRecoverSqlCode('schema')).toBeNull()
+            expect(extractAndRecoverSqlCode('SCHEMA')).toBeNull()
+            expect(extractAndRecoverSqlCode('.schema')).toBeNull()
+            expect(extractAndRecoverSqlCode('tables')).toBeNull()
+            expect(extractAndRecoverSqlCode('.tables')).toBeNull()
+            expect(extractAndRecoverSqlCode('\\d')).toBeNull()
         })
 
         it('should alias schema in METHOD_ALIASES for analytics and core', async () => {
             const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
-            expect(METHOD_ALIASES.analytics?.schema).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics?.schema).toBe('maintenanceUnavailable')
             expect(METHOD_ALIASES.analytics?.tables).toBe('getStatistics')
-            expect(METHOD_ALIASES.core?.schema).toBe('getStatistics')
+            expect(METHOD_ALIASES.core?.schema).toBe('maintenanceUnavailable')
         })
 
         it('should parse learned_context and group_name in ExecuteCodeSchema', async () => {
@@ -778,7 +784,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(safeCoerceValidationStatus.parse('error')).toBe('failed')
             expect(safeCoerceValidationStatus.parse(false)).toBe('failed')
             expect(safeCoerceValidationStatus.parse('none')).toBe('none')
-            expect(safeCoerceValidationStatus.parse('other_string')).toBe('none')
+            expect(safeCoerceValidationStatus.parse('skipped')).toBe('none')
+            expect(safeCoerceValidationStatus.safeParse('other_string').success).toBe(false)
 
             const schemaRes = baseEntryOptionsSchema.safeParse({
                 validationStatus: 'validated',
@@ -913,8 +920,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(serverInfoTool).toBeDefined()
             if (serverInfoTool) {
                 const result = (await serverInfoTool.handler({})) as Record<string, unknown>
-                expect(result['success']).toBe(true)
-                expect(result['status']).toBe('healthy')
+                expect(result['success']).toBe(false)
+                expect(result['status']).toBe('degraded')
                 expect(result['server']).toBeDefined()
                 const serverObj = result['server'] as Record<string, unknown>
                 expect(serverObj['name']).toBe('memory-journal-mcp')
@@ -931,8 +938,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(serverHealthTool).toBeDefined()
             if (serverHealthTool) {
                 const result = (await serverHealthTool.handler({})) as Record<string, unknown>
-                expect(result['success']).toBe(true)
-                expect(result['status']).toBe('healthy')
+                expect(result['success']).toBe(false)
+                expect(result['status']).toBe('degraded')
                 expect(result['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
             }
         })
@@ -1123,8 +1130,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 const normalized = result.args[0] as Record<string, unknown>
                 expect(normalized.content).toContain('**Findings:**\n- Identified missing syntax validation')
                 expect(normalized.content).toContain('- Added regression tests for JSON code payloads')
-                expect(normalized.project).toBeUndefined()
-                expect(normalized.tags).toContain('db-mcp')
+                expect(normalized.project).toBe('db-mcp')
+                expect(normalized.tags).toBeUndefined()
             }
         })
 
@@ -1140,13 +1147,13 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should route list_projects and get_project tool fallbacks correctly (Issue 2 regression)', async () => {
             const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
             const { getAdminTools } = await import('../src/handlers/tools/admin/index.js')
-            
+
             const context = { config: { projectRegistry: {} }, db: {}, runtime: {}, github: {}, teamDb: {}, vectorManager: {} } as any
             const dummyTools = getDummyHealingTools(context)
-            
+
             const listProjectsTool = dummyTools.find(t => t.name === 'list_projects')
             expect(listProjectsTool).toBeDefined()
-            
+
             const getProjectTool = dummyTools.find(t => t.name === 'mj.admin.getProject')
             expect(getProjectTool).toBeDefined()
         })
@@ -1168,7 +1175,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
             const rawAgentCode = `const fs = await import('fs');
 const path = await import('path');
-const dbPath = 'C:\\\\Users\\\\chris\\\\Desktop\\\\memory-journal-mcp\\\\memory.db';
+const dbPath = 'C:\\\\workspace\\\\memory-journal-mcp\\\\memory.db';
 let stat = null;
 if (fs.existsSync(dbPath)) {
   stat = fs.statSync(dbPath);
@@ -1447,7 +1454,7 @@ return mj.createEntry({
   type: "progress",
   title: "db-mcp Code Mode Testing - Core Tools Part 2",
   content: "Completed rigorous testing of sqlite.core.upsert and sqlite.core.batchInsert.",
-  project_number: "db-mcp"
+  project_number: 6
 });
 `;
 
@@ -1491,8 +1498,9 @@ return mj.createEntry({
             const esmCode = `
 import fs from 'fs';
 import path from 'path';
-const exists = fs.existsSync('/dummy/path');
-return { exists };
+const dummy = fs.existsSync('/dummy/path');
+const journal = fs.existsSync('/definitely-missing/memory_journal.db');
+return { dummy, journal };
 `;
             const healedEsm = healCodeModeScript(esmCode);
             expect(healedEsm).not.toContain("import fs from 'fs'");
@@ -1501,7 +1509,7 @@ return { exists };
             const sandbox = new WorkerSandbox();
             const result = await sandbox.execute(healedEsm, {});
             expect(result.success).toBe(true);
-            expect(result.result).toEqual({ exists: true });
+            expect(result.result).toEqual({ dummy: false, journal: false });
         });
 
         it('should preserve valid JS containing string literals with embedded createEntry calls without syntax corruption', async () => {
@@ -1690,7 +1698,7 @@ return { success: true, projectId };
                 _search_path: 'src/non-existent-subdir/schemas',
             })) as Record<string, unknown>
 
-            expect(res['success']).toBe(true)
+            expect(res['success']).toBe(false)
             expect(res['totalMatches']).toBe(0)
             expect(res['_healing_note']).toBeDefined()
         })
@@ -1879,10 +1887,10 @@ return { success: true, projectId };
 
         it('should map getDatabase and database aliases in METHOD_ALIASES for analytics and core', async () => {
             const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
-            expect(METHOD_ALIASES['analytics']?.['getDatabase']).toBe('getStatistics')
-            expect(METHOD_ALIASES['analytics']?.['database']).toBe('getStatistics')
-            expect(METHOD_ALIASES['core']?.['getDatabase']).toBe('getStatistics')
-            expect(METHOD_ALIASES['core']?.['database']).toBe('getStatistics')
+            expect(METHOD_ALIASES['analytics']?.['getDatabase']).toBe('maintenanceUnavailable')
+            expect(METHOD_ALIASES['analytics']?.['database']).toBe('maintenanceUnavailable')
+            expect(METHOD_ALIASES['core']?.['getDatabase']).toBe('maintenanceUnavailable')
+            expect(METHOD_ALIASES['core']?.['database']).toBe('maintenanceUnavailable')
         })
 
         it('should provide getDatabase, getDb, and connectToDatabase factory methods on buildApiProxy', async () => {
@@ -1893,7 +1901,7 @@ return { success: true, projectId };
             expect(typeof proxy['getDatabase']).toBe('function')
             expect(typeof proxy['getDb']).toBe('function')
             expect(typeof proxy['connectToDatabase']).toBe('function')
-            
+
             const dbInstance = (proxy['getDatabase'] as () => unknown)()
             expect(dbInstance).toBeDefined()
         })
@@ -2265,7 +2273,551 @@ return { success: true, projectId };
             expect(toolsWithoutHealing.some((t) => t.name === 'create_entry')).toBe(true)
         })
     })
+
+    describe('CMS-04 REM Supervisor Regressions: Git Log, Relationship Limit Clamping, and Cross-Workspace Fallback', () => {
+        const mockConfig = {
+            runtime: {
+                maintenanceManager: {
+                    withActiveJob: (fn: any) => fn(),
+                    acquireMaintenanceLock: async () => {},
+                    releaseMaintenanceLock: () => {},
+                },
+            },
+        } as any
+
+        it('should auto-clamp visualize_relationships limit > 500 down to 500', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                visualizeRelationships: vi.fn().mockReturnValue({ nodes: [], edges: [] }),
+                getEntryById: vi.fn(),
+            } as any
+
+            await callTool('visualize_relationships', { limit: 1000 }, mockDb, undefined, undefined, mockConfig)
+            expect(mockDb.visualizeRelationships).toHaveBeenCalledWith(
+                expect.objectContaining({ limit: 500 })
+            )
+        })
+
+        it('should normalize max_count and limit to maxCount in GitHistoryOptionsSchemaMcp and applyGitInterceptions', async () => {
+            const { GitHistoryOptionsSchemaMcp } = await import('../src/handlers/tools/git.js')
+            const { applyGitInterceptions } = await import('../src/codemode/api/git-api.js')
+
+            const parsed = GitHistoryOptionsSchemaMcp.parse({ max_count: 20 })
+            expect(parsed.maxCount).toBe(20)
+
+            const intercepted = applyGitInterceptions('get_commit_history', [{ max_count: 15 }]) as { args: Record<string, unknown>[] }
+            expect(intercepted?.args?.[0]?.['maxCount']).toBe(15)
+        })
+
+        it('should not fall back to a cross-workspace lookup in get_entry_by_id when not found in caller workspace', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, wsId: string) => {
+                    if (wsId === '*') return { id: 14051, workspaceId: 'core-platform', content: 'test' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                calculateImportance: vi.fn().mockReturnValue({ score: 0.5, breakdown: {} }),
+            } as any
+
+            const res = (await callTool(
+                'get_entry_by_id',
+                {
+                    entry_id: 14051,
+                    workspace_id: 'default',
+                },
+                mockDb,
+                undefined,
+                undefined,
+                mockConfig
+            )) as { success: boolean; code?: string; entry?: { id: number; workspaceId: string } }
+
+            expect(res.success).toBe(false)
+            expect(res.code).toBe('RESOURCE_NOT_FOUND')
+            expect(res.entry).toBeUndefined()
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14051, '*')
+        })
+
+        it('should proxy entry properties through worker-result-proxy when entry object is present', async () => {
+            const { wrapResult } = await import('../src/codemode/worker-result-proxy.js')
+            const wrapped = wrapResult({
+                success: true,
+                entry: {
+                    id: 14040,
+                    title: 'Code Quality Audit',
+                    content: 'Detailed audit report content',
+                    tags: ['audit', 'code-quality'],
+                    timestamp: '2026-11-01T01:42:19.879Z'
+                }
+            }) as any
+
+            expect(wrapped.id).toBe(14040)
+            expect(wrapped.content).toBe('Detailed audit report content')
+            expect(wrapped.title).toBe('Code Quality Audit')
+            expect(wrapped.tags).toEqual(['audit', 'code-quality'])
+            expect(wrapped.created_at).toBe('2026-11-01T01:42:19.879Z')
+            expect(wrapped.content.slice(0, 8)).toBe('Detailed')
+        })
+
+        it('should recognize workspace_id as a filter in search_entries without query', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'test' }], count: 1 }),
+                searchEntries: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'test' }], count: 1 }),
+            } as any
+
+            const res = (await callTool(
+                'search_entries',
+                {
+                    workspace_id: '*',
+                    limit: 1
+                },
+                mockDb,
+                undefined,
+                undefined,
+                mockConfig
+            )) as { success?: boolean; error?: string; entries?: unknown[] }
+
+            expect(res.error).toBeUndefined()
+            expect(res.entries).toBeDefined()
+        })
+
+        it('should resolve git working directory using repo and projectRegistry', async () => {
+            const { resolveGitWorkingDir } = await import('../src/handlers/tools/git-staleness.js')
+            const resolved = resolveGitWorkingDir({ repo: 'memory-journal-mcp' }, {
+                projectRegistry: {
+                    'memory-journal-mcp': {
+                        path: process.cwd(),
+                        project_number: 5
+                    }
+                }
+            } as any)
+            expect(resolved).toBe(process.cwd())
+        })
+
+        it('should parse owner/repo slug in resolveOwnerRepo and resolveOwner without error', async () => {
+            const { resolveOwnerRepo, resolveOwner, resolveProjectNumber } = await import('../src/handlers/tools/github/helpers.js')
+            const mockContext = {
+                config: {
+                    projectRegistry: {
+                        'memory-journal-mcp': {
+                            project_number: 5
+                        }
+                    }
+                },
+                github: {
+                    isApiAvailable: () => true,
+                    getRepoInfo: async () => ({ owner: 'detected-owner', repo: 'detected-repo' })
+                }
+            } as any
+
+            expect(resolveProjectNumber(mockContext, 'neverinfamous/memory-journal-mcp')).toBe(5)
+
+            const resRepo = await resolveOwnerRepo(mockContext, { repo: 'neverinfamous/memory-journal-mcp' })
+            expect('error' in resRepo).toBe(false)
+            if (!('error' in resRepo)) {
+                expect(resRepo.owner).toBe('neverinfamous')
+                expect(resRepo.repo).toBe('memory-journal-mcp')
+            }
+
+            const resOwner = await resolveOwner(mockContext, undefined, 'neverinfamous/memory-journal-mcp')
+            expect('error' in resOwner).toBe(false)
+            if (!('error' in resOwner)) {
+                expect(resOwner.owner).toBe('neverinfamous')
+                expect(resOwner.repo).toBe('memory-journal-mcp')
+            }
+        })
+
+        it('should unpack filters and filter objects in healAgentHallucinations', async () => {
+            const { healAgentHallucinations } = await import('../src/handlers/tools/schemas/hallucination-healer.js')
+            const payload = {
+                workspace_id: '*',
+                filters: {
+                    tags: ['cms'],
+                    entry_type: 'maintenance'
+                }
+            }
+            const healed = healAgentHallucinations(payload) as Record<string, unknown>
+            expect(healed['filters']).toBeUndefined()
+            expect(healed['tags']).toEqual(['cms'])
+            expect(healed['entry_type']).toBe('maintenance')
+            expect(healed['workspace_id']).toBe('*')
+
+            const filterPayload = {
+                filter: {
+                    query: 'test-query'
+                }
+            }
+            const healedFilter = healAgentHallucinations(filterPayload) as Record<string, unknown>
+            expect(healedFilter['filter']).toBeUndefined()
+            expect(healedFilter['query']).toBe('test-query')
+        })
+
+        it('should normalize repo slug in applyGithubInterceptions', async () => {
+            const { applyGithubAndBackupInterceptions } = await import('../src/codemode/normalizers/github-and-backup-interceptions.js')
+            const intercepted = applyGithubAndBackupInterceptions('get_github_issues', [{
+                repo: 'neverinfamous/memory-journal-mcp'
+            }]) as { args: Record<string, unknown>[] }
+
+            expect(intercepted.args[0]?.['owner']).toBe('neverinfamous')
+            expect(intercepted.args[0]?.['repo']).toBe('memory-journal-mcp')
+        })
+
+        it('should heal tag aliases in healAgentHallucinations', async () => {
+            const { healAgentHallucinations } = await import('../src/handlers/tools/schemas/hallucination-healer.js')
+            const payload = {
+                old_tag: 'legacy-tag',
+                new_tag: 'modern-tag'
+            }
+            const healed = healAgentHallucinations(payload) as Record<string, unknown>
+            expect(healed['source_tag']).toBe('legacy-tag')
+            expect(healed['target_tag']).toBe('modern-tag')
+
+            const camelPayload = {
+                oldTag: 'old-name',
+                newTag: 'new-name'
+            }
+            const healedCamel = healAgentHallucinations(camelPayload) as Record<string, unknown>
+            expect(healedCamel['source_tag']).toBe('old-name')
+            expect(healedCamel['target_tag']).toBe('new-name')
+        })
+
+        it('should allow search_entries with specific non-default workspace_id without query string, but reject default workspace without query', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'test' }], count: 1 }),
+                searchEntries: vi.fn().mockReturnValue({
+                    entries: [{ id: 1, content: 'test' }],
+                    total: 1,
+                    searchMode: 'fts',
+                    degraded: false
+                }),
+                getSearchFacets: vi.fn().mockReturnValue({ tags: [], entryTypes: [] })
+            } as any
+
+            // Unfiltered bare search (no workspace_id, no query) is rejected to prevent unbounded scans
+            const resBare = (await callTool('search_entries', { limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(resBare['code']).toBe('VALIDATION_ERROR')
+
+            // Default workspace without query is rejected to prevent unbounded scans
+            const resDefault = (await callTool('search_entries', { workspace_id: 'default', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(resDefault['code']).toBe('VALIDATION_ERROR')
+
+            // Specific non-default workspace without query is treated as an intentional filter
+            const resSpecific = (await callTool('search_entries', { workspace_id: 'alpha', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(resSpecific['error']).toBeUndefined()
+            expect(resSpecific['entries']).toBeDefined()
+        })
+
+        it('should not fall back to wildcard in visualize_relationships when workspace_id is omitted', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn().mockImplementation((id: number, wsId: string) => {
+                    // Fail if searching specifically in local workspace, succeed if wildcard
+                    if (wsId === '*') {
+                        return { id, workspaceId: 'core-platform', deletedAt: null, content: 'Test entry' }
+                    }
+                    return null
+                }),
+                visualizeRelationships: vi.fn().mockReturnValue({
+                    nodes: [{ id: 14361, group: 'maintenance', metadata: { content: 'Test' } }],
+                    edges: []
+                })
+            } as any
+
+            const res = (await callTool('visualize_relationships', { entry_id: 14361, depth: 1 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(res['error']).toBeDefined()
+            expect(res['mermaid']).toBeUndefined()
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14361, '*')
+        })
+
+        it('should return nodes and edges arrays in visualize_relationships and safe proxy access', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn().mockReturnValue({ id: 14367, workspaceId: 'default', deletedAt: null, content: 'CMS supervisor' }),
+                visualizeRelationships: vi.fn().mockReturnValue({
+                    nodes: [{ id: 14367, group: 'maintenance', metadata: { content: 'CMS supervisor' } }],
+                    edges: [{ from: 14367, to: 14369, type: 'implements' }]
+                })
+            } as any
+
+            const res = (await callTool('visualize_relationships', { entry_id: 14367, depth: 1 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(res['nodes']).toBeDefined()
+            expect(Array.isArray(res['nodes'])).toBe(true)
+            expect(res['edges']).toBeDefined()
+            expect(Array.isArray(res['edges'])).toBe(true)
+
+            // Test proxy behavior on failed result
+            const failedProxy = wrapResult({
+                success: false,
+                error: 'Entry not found: 14367',
+                code: 'RESOURCE_NOT_FOUND'
+            }) as Record<string, unknown>
+            expect(() => failedProxy['nodes']).toThrow('Entry not found: 14367')
+            expect(() => failedProxy['edges']).toThrow('Entry not found: 14367')
+        })
+
+        it('should accept workspace_id: "*" in merge_tags for global consolidation', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                mergeTags: vi.fn().mockReturnValue({ entriesUpdated: 12, sourceDeleted: true })
+            } as any
+
+            const res = (await callTool('merge_tags', {
+                source_tag: 'usability-testing',
+                target_tag: 'usability-test',
+                workspace_id: '*'
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.mergeTags).toHaveBeenCalledWith('usability-testing', 'usability-test', '*', undefined)
+        })
+
+        it('should accept workspace_id: "*" in check_entry_staleness without validation error', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [], count: 0 }),
+                getEntryByIdIncludeDeleted: vi.fn().mockReturnValue(null),
+                getAnchorsByEntryId: vi.fn().mockReturnValue([])
+            } as any
+
+            const res = (await callTool('check_entry_staleness', {
+                workspace_id: '*'
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(false)
+            expect(res['code']).not.toBe('VALIDATION_ERROR')
+            expect(String(res['error'])).toContain('No anchor check ran')
+            expect(Array.isArray(res['results'])).toBe(true)
+        })
+
+        it('should return not-found when get_entry_by_id misses the active workspace', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, ws: string) => {
+                    if (ws === 'memory-journal-mcp') return null
+                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
+                    if (ws === 'core-platform') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                calculateImportance: vi.fn().mockReturnValue({ score: 0.5, breakdown: {} })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const customConfig = { ...mockConfig, defaultWorkspaceId: 'memory-journal-mcp' }
+            const res = (await callTool('get_entry_by_id', {
+                entry_id: 14463
+            }, mockDb, undefined, undefined, customConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(false)
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14463, '*')
+        })
+
+        it('should accept workspace_id: "*" in batch_update_entries for cross-workspace updates', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                updateEntries: vi.fn().mockReturnValue({
+                    updated: [{ id: 14460, workspaceId: 'db-mcp' }],
+                    notFound: [],
+                    errors: []
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('batch_update_entries', {
+                workspace_id: '*',
+                updates: [
+                    { entry_id: 14460, significance_type: 'blocker_resolved' }
+                ]
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.updateEntries).toHaveBeenCalled()
+            const callArgs = (mockDb.updateEntries as unknown as { mock: { calls: Record<string, unknown>[][][] } }).mock.calls[0]?.[0]
+            expect(callArgs?.[0]?.['workspaceId']).toBe('*')
+        })
+
+        it('should accept workspace_id: "*" in batch_delete_entries for cross-workspace deletions', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryByIdIncludeDeleted: vi.fn().mockReturnValue({
+                    id: 14460,
+                    workspaceId: 'db-mcp',
+                }),
+                deleteEntries: vi.fn().mockReturnValue({
+                    deleted: [14460],
+                    notFound: [],
+                    errors: []
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('batch_delete_entries', {
+                workspace_id: '*',
+                entry_ids: [14460]
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.deleteEntries).toHaveBeenCalledWith([14460], false, '*')
+        })
+
+        it('should return not-found for get_entry_by_id when project_number is supplied and the entry is in another workspace', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, ws: string) => {
+                    if (ws === 'memory-journal-mcp') return null
+                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
+                    if (ws === 'core-platform') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                calculateImportance: vi.fn().mockReturnValue({ score: 0.5, breakdown: {} })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('get_entry_by_id', {
+                entry_id: 14463,
+                project_number: 5
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(false)
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14463, '*')
+        })
+
+        it('should reject workspace_id: "*" in link_entries because links are scoped writes (H4)', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, _ws: string) => {
+                    if (id === 14464) return { id: 14464, workspaceId: 'memory-journal-mcp' }
+                    if (id === 14462) return { id: 14462, workspaceId: 'memory-journal-mcp' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                linkEntries: vi.fn().mockReturnValue({
+                    id: 999,
+                    fromEntryId: 14464,
+                    toEntryId: 14462,
+                    relationshipType: 'resolved'
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('link_entries', {
+                from_entry_id: 14464,
+                to_entry_id: 14462,
+                relationship_type: 'resolved',
+                workspace_id: '*'
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(false)
+            expect(res['code']).toBe('VALIDATION_ERROR')
+            expect(mockDb.linkEntries).not.toHaveBeenCalled()
+        })
+
+        it('should reject cross-workspace linking in link_entries when workspace_id is omitted', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, ws: string) => {
+                    if (id === 14464) {
+                        return ws === 'memory-journal-mcp' || ws === '*'
+                            ? { id: 14464, workspaceId: 'memory-journal-mcp' }
+                            : null
+                    }
+                    if (id === 14463) {
+                        return ws === 'core-platform' || ws === '*'
+                            ? { id: 14463, workspaceId: 'core-platform' }
+                            : null
+                    }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                linkEntries: vi.fn().mockReturnValue({
+                    id: 1000,
+                    fromEntryId: 14464,
+                    toEntryId: 14463,
+                    relationshipType: 'references'
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const customConfig = { ...mockConfig, defaultWorkspaceId: 'memory-journal-mcp' }
+            const res = (await callTool('link_entries', {
+                from_entry_id: 14464,
+                to_entry_id: 14463,
+                relationship_type: 'references'
+            }, mockDb, undefined, undefined, customConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(false)
+            expect(mockDb.linkEntries).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('Layer 2 & Schemas: Relationship Top-Level Parameter Auto-Healing', () => {
+        it('should heal evolves_from parameter in CreateEntrySchema into relationships array (agent-issues.jsonl regression)', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const parsed = CreateEntrySchema.parse({
+                workspace_id: 'core-platform',
+                project_number: 16,
+                session_id: '00000000-0000-4000-8000-000000000002',
+                entry_type: 'maintenance',
+                content: 'Reflex healing summary',
+                tags: ['cms', 'cms-03-reflex-healing'],
+                validation_status: 'passed',
+                impact_score: 0.7,
+                trust_score: 1,
+                significance_type: 'milestone',
+                evolves_from: 14515,
+            })
+
+            expect(parsed.relationships).toBeDefined()
+            expect(parsed.relationships).toEqual([
+                { targetId: 14515, relationType: 'evolves_from' }
+            ])
+            expect((parsed as Record<string, unknown>)['evolves_from']).toBeUndefined()
+        })
+
+        it('should heal multiple top-level relationship keys and merge with existing relationships', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const parsed = CreateEntrySchema.parse({
+                workspace_id: 'memory-journal-mcp',
+                project_number: 5,
+                content: 'CMS-04 supervisor entry',
+                evolves_from: 14522,
+                references: 14605,
+                related_to: 14512,
+            })
+
+            expect(parsed.relationships).toBeDefined()
+            expect(parsed.relationships).toHaveLength(3)
+            expect(parsed.relationships).toContainEqual({ targetId: 14522, relationType: 'evolves_from' })
+            expect(parsed.relationships).toContainEqual({ targetId: 14605, relationType: 'references' })
+            expect(parsed.relationships).toContainEqual({ targetId: 14512, relationType: 'relates_to' })
+        })
+
+        it('should fold non-numeric references text into content as markdown notes', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const parsed = CreateEntrySchema.parse({
+                workspace_id: 'memory-journal-mcp',
+                project_number: 5,
+                content: 'Architecture note',
+                references: 'See RFC 2119 and ISO 8601',
+            })
+
+            expect(parsed.content).toContain('**References:** See RFC 2119 and ISO 8601')
+            expect(parsed.relationships).toBeUndefined()
+        })
+
+        it('should normalize raw numeric and string IDs in preprocessRelationshipItem', async () => {
+            const { preprocessRelationshipItem } = await import(
+                '../src/handlers/tools/schemas/constants-and-primitives.js'
+            )
+            expect(preprocessRelationshipItem(14515)).toEqual({
+                targetId: 14515,
+                relationType: 'references',
+            })
+            expect(preprocessRelationshipItem('14515')).toEqual({
+                targetId: 14515,
+                relationType: 'references',
+            })
+            expect(preprocessRelationshipItem({ id: '14515', type: 'implements' })).toEqual({
+                targetId: 14515,
+                relationType: 'implements',
+            })
+        })
+    })
 })
-
-
-

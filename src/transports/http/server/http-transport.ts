@@ -4,7 +4,6 @@ import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler, NextFunction } from 'express'
 import { logger } from '../../../utils/logger.js'
-import type { Scheduler } from '../../../server/scheduler.js'
 import type { HttpTransportConfig, RateLimitEntry } from '../types.js'
 import {
     DEFAULT_MAX_BODY_BYTES,
@@ -12,26 +11,27 @@ import {
     HTTP_KEEP_ALIVE_TIMEOUT_MS,
     HTTP_HEADERS_TIMEOUT_MS,
 } from '../types.js'
-import { setSecurityHeaders, setCorsHeaders, checkRateLimit } from '../security.js'
+import {
+    setSecurityHeaders,
+    setCorsHeaders,
+    checkRateLimit,
+    buildAllowedHostHeaders,
+    isLoopbackHost,
+} from '../security.js'
 import {
     handleHealthCheck,
     handleRootInfo,
-    createAuthMiddleware,
     handlePrometheusMetrics,
 } from '../handlers.js'
-import {
-    createTokenValidator,
-    createOAuthResourceServer,
-    createAuthMiddleware as createOAuthMiddleware,
-    oauthErrorHandler,
-    SUPPORTED_SCOPES,
-} from '../../../auth/index.js'
-import type { TokenClaims } from '../../../auth/index.js'
+import { oauthErrorHandler } from '../../../auth/index.js'
+import { requireScope } from '../../../auth/middleware.js'
+import { installHttpAuthentication } from './http-oauth-setup.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
-import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import type { LegacySSEServerTransport } from './legacy-sse.js'
 import { registerMcpProtocolRoutes } from './protocol-handlers.js'
+import { assertHttpBindIsSafe } from './protocol-route-handlers.js'
+import { createPropagateContextMiddleware } from './context-middleware.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -40,6 +40,49 @@ import { registerMcpProtocolRoutes } from './protocol-handlers.js'
  * 1. Streamable HTTP (MCP 2025-03-26) via `/mcp` — preferred for modern clients
  * 2. Legacy SSE (MCP 2024-11-05) via `/sse` + `/messages` — backward compatibility
  */
+export { buildAllowedHostHeaders } from '../security.js'
+
+function isWildcardBindHost(host: string): boolean {
+    const h = host.trim().toLowerCase()
+    return h === '0.0.0.0' || h === '::' || h === '[::]'
+}
+
+function isValidWildcardHostHeader(rawHost: string | string[] | undefined): boolean {
+    if (typeof rawHost !== 'string') return false
+    const trimmed = rawHost.trim()
+    if (trimmed.length === 0 || /\s/.test(trimmed) || /[@/?#\\]/.test(trimmed)) return false
+    try {
+        const parsed = new URL(`http://${trimmed}`)
+        return (
+            parsed.username === '' &&
+            parsed.password === '' &&
+            parsed.pathname === '/' &&
+            parsed.search === '' &&
+            parsed.hash === '' &&
+            parsed.hostname.length > 0
+        )
+    } catch {
+        return false
+    }
+}
+
+function createWildcardHostValidationMiddleware(): RequestHandler {
+    return (req: Request, res: Response, next: NextFunction): void => {
+        if (!isValidWildcardHostHeader(req.headers.host)) {
+            res.status(403).json({
+                jsonrpc: '2.0',
+                error: {
+                    code: -32000,
+                    message: 'Forbidden: Invalid or missing Host header',
+                },
+                id: null,
+            })
+            return
+        }
+        next()
+    }
+}
+
 export class HttpTransport {
     private readonly app: Express
     private readonly config: HttpTransportConfig
@@ -53,6 +96,7 @@ export class HttpTransport {
 
     private readonly rateLimitMap = new Map<string, RateLimitEntry>()
     private rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null
+    private stopSessionSweep: (() => void) | null = null
 
     constructor(config: HttpTransportConfig) {
         this.config = {
@@ -66,61 +110,48 @@ export class HttpTransport {
         }
     }
 
+    private installHostValidation(host: string, isLocalhost: boolean, hasAuth: boolean): void {
+        const allowedHosts = buildAllowedHostHeaders(host, this.config.publicOrigin)
+        const hasCustomPublicOrigin =
+            this.config.publicOrigin !== undefined && this.config.publicOrigin.trim() !== ''
+        const isAuthenticatedWildcard =
+            isWildcardBindHost(host) && hasAuth && !hasCustomPublicOrigin
+
+        this.app.use(createWildcardHostValidationMiddleware())
+        if (!isAuthenticatedWildcard) {
+            this.app.use(
+                isLocalhost && !hasCustomPublicOrigin
+                    ? localhostHostValidation()
+                    : hostHeaderValidation(allowedHosts)
+            )
+        }
+        logger.info('DNS rebinding protection enabled (host header validation)', {
+            module: 'HTTP',
+            allowedHosts:
+                isLocalhost && !hasCustomPublicOrigin
+                    ? ['localhost', '127.0.0.1', '[::1]']
+                    : isAuthenticatedWildcard
+                      ? ['* (authenticated wildcard bind)']
+                      : allowedHosts,
+        })
+    }
+
     async start(
         serverFactory: McpServerFactory,
-        scheduler: Scheduler | null,
         runtime: ServerRuntime
     ): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
-
-        const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-        const hasCorsOpen = corsOrigins?.includes('*') ?? false
-        const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
-
-        if (!hasAuth && hasCorsOpen) {
-            const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-
-        if (authToken === 'change_this_to_a_secure_token_for_production') {
-            const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-
-        if (!isLocalhost && !hasAuth) {
-            const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-
-        if (hasCorsOpen) {
-            logger.warning(
-                'CORS origin is set to "*" (all origins). ' +
-                    'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
-                { module: 'HTTP' }
-            )
-        }
-
-        if (!hasAuth) {
-            logger.warning(
-                'No authentication configured for HTTP transport. ' +
-                    'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
-                { module: 'HTTP' }
-            )
-        }
-
-        const isLocalHostHeader = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-        this.app.use(
-            isLocalHostHeader
-                ? localhostHostValidation()
-                : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
+        assertHttpBindIsSafe(
+            host,
+            authToken,
+            corsOrigins,
+            this.config.oauthEnabled,
+            (msg) => logger.warning(msg, { module: 'HTTP' }),
+            (msg) => logger.error(msg, { module: 'HTTP' })
         )
-        logger.info('DNS rebinding protection enabled (host header validation)', {
-            module: 'HTTP',
-            allowedHosts: isLocalHostHeader ? ['localhost', '127.0.0.1', '[::1]'] : [host],
-        })
+        const isLocalhost = isLoopbackHost(host)
+        const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
+        this.installHostValidation(host, isLocalhost, hasAuth)
 
         this.app.use((req: Request, res: Response, next: () => void) => {
             setSecurityHeaders(res, this.config)
@@ -140,6 +171,35 @@ export class HttpTransport {
             next()
         })
 
+        try {
+            // [INVARIANT] Rate limiting and authentication run before body parsing so
+            // rate-limited (429) and unauthenticated (401) requests never parse JSON bodies (M4).
+            this.installRateLimiting()
+            const oauthInstalled = await installHttpAuthentication(
+                this.app,
+                this.config,
+                host,
+                port,
+                authToken,
+                isLocalhost
+            )
+            this.installBodyParsing()
+            this.installRoutes(serverFactory, runtime, oauthInstalled)
+            await this.listen(port, host)
+        } catch (error) {
+            // [SIDE-EFFECT] Release timers so a failed start does not keep the process alive.
+            if (this.rateLimitCleanupTimer !== null) {
+                clearInterval(this.rateLimitCleanupTimer)
+                this.rateLimitCleanupTimer = null
+            }
+            this.stopSessionSweep?.()
+            this.stopSessionSweep = null
+            throw error
+        }
+    }
+
+    /** Install the body-size guard, JSON parser and body-parser error responses. */
+    private installBodyParsing(): void {
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
         const jsonParser = express.json({ limit: maxBody }) as RequestHandler
         this.app.use((req: Request, res: Response, next: NextFunction) => {
@@ -190,6 +250,10 @@ export class HttpTransport {
             next(err)
         })
 
+    }
+
+    /** Install per-IP rate limiting and its periodic cleanup timer. */
+    private installRateLimiting(): void {
         if (this.config.enableRateLimit !== false) {
             this.app.use((req: Request, res: Response, next: () => void) => {
                 const result = checkRateLimit(req, this.config, this.rateLimitMap)
@@ -219,131 +283,40 @@ export class HttpTransport {
             logger.info('Rate limiting enabled (using IP)', { module: 'HTTP' })
         }
 
-        if (
-            this.config.oauthEnabled === true &&
-            this.config.oauthIssuer !== undefined &&
-            this.config.oauthAudience !== undefined
-        ) {
-            if (this.config.oauthIssuer.startsWith('http://')) {
-                if (this.config.allowPlaintextLoopbackOAuth !== true) {
-                    const errorMsg = `FATAL: OAuth issuer targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
-                    logger.error(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
-                    throw new Error(errorMsg)
-                }
-                try {
-                    const url = new URL(this.config.oauthIssuer)
-                    if (
-                        url.hostname !== 'localhost' &&
-                        url.hostname !== '127.0.0.1' &&
-                        url.hostname !== '[::1]'
-                    ) {
-                        throw new Error()
-                    }
-                } catch {
-                    const errorMsg = `FATAL: Plaintext OAuth bypass is ONLY permitted for loopback hosts (localhost, 127.0.0.1, [::1]). The configured issuer is not allowed.`
-                    logger.error(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
-                    throw new Error(errorMsg)
-                }
-            }
+    }
 
-            if (
-                !isLocalhost &&
-                (this.config.publicOrigin === undefined || this.config.publicOrigin === '')
-            ) {
-                const errorMsg = `FATAL: OAuth is enabled on a non-loopback interface ('${host}'), but no 'publicOrigin' was provided. You MUST specify an explicit public origin (e.g. 'https://api.example.com') for secure OAuth token audience binding.`
-                logger.error(errorMsg, { module: 'HTTP' })
-                throw new Error(errorMsg)
-            }
-
-            const jwksUri =
-                this.config.oauthJwksUri ?? `${this.config.oauthIssuer}/.well-known/jwks.json`
-
-            const tokenValidator = createTokenValidator({
-                jwksUri,
-                issuer: this.config.oauthIssuer,
-                audience: this.config.oauthAudience,
-                clockTolerance: this.config.oauthClockTolerance ?? 60,
-            })
-
-            await tokenValidator.preload()
-
-            const resourceServer = createOAuthResourceServer({
-                resource: this.config.publicOrigin ?? `http://${host}:${String(port)}`,
-                authorizationServers: [this.config.oauthIssuer],
-                scopesSupported: [...SUPPORTED_SCOPES],
-            })
-
-            this.app.get(resourceServer.getWellKnownPath(), resourceServer.getMetadataHandler())
-
-            this.app.use(
-                createOAuthMiddleware({
-                    tokenValidator,
-                    resourceServer,
-                    publicPaths: ['/health', '/', '/.well-known/*'],
-                })
-            )
-
-            this.app.use(oauthErrorHandler)
-
-            logger.info('OAuth 2.1 authentication enabled', {
-                module: 'HTTP',
-                resource: resourceServer.getResourceUri(),
-                audience: this.config.oauthAudience,
-            })
-        } else if (authToken !== undefined && authToken !== '') {
-            this.app.use(createAuthMiddleware(authToken))
-        }
-
-        const propagateContextMiddleware: RequestHandler = (req, _res, next) => {
-            const reqRecord = req as unknown as Record<string, unknown>
-            const tokenClaims = reqRecord['tokenClaims'] as TokenClaims | undefined
-            const authInfo = reqRecord['auth'] as
-                | (TokenClaims & { clientId?: string })
-                | undefined
-
-            if (tokenClaims !== undefined && tokenClaims !== null) {
-                propagateCtx(
-                    { authenticated: true, claims: tokenClaims, scopes: tokenClaims.scopes },
-                    next
-                )
-            } else if (authInfo !== undefined && authInfo !== null) {
-                const sub =
-                    authInfo.sub ??
-                    (typeof authInfo['subject'] === 'string' ? authInfo['subject'] : undefined) ??
-                    authInfo.clientId ??
-                    'unknown'
-                const normalizedClaims: TokenClaims = {
-                    ...authInfo,
-                    sub,
-                    scopes: Array.isArray(authInfo.scopes) ? authInfo.scopes : [],
-                }
-                propagateCtx(
-                    { authenticated: true, claims: normalizedClaims, scopes: normalizedClaims.scopes },
-                    next
-                )
-            } else {
-                next()
-            }
-        }
-
-        /* codeql[js/missing-rate-limiting] */ this.app.use(propagateContextMiddleware)
+    /** Register context propagation, health/metrics/root endpoints, MCP protocol routes, OAuth error handler and the 404 handler. */
+    private installRoutes(
+        serverFactory: McpServerFactory,
+        runtime: ServerRuntime,
+        oauthInstalled = false
+    ): void {
+        /* codeql[js/missing-rate-limiting] */ this.app.use(createPropagateContextMiddleware())
 
         this.app.get('/health', handleHealthCheck)
 
         if (this.config.metricsExport === 'prometheus') {
-            this.app.get('/metrics', handlePrometheusMetrics(runtime))
+            if (this.config.oauthEnabled === true) {
+                this.app.get('/metrics', requireScope('audit'), handlePrometheusMetrics(runtime))
+            } else {
+                this.app.get('/metrics', handlePrometheusMetrics(runtime))
+            }
             logger.info('Prometheus metrics export enabled on /metrics', { module: 'HTTP' })
         }
 
         this.app.get('/', handleRootInfo)
 
-        registerMcpProtocolRoutes(
+        this.stopSessionSweep = registerMcpProtocolRoutes(
             this.app,
             this.config,
             serverFactory,
             this.activeServers,
             this.sseTransports
         )
+
+        if (oauthInstalled) {
+            this.app.use(oauthErrorHandler)
+        }
 
         this.app.use((req: Request, res: Response): void => {
             logger.debug('404 Not Found', {
@@ -352,56 +325,85 @@ export class HttpTransport {
             })
             res.status(404).json({ error: 'Not found' })
         })
+    }
 
-        this.httpServer = this.app.listen(port, host, () => {
-            if (this.httpServer !== null) {
-                this.httpServer.setTimeout(HTTP_REQUEST_TIMEOUT_MS)
-                this.httpServer.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
-                this.httpServer.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
-            }
+    /** Bind the HTTP server; rejects on bind errors (e.g. EADDRINUSE). */
+    private async listen(port: number, host: string): Promise<void> {
+        await new Promise<void>((resolve, reject) => {
+            const server = this.app.listen(port, host, () => {
+                logger.info(
+                    `MCP server started on HTTP (${this.config.stateless ? 'stateless' : 'stateful'})`,
+                    {
+                        module: 'HTTP',
+                        port,
+                        host,
+                        endpoint: `http://${host}:${String(port)}/mcp`,
+                    }
+                )
+                resolve()
+            })
+            this.httpServer = server
+            server.requestTimeout = HTTP_REQUEST_TIMEOUT_MS
+            server.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
+            server.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
 
-            logger.info(
-                `MCP server started on HTTP (${this.config.stateless ? 'stateless' : 'stateful'})`,
-                {
+            server.on('error', (err: Error) => {
+                logger.error('HTTP server failed to bind', {
                     module: 'HTTP',
-                    port,
-                    host,
-                    endpoint: `http://${host}:${String(port)}/mcp`,
-                }
-            )
-        })
+                    error: err.message,
+                })
+                // Rejecting after start() already resolved is a no-op, so only a bind failure surfaces.
+                reject(err)
+            })
 
-        scheduler?.start()
-
-        this.httpServer.on('close', () => {
-            logger.info('HTTP server closed', { module: 'HTTP' })
+            server.on('close', () => {
+                logger.info('HTTP server closed', { module: 'HTTP' })
+            })
         })
     }
 
-    async stop(scheduler: Scheduler | null): Promise<void> {
+    async stop(): Promise<void> {
         logger.info('Shutting down HTTP server...', { module: 'HTTP' })
-
-        scheduler?.stop()
 
         if (this.rateLimitCleanupTimer !== null) {
             clearInterval(this.rateLimitCleanupTimer)
             this.rateLimitCleanupTimer = null
         }
+        this.stopSessionSweep?.()
+        this.stopSessionSweep = null
 
-        for (const server of this.activeServers) {
-            try {
-                await server.close()
-            } catch (error) {
+        const serversToClose = Array.from(this.activeServers)
+        this.activeServers.clear()
+        const closeResults = await Promise.allSettled(
+            serversToClose.map((server) => server.close())
+        )
+        for (const res of closeResults) {
+            if (res.status === 'rejected') {
                 logger.error('Error closing active server', {
                     module: 'HTTP',
-                    error: error instanceof Error ? error.message : String(error),
+                    error: res.reason instanceof Error ? res.reason.message : String(res.reason),
                 })
             }
         }
-        this.activeServers.clear()
+
+        this.sseTransports.clear()
+        this.rateLimitMap.clear()
 
         if (this.httpServer !== null) {
-            this.httpServer.close()
+            const server = this.httpServer
+            this.httpServer = null
+            if (server.listening) {
+                await new Promise<void>((resolve, reject) => {
+                    server.close((err) => {
+                        if (err) reject(err)
+                        else resolve()
+                    })
+                    // Drop lingering keep-alive sockets so close() cannot hang shutdown
+                    if (typeof server.closeAllConnections === 'function') {
+                        server.closeAllConnections()
+                    }
+                })
+            }
         }
 
         logger.info('Shutdown complete', { module: 'HTTP' })

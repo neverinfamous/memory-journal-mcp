@@ -989,16 +989,16 @@ describe('GitHubIntegration', () => {
             expect(result).toHaveLength(2)
         })
 
-        it('should return empty array without octokit', async () => {
+        it('should return null without octokit', async () => {
             const bare = new GitHubIntegration('.')
             const result = await bare.getTopReferrers('o', 'r')
-            expect(result).toEqual([])
+            expect(result).toBeNull()
         })
 
-        it('should return empty array on error', async () => {
+        it('should return null on error', async () => {
             octokit.rest.repos.getTopReferrers.mockRejectedValue(new Error('Forbidden'))
             const result = await gh.getTopReferrers('o', 'r')
-            expect(result).toEqual([])
+            expect(result).toBeNull()
         })
     })
 
@@ -1029,16 +1029,16 @@ describe('GitHubIntegration', () => {
             expect(result).toHaveLength(1)
         })
 
-        it('should return empty array without octokit', async () => {
+        it('should return null without octokit', async () => {
             const bare = new GitHubIntegration('.')
             const result = await bare.getPopularPaths('o', 'r')
-            expect(result).toEqual([])
+            expect(result).toBeNull()
         })
 
-        it('should return empty array on error', async () => {
+        it('should return null on error', async () => {
             octokit.rest.repos.getTopPaths.mockRejectedValue(new Error('Forbidden'))
             const result = await gh.getPopularPaths('o', 'r')
-            expect(result).toEqual([])
+            expect(result).toBeNull()
         })
     })
 

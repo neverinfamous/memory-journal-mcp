@@ -17,7 +17,14 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import { getAdversarialPromptDefinitions } from './adversarial.js'
 import { getOptimizerPromptDefinitions } from './optimizer.js'
 import { getLoadBriefingPromptDefinitions } from './load-briefing.js'
-import { ResourceNotFoundError } from '../../types/errors.js'
+import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
+import { enforceAccessBoundary } from '../../auth/validation.js'
+import type { AuditLogger } from '../../audit/index.js'
+import { isRecord } from '../../utils/type-guards.js'
+
+function isAuditLoggerLike(val: unknown): val is AuditLogger {
+    return isRecord(val) && typeof val['logDenial'] === 'function'
+}
 
 /**
  * Message format for MCP prompts
@@ -42,25 +49,37 @@ export interface InternalPromptDef {
         required?: boolean
     }[]
     icons?: McpIcon[]
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
+    }
     handler: (
         args: Record<string, string>,
         db: IDatabaseAdapter,
         teamDb?: IDatabaseAdapter,
         github?: GitHubIntegration,
-        briefingConfig?: BriefingConfig
+        briefingConfig?: BriefingConfig,
+        runtime?: object | null
     ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
+
+let cachedAllPromptDefs: readonly InternalPromptDef[] | null = null
+let cachedPromptMap: ReadonlyMap<string, InternalPromptDef> | null = null
+let cachedPublicPrompts: readonly object[] | null = null
 
 /**
  * Get all prompt definitions for MCP list
  */
 export function getPrompts(): object[] {
-    return getAllPromptDefinitions().map((def) => ({
+    cachedPublicPrompts ??= getAllPromptDefinitions().map((def) => ({
         name: def.name,
         description: def.description,
         ...(def.arguments !== undefined ? { arguments: def.arguments } : {}),
         ...(def.icons !== undefined ? { icons: def.icons } : {}),
+        ...(def.capabilities !== undefined ? { capabilities: def.capabilities } : {}),
     }))
+    return [...cachedPublicPrompts]
 }
 
 /**
@@ -72,29 +91,49 @@ export function getPrompt(
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
     github?: GitHubIntegration,
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig,
+    runtime?: object | null
 ): Promise<{ messages: PromptMessage[] }> {
-    const prompts = getAllPromptDefinitions()
-    const prompt = prompts.find((p) => p.name === name)
+    if (args !== null && args !== undefined && typeof args === 'object') {
+        for (const [key, val] of Object.entries(args)) {
+            if (typeof val === 'string' && val.length > 10_000) {
+                throw new ValidationError(
+                    `Prompt argument '${key}' exceeds maximum length of 10000 characters`
+                )
+            }
+        }
+    }
+    getAllPromptDefinitions()
+    const prompt = cachedPromptMap?.get(name)
 
     if (!prompt) {
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return Promise.resolve(prompt.handler(args, db, teamDb, github, briefingConfig))
+    const rawAuditLogger = isRecord(runtime) ? runtime['auditLogger'] : undefined
+    const auditLogger = isAuditLoggerLike(rawAuditLogger) ? rawAuditLogger : undefined
+    enforceAccessBoundary(name, 'prompt', prompt.capabilities, auditLogger)
+
+    return Promise.resolve().then(() =>
+        prompt.handler(args, db, teamDb, github, briefingConfig, runtime)
+    )
 }
 
 /**
  * Get all prompt definitions by composing sub-module definitions
  */
 export function getAllPromptDefinitions(): InternalPromptDef[] {
-    return [
-        ...getWorkflowPromptDefinitions(),
-        ...getAnalyticsPromptDefinitions(),
-        ...getGitHubPromptDefinitions(),
-        ...getGitPromptDefinitions(),
-        ...getAdversarialPromptDefinitions(),
-        ...getOptimizerPromptDefinitions(),
-        ...getLoadBriefingPromptDefinitions(),
-    ]
+    if (cachedAllPromptDefs === null) {
+        cachedAllPromptDefs = [
+            ...getWorkflowPromptDefinitions(),
+            ...getAnalyticsPromptDefinitions(),
+            ...getGitHubPromptDefinitions(),
+            ...getGitPromptDefinitions(),
+            ...getAdversarialPromptDefinitions(),
+            ...getOptimizerPromptDefinitions(),
+            ...getLoadBriefingPromptDefinitions(),
+        ]
+        cachedPromptMap = new Map(cachedAllPromptDefs.map((p) => [p.name, p]))
+    }
+    return [...cachedAllPromptDefs]
 }

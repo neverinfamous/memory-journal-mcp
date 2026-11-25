@@ -71,6 +71,10 @@ export class OAuthError extends MemoryJournalMcpError {
 /**
  * Token is missing from the request
  */
+function sanitizeHeaderParam(value: string): string {
+    return value.replace(/[\r\n"\\]/g, '')
+}
+
 export class TokenMissingError extends OAuthError {
     constructor(realm = 'memory-journal-mcp') {
         super(
@@ -78,7 +82,7 @@ export class TokenMissingError extends OAuthError {
             AUTH_ERROR_CODES.TOKEN_MISSING,
             401,
             undefined,
-            `Bearer realm="${realm}"`
+            `Bearer realm="${sanitizeHeaderParam(realm)}"`
         )
         this.name = 'TokenMissingError'
     }
@@ -136,7 +140,7 @@ export class InvalidSignatureError extends OAuthError {
 export class InsufficientScopeError extends OAuthError {
     constructor(requiredScope: string | string[], providedScopes?: string[]) {
         const required = Array.isArray(requiredScope) ? requiredScope : [requiredScope]
-        const scopeValue = required.join(' ')
+        const scopeValue = sanitizeHeaderParam(required.join(' '))
 
         super(
             `Insufficient scope. Required: ${scopeValue}`,
@@ -203,12 +207,4 @@ export class ClientRegistrationError extends OAuthError {
  */
 export function isOAuthError(error: unknown): error is OAuthError {
     return error instanceof OAuthError
-}
-
-/**
- * Get WWW-Authenticate header for an OAuth error.
- * @deprecated Use error.wwwAuthenticate property directly instead
- */
-export function getWWWAuthenticateHeader(error: OAuthError, realm = 'memory-journal-mcp'): string {
-    return error.wwwAuthenticate ?? `Bearer realm="${realm}"`
 }

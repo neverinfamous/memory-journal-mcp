@@ -11,6 +11,17 @@ import { Migration010AddAuthorAliases } from './010-add-author-aliases.js'
 import { Migration011AddWorkspaceId } from './011-add-workspace-id.js'
 import { Migration012AddTrustAndAnchors } from './012-add-trust-and-anchors.js'
 import { Migration013AddSessionId } from './013-add-session-id.js'
+import { Migration014AddAliasWorkspace } from './014-add-alias-workspace.js'
+import { Migration015AliasWorkspaceUnique } from './015-alias-workspace-unique.js'
+import { Migration016FtsSoftDeleteTriggers } from './016-fts-soft-delete-triggers.js'
+import { Migration017AddPerformanceIndexes } from './017-add-performance-indexes.js'
+import { Migration018AddProjectAndPruneDuplicateIndexes } from './018-add-project-and-prune-duplicate-indexes.js'
+import { Migration019NormalizeLegacyCommitEntries } from './019-normalize-legacy-commit-entries.js'
+import { Migration020AddTeamOriginPersonalId } from './020-add-team-origin-personal-id.js'
+import { Migration021AddEntityLookupAndPruneAliasIndex } from './021-add-entity-lookup-and-prune-alias-index.js'
+import { Migration022AddAutoContextIndex } from './022-add-autocontext-index.js'
+import { Migration023AddProjectRecentIndex } from './023-add-project-recent-index.js'
+import { Migration024PruneLegacyJournalIndexes } from './024-prune-legacy-journal-indexes.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -27,4 +38,15 @@ export const MIGRATIONS: Migration[] = [
     Migration011AddWorkspaceId,
     Migration012AddTrustAndAnchors,
     Migration013AddSessionId,
+    Migration014AddAliasWorkspace,
+    Migration015AliasWorkspaceUnique,
+    Migration016FtsSoftDeleteTriggers,
+    Migration017AddPerformanceIndexes,
+    Migration018AddProjectAndPruneDuplicateIndexes,
+    Migration019NormalizeLegacyCommitEntries,
+    Migration020AddTeamOriginPersonalId,
+    Migration021AddEntityLookupAndPruneAliasIndex,
+    Migration022AddAutoContextIndex,
+    Migration023AddProjectRecentIndex,
+    Migration024PruneLegacyJournalIndexes,
 ]

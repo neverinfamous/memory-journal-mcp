@@ -7,11 +7,15 @@ export const DatabaseAdapterFactory = {
     /**
      * Creates and returns the SQLite database adapter
      */
-    create(dbPath: string, config?: ToolHandlerConfig): Promise<IDatabaseAdapter> {
+    create(
+        dbPath: string,
+        config?: ToolHandlerConfig,
+        adapterOptions?: { backupsDir?: string }
+    ): Promise<IDatabaseAdapter> {
         logger.info('Initializing SQLite database backend', {
             module: 'DatabaseAdapterFactory',
             dbPath,
         })
-        return Promise.resolve(new DatabaseAdapter(dbPath, config))
+        return Promise.resolve(new DatabaseAdapter(dbPath, config, adapterOptions))
     },
 }

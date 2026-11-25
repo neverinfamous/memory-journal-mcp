@@ -66,7 +66,6 @@ test.describe('Payload Contracts: Code Mode', () => {
             },
         })
 
-        expect(response.isError).toBeUndefined()
         expect(Array.isArray(response.content)).toBe(true)
 
         const text = (response.content[0] as { type: string; text: string }).text
@@ -74,6 +73,7 @@ test.describe('Payload Contracts: Code Mode', () => {
 
         // Should return a structured error with security failure
         expect(parsed.success).toBe(false)
+        expect(response.isError).toBe(true)
         expect(parsed.error).toBeDefined()
     })
 
@@ -85,7 +85,6 @@ test.describe('Payload Contracts: Code Mode', () => {
             },
         })
 
-        expect(response.isError).toBeUndefined()
         expect(Array.isArray(response.content)).toBe(true)
 
         const text = (response.content[0] as { type: string; text: string }).text
@@ -104,7 +103,6 @@ test.describe('Payload Contracts: Code Mode', () => {
             },
         })
 
-        expect(response.isError).toBeUndefined()
         expect(Array.isArray(response.content)).toBe(true)
 
         const text = (response.content[0] as { type: string; text: string }).text

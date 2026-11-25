@@ -201,6 +201,8 @@ describe('Team Core Tool Handlers', () => {
             )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('not found')
+            expect(result.suggestion).toContain('mj.team.teamGetRecent')
+            expect(result.suggestion).toContain('mj.team.teamSearch')
         })
 
         it('should return error if no team db', async () => {

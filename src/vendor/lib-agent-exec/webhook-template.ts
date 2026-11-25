@@ -1,6 +1,6 @@
 // @ts-nocheck
 function hasKey<K extends PropertyKey>(obj: object, key: K): obj is Record<K, unknown> {
-  return key in obj;
+  return Object.hasOwn(obj, key);
 }
 
 function safeGet(obj: unknown, path: string): unknown {
@@ -16,95 +16,109 @@ function safeGet(obj: unknown, path: string): unknown {
   return current;
 }
 
+const COMBINED_PLACEHOLDER_RE = /\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}|\{\{(stdout|stderr|code|signal|success|envelope\.data|envelope\.status)\}\}/g;
+const EXACT_CONTEXT_PLACEHOLDER_RE = /^\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}$/;
+
+function formatJsonStringFragment(value: string, escapeForRawJson: boolean): string {
+  return escapeForRawJson ? JSON.stringify(value).slice(1, -1) : value;
+}
+
+function scalarToString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value === null || value === undefined) return fallback;
+  return JSON.stringify(value) ?? fallback;
+}
+
+function resolveContextToken(match: string, pathStr: string | undefined, integrationContext: unknown, escapeForRawJson: boolean): string {
+  if (integrationContext === undefined) return match;
+  const current = safeGet(integrationContext, typeof pathStr === 'string' ? pathStr : '');
+  if (current === undefined) return match;
+  if (typeof current === 'object') {
+    const serialized = JSON.stringify(current);
+    return escapeForRawJson ? formatJsonStringFragment(serialized, true) : serialized;
+  }
+  return typeof current === 'string' ? formatJsonStringFragment(current, escapeForRawJson) : scalarToString(current);
+}
+
+function resolveVarPlaceholder(key: string, vars: Record<string, unknown>, escapeForRawJson: boolean): string | null {
+  if (key === 'stdout') return formatJsonStringFragment(scalarToString(vars['stdout']), escapeForRawJson);
+  if (key === 'stderr') return formatJsonStringFragment(scalarToString(vars['stderr']), escapeForRawJson);
+  if (key === 'code') return scalarToString(vars['code'], 'null');
+  if (key === 'signal') {
+    const sig = vars['signal'];
+    return typeof sig === 'string' ? formatJsonStringFragment(sig, escapeForRawJson) : scalarToString(sig, 'null');
+  }
+  if (key === 'success') return vars['success'] === true ? 'true' : 'false';
+  if (key === 'envelope.data') {
+    const data = safeGet(vars['envData'], 'data');
+    if (data === undefined) return 'null';
+    const serialized = JSON.stringify(data);
+    return escapeForRawJson && typeof data === 'string' ? serialized.slice(1, -1) : serialized;
+  }
+  if (key === 'envelope.status') {
+    const status = safeGet(vars['envData'], 'status');
+    if (status === undefined || status === null) return 'null';
+    return typeof status === 'string' ? formatJsonStringFragment(status, escapeForRawJson) : scalarToString(status);
+  }
+  return null;
+}
+
+function replaceAllPlaceholdersSinglePass(
+  input: string,
+  integrationContext: unknown,
+  vars: Record<string, unknown>,
+  escapeForRawJson: boolean,
+): string {
+  return input.replace(COMBINED_PLACEHOLDER_RE, (match, ctxPath?: string, varKey?: string) => {
+    if (varKey !== undefined) return resolveVarPlaceholder(varKey, vars, escapeForRawJson) ?? match;
+    return resolveContextToken(match, ctxPath, integrationContext, escapeForRawJson);
+  });
+}
+
+function substituteTemplateString(node: string, integrationContext: unknown, vars: Record<string, unknown>): unknown {
+  if (node === '{{envelope.data}}') return safeGet(vars['envData'], 'data') ?? null;
+  if (node === '{{envelope.status}}') return safeGet(vars['envData'], 'status') ?? null;
+  if (node === '{{stdout}}') return vars['stdout'] ?? '';
+  if (node === '{{stderr}}') return vars['stderr'] ?? '';
+  if (node === '{{code}}') return vars['code'] ?? null;
+  if (node === '{{signal}}') return vars['signal'] ?? null;
+  if (node === '{{success}}') return vars['success'] ?? false;
+
+  if (integrationContext !== undefined) {
+    const exactMatch = EXACT_CONTEXT_PLACEHOLDER_RE.exec(node);
+    if (exactMatch) {
+      const current = safeGet(integrationContext, exactMatch[1] ?? '');
+      if (current !== undefined && current !== node) return current;
+    }
+  }
+  return replaceAllPlaceholdersSinglePass(node, integrationContext, vars, false);
+}
+
+function walkTemplateNode(node: unknown, integrationContext: unknown, vars: Record<string, unknown>): unknown {
+  if (typeof node === 'string') return substituteTemplateString(node, integrationContext, vars);
+  if (Array.isArray(node)) return node.map((item) => walkTemplateNode(item, integrationContext, vars));
+  if (node !== null && typeof node === 'object') {
+    const out: Record<string, unknown> = {};
+    Object.setPrototypeOf(out, null);
+    for (const [k, v] of Object.entries(node)) {
+      out[k] = walkTemplateNode(v, integrationContext, vars);
+    }
+    return out;
+  }
+  return node;
+}
+
+function renderFallbackTemplate(templateStr: string, integrationContext: unknown, vars: Record<string, unknown>): string {
+  return replaceAllPlaceholdersSinglePass(templateStr, integrationContext, vars, true);
+}
+
 export function renderWebhookTemplate(templateStr: string, integrationContext: unknown, vars: Record<string, unknown>): string {
   try {
-    const obj = JSON.parse(templateStr);
-    const walk = (node: unknown): unknown => {
-      if (typeof node === 'string') {
-        if (node === '{{envelope.data}}') return safeGet(vars['envData'], 'data') ?? null;
-        if (node === '{{envelope.status}}') return safeGet(vars['envData'], 'status') ?? null;
-        if (node === '{{stdout}}') return vars['stdout'] ?? '';
-        if (node === '{{stderr}}') return vars['stderr'] ?? '';
-        if (node === '{{code}}') return vars['code'] ?? null;
-        if (node === '{{signal}}') return vars['signal'] ?? null;
-        if (node === '{{success}}') return vars['success'] ?? false;
-        
-        let replaced: string = node;
-        if (integrationContext !== undefined) {
-          const exactMatch = /^\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}$/.exec(node);
-          if (exactMatch) {
-            const pathStr = exactMatch[1] || '';
-            const current = safeGet(integrationContext, pathStr);
-            if (current !== undefined && current !== node) return current;
-          }
-
-          replaced = replaced.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-            const current = safeGet(integrationContext, pathStr || '');
-            if (current === undefined) return match;
-            return typeof current === 'object' ? JSON.stringify(current) : String(current);
-          });
-        }
-        
-        replaced = replaced.replace(/\{\{(stdout|stderr|code|signal|success|envelope\.data|envelope\.status)\}\}/g, (match, key) => {
-          if (key === 'stdout') return String(vars['stdout'] ?? '');
-          if (key === 'stderr') return String(vars['stderr'] ?? '');
-          if (key === 'code') return String(vars['code'] ?? 'null');
-          if (key === 'signal') return String(vars['signal'] ?? 'null');
-          if (key === 'success') return vars['success'] ? 'true' : 'false';
-          if (key === 'envelope.data') {
-            const data = safeGet(vars['envData'], 'data');
-            return data !== undefined ? JSON.stringify(data) : 'null';
-          }
-          if (key === 'envelope.status') {
-            const status = safeGet(vars['envData'], 'status');
-            return status !== undefined ? String(status) : 'null';
-          }
-          return match;
-        });
-
-        return replaced;
-      }
-      if (Array.isArray(node)) return node.map(walk);
-      if (node !== null && typeof node === 'object') {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(node)) {
-          out[k] = walk(v);
-        }
-        return out;
-      }
-      return node;
-    };
-    return JSON.stringify(walk(obj));
+    const obj: unknown = JSON.parse(templateStr);
+    return JSON.stringify(walkTemplateNode(obj, integrationContext, vars));
   } catch {
-    // fallback to naive replace for non-JSON templates
-    const replaceCtx = (str: string) => {
-      if (integrationContext === undefined) return str;
-      return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-        const current = safeGet(integrationContext, pathStr || '');
-        if (current === undefined) return match;
-        return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
-      });
-    };
-    let body = replaceCtx(templateStr);
-    
-    body = body.replace(/\{\{(stdout|stderr|code|signal|success|envelope\.data|envelope\.status)\}\}/g, (match, key) => {
-      if (key === 'stdout') return JSON.stringify(vars['stdout'] ?? '').slice(1, -1);
-      if (key === 'stderr') return JSON.stringify(vars['stderr'] ?? '').slice(1, -1);
-      if (key === 'code') return String(vars['code'] ?? 'null');
-      if (key === 'signal') return String(vars['signal'] ?? 'null');
-      if (key === 'success') return vars['success'] ? 'true' : 'false';
-      if (key === 'envelope.data') {
-        const data = safeGet(vars['envData'], 'data');
-        return data !== undefined ? JSON.stringify(data).slice(1, -1) : 'null';
-      }
-      if (key === 'envelope.status') {
-        const status = safeGet(vars['envData'], 'status');
-        return status !== undefined ? String(status) : 'null';
-      }
-      return match;
-    });
-
-    return body;
+    return renderFallbackTemplate(templateStr, integrationContext, vars);
   }
 }
 

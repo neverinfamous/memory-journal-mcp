@@ -1,69 +1,145 @@
 import { type McpServer } from '@modelcontextprotocol/server'
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
-import { logger } from '../../utils/logger.js'
-import { getTools, callTool } from '../../handlers/tools/index.js'
+import { getTools } from '../../handlers/tools/index.js'
 import { getRequiredScope } from '../../auth/scope-map.js'
+import { resolveEnvAuthScopes } from '../../auth/scopes.js'
 import { getResources } from '../../handlers/resources/index.js'
 import { getPrompts } from '../../handlers/prompts/index.js'
-import { HttpTransport } from '../../transports/http/index.js'
+import { sanitizeDefaultWorkspaceId } from '../../utils/workspace-registry-match.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
-import type { PromptDefinition, ResourceDefinition } from '../registration.js'
-import { globalSubscriptionManager } from '../subscription-manager.js'
+import { toPromptDefinitions, toResourceDefinitions } from '../definition-parsers.js'
 
-import type { ServerOptions } from './types.js'
+import type { ServerContext, ServerOptions } from './types.js'
 import { initializeDependencies } from './initialization.js'
 import { createServerInstance } from './tool-registration.js'
 import { startMetricsServer } from '../../observability/metrics-server.js'
-import type { DynamicConfig } from '../../utils/config-manager.js'
+import { logger } from '../../utils/logger.js'
+import { flushAgentIssues } from '../../utils/issue-logger.js'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+import {
+    buildBaseToolConfig,
+    closeServerResources,
+    teardownVectorManagers,
+} from './core-helpers.js'
+import { closeCrossTeamAdapters } from '../../handlers/tools/search/cross-team.js'
+import { resolveActiveBriefingConfig } from './tool-registration/register-tools-helpers.js'
+import {
+    registerConfigChangeListener,
+    startSelectedTransport,
+} from './server-lifecycle-helpers.js'
 
-export async function createServer(options: ServerOptions): Promise<void> {
-    const context = await initializeDependencies(options);
-    const { db, testDb, teamDb, testTeamDb, runtime, vectorManager, teamVectorManager, github, configManager, scheduler, allowedIoRoots, activeMetricsPath } = context;
-    const { transport, defaultProjectNumber } = options;
+/**
+ * Starts the standalone Prometheus metrics server when allowed by auth/OAuth configuration.
+ * Skips unauthenticated standalone startup if OAuth 2.1 is enabled without a static token.
+ */
+export function startConfiguredMetricsServer(
+    runtime: ServerRuntime,
+    options: Pick<ServerOptions, 'metricsExport' | 'metricsPort' | 'authToken' | 'oauthEnabled'>
+): (() => Promise<void>) | undefined {
+    if (options.metricsExport !== 'prometheus') {
+        return undefined
+    }
+    const rawEnvToken = process.env['MCP_AUTH_TOKEN']
+    const envToken = rawEnvToken !== undefined && rawEnvToken !== '' ? rawEnvToken : undefined
+    const effectiveAuthToken =
+        options.authToken !== undefined && options.authToken !== ''
+            ? options.authToken
+            : envToken !== undefined && envToken !== ''
+              ? envToken
+              : undefined
+    if (options.oauthEnabled === true && effectiveAuthToken === undefined) {
+        logger.warning(
+            'Standalone metrics server (:9465) skipped because OAuth 2.1 is enabled without a static --auth-token / MCP_AUTH_TOKEN; scrape OAuth-protected /metrics on the HTTP transport instead.',
+            { module: 'MetricsServer' }
+        )
+        return undefined
+    }
+    return startMetricsServer(runtime, options.metricsPort, {
+        ...(effectiveAuthToken !== undefined
+            ? { authToken: effectiveAuthToken, authScopes: resolveEnvAuthScopes() }
+            : {}),
+    })
+}
 
-    const filterConfig = configManager.getConfig().toolFilterConfig;
-    
-    const baseConfig: ToolHandlerConfig = {
-        defaultProjectNumber,
-        defaultWorkspaceId: options.defaultWorkspaceId,
-        projectRegistry: options.projectRegistry,
-        additionalTeamDbs: options.additionalTeamDbs,
-
-        allowedIoRoots,
-        filterConfig,
-        authEnabled: Boolean(options.authToken ?? process.env['MCP_AUTH_TOKEN']),
-        oauthEnabled: options.oauthEnabled,
-        codemodeEnabled: true,
-        codemodeInternalFullAccess: options.codemodeInternalFullAccess,
-        agentHealing: options.agentHealing,
-        teamDefaultRole: options.teamDefaultRole,
-        teamAdmin: options.teamAdmin,
+function buildServerToolConfigs(
+    context: ServerContext,
+    options: ServerOptions
+): { baseConfig: ToolHandlerConfig; customToolHandlerConfig: ToolHandlerConfig } {
+    const {
         runtime,
-        subscriptionManager: globalSubscriptionManager,
-        archiveOlderThanDays: options.archiveOlderThanDays,
-        pruneOlderThanDays: options.pruneOlderThanDays,
-        hardDeleteOlderThanDays: options.hardDeleteOlderThanDays,
-        pruneImportanceThreshold: options.pruneImportanceThreshold,
+        configManager,
+        allowedIoRoots,
+    } = context
+
+    const initialDynamicConfig = configManager.getConfig()
+    const baseConfig: ToolHandlerConfig = buildBaseToolConfig(
+        options,
+        runtime,
+        allowedIoRoots,
+        initialDynamicConfig.toolFilterConfig
+    )
+    baseConfig.briefingConfig = resolveActiveBriefingConfig(
+        initialDynamicConfig.briefingConfig,
+        allowedIoRoots
+    )
+    if (
+        baseConfig.defaultProjectNumber === undefined &&
+        baseConfig.briefingConfig.defaultProjectNumber !== undefined
+    ) {
+        baseConfig.defaultProjectNumber = baseConfig.briefingConfig.defaultProjectNumber
+    }
+    if (baseConfig.defaultWorkspaceId === undefined) {
+        const sanitized = sanitizeDefaultWorkspaceId(baseConfig.briefingConfig.defaultWorkspaceId)
+        if (sanitized !== undefined) baseConfig.defaultWorkspaceId = sanitized
+    }
+    if (
+        baseConfig.projectRegistry === undefined &&
+        baseConfig.briefingConfig.projectRegistry !== undefined
+    ) {
+        baseConfig.projectRegistry = baseConfig.briefingConfig.projectRegistry
     }
 
-    const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
-        callTool(
-            name,
-            args,
-            db,
-            vectorManager,
-            github,
-            baseConfig,
-            undefined,
-            teamDb ?? undefined,
-            teamVectorManager ?? undefined
-        )
+    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig }
+    return { baseConfig, customToolHandlerConfig }
+}
 
-    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
+async function cleanupFailedStartup(params: {
+    runtime: ServerRuntime
+    configManager: ServerContext['configManager']
+    shutdownMetrics: (() => Promise<void>) | undefined
+    closeDatabases: () => void
+}): Promise<void> {
+    const { runtime, configManager, shutdownMetrics, closeDatabases } = params
+    try {
+        runtime.stopBackgroundTasks?.()
+    } catch {
+        // best-effort timer teardown
+    }
+    try {
+        configManager.close()
+    } catch {
+        // best-effort config watcher teardown
+    }
+    if (shutdownMetrics !== undefined) {
+        await shutdownMetrics().catch(() => undefined)
+    }
+    await runtime.auditLogger?.close().catch(() => undefined)
+    await flushAgentIssues().catch(() => undefined)
+    await teardownVectorManagers(runtime)
+    try {
+        closeDatabases()
+    } catch {
+        // best-effort database teardown
+    }
+}
 
+function loadAndValidateTools(
+    context: ServerContext,
+    customToolHandlerConfig: ToolHandlerConfig
+): { allTools: ReturnType<typeof getTools>; allToolNames: Set<string> } {
+    const { db, vectorManager, github, teamDb, teamVectorManager } = context
     const allTools = getTools(
         db,
-        filterConfig,
+        null,
         vectorManager,
         github,
         customToolHandlerConfig,
@@ -71,144 +147,72 @@ export async function createServer(options: ServerOptions): Promise<void> {
         teamVectorManager ?? undefined
     )
     const allToolNames = new Set(allTools.map((t) => t.name))
-
-    for (const toolName of allToolNames) {
-        getRequiredScope(toolName)
-    }
-
-    const resources = getResources()
-    const prompts = getPrompts()
-
-    // Subscribe to config changes to send notifications
-    configManager.on('changed', (newConfig: DynamicConfig) => {
-        baseConfig.filterConfig = newConfig.toolFilterConfig
-        baseConfig.briefingConfig = newConfig.briefingConfig
-        customToolHandlerConfig.filterConfig = newConfig.toolFilterConfig
-        customToolHandlerConfig.briefingConfig = newConfig.briefingConfig
-        // Send tool list changed notification if using SSE/HTTP
-        void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
-        try {
-            // Notify MCP clients that tools might have changed (e.g. tool filter updated)
-            void globalSubscriptionManager.broadcastNotification('notifications/tools/list_changed')
-            // Also notify that resources might have changed (for good measure)
-            void globalSubscriptionManager.broadcastNotification('notifications/resources/list_changed')
-        } catch (error: unknown) {
-            logger.debug('Failed to send list_changed notifications to MCP client', {
-                module: 'McpServer',
-                error: error instanceof Error ? error.message : String(error)
-            })
-        }
-    })
-
-    const getServerInstance = (): McpServer => createServerInstance(
-        context,
-        options,
-        prompts as PromptDefinition[],
-        resources as ResourceDefinition[],
-        allTools,
-        allToolNames,
-        customToolHandlerConfig
-    );
-
-    let shutdownMetrics: (() => Promise<void>) | undefined;
-    if (options.metricsExport === 'prometheus') {
-        shutdownMetrics = startMetricsServer(runtime, options.metricsPort);
-    }
-
-    // Start server based on transport
-    if (transport === 'stdio') {
-        const stdioTransport = new StdioServerTransport()
-        const server = getServerInstance()
-        await server.connect(stdioTransport)
-        logger.info('MCP server started on stdio', { module: 'McpServer' })
-
-        const handleStdioShutdown = (): void => {
-            logger.info('Shutting down...', { module: 'McpServer' })
-            // Flush audit log before exit
-            if (runtime.auditLogger) {
-                void runtime.auditLogger.close()
-            }
-            if (shutdownMetrics) {
-                void shutdownMetrics().catch((err: unknown) => {
-                    logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
-                });
-            }
-            if (activeMetricsPath) {
-                void runtime.metrics.saveToFile(activeMetricsPath).then(() => {
-                    db.close()
-                    testDb?.close()
-                    teamDb?.close()
-                    testTeamDb?.close()
-                    process.exit(0)
-                })
-            } else {
-                db.close()
-                testDb?.close()
-                teamDb?.close()
-                testTeamDb?.close()
-                process.exit(0)
-            }
-        }
-
-        // Handle shutdown for stdio
-        process.on('SIGINT', handleStdioShutdown)
-        process.on('SIGTERM', handleStdioShutdown)
-    } else {
-        // HTTP transport
-        const port = options.port ?? 3000
-        const host = options.host ?? 'localhost'
-        const corsRaw = process.env['MCP_CORS_ORIGIN']
-        const corsOrigins =
-            options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()) : [])
-        const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
-
-        const httpTransport = new HttpTransport({
-            port,
-            host,
-            corsOrigins,
-            stateless: options.statelessHttp === true,
-            authToken,
-            enableHSTS: options.enableHSTS,
-            oauthEnabled: options.oauthEnabled,
-            oauthIssuer: options.oauthIssuer,
-            oauthAudience: options.oauthAudience,
-            oauthJwksUri: options.oauthJwksUri,
-            oauthClockTolerance: options.oauthClockTolerance,
-            allowPlaintextLoopbackOAuth: options.allowPlaintextLoopbackOAuth,
-            trustProxy: options.trustProxy,
-            publicOrigin: options.publicOrigin,
-            metricsExport: options.metricsExport,
-        })
-
-        await httpTransport.start(getServerInstance, scheduler, runtime)
-
-        const handleHttpShutdown = (): void => {
-            void (async () => {
-                if (shutdownMetrics) {
-                    await shutdownMetrics().catch((err: unknown) => {
-                    logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
-                });
-                }
-                await httpTransport.stop(scheduler)
-                // Flush audit log before exit
-                if (runtime.auditLogger) {
-                    await runtime.auditLogger.close()
-                }
-                if (activeMetricsPath) {
-                    await runtime.metrics.saveToFile(activeMetricsPath)
-                }
-                db.close()
-                testDb?.close()
-                teamDb?.close()
-                testTeamDb?.close()
-                process.exit(0)
-            })()
-        }
-
-        // Handle shutdown
-        process.on('SIGINT', handleHttpShutdown)
-        process.on('SIGTERM', handleHttpShutdown)
-    }
+    for (const toolName of allToolNames) getRequiredScope(toolName)
+    return { allTools, allToolNames }
 }
 
+export async function createServer(options: ServerOptions): Promise<void> {
+    const context = await initializeDependencies(options)
+    const {
+        db,
+        testDb,
+        teamDb,
+        testTeamDb,
+        runtime,
+        configManager,
+        allowedIoRoots,
+        activeMetricsPath,
+    } = context
 
+    const closeDatabases = (): void => {
+        closeServerResources([db, testDb, teamDb, testTeamDb])
+        closeCrossTeamAdapters()
+    }
+    let shutdownMetrics: (() => Promise<void>) | undefined
+
+    try {
+        const { baseConfig, customToolHandlerConfig } = buildServerToolConfigs(context, options)
+        const { allTools, allToolNames } = loadAndValidateTools(context, customToolHandlerConfig)
+
+        const resources = toResourceDefinitions(getResources())
+        const prompts = toPromptDefinitions(getPrompts())
+
+        registerConfigChangeListener({
+            configManager,
+            options,
+            allowedIoRoots,
+            baseConfig,
+            customToolHandlerConfig,
+        })
+
+        const getServerInstance = (): McpServer =>
+            createServerInstance(
+                context,
+                options,
+                prompts,
+                resources,
+                allTools,
+                allToolNames,
+                customToolHandlerConfig
+            )
+
+        shutdownMetrics = startConfiguredMetricsServer(runtime, options)
+        await startSelectedTransport({
+            options,
+            getServerInstance,
+            runtime,
+            configManager,
+            shutdownMetrics,
+            activeMetricsPath,
+            closeDatabases,
+        })
+    } catch (startupError) {
+        await cleanupFailedStartup({
+            runtime,
+            configManager,
+            shutdownMetrics,
+            closeDatabases,
+        })
+        throw startupError
+    }
+}

@@ -1,19 +1,40 @@
 import { z } from 'zod'
 import {
+    preprocessTeamSortByOnly,
+    preprocessTeamSearchQuery,
+    preprocessDateRange,
+} from './search-preprocessors.js'
+import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     MAX_CONTENT_LENGTH,
-    EntryOutputSchema,
-    RelationshipOutputSchema,
-    TagOutputSchema,
+    MAX_QUERY_LIMIT,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     StrictProjectNumberSchema,
     healAgentHallucinations,
     preprocessRelationshipItem,
+    relationshipTypeEnumError,
 } from '../../schemas.js'
-import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
+import {
+    TeamEntryOutputSchema,
+    TeamCreateOutputSchema,
+    TeamEntriesListOutputSchema,
+    TeamEntryDetailOutputSchema,
+    TeamTagsListOutputSchema,
+} from './core-search-output-schemas.js'
+import { isRecord } from '../../../../utils/type-guards.js'
+
+export {
+    TeamEntryOutputSchema,
+    TeamCreateOutputSchema,
+    TeamEntriesListOutputSchema,
+    TeamEntryDetailOutputSchema,
+    TeamTagsListOutputSchema,
+}
 
 const WORKSPACE_DESC =
     'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
@@ -23,10 +44,6 @@ const TEAM_RELATION_TYPES = [
     'blocked_by', 'resolved', 'caused', 'resolves', 'relates_to', 'depends_on',
 ] as const
 
-export const TeamEntryOutputSchema = EntryOutputSchema.extend({
-    author: z.string().nullable().optional(),
-})
-
 /** team_create_entry — strict */
 export const TeamCreateEntrySchema = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
@@ -34,38 +51,55 @@ export const TeamCreateEntrySchema = z.preprocess(
         .object({
             content: z.string().min(1).max(MAX_CONTENT_LENGTH),
             entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-            tags: z.array(z.string()).optional().default([]),
+            tags: z.array(z.string().max(100)).max(100).optional().default([]),
             significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-            project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().min(1, 'workspace_id (repository name) is required'),
-            project_owner: z.string().optional(),
-            issue_number: z.number().optional(),
-            issue_url: z.string().optional(),
-            pr_number: z.number().optional(),
-            pr_url: z.string().optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+            workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
+            project_owner: z.string().max(255).optional(),
+            issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            issue_url: z.string().max(1000).optional(),
+            pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            pr_url: z.string().max(1000).optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-            workflow_run_id: z.number().optional(),
-            workflow_name: z.string().optional(),
+            workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            workflow_name: z.string().max(255).optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
-            author: z.string().optional(),
-            auto_context: z.string().optional(),
-            impact_score: z.number().min(0).max(1).optional(),
-            trust_score: z.number().min(0).max(1).optional(),
+            author: z.string().max(100).optional(),
+            auto_link: z.boolean().optional(),
+            auto_context: z.string().max(100_000).optional(),
+            impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
+            trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
-            session_id: z.string().optional(),
+            session_id: z.string().max(255).optional(),
+            anchors: z
+                .array(
+                    z
+                        .object({
+                            anchor_path: z.string().max(500),
+                            anchor_type: z.string().max(64),
+                            status: z
+                                .enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable'])
+                                .optional()
+                                .default('pending'),
+                        })
+                        .strict()
+                )
+                .max(100)
+                .optional(),
             relationships: z
                 .array(
                     z.preprocess(
                         preprocessRelationshipItem,
                         z.object({
-                            targetId: z.number(),
+                            targetId: z.number().int().positive(),
                             relationType: z
-                                .enum(TEAM_RELATION_TYPES)
+                                .enum(TEAM_RELATION_TYPES, { error: relationshipTypeEnumError })
                                 .optional()
                                 .default('references'),
-                        })
+                        }).strict()
                     )
                 )
+                .max(100)
                 .optional(),
         })
         .strict()
@@ -105,8 +139,8 @@ export const TeamCreateEntrySchema = z.preprocess(
                 (data.tags?.includes('session-summary') && data.auto_context)
             ) {
                 try {
-                    const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>
-                    const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined
+                    const ac: unknown = JSON.parse(data.auto_context || '{}')
+                    const commits = isRecord(ac) ? ac['commits'] : undefined
                     if (!Array.isArray(commits) || commits.length === 0) {
                         ctx.addIssue({
                             code: 'custom',
@@ -174,7 +208,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe(
-                    'REQUIRED. The repository name (e.g. adamic). Do not use numeric project IDs or "workspace" as the key.'
+                    'REQUIRED. The repository name (e.g. "my-repo"). Do not use numeric project IDs or "workspace" as the key.'
                 ),
             project_owner: z.string().optional().describe('Owner of the project/task.'),
             issue_number: relaxedNumber().optional(),
@@ -186,6 +220,10 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
             workflow_name: z.string().optional(),
             workflow_status: z.string().optional(),
             author: z.string().optional().describe('Override author name (default: auto-detected)'),
+            auto_link: z
+                .boolean()
+                .optional()
+                .describe('Compatibility option accepted for parity with create_entry / CLI --auto-link.'),
             auto_context: z.string().optional(),
             impact_score: relaxedNumber()
                 .optional()
@@ -205,6 +243,16 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe('Agent session ID for thread isolation (usually conversation ID).'),
+            anchors: z
+                .array(
+                    z.object({
+                        anchor_path: z.string(),
+                        anchor_type: z.string(),
+                        status: z.string().optional().default('pending'),
+                    })
+                )
+                .optional()
+                .describe('Files or lines of code that this entry is anchored to.'),
             relationships: z
                 .array(
                     z.preprocess(
@@ -217,225 +265,163 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                 )
                 .optional()
                 .describe(
-                    'Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'
+                    'Optional array of `{ targetId, relationType }` links to previous entries. Canonical types: "evolves_from", "references", "implements", "clarifies", "response_to", "blocked_by", "resolved", "caused"'
                 ),
         })
         .strict()
 )
 
 /** team_get_recent — strict */
-export const TeamGetRecentSchema = z.object({
-    limit: z.number().min(1).max(500).optional().default(10),
-    cursor: z.string().optional().describe('Cursor for pagination'),
-    project_number: StrictProjectNumberSchema,
-    workspace_id: z.string().optional(),
-    sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
-    include_archived: z.boolean().optional().default(false),
-})
+export const TeamGetRecentSchema = z.preprocess(
+    preprocessTeamSortByOnly,
+    z
+        .object({
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
+            cursor: z.string().max(500).optional().describe('Cursor for pagination'),
+            offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+            workspace_id: z.string().max(255).optional(),
+            sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false),
+        })
+        .strict()
+        .superRefine((data, ctx) => {
+            if (data.cursor !== undefined && /^(?:0|[1-9]\d*)$/.test(data.cursor.trim())) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: 'Conflicting cursor and offset values specified',
+                    path: ['cursor'],
+                })
+            }
+        })
+)
 
 /** team_get_recent — relaxed */
-export const TeamGetRecentSchemaMcp = z.object({
-    limit: relaxedNumber().optional().default(10),
-    cursor: z.string().optional().describe('Cursor for pagination'),
-    project_number: relaxedNumber().optional(),
-    workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-    sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-    include_archived: z.boolean().optional().default(false),
-})
-
-function preprocessTeamSearchQuery(val: unknown): unknown {
-    const healed = healAgentHallucinations(val)
-    if (typeof healed === 'object' && healed !== null) {
-        const obj = { ...(healed as Record<string, unknown>) }
-        let modified = false
-        for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode', 'content']) {
-            if (key in obj && !('query' in obj)) {
-                obj['query'] = obj[key]
-                Reflect.deleteProperty(obj, key)
-                modified = true
-                break
-            }
-        }
-        return modified ? obj : healed
-    }
-    return healed
-}
+export const TeamGetRecentSchemaMcp = z.preprocess(
+    preprocessTeamSortByOnly,
+    z.object({
+        limit: relaxedNumber().optional().default(10).describe('Maximum entries to return (1-500, default: 10)'),
+        cursor: z.string().optional().describe('Cursor for pagination'),
+        offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
+        project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
+        workspace_id: z.string().optional().describe(WORKSPACE_DESC),
+        sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
+        include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
+    })
+)
 
 /** team_search — strict */
 export const TeamSearchSchema = z.preprocess(
     preprocessTeamSearchQuery,
-    z.object({
-        query: z.string().optional(),
-        cursor: z.string().optional().describe('Cursor for pagination'),
-        tags: z.array(z.string()).optional(),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-        limit: z.number().max(500).optional().default(10),
-        sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-        fuzzy_match: z.boolean().optional().default(false),
-        auto_correct: z.boolean().optional().default(false),
-    })
+    z
+        .object({
+            query: z.string().max(500).optional(),
+            cursor: z.string().max(500).optional().describe('Cursor for pagination'),
+            tags: z.array(z.string().max(100)).max(100).optional(),
+            exclude_tags: z.array(z.string().max(100)).max(100).optional().describe('Exclude entries having any of these tags'),
+            entry_type: z.enum(ENTRY_TYPES).optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+            workspace_id: z.string().max(255).optional(),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(10),
+            sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false),
+            fuzzy_match: z.boolean().optional().default(false),
+            auto_correct: z.boolean().optional().default(false),
+        })
+        .strict()
 )
 
 /** team_search — relaxed */
 export const TeamSearchSchemaMcp = z.preprocess(
     preprocessTeamSearchQuery,
     z.object({
-        query: z.string().optional(),
+        query: z.string().optional().describe('Search text query (use `query`, not `q`)'),
         cursor: z.string().optional().describe('Cursor for pagination'),
-        tags: z.array(z.string()).optional(),
-        project_number: relaxedNumber().optional(),
+        tags: z.array(z.string()).optional().describe('Filter entries having any of these tags'),
+        exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
+        entry_type: z.string().optional().describe('Filter results by entry type'),
+        project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
         workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-        limit: relaxedNumber().optional().default(10),
+        limit: relaxedNumber().optional().default(10).describe('Maximum entries to return (1-500, default: 10)'),
         sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-        fuzzy_match: z.boolean().optional().default(false),
-        auto_correct: z.boolean().optional().default(false),
+        include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
+        fuzzy_match: z.boolean().optional().default(false).describe('Return typo-tolerant suggestions when no exact matches are found'),
+        auto_correct: z.boolean().optional().default(false).describe('Automatically re-run search with top suggestion when distance <= 1'),
     })
 )
 
 /** team_list_deleted_entries — strict */
-export const TeamListDeletedEntriesSchema = z.object({
-    limit: z.number().optional().default(50),
-    offset: z.number().optional().default(0),
-    project_number: StrictProjectNumberSchema,
-    workspace_id: z.string().optional(),
-})
+export const TeamListDeletedEntriesSchema = z
+    .object({
+        limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_QUERY_LIMIT)).optional().default(50),
+        offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 /** team_list_deleted_entries — relaxed */
 export const TeamListDeletedEntriesSchemaMcp = z.object({
-    limit: relaxedNumber().optional().default(50),
-    offset: relaxedNumber().optional().default(0),
-    project_number: relaxedNumber().optional(),
+    limit: relaxedNumber().optional().default(50).describe('Maximum deleted entries to return (min: 1, default: 50)'),
+    offset: relaxedNumber().optional().default(0).describe('Pagination offset (min: 0, default: 0)'),
+    project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
     workspace_id: z.string().optional().describe(WORKSPACE_DESC),
 })
 
 /** team_get_entry_by_id — strict */
-export const TeamGetEntryByIdSchema = z.object({
-    entry_id: z.number().int(),
-    include_relationships: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamGetEntryByIdSchema = z
+    .object({
+        entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
+        include_relationships: z.boolean().optional().default(true),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 /** team_get_entry_by_id — relaxed */
 export const TeamGetEntryByIdSchemaMcp = z.object({
-    entry_id: relaxedNumber().optional(),
-    include_relationships: z.boolean().optional().default(true),
-    project_number: relaxedNumber().optional(),
+    entry_id: relaxedNumber().optional().describe('Team entry ID to retrieve'),
+    include_relationships: z.boolean().optional().default(true).describe('Include linked relationships in response'),
+    project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
     workspace_id: z.string().optional().describe(WORKSPACE_DESC),
 })
-
-function preprocessDateRange(val: unknown): unknown {
-    const healed = healAgentHallucinations(val)
-    if (typeof healed === 'object' && healed !== null) {
-        const obj = { ...(healed as Record<string, unknown>) }
-        let modified = false
-        if ('start' in obj && !('start_date' in obj)) {
-            obj['start_date'] = obj['start']
-            Reflect.deleteProperty(obj, 'start')
-            modified = true
-        }
-        if ('end' in obj && !('end_date' in obj)) {
-            obj['end_date'] = obj['end']
-            Reflect.deleteProperty(obj, 'end')
-            modified = true
-        }
-        return modified ? obj : healed
-    }
-    return healed
-}
 
 /** team_search_by_date_range — strict */
 export const TeamSearchByDateRangeSchema = z.preprocess(
     preprocessDateRange,
-    z.object({
-        start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
-        end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
-        cursor: z.string().optional().describe('Cursor for pagination'),
-        entry_type: z.enum(ENTRY_TYPES).optional(),
-        tags: z.array(z.string()).optional(),
-        project_number: StrictProjectNumberSchema.optional(),
-        workspace_id: z.string().optional(),
-        limit: z.number().max(500).optional().default(50),
-        sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-    })
+    z
+        .object({
+            start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE),
+            end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE),
+            cursor: z.string().optional().describe('Cursor for pagination'),
+            entry_type: z.enum(ENTRY_TYPES).optional(),
+            tags: z.array(z.string()).optional(),
+            exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+            workspace_id: z.string().max(255).optional(),
+            limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(50),
+            sort_by: z.enum(['timestamp', 'importance', 'blended']).optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false),
+        })
+        .strict()
 )
 
 /** team_search_by_date_range — relaxed */
 export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
     preprocessDateRange,
-    z.object({
-        start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
-        end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-        cursor: z.string().optional().describe('Cursor for pagination'),
-        entry_type: z.string().optional(),
-        tags: z.array(z.string()).optional(),
-        project_number: relaxedNumber().optional(),
-        workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-        limit: relaxedNumber().optional().default(50),
-        sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-        include_archived: z.boolean().optional().default(false),
-    })
+    z
+        .object({
+            start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
+            end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
+            cursor: z.string().optional().describe('Cursor for pagination'),
+            entry_type: z.string().optional().describe('Filter results by entry type'),
+            tags: z.array(z.string()).optional().describe('Filter entries having any of these tags'),
+            exclude_tags: z.array(z.string()).optional().describe('Exclude entries having any of these tags'),
+            project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
+            workspace_id: z.string().optional().describe(WORKSPACE_DESC),
+            limit: relaxedNumber().optional().default(50).describe('Maximum entries to return (1-500, default: 50)'),
+            sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
+            include_archived: z.boolean().optional().default(false).describe('Include archived entries in results'),
+        })
+        .loose()
 )
-
-export const TeamCreateOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        entry: TeamEntryOutputSchema.optional(),
-        author: z.string().optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-export const TeamEntriesListOutputSchema = z
-    .object({
-        entries: z.array(TeamEntryOutputSchema).optional(),
-        count: z.number().optional(),
-        next_cursor: z.string().optional().describe('Cursor for the next page of results'),
-        suggestions: z
-            .array(z.string())
-            .optional()
-            .describe('Fuzzy matches when fuzzy_match=true and no exact results were found'),
-        correctedQuery: z
-            .string()
-            .optional()
-            .describe('The corrected query when auto_correct=true and a confident match was found'),
-        success: z.boolean().optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-export const TeamEntryDetailOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        entry: TeamEntryOutputSchema.optional(),
-        relationships: z.array(RelationshipOutputSchema).optional(),
-        importance: z
-            .object({
-                score: z.number(),
-                breakdown: z
-                    .object({
-                        significance: z.number(),
-                        relationships: z.number(),
-                        causal: z.number(),
-                        recency: z.number(),
-                        trustModifier: z.number().optional(),
-                    })
-                    .optional(),
-            })
-            .optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-export const TeamTagsListOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        tags: z.array(TagOutputSchema).optional(),
-        count: z.number().optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)

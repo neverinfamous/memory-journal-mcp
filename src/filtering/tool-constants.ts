@@ -9,7 +9,7 @@ import type { ToolGroup, MetaGroup } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 115 tools across 11 groups are categorized here for filtering support.
+ * All 108 tools across 11 groups are categorized here for filtering support.
  */
 export const TOOL_GROUPS = {
     core: [
@@ -22,11 +22,6 @@ export const TOOL_GROUPS = {
         'trigger_progress',
         'list_tags',
         'mark_anchors_stale',
-        'read_resource',
-        'mj_read_resource',
-        'memory_read_resource',
-        'load-briefing',
-        'mj_session_summary',
     ],
     search: [
         'search_entries',

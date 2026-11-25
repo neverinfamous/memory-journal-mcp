@@ -383,7 +383,28 @@ describe('AuditLogger', () => {
                 )
             } finally {
                 errorSpy.mockRestore()
+                // Discard retained lines/failure so the cleanup close() below does not re-throw
+                // (close() surfacing flush failures is asserted in a dedicated test).
+                logger['buffer'] = []
+                logger['flushError'] = null
                 await logger.close()
+            }
+        })
+
+        it('should surface persistent write failures from close() and keep lines for retry', async () => {
+            const logger = new AuditLogger({
+                ...enabledConfig(dir),
+                logPath: dir, // directory => appendFile throws EISDIR
+            })
+            const errorSpy = vi.spyOn(appLogger, 'error').mockImplementation(() => undefined)
+
+            try {
+                logger.log(fakeEntry())
+                await expect(logger.flush()).resolves.toBeUndefined()
+                expect(logger['buffer'].length).toBe(1)
+                await expect(logger.close()).rejects.toThrow()
+            } finally {
+                errorSpy.mockRestore()
             }
         })
 

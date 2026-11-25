@@ -1,9 +1,9 @@
 import type { Command } from 'commander'
-import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../audit/index.js'
+import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../audit/types.js'
+import { defaultDbPath, defaultTeamDbPath } from './default-paths.js'
 import { withGroup } from './program.js'
 
-export const defaultDbPath = './memory_journal.db'
-export const defaultTeamDbPath = undefined
+export { defaultDbPath, defaultTeamDbPath }
 export function addCoreOptions(command: Command): Command {
     return withGroup(command, 'Core Options', (cmd) => {
         cmd
@@ -15,9 +15,14 @@ export function addCoreOptions(command: Command): Command {
                 'Maximum number of array/object elements allowed in tool input arguments (default: 25000, 0 = disabled, env: MAX_TOOL_INPUT_ELEMENTS)'
             )
             .option(
+                '--agent-healing',
+                'Enable autonomous MCP tool and parameter healing/interception, overriding env/config (env: MCP_AGENT_HEALING)'
+            )
+            .option(
                 '--no-agent-healing',
                 'Disable autonomous MCP tool and parameter healing/interception (env: MCP_AGENT_HEALING=false)'
             )
+            .option('--instruction-level <level>', 'Instruction verbosity level: essential, detailed, full (env: INSTRUCTION_LEVEL)')
     })
 }
 
@@ -50,6 +55,17 @@ export function addWorkspaceOptions(command: Command): Command {
             .option('--default-project <number>', 'Default GitHub Project number (env: DEFAULT_PROJECT_NUMBER)')
             .option('--default-workspace-id <string>', 'Default workspace ID for isolating journal entries (env: DEFAULT_WORKSPACE_ID)')
     })
+}
+
+/**
+ * Workspace options for read-only data commands: the shared workspace group plus
+ * `--workspace` to scope a single invocation (falls back to --default-workspace-id).
+ */
+export function addWorkspaceScopeOptions(command: Command): Command {
+    withGroup(command, 'Command Options', (cmd) => {
+        cmd.option('--workspace <id>', 'Scope to a workspace ID (default: --default-workspace-id)')
+    })
+    return addWorkspaceOptions(command)
 }
 
 export function addVectorOptions(command: Command): Command {
@@ -114,6 +130,10 @@ export function addAuditOptions(command: Command): Command {
                 'Enable audit logging to the specified JSONL file path, or "stderr" for container mode (env: AUDIT_LOG_PATH)'
             )
             .option(
+                '--audit-redact',
+                'Redact tool arguments from audit entries, overriding env/config (env: AUDIT_REDACT)'
+            )
+            .option(
                 '--no-audit-redact',
                 'Disable redaction of tool arguments from audit entries (env: AUDIT_REDACT=false)'
             )
@@ -149,59 +169,9 @@ export function addCodeModeOptions(command: Command): Command {
     })
 }
 
-export function addSchedulerOptions(command: Command): Command {
-    return withGroup(command, 'Scheduler Options', (cmd) => {
-        cmd
-            .option(
-                '--backup-interval <minutes>',
-                'Automated backup interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option('--keep-backups <count>', 'Max backups to retain during automated cleanup', '5')
-            .option(
-                '--vacuum-interval <minutes>',
-                'Database optimize interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option(
-                '--rebuild-index-interval <minutes>',
-                'Vector index rebuild interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option(
-                '--digest-interval <minutes>',
-                'Analytics digest interval in minutes, HTTP only (0 = disabled; recommended: 1440 for daily)',
-                '0'
-            )
-            .option(
-                '--report-interval <minutes>',
-                'Scheduled report generation interval in minutes, HTTP only (0 = disabled)',
-                '0'
-            )
-            .option(
-                '--report-webhook-url <url>',
-                'Webhook URL for report delivery (POST) (env: REPORT_WEBHOOK_URL)'
-            )
-            .option(
-                '--report-webhook-auth <token>',
-                'Optional Authorization header value for the report webhook (env: REPORT_WEBHOOK_AUTH)'
-            )
-            .option(
-                '--report-content-type <type>',
-                'Webhook payload format: slack, discord, or json (env: REPORT_CONTENT_TYPE)',
-                'slack'
-            )
-    })
-}
-
 export function addPruningOptions(command: Command): Command {
     return withGroup(command, 'Pruning Options', (cmd) => {
         cmd
-            .option(
-                '--auto-prune-interval <minutes>',
-                'Interval to run autonomous pruning in background (env: AUTO_PRUNE_INTERVAL_MINUTES, 0 = disabled)',
-                '0'
-            )
             .option(
                 '--archive-older-than-days <days>',
                 'Archive active entries older than N days with importance below threshold (env: ARCHIVE_OLDER_THAN_DAYS, 0 = disabled)',
@@ -233,80 +203,44 @@ export function addPruningOptions(command: Command): Command {
     })
 }
 
+type BriefingOptionSpec = readonly [string, string] | readonly [string, string, string]
+
+const BRIEFING_OPTION_SPECS: readonly BriefingOptionSpec[] = [
+    ['--briefing-importance-threshold <threshold>', 'Minimum importance score (0.0 to 1.0) for an entry to be included in the briefing (env: BRIEFING_IMPORTANCE_THRESHOLD)'],
+    ['--briefing-entries <count>', 'Number of journal entries in briefing (env: BRIEFING_ENTRY_COUNT)', '3'],
+    ['--briefing-commits <count>', 'Number of commits to include in briefing (env: BRIEFING_COMMIT_COUNT)', '3'],
+    ['--briefing-summaries <count>', 'Number of session summaries to show in briefing (env: BRIEFING_SUMMARY_COUNT)', '1'],
+    ['--briefing-include-team', 'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'],
+    ['--no-briefing-include-team', 'Force-exclude team DB entries from briefing, overriding env/config (env: BRIEFING_INCLUDE_TEAM=false)'],
+    ['--briefing-issues <count>', 'Number of issues to list in briefing; 0 = hide (env: BRIEFING_ISSUE_COUNT)', '0'],
+    ['--briefing-prs <count>', 'Number of PRs to list in briefing; 0 = hide (env: BRIEFING_PR_COUNT)', '0'],
+    ['--briefing-pr-count <count>', 'Legacy alias for --briefing-prs (env: BRIEFING_PR_COUNT)'],
+    ['--briefing-pr-status', 'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'],
+    ['--no-briefing-pr-status', 'Force-hide PR status breakdown in briefing, overriding env/config (env: BRIEFING_PR_STATUS=false)'],
+    ['--briefing-milestones <count>', 'Number of milestones to list in briefing; 0 = hide (env: BRIEFING_MILESTONE_COUNT)', '3'],
+    ['--rules-file <path>', 'Path to user rules file served by memory://rules (env: RULES_FILE_PATH)'],
+    ['--skills-dir <path>', 'Path to user skills directory served by memory://skills (env: SKILLS_DIR_PATH)'],
+    ['--briefing-workflows <count>', 'Number of workflow runs to list in briefing; 0 = hide (env: BRIEFING_WORKFLOW_COUNT)', '0'],
+    ['--briefing-workflow-status', 'Show workflow run status breakdown in briefing (env: BRIEFING_WORKFLOW_STATUS)'],
+    ['--no-briefing-workflow-status', 'Force-hide workflow run status breakdown in briefing, overriding env/config (env: BRIEFING_WORKFLOW_STATUS=false)'],
+    ['--briefing-copilot', 'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT or BRIEFING_COPILOT_REVIEWS)'],
+    ['--no-briefing-copilot', 'Force-hide Copilot review aggregation in briefing, overriding env/config (env: BRIEFING_COPILOT=false)'],
+    ['--briefing-graph', 'Include graph/git pivots in briefing (env: BRIEFING_GRAPH)'],
+    ['--no-briefing-graph', 'Disable graph/git pivots in briefing: entry link degree, commit→entry refs, active threads (env: BRIEFING_GRAPH=false)'],
+    ['--briefing-insights', 'Show the briefing Insights row (env: BRIEFING_INSIGHTS)'],
+    ['--no-briefing-insights', 'Hide the briefing Insights row and skip its GitHub repo stats/traffic calls and analytics digest (env: BRIEFING_INSIGHTS=false)'],
+    ['--workflow-summary <text>', 'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'],
+]
+
 export function addBriefingOptions(command: Command): Command {
     return withGroup(command, 'Briefing Options', (cmd) => {
-        cmd
-            .option(
-                '--briefing-importance-threshold <threshold>',
-                'Minimum importance score (0.0 to 1.0) for an entry to be included in the briefing (env: BRIEFING_IMPORTANCE_THRESHOLD)'
-            )
-            .option(
-                '--briefing-pr-count <count>',
-                'Number of PRs to include in briefing (env: BRIEFING_PR_COUNT)'
-            )
-            .option(
-                '--briefing-entries <count>',
-                'Number of journal entries in briefing (env: BRIEFING_ENTRY_COUNT)',
-                '3'
-            )
-            .option(
-                '--briefing-commits <count>',
-                'Number of commits to include in briefing (env: BRIEFING_COMMIT_COUNT)',
-                '3'
-            )
-            .option(
-                '--briefing-summaries <count>',
-                'Number of session summaries to show in briefing (env: BRIEFING_SUMMARY_COUNT)',
-                '1'
-            )
-            .option(
-                '--briefing-include-team',
-                'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'
-            )
-            .option(
-                '--briefing-issues <count>',
-                'Number of issues to list in briefing; 0 = count only (env: BRIEFING_ISSUE_COUNT)',
-                '0'
-            )
-            .option(
-                '--briefing-prs <count>',
-                'Number of PRs to list in briefing; 0 = count only (env: BRIEFING_PR_COUNT)',
-                '0'
-            )
-            .option(
-                '--briefing-pr-status',
-                'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'
-            )
-            .option(
-                '--briefing-milestones <count>',
-                'Number of milestones to list in briefing; 0 = hide (env: BRIEFING_MILESTONE_COUNT)',
-                '3'
-            )
-            .option(
-                '--rules-file <path>',
-                'Path to user rules file for awareness in briefing (env: RULES_FILE_PATH)'
-            )
-            .option(
-                '--skills-dir <path>',
-                'Path to skills directory for awareness in briefing (env: SKILLS_DIR_PATH)'
-            )
-            .option(
-                '--briefing-workflows <count>',
-                'Number of workflow runs to list in briefing; 0 = status only (env: BRIEFING_WORKFLOW_COUNT)',
-                '0'
-            )
-            .option(
-                '--briefing-workflow-status',
-                'Show workflow run status breakdown in briefing (env: BRIEFING_WORKFLOW_STATUS)'
-            )
-            .option(
-                '--briefing-copilot',
-                'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT_REVIEWS)'
-            )
-            .option(
-                '--workflow-summary <text>',
-                'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
-            )
+        for (const spec of BRIEFING_OPTION_SPECS) {
+            if (spec.length === 3) {
+                cmd.option(spec[0], spec[1], spec[2])
+            } else {
+                cmd.option(spec[0], spec[1])
+            }
+        }
     })
 }
 
@@ -326,6 +260,7 @@ export function addMetricsOptions(command: Command): Command {
 export function addOutputOptions(command: Command): Command {
     return withGroup(command, 'Command Options', (cmd) => {
         cmd.option('--json', 'Output results as a structured JSON envelope')
+            .option('--no-json', 'Output plain-text summary instead of JSON')
     })
 }
 
@@ -338,7 +273,6 @@ export function addServerOptions(command: Command): Command {
     addOAuthOptions(command)
     addAuditOptions(command)
     addCodeModeOptions(command)
-    addSchedulerOptions(command)
     addPruningOptions(command)
     addBriefingOptions(command)
     addMetricsOptions(command)

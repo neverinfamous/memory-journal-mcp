@@ -4,21 +4,17 @@ import { loadSkills } from '@modelcontextprotocol/server/ext/skills/node'
 import type { SkillCatalog } from '@modelcontextprotocol/server/ext/skills'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { DatabaseAdapterProxy } from '../../database/core/DatabaseAdapterProxy.js'
-import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
-import { VectorSearchManagerProxy } from '../../vector/vector-search-manager/VectorSearchManagerProxy.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { logger } from '../../utils/logger.js'
-import { parseToolFilter, getToolFilterFromEnv, getFilterSummary, getAllToolNames } from '../../filtering/tool-filter.js'
-import { Scheduler } from '../scheduler.js'
-import { DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { ServerRuntime } from '../../utils/maintenance-lock.js'
-import { ConfigManager } from '../../utils/config-manager.js'
+import type { ConfigManager } from '../../utils/config-manager.js'
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
-import { runAutoPrune } from '../auto-prune.js'
+import { teardownVectorManagers } from './core-helpers.js'
+import { createVectorManagers } from './initialization-helpers.js'
+import { initConfigAndStartupJobs, resolveFinalAllowedIoRoots } from './initialization-config.js'
 
 import type { ServerOptions, ServerContext } from './types.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 
 /**
  * Resolves the bundled `skills/` directory relative to the current module,
@@ -66,212 +62,141 @@ export async function loadBundledSkillCatalog(
     }
 }
 
-export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
-    const { transport, dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
+async function configureMetricsPersistence(
+    runtime: ServerRuntime,
+    options: ServerOptions,
+    dbPath: string
+): Promise<string | undefined> {
+    if (!options.persistMetrics) return undefined
+    const isInMemory = dbPath === ':memory:' || dbPath.startsWith('file::memory:')
+    if (options.metricsPath === undefined && isInMemory) {
+        return undefined
+    }
+    const configuredPath = options.metricsPath ?? dbPath.replace(/\.db$/, '') + '_metrics.json'
+    await runtime.metrics.loadFromFile(configuredPath)
+    const metricsTimer = setInterval(() => {
+        void runtime.metrics.saveToFile(configuredPath)
+    }, 5 * 60 * 1000)
+    metricsTimer.unref()
+    const previousStop = runtime.stopBackgroundTasks
+    runtime.stopBackgroundTasks = () => {
+        previousStop?.()
+        clearInterval(metricsTimer)
+    }
+    return configuredPath
+}
 
-    // Initialize database
-    const primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
-    await primaryDb.initialize()
-    logger.info('Database initialized', { module: 'McpServer', dbPath })
+function resolveIsolatedBackupsDir(targetDbPath: string, roleSuffix: string): string {
+    const ext = path.extname(targetDbPath)
+    const rawStem = path.basename(targetDbPath, ext)
+    const cleanStem = rawStem.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '')
+    const dirName =
+        cleanStem !== '' && cleanStem !== 'backups'
+            ? `backups-${roleSuffix}-${cleanStem}`
+            : `backups-${roleSuffix}`
+    return path.join(path.dirname(targetDbPath), dirName)
+}
 
-    let testDb: IDatabaseAdapter | undefined
-    if (testDbPath) {
-        testDb = await DatabaseAdapterFactory.create(testDbPath, options)
-        await testDb.initialize()
-        logger.info('Test database initialized', { module: 'McpServer', testDbPath })
+async function initializeTeamDatabase(options: ServerOptions): Promise<{
+    primaryTeamDb: IDatabaseAdapter | undefined
+    testTeamDb: IDatabaseAdapter | undefined
+    teamDb: IDatabaseAdapter | undefined
+}> {
+    const { teamDbPath, testTeamDbPath } = options
+    if (!teamDbPath) {
+        return { primaryTeamDb: undefined, testTeamDb: undefined, teamDb: undefined }
     }
 
-    const db = DatabaseAdapterProxy.create(primaryDb, testDb)
-
-    // Auto-prune low-importance old entries if configured
-    const hasAutoPrune = ((options.archiveOlderThanDays ?? 0) > 0) ||
-                         ((options.pruneOlderThanDays ?? 0) > 0) ||
-                         ((options.hardDeleteOlderThanDays ?? 0) > 0)
-
-    if (hasAutoPrune) {
-        const pruneResult = await runAutoPrune(db, {
-            archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
-            pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
-            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
-            importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
-            dryRun: options.pruneDryRun,
-            excludeTags: options.pruneExcludeTags,
-        })
-        logger.info('Auto-prune completed', {
-            module: 'McpServer',
-            archivedCount: pruneResult.archivedCount,
-            prunedCount: pruneResult.prunedCount,
-            hardDeletedCount: pruneResult.hardDeletedCount,
-            backupFile: pruneResult.backupFile,
-        })
-    }
-
-    // Initialize ServerRuntime (handles instance-scoped globals)
-    const runtime = new ServerRuntime()
-
-    // Initialize audit logging if configured
-    if (options.auditConfig?.enabled) {
-        runtime.auditLogger = new AuditLogger(options.auditConfig)
-        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
-        logger.info('Audit logging enabled', {
-            module: 'McpServer',
-            path: options.auditConfig.logPath,
-            redact: options.auditConfig.redact,
-            auditReads: options.auditConfig.auditReads,
-        })
-    }
-
-    // Configure metrics persistence path
-    let activeMetricsPath: string | undefined
-    if (options.persistMetrics) {
-        const configuredPath = options.metricsPath ?? (dbPath.replace(/\.db$/, '') + '_metrics.json')
-        activeMetricsPath = configuredPath
-        
-        await runtime.metrics.loadFromFile(configuredPath)
-        
-        // Periodic save every 5 minutes
-        setInterval(() => {
-            void runtime.metrics.saveToFile(configuredPath)
-        }, 5 * 60 * 1000).unref()
-    }
-
-    // Initialize team database if configured
     let primaryTeamDb: IDatabaseAdapter | undefined
     let testTeamDb: IDatabaseAdapter | undefined
-    let teamDb: IDatabaseAdapter | undefined
-    if (teamDbPath) {
+    try {
         primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath, options)
         await primaryTeamDb.initialize()
         primaryTeamDb.applyTeamSchema()
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
 
         if (testTeamDbPath) {
-            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options)
-
+            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options, {
+                backupsDir: resolveIsolatedBackupsDir(testTeamDbPath, 'team-test'),
+            })
             await testTeamDb.initialize()
             testTeamDb.applyTeamSchema()
             logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })
         }
 
-        teamDb = DatabaseAdapterProxy.create(primaryTeamDb, testTeamDb)
+        const teamDb = DatabaseAdapterProxy.create(primaryTeamDb, testTeamDb)
 
         // Bootstrap team admin if configured and RBAC is not yet active (empty table)
-        if (options.teamAdmin && teamDb.getTeamMemberCount !== undefined && teamDb.addTeamMember !== undefined) {
-            if (!teamDb.isTeamRbacActive?.()) {
-                teamDb.addTeamMember(options.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
-                logger.info('Bootstrapped initial team admin', { module: 'McpServer', admin: options.teamAdmin })
-            }
-        }
-    }
-
-    // Initialize vector search manager (lazy loading - model loads on first use)
-    const primaryVectorManager = new VectorSearchManager(primaryDb, { modelName: options.embeddingModel })
-    let testVectorManager: VectorSearchManager | undefined
-    if (testDb) {
-        testVectorManager = new VectorSearchManager(testDb, { modelName: options.embeddingModel })
-    }
-    const vectorManager = VectorSearchManagerProxy.create(primaryVectorManager, testVectorManager)
-
-    // Initialize team vector search manager if team DB is configured
-    let primaryTeamVectorManager: VectorSearchManager | undefined
-    let testTeamVectorManager: VectorSearchManager | undefined
-    let teamVectorManager: VectorSearchManager | undefined
-    if (primaryTeamDb) {
-        primaryTeamVectorManager = new VectorSearchManager(primaryTeamDb, { modelName: options.embeddingModel })
-        if (testTeamDb) {
-            testTeamVectorManager = new VectorSearchManager(testTeamDb, { modelName: options.embeddingModel })
-        }
-        teamVectorManager = VectorSearchManagerProxy.create(primaryTeamVectorManager, testTeamVectorManager)
-        logger.info('Team vector search manager created', { module: 'McpServer' })
-    }
-
-    // Auto-rebuild vector index if enabled (non-blocking)
-    if (options.autoRebuildIndex) {
-        logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
-        primaryVectorManager
-            .initialize()
-            .then(async () => {
-                const { indexed: count } = await primaryVectorManager.rebuildIndex()
-                logger.info('Vector index rebuilt in background', {
-                    module: 'McpServer',
-                    entriesIndexed: count,
-                })
-            })
-            .catch((err: unknown) => {
-                logger.error('Background vector init/rebuild failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-
-        if (testVectorManager) {
-            testVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background test vector init failed', { module: 'McpServer', error: err })
-            })
-        }
-
-        if (primaryTeamVectorManager) {
-            primaryTeamVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background team vector init failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-            if (testTeamVectorManager) {
-                testTeamVectorManager.initialize().catch((err: unknown) => {
-                    logger.error('Background test team vector init failed', { module: 'McpServer', error: err })
-                })
-            }
-            logger.info('Team vector search manager eager initialization started in background', {
+        if (
+            options.teamAdmin &&
+            teamDb.getTeamMemberCount !== undefined &&
+            teamDb.addTeamMember !== undefined &&
+            !teamDb.isTeamRbacActive?.()
+        ) {
+            teamDb.addTeamMember(options.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
+            logger.info('Bootstrapped initial team admin', {
                 module: 'McpServer',
+                admin: options.teamAdmin,
             })
         }
-    } else {
-        // Otherwise, eager-load the model in the background so the first request isn't blocked
-        logger.info('Vector search manager eager initialization started in background', {
-            module: 'McpServer',
-        })
-        primaryVectorManager
-            .initialize()
-            .then(async () => {
-                if (testVectorManager) await testVectorManager.initialize()
-                
-                // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
-                if (primaryTeamVectorManager) {
-                    logger.info(
-                        'Team vector search manager eager initialization started in background',
-                        { module: 'McpServer' }
-                    )
-                    await primaryTeamVectorManager.initialize()
-                    if (testTeamVectorManager) await testTeamVectorManager.initialize()
-                }
-            })
-            .catch((err: unknown) => {
-                logger.error('Background vector init failed', { module: 'McpServer', error: err })
-            })
-    }
 
-    // Initialize GitHub integration
+        return { primaryTeamDb, testTeamDb, teamDb }
+    } catch (error: unknown) {
+        try {
+            testTeamDb?.close()
+        } catch {
+            // Ignore cleanup errors during aborted team DB startup
+        }
+        try {
+            primaryTeamDb?.close()
+        } catch {
+            // Ignore cleanup errors during aborted team DB startup
+        }
+        throw error
+    }
+}
+
+const STARTUP_REPO_INFO_TIMEOUT_MS = 8000
+
+async function readStartupRepoInfo(github: ReturnType<typeof getGitHubIntegration>): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+        await Promise.race([
+            github.getRepoInfo(),
+            new Promise<never>((_resolve, reject) => {
+                timer = setTimeout(() => {
+                    reject(new Error('Timed out reading repository info during startup'))
+                }, STARTUP_REPO_INFO_TIMEOUT_MS)
+                timer.unref()
+            }),
+        ])
+    } finally {
+        if (timer !== undefined) clearTimeout(timer)
+    }
+}
+
+async function initializeGitHubIntegration(
+    options: ServerOptions,
+    runtime: ServerRuntime
+): Promise<ReturnType<typeof getGitHubIntegration>> {
     let githubPath = '.'
     if (options.projectRegistry && Object.keys(options.projectRegistry).length > 0) {
         if (options.defaultProjectNumber !== undefined) {
-            const defaultEntry = Object.values(options.projectRegistry).find(
+            const matches = Object.values(options.projectRegistry).filter(
                 (r) => r.project_number === options.defaultProjectNumber
             )
+            const defaultEntry = matches.length === 1 ? matches[0] : undefined
             if (defaultEntry?.path) {
                 githubPath = defaultEntry.path
             }
         }
-
-        // Removed implicit fallback to the first registry entry.
-        // Mutating operations without an explicit owner/repo will throw or request clarification
-        // rather than guessing the wrong project boundary.
     }
     const github = getGitHubIntegration(githubPath, runtime)
 
     try {
-        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
-        await github.getRepoInfo()
+        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs.
+        // A stuck local git process must not keep the HTTP server from listening.
+        await readStartupRepoInfo(github)
     } catch (error: unknown) {
         logger.warning('Failed to pre-populate GitHub repository cache', {
             module: 'McpServer',
@@ -285,127 +210,166 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         hasToken: github.isApiAvailable(),
     })
 
-    // Parse tool filter
-    let filterConfig: ToolFilterConfig | null
-    if (options.toolFilter) {
-        filterConfig = parseToolFilter(options.toolFilter)
-        logger.info('Tool filter applied', {
-            module: 'McpServer',
-            summary: getFilterSummary(filterConfig),
-        })
-    } else {
-        filterConfig = getToolFilterFromEnv()
-        if (filterConfig) {
-            logger.info('Tool filter from env', {
+    return github
+}
+
+async function safeCloseStartupResources(resources: {
+    configManager: ConfigManager | undefined
+    runtime: ServerRuntime
+    testTeamDb: IDatabaseAdapter | undefined
+    primaryTeamDb: IDatabaseAdapter | undefined
+    testDb: IDatabaseAdapter | undefined
+    primaryDb: IDatabaseAdapter | undefined
+}): Promise<void> {
+    try {
+        resources.configManager?.close()
+    } catch {
+        // Ignore cleanup errors during aborted startup
+    }
+    try {
+        resources.runtime.stopBackgroundTasks?.()
+    } catch {
+        // Ignore cleanup errors during aborted startup
+    }
+    if (resources.runtime.auditLogger !== null) {
+        await resources.runtime.auditLogger.close().catch(() => undefined)
+    }
+    await teardownVectorManagers(resources.runtime)
+    for (const adapter of [
+        resources.testTeamDb,
+        resources.primaryTeamDb,
+        resources.testDb,
+        resources.primaryDb,
+    ]) {
+        if (adapter !== undefined) {
+            try {
+                adapter.close()
+            } catch {
+                // Ignore close errors during aborted startup
+            }
+        }
+    }
+}
+
+async function setupCoreDatabasesAndAudit(options: ServerOptions, runtime: ServerRuntime): Promise<{
+    primaryDb: IDatabaseAdapter
+    testDb: IDatabaseAdapter | undefined
+    db: IDatabaseAdapter
+    activeMetricsPath: string | undefined
+}> {
+    const { dbPath, testDbPath } = options
+    let primaryDb: IDatabaseAdapter | undefined
+    let testDb: IDatabaseAdapter | undefined
+    try {
+        primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
+        await primaryDb.initialize()
+        logger.info('Database initialized', { module: 'McpServer', dbPath })
+
+        if (testDbPath) {
+            testDb = await DatabaseAdapterFactory.create(testDbPath, options, {
+                backupsDir: resolveIsolatedBackupsDir(testDbPath, 'test'),
+            })
+            await testDb.initialize()
+            logger.info('Test database initialized', { module: 'McpServer', testDbPath })
+        }
+
+        const db = DatabaseAdapterProxy.create(primaryDb, testDb)
+        if (options.auditConfig?.enabled) {
+            runtime.auditLogger = new AuditLogger(options.auditConfig)
+            runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger, runtime)
+            logger.info('Audit logging enabled', {
                 module: 'McpServer',
-                summary: getFilterSummary(filterConfig),
+                path: options.auditConfig.logPath,
+                redact: options.auditConfig.redact,
+                auditReads: options.auditConfig.auditReads,
             })
         }
-    }
 
-    if (!filterConfig) {
-        const totalTools = getAllToolNames().length
-        if (totalTools > 50) {
-            logger.warning(`CONTEXT BLOAT WARNING: ${totalTools} tools are being registered without a tool filter.`)
-            logger.warning(`  This may consume excessive context window in the LLM. Consider using '--tool-filter codemode' or '--tool-filter starter' to save tokens.`)
+        const activeMetricsPath = options.persistMetrics
+            ? await configureMetricsPersistence(runtime, options, dbPath)
+            : undefined
+        return { primaryDb, testDb, db, activeMetricsPath }
+    } catch (error: unknown) {
+        if (runtime.auditLogger !== null) {
+            await runtime.auditLogger.close().catch(() => undefined)
         }
-    }
-
-    const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
-
-    const configManager = new ConfigManager({
-        rawToolFilter,
-        toolFilterConfig: filterConfig,
-        briefingConfig: options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG,
-        codemodeInternalFullAccess: options.codemodeInternalFullAccess
-    }, options.configFilePath)
-
-    runtime.configManager = configManager
-
-    // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
-    // which captures scheduler in its closure.
-    let scheduler: Scheduler | null = null
-    if (options.scheduler) {
-        const hasAnyJob =
-            options.scheduler.backupIntervalMinutes > 0 ||
-            options.scheduler.vacuumIntervalMinutes > 0 ||
-            options.scheduler.rebuildIndexIntervalMinutes > 0 ||
-            options.scheduler.digestIntervalMinutes > 0 ||
-            options.scheduler.pruneIntervalMinutes > 0 ||
-            options.scheduler.reportIntervalMinutes > 0
-
-        if (hasAnyJob && transport === 'stdio') {
-            logger.warning(
-                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
-                    'Use HTTP/SSE transport for automated scheduling.',
-                { module: 'Scheduler' }
-            )
-        } else if (hasAnyJob) {
-            // Inherit auto-prune thresholds for the scheduler's prune job
-            options.scheduler.archiveOlderThanDays = options.archiveOlderThanDays
-            options.scheduler.pruneOlderThanDays = options.pruneOlderThanDays
-            options.scheduler.hardDeleteOlderThanDays = options.hardDeleteOlderThanDays
-            options.scheduler.pruneImportanceThreshold = options.pruneImportanceThreshold
-            options.scheduler.pruneDryRun = options.pruneDryRun
-            options.scheduler.pruneExcludeTags = options.pruneExcludeTags
-            
-            scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
+        for (const adapter of [testDb, primaryDb]) {
+            if (adapter !== undefined) {
+                try {
+                    adapter.close()
+                } catch {
+                    // Ignore cleanup errors during aborted core DB startup
+                }
+            }
         }
+        throw error
     }
+}
 
-    // Seed initial digest snapshot so first briefing read has analytics.
-    // Runs for both stdio and HTTP transports. Skip if a snapshot already exists
-    // (e.g., from a previous server session or prior scheduler run).
+export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
+    const runtime = new ServerRuntime()
+    runtime.teamDefaultRole = options.teamDefaultRole ?? 'denied'
+    let primaryDb: IDatabaseAdapter | undefined
+    let testDb: IDatabaseAdapter | undefined
+    let primaryTeamDb: IDatabaseAdapter | undefined
+    let testTeamDb: IDatabaseAdapter | undefined
+    let configManager: ConfigManager | undefined
+
     try {
-        const existingSnapshot = db.getLatestAnalyticsSnapshot('digest')
-        if (!existingSnapshot) {
-            const digest = db.computeDigest()
-            db.saveAnalyticsSnapshot('digest', digest)
-            logger.info('Initial analytics digest seeded', { module: 'McpServer' })
+        const coreSetup = await setupCoreDatabasesAndAudit(options, runtime)
+        primaryDb = coreSetup.primaryDb
+        testDb = coreSetup.testDb
+        const { db, activeMetricsPath } = coreSetup
+
+        const teamResult = await initializeTeamDatabase(options)
+        primaryTeamDb = teamResult.primaryTeamDb
+        testTeamDb = teamResult.testTeamDb
+        const { teamDb } = teamResult
+
+        const { vectorManager, teamVectorManager, pendingVectorInit, disposeVectorManagers } =
+            createVectorManagers({
+                options,
+                primaryDb,
+                testDb,
+                primaryTeamDb,
+                testTeamDb,
+                maintenanceManager: runtime.maintenanceManager,
+            })
+        runtime.pendingVectorInit = pendingVectorInit
+        runtime.disposeVectorManagers = disposeVectorManagers
+
+        const configAndJobs = await initConfigAndStartupJobs({ options, db, runtime })
+        configManager = configAndJobs.configManager
+
+        const allowedIoRoots = resolveFinalAllowedIoRoots(options)
+        const [github, skillCatalog] = await Promise.all([
+            initializeGitHubIntegration(configAndJobs.effectiveOptions, runtime),
+            loadBundledSkillCatalog(),
+        ])
+
+        return {
+            db,
+            testDb,
+            teamDb,
+            testTeamDb,
+            runtime,
+            vectorManager,
+            teamVectorManager,
+            github,
+            configManager,
+            allowedIoRoots,
+            activeMetricsPath,
+            ...(skillCatalog ? { skillCatalog } : {}),
         }
     } catch (error: unknown) {
-        logger.debug('Failed to seed initial digest (non-critical)', {
-            module: 'McpServer',
-            error: error instanceof Error ? error.message : String(error),
+        await safeCloseStartupResources({
+            configManager,
+            runtime,
+            testTeamDb,
+            primaryTeamDb,
+            testDb,
+            primaryDb,
         })
-    }
-
-    let finalAllowedIoRoots = options.allowedIoRoots
-    if (!finalAllowedIoRoots) {
-        if (options.transport === 'http') {
-            const errorMsg = `FATAL: Refusing to bind HTTP transport without explicit ALLOWED_IO_ROOTS. You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to prevent ambient filesystem authority.`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-        finalAllowedIoRoots = [] // Empty array means NO filesystem access
-        logger.warning(
-            '⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.',
-            {
-                module: 'McpServer',
-            }
-        )
-    }
-
-    logger.info('IO sandbox configured', {
-        module: 'McpServer',
-        allowedRoots: finalAllowedIoRoots,
-    })
-
-    const skillCatalog = await loadBundledSkillCatalog()
-
-    return {
-        db,
-        testDb,
-        teamDb,
-        testTeamDb,
-        runtime,
-        vectorManager,
-        teamVectorManager,
-        github,
-        configManager,
-        scheduler,
-        allowedIoRoots: finalAllowedIoRoots,
-        activeMetricsPath,
-        ...(skillCatalog ? { skillCatalog } : {}),
+        throw error
     }
 }

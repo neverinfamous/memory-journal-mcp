@@ -2,15 +2,16 @@
 
 ### Team RBAC & Access Control
 
-The team database features a Role-Based Access Control (RBAC) system for team members:
+Team tools require `TEAM_DB_PATH` (`--team-db`) plus caller identity via `TEAM_AUTHOR` or OAuth. The team database enforces Role-Based Access Control (RBAC):
 - **Roles**: 
   - `viewer`: Read-only access to all team data.
-  - `member`: Read all, Create/Edit/Delete *own* entries.
-  - `admin`: Read/Write/Delete *all* entries, manage team members, rebuild vector indexes, backup data.
-- **Bootstrap Workflow**: The RBAC system is inactive until the first member is added. The first time `team_add_member` is called, the caller is automatically registered as an `admin`. Alternatively, the server can be bootstrapped via the `TEAM_ADMIN` environment variable or `--team-admin` CLI flag. Unregistered authors fall back to the configured `TEAM_DEFAULT_ROLE`.
-- **Managing Members**: Admins can manage members using `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, and `team_get_member`. 
-- **Author Aliases**: Admins can manage author aliases to consolidate attribution for team analytics when one person uses multiple usernames using `team_add_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_remove_author_alias`, and `team_consolidate_authors`.
-- **OAuth Scopes**: OAuth scopes (read/write/admin) govern broad HTTP endpoint access. RBAC roles govern fine-grained internal tool capabilities. Both must be satisfied when OAuth is active.
+  - `member`: Read all; Create/Edit/Delete *own* entries.
+  - `admin`: Read/Write/Delete *all* entries, manage team members/aliases, rebuild vector indexes, and back up team data.
+- **Bootstrap Workflow**: RBAC stays inactive until the first member is registered. On an empty member table, the first `team_add_member` call MUST assign `role: 'admin'` to the caller's own `author` identity to bootstrap admin access (or configure `TEAM_ADMIN` / `--team-admin` at startup). Once any member exists, unregistered callers fall back to `TEAM_DEFAULT_ROLE` (which defaults to `'denied'`).
+- **Managing Members**: Admins manage members using `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, and `team_get_member`. 
+- **Author Aliases**: Admins consolidate multi-username attribution via `team_add_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_remove_author_alias`, and `team_consolidate_authors`.
+- **OAuth Scopes**: When HTTP OAuth is active, OAuth scopes (`read`, `write`, `team`, `audit`, `admin`, `full`) and RBAC roles must both permit the operation.
+- **Per-Project Tenant Isolation**: Team read, search, and relationship tools (`team_get_recent`, `team_get_entry_by_id`, `team_search`, `team_link_entries`) require a concrete registered `workspace_id` and `project_number` and reject `workspace_id: '*'`. For cross-project team audits, iterate `list_projects` and call `team_get_recent({ workspace_id, project_number, limit: 200 })` per project instead of passing `workspace_id: '*'` or probing sequential entry IDs.
 
 ## Available Tools
 

@@ -15,7 +15,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
 import { ChildProcess, spawn } from 'node:child_process'
-import { createWriteStream } from 'node:fs'
+import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
@@ -28,11 +28,13 @@ export const DEFAULT_PORT = 3105
  * Falls back to http://localhost:3105 if not set in project config.
  */
 export function getBaseURL(testInfo: TestInfo): string {
-    const customBaseURL = (testInfo.project.use as { baseURL?: string }).baseURL
-    if (customBaseURL) return customBaseURL
-
     const workerIndex = testInfo.parallelIndex ?? Number(process.env.TEST_PARALLEL_INDEX || 0)
-    return `http://localhost:${DEFAULT_PORT + workerIndex}`
+    const customBaseURL = (testInfo.project.use as { baseURL?: string }).baseURL
+    if (customBaseURL && customBaseURL !== `http://localhost:${String(DEFAULT_PORT)}`) {
+        return customBaseURL
+    }
+
+    return `http://localhost:${String(DEFAULT_PORT + workerIndex)}`
 }
 
 /**
@@ -67,6 +69,17 @@ export async function createClient(port?: number, authToken?: string): Promise<C
         { capabilities: { experimental: { progress: {} }, progress: {} } }
     )
     await client.connect(transport)
+
+    const originalClose = client.close.bind(client)
+    client.close = async () => {
+        try {
+            await transport.terminateSession()
+        } catch {
+            // Ignore termination errors if server is already closed or in stateless mode
+        }
+        await originalClose()
+    }
+
     return client
 }
 
@@ -74,44 +87,80 @@ export async function createClient(port?: number, authToken?: string): Promise<C
  * Call a tool and parse the JSON text response into a typed object.
  * Asserts the response has text content and returns the parsed payload.
  */
+const E2E_ENTRY_TOOLS = new Set([
+    'create_entry',
+    'update_entry',
+    'get_recent_entries',
+    'search_entries',
+    'search_by_date_range',
+    'semantic_search',
+    'link_entries',
+    'export_entries',
+    'team_create_entry',
+    'team_update_entry',
+    'batch_create_entries',
+    'team_get_recent',
+    'team_search',
+    'team_search_by_date_range',
+    'team_semantic_search',
+    'team_link_entries',
+    'team_export_entries',
+])
+
+function withDefaultE2EWorkspace(
+    toolName: string,
+    args: Record<string, unknown>
+): Record<string, unknown> {
+    if (E2E_ENTRY_TOOLS.has(toolName) && !('workspace_id' in args)) {
+        return { ...args, workspace_id: 'default' }
+    }
+    return args
+}
+
 export async function callToolAndParse(
     client: Client,
     toolName: string,
     args: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
-    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
-        args.workspace_id = 'default';
-    }
-    const response = await client.callTool({ name: toolName, arguments: args })
+    const response = await client.callTool({
+        name: toolName,
+        arguments: withDefaultE2EWorkspace(toolName, args),
+    })
 
-    if (response.isError) {
-        console.error(
-            'Tool call returned isError: true. Response:',
-            JSON.stringify(response, null, 2)
-        )
-    }
-    expect(response.isError).toBeUndefined()
     expect(Array.isArray(response.content)).toBe(true)
 
     const content = response.content as Array<{ type: string; text?: string }>
     expect(content.length).toBeGreaterThan(0)
 
     // MCP SDK may support unknown fields or ignore them. Check if attached natively:
+    let payload: Record<string, unknown>
     if ('structuredContent' in response && response.structuredContent) {
-        return response.structuredContent as Record<string, unknown>
+        payload = response.structuredContent as Record<string, unknown>
+    } else {
+        const first = content[0]
+        if (first === undefined || first.type !== 'text') {
+            throw new Error(`Expected first content block to have type 'text', got: ${JSON.stringify(first)}`)
+        }
+
+        // If the structed property was stripped by strict-schema SDK parsing, we cannot test the E2E JSON effectively from the test harness if it just says "[Structured output attached]".
+        // But since the original code was JSON stringified, if we encounter the optimization string, we have a problem.
+        if (first.text === '[Structured output attached]') {
+            throw new Error('SDK stripped structuredContent and only optimization text remains.')
+        }
+        if (typeof first.text !== 'string') {
+            throw new Error(`Expected text field on content block, got: ${JSON.stringify(first)}`)
+        }
+
+        payload = JSON.parse(first.text) as Record<string, unknown>
     }
 
-    const first = content[0]!
-    expect(first.type).toBe('text')
-
-    // If the structed property was stripped by strict-schema SDK parsing, we cannot test the E2E JSON effectively from the test harness if it just says "[Structured output attached]".
-    // But since the original code was JSON stringified, if we encounter the optimization string, we have a problem.
-    if (first.text === '[Structured output attached]') {
-        throw new Error('SDK stripped structuredContent and only optimization text remains.')
+    // Structured handler failures set isError and still return { success: false }.
+    // Any other isError is a transport or protocol failure.
+    if (response.isError === true && payload.success !== false) {
+        expect(response.isError, JSON.stringify(payload)).toBeUndefined()
     }
 
-    return JSON.parse(first.text!) as Record<string, unknown>
+    return payload
 }
 
 /**
@@ -138,11 +187,10 @@ export async function callToolRaw(
     content: Array<{ type: string; text: string }>
     isError?: boolean
 }> {
-    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
-    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
-        args.workspace_id = 'default';
-    }
-    const response = await client.callTool({ name: toolName, arguments: args })
+    const response = await client.callTool({
+        name: toolName,
+        arguments: withDefaultE2EWorkspace(toolName, args),
+    })
     return response as {
         content: Array<{ type: string; text: string }>
         isError?: boolean
@@ -178,6 +226,7 @@ export function expectHandlerError(
 interface ManagedServer {
     process: ChildProcess
     port: number
+    logStream?: WriteStream
 }
 
 const managedServers = new Map<number, ManagedServer>()
@@ -196,6 +245,8 @@ export async function startServer(
     dbSuffix?: string,
     options?: { cwd?: string; env?: Record<string, string | undefined> }
 ): Promise<void> {
+    const e2eOutputDir = join(process.cwd(), '.test-output', 'e2e')
+    mkdirSync(e2eOutputDir, { recursive: true })
     const suffix = dbSuffix ? `${dbSuffix}-${port}` : String(port)
     const serverProcess = spawn(
         'node',
@@ -219,6 +270,7 @@ export async function startServer(
             env: Object.fromEntries(
                 Object.entries({
                     ...process.env,
+                    DISABLE_ISSUE_LOGGING: 'true',
                     GITHUB_TOKEN: '',
                     GITHUB_PERSONAL_ACCESS_TOKEN: '',
                     ALLOWED_IO_ROOTS: process.cwd(),
@@ -239,12 +291,14 @@ export async function startServer(
     serverProcess.stdout?.pipe(logStream)
     serverProcess.stderr?.pipe(logStream)
 
-    managedServers.set(port, { process: serverProcess, port })
+    managedServers.set(port, { process: serverProcess, port, logStream })
 
     const maxAttempts = 600
     for (let i = 0; i < maxAttempts; i++) {
         try {
-            const res = await fetch(`http://localhost:${port}/health`)
+            const res = await fetch(`http://localhost:${port}/health`, {
+                signal: AbortSignal.timeout(1000),
+            })
             if (res.ok) return
         } catch {
             // Server not ready yet
@@ -253,6 +307,8 @@ export async function startServer(
     }
 
     serverProcess.kill()
+    logStream.end()
+    managedServers.delete(port)
     throw new Error(`Server on port ${port} did not start within timeout`)
 }
 
@@ -263,6 +319,7 @@ export function stopServer(port: number): void {
     const server = managedServers.get(port)
     if (server) {
         server.process.kill('SIGTERM')
+        server.logStream?.end()
         managedServers.delete(port)
     }
 }

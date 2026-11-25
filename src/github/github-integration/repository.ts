@@ -1,7 +1,51 @@
 import { logger } from '../../utils/logger.js'
+import { sanitizeErrorMessageForResponse } from '../../utils/error-helpers.js'
+import { sanitizeRemoteUrl } from '../../utils/security-utils.js'
 import type { GitHubClient } from './client.js'
 import type { RepoInfo, LocalGitStatus } from './types.js'
 import type { GitHubWorkflowRun } from '../../types/index.js'
+import { isCachedRepoInfo, isCachedWorkflowRuns } from './cache-helpers.js'
+
+function normalizeWorkflowStatus(status: string | null): GitHubWorkflowRun['status'] {
+    switch (status) {
+        case 'queued':
+        case 'in_progress':
+        case 'completed':
+            return status
+        case null:
+        default:
+            return 'completed'
+    }
+}
+
+function normalizeWorkflowConclusion(conclusion: string | null): GitHubWorkflowRun['conclusion'] {
+    switch (conclusion) {
+        case 'success':
+        case 'failure':
+        case 'cancelled':
+        case 'skipped':
+        case null:
+            return conclusion
+        default:
+            return null
+    }
+}
+
+const RESOLVES_ISSUE_PATTERN = /(?:fix|fixes|resolve|resolves|close|closes)\s+#(\d+)/gi
+
+/** Extract unique issue numbers referenced by "fixes #N"-style keywords in commit messages. */
+function extractResolvedIssueNumbers(messages: string[]): number[] {
+    const resolved: number[] = []
+    for (const message of messages) {
+        for (const match of message.matchAll(RESOLVES_ISSUE_PATTERN)) {
+            const num = parseInt(match[1] ?? '', 10)
+            if (!isNaN(num) && !resolved.includes(num)) {
+                resolved.push(num)
+            }
+        }
+    }
+    return resolved
+}
 
 export class RepositoryManager {
     constructor(private client: GitHubClient) {}
@@ -11,12 +55,17 @@ export class RepositoryManager {
         if (cached) return cached
 
         try {
-            const branchResult = await this.client.git.branch()
+            const [branchSettled, remotesSettled] = await Promise.allSettled([
+                this.client.git.branch(),
+                this.client.git.getRemotes(true),
+            ])
+            if (branchSettled.status === 'rejected') throw branchSettled.reason
+            if (remotesSettled.status === 'rejected') throw remotesSettled.reason
+            const branchResult = branchSettled.value
+            const remotes = remotesSettled.value
             const branch = branchResult.current || null
-
-            const remotes = await this.client.git.getRemotes(true)
             const origin = remotes.find((r) => r.name === 'origin')
-            const remoteUrl = origin?.refs?.fetch || null
+            const remoteUrl = sanitizeRemoteUrl(origin?.refs?.fetch || null)
 
             const { owner, repo } = this.parseRemoteUrl(remoteUrl)
 
@@ -33,11 +82,12 @@ export class RepositoryManager {
     }
 
     getCachedRepoInfo(): RepoInfo | null {
-        return (this.client.getCached('repoInfo') as RepoInfo | undefined) ?? null
+        const cached = this.client.getCached('repoInfo')
+        return isCachedRepoInfo(cached) ? cached : null
     }
 
     setCachedRepoInfo(info: RepoInfo): void {
-        this.client.setCache('repoInfo', info)
+        this.client.setCache('repoInfo', { ...info, remoteUrl: sanitizeRemoteUrl(info.remoteUrl) })
     }
 
     private parseRemoteUrl(remoteUrl: string | null): {
@@ -47,7 +97,7 @@ export class RepositoryManager {
         if (!remoteUrl) return { owner: null, repo: null }
 
         if (remoteUrl.startsWith('git@github.com:')) {
-            const pathPart = remoteUrl.replace('git@github.com:', '').replace('.git', '')
+            const pathPart = remoteUrl.replace('git@github.com:', '').replace(/\.git$/i, '')
             const parts = pathPart.split('/')
             if (parts.length >= 2) {
                 return { owner: parts[0] ?? null, repo: parts[1] ?? null }
@@ -56,15 +106,19 @@ export class RepositoryManager {
 
         try {
             const url = new URL(remoteUrl)
-            if (url.hostname === 'github.com') {
-                const path = url.pathname.replace('.git', '').replace(/^\//, '')
+            if (url.hostname === 'github.com' || url.hostname === 'www.github.com') {
+                const path = url.pathname.replace(/\.git$/i, '').replace(/^\//, '')
                 const parts = path.split('/')
                 if (parts.length >= 2) {
                     return { owner: parts[0] ?? null, repo: parts[1] ?? null }
                 }
             }
-        } catch {
+        } catch (parseError) {
             // Not a valid URL
+            logger.debug('Remote URL is not a parseable URL', {
+                module: 'GitHub',
+                error: parseError instanceof Error ? parseError.message : String(parseError),
+            })
         }
 
         return { owner: null, repo: null }
@@ -82,8 +136,8 @@ export class RepositoryManager {
         }
 
         const cacheKey = `workflows:${owner}:${repo}:${String(limit)}`
-        const cached = this.client.getCached(cacheKey) as GitHubWorkflowRun[] | undefined
-        if (cached) return cached
+        const cached = this.client.getCached(cacheKey)
+        if (isCachedWorkflowRuns(cached)) return cached
 
         try {
             const response = await this.client.octokit.rest.actions.listWorkflowRunsForRepo({
@@ -96,13 +150,8 @@ export class RepositoryManager {
             const result = response.data.workflow_runs.map((run) => ({
                 id: run.id,
                 name: run.name ?? 'Unknown Workflow',
-                status: run.status as 'queued' | 'in_progress' | 'completed',
-                conclusion: run.conclusion as
-                    | 'success'
-                    | 'failure'
-                    | 'cancelled'
-                    | 'skipped'
-                    | null,
+                status: normalizeWorkflowStatus(run.status),
+                conclusion: normalizeWorkflowConclusion(run.conclusion),
                 url: run.html_url,
                 headBranch: run.head_branch ?? '',
                 headSha: run.head_sha,
@@ -121,37 +170,42 @@ export class RepositoryManager {
         }
     }
 
-    async getLocalGitStatus(): Promise<LocalGitStatus> {
+    async getLocalGitStatus(options?: { includeResolvedIssues?: boolean }): Promise<LocalGitStatus> {
         try {
-            const status = await this.client.git.status()
+            const includeResolved = options?.includeResolvedIssues ?? true
+            const [statusSettled, logSettled] = await Promise.allSettled([
+                this.client.git.status(),
+                includeResolved ? this.client.git.log({ maxCount: 50 }) : Promise.resolve(null),
+            ])
+            if (statusSettled.status === 'rejected') {
+                throw statusSettled.reason
+            }
+            const status = statusSettled.value
             const resolvedIssues: number[] = []
 
-            try {
-                // Parse recent local commits for issue resolution references
-                const log = await this.client.git.log({ maxCount: 50 })
-                for (const commit of log.all) {
-                    const matches = commit.message.match(/(?:fix|fixes|resolve|resolves|close|closes)\s+#(\d+)/ig)
-                    if (matches) {
-                        for (const m of matches) {
-                            const execMatch = /#(\d+)/.exec(m)
-                            const numStr = execMatch?.[1]
-                            if (numStr) {
-                                const num = parseInt(numStr, 10)
-                                if (!isNaN(num) && !resolvedIssues.includes(num)) {
-                                    resolvedIssues.push(num)
-                                }
-                            }
-                        }
-                    }
+            if (logSettled.status === 'fulfilled') {
+                if (logSettled.value !== null) {
+                    resolvedIssues.push(...extractResolvedIssueNumbers(logSettled.value.all.map((c) => c.message)))
                 }
-            } catch {
-                // Ignore git log parsing errors
+            } else {
+                logger.debug('Failed to parse git log for resolved issues', {
+                    module: 'GitHub',
+                    error: logSettled.reason instanceof Error ? logSettled.reason.message : String(logSettled.reason),
+                })
             }
 
+            const trackedChanges = new Set<string>([
+                ...(status.modified ?? []),
+                ...(status.created ?? []),
+                ...(status.deleted ?? []),
+                ...(status.staged ?? []),
+                ...(status.conflicted ?? []),
+                ...(status.renamed ?? []).map((r) => r.to),
+            ])
             return {
                 branch: status.current || null,
-                modified: status.modified.length,
-                untracked: status.not_added.length,
+                modified: trackedChanges.size,
+                untracked: status.not_added?.length ?? 0,
                 isClean: status.isClean(),
                 resolvedIssues,
             }
@@ -160,7 +214,14 @@ export class RepositoryManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return { modified: 0, untracked: 0, isClean: true }
+            return {
+                modified: 0,
+                untracked: 0,
+                isClean: false,
+                error: sanitizeErrorMessageForResponse(
+                    error instanceof Error ? error.message : String(error)
+                ),
+            }
         }
     }
 }

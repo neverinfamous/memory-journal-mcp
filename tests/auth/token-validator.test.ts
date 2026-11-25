@@ -5,6 +5,7 @@
  * scope parsing, and JWKS integration.
  */
 
+import dns from 'node:dns'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TokenValidator, createTokenValidator } from '../../src/auth/token-validator.js'
 import type { TokenValidatorConfig } from '../../src/auth/types.js'
@@ -14,6 +15,7 @@ import { AUTH_ERROR_CODES } from '../../src/auth/errors.js'
 vi.mock('jose', () => ({
     createRemoteJWKSet: vi.fn(() => vi.fn()),
     jwtVerify: vi.fn(),
+    customFetch: Symbol('jose.customFetch'),
     errors: {
         JWTExpired: class JWTExpired extends Error {
             constructor() {
@@ -272,6 +274,27 @@ describe('TokenValidator', () => {
             expect(result.claims?.scopes).toEqual(['write', 'admin'])
         })
 
+        it('does not let a string scopes claim replace the sanitized array', async () => {
+            const { jwtVerify } = await import('jose')
+            const mockVerify = vi.mocked(jwtVerify)
+
+            mockVerify.mockResolvedValueOnce({
+                payload: {
+                    sub: 'user-3',
+                    scopes: 'write admin',
+                    exp: Math.floor(Date.now() / 1000) + 3600,
+                    iat: Math.floor(Date.now() / 1000),
+                },
+                protectedHeader: { alg: 'RS256' },
+            } as never)
+
+            const validator = new TokenValidator(config)
+            const result = await validator.validate('string-scopes-token')
+
+            expect(result.valid).toBe(true)
+            expect(result.claims?.scopes).toEqual([])
+        })
+
         it('should parse scope array from payload.scope', async () => {
             const { jwtVerify } = await import('jose')
             const mockVerify = vi.mocked(jwtVerify)
@@ -352,13 +375,18 @@ describe('TokenValidator', () => {
 
     describe('preload', () => {
         let originalFetch: typeof global.fetch
+        let lookupSpy: ReturnType<typeof vi.spyOn>
 
         beforeEach(() => {
             originalFetch = global.fetch
+            lookupSpy = vi
+                .spyOn(dns.promises, 'lookup')
+                .mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
         })
 
         afterEach(() => {
             global.fetch = originalFetch
+            lookupSpy.mockRestore()
         })
 
         it('should fetch JWKS and complete successfully', async () => {

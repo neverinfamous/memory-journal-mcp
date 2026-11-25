@@ -1,34 +1,35 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import * as esbuild from 'esbuild'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { WorkerSandbox, WorkerSandboxPool } from '../../src/codemode/index.js'
 
 const workerScriptSrc = path.join(__dirname, '../../src/codemode/worker-script.ts')
-const workerScriptJs = path.join(__dirname, '../../src/codemode/worker-script.js')
 const workerScriptDistJs = path.join(__dirname, '../../dist/worker-script.js')
 
 beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
     // worker_threads cannot run .ts files directly in this vitest setup
     // Uses esbuild's JS API directly (npx esbuild via execSync hangs on Windows)
+    fs.mkdirSync(path.dirname(workerScriptDistJs), { recursive: true })
+    const tmpDistJs = `${workerScriptDistJs}.${String(process.pid)}.tmp.js`
     esbuild.buildSync({
         entryPoints: [workerScriptSrc],
         bundle: true,
         platform: 'node',
         format: 'esm',
-        outfile: workerScriptJs,
+        packages: 'external',
+        outfile: tmpDistJs,
     })
-    fs.mkdirSync(path.dirname(workerScriptDistJs), { recursive: true })
-    fs.copyFileSync(workerScriptJs, workerScriptDistJs)
-}, 30_000)
-
-afterAll(() => {
-    // Cleanup generated JS files
-    if (fs.existsSync(workerScriptJs)) {
-        fs.unlinkSync(workerScriptJs)
+    try {
+        fs.renameSync(tmpDistJs, workerScriptDistJs)
+    } catch {
+        if (!fs.existsSync(workerScriptDistJs)) {
+            fs.copyFileSync(tmpDistJs, workerScriptDistJs)
+        }
+        fs.rmSync(tmpDistJs, { force: true })
     }
-})
+}, 30_000)
 
 describe('WorkerSandbox', () => {
     it('should execute basic code successfully', async () => {
@@ -89,6 +90,9 @@ describe('WorkerSandbox', () => {
     it('should support mj.projects() as callable function and mj.getJournal("proj")', async () => {
         const sandbox = new WorkerSandbox()
         const bindings = {
+            admin: {
+                list_projects: async () => ({ success: true, projects: {} }),
+            },
             analytics: {
                 get_cross_project_insights: async () => ({ success: true, insights: [] }),
             },
@@ -174,10 +178,11 @@ describe('WorkerSandbox', () => {
         expect(r4.success).toBe(true)
         expect((r4.result as any).tables).toContain('memory_journal')
 
-        // Test 5: sqlite.schema() calls getStatistics
+        // Test 5: sqlite.schema() returns schema help and does not run getStatistics
         const r5 = await sandbox.execute('return await sqlite.schema();', bindings)
         expect(r5.success).toBe(true)
-        expect((r5.result as any).totalEntries).toBe(100)
+        expect((r5.result as any).group).toBe('schema')
+        expect((r5.result as any).tables).toContain('memory_journal')
 
         // Test 6: sqlite.schema.listTables()
         const r6 = await sandbox.execute('return await sqlite.schema.listTables();', bindings)
@@ -210,14 +215,14 @@ describe('WorkerSandbox', () => {
         }
         const code = `
             const journalClient = await MemoryJournal.getInstance();
-            const searchRes = await journalClient.searchEntries({ query: 'project briefing adamic' });
+            const searchRes = await journalClient.searchEntries({ query: 'project briefing core-platform' });
             const directSearch = await searchEntries({ query: 'direct search test' });
             return { searchRes, directSearch };
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
         const res = result.result as any
-        expect(res.searchRes.entries[0].content).toContain('project briefing adamic')
+        expect(res.searchRes.entries[0].content).toContain('project briefing core-platform')
         expect(res.directSearch.entries[0].content).toContain('direct search test')
     })
 
@@ -232,7 +237,16 @@ describe('WorkerSandbox', () => {
         const result = await sandbox.execute(code, {})
         expect(result.success).toBe(false)
         expect(result.error).toMatch(/timed out|timeout|code 1/i)
+        sandbox.dispose()
     }, 30000)
+
+    it('terminates async work that outlives the vm timeout', async () => {
+        const sandbox = new WorkerSandbox({ timeoutMs: 200 })
+        const result = await sandbox.execute('await new Promise(() => {})', {})
+        expect(result.success).toBe(false)
+        expect(result.error).toMatch(/timed out|timeout|code 1/i)
+        sandbox.dispose()
+    }, 10000)
 
     it('should catch synchronous syntax errors or throw', async () => {
         const sandbox = new WorkerSandbox()
@@ -486,9 +500,10 @@ describe('WorkerSandbox', () => {
             expect(result.result).toEqual({
                 alive: true,
                 exitRes: {
-                    success: true,
-                    exited: true,
+                    success: false,
+                    exited: false,
                     exitCode: 0,
+                    error: 'process.exit is disabled in the sandbox',
                 },
             })
 

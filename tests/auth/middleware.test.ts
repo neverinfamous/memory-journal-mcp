@@ -390,6 +390,7 @@ describe('formatOAuthError', () => {
 describe('createAuthMiddleware', () => {
     function makeReqResNext(overrides: Record<string, unknown> = {}) {
         const req = {
+            method: 'GET',
             path: '/mcp',
             headers: {} as Record<string, string>,
             ...overrides,

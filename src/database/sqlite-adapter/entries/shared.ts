@@ -1,4 +1,10 @@
-import type { JournalEntry, ToolHandlerConfig } from '../../../types/index.js'
+import type { EntryType, JournalEntry, SignificanceType, ToolHandlerConfig } from '../../../types/index.js'
+import { SIGNIFICANCE_TYPES } from '../../../types/entities.js'
+import {
+    canonicalizeStoredEntryType,
+    isCanonicalEntryType,
+} from '../../../utils/legacy-commit-narrative.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import type { Database } from 'better-sqlite3'
 import type { TagsManager } from '../tags.js'
 import type { NativeConnectionManager } from '../native-connection.js'
@@ -34,7 +40,7 @@ export interface EntriesSharedContext {
     ctx: NativeConnectionManager
     tagsMgr: TagsManager
     db: Database
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig | undefined
 }
 
 /**
@@ -47,25 +53,92 @@ export function rowToEntry(tagsMgr: TagsManager, row: unknown): JournalEntry {
     return entry
 }
 
+function parseEntryType(val: unknown): EntryType {
+    const raw = typeof val === 'string' ? val : ''
+    return isCanonicalEntryType(raw) ? raw : canonicalizeStoredEntryType(raw, null).entryType
+}
+
+const SIGNIFICANCE_TYPE_MAP = new Map<string, SignificanceType>(
+    SIGNIFICANCE_TYPES.filter((t): t is Exclude<SignificanceType, null> => t !== null).map((t) => [t, t])
+)
+const NUM_ENTRY_KEYS = ['projectNumber', 'issueNumber', 'prNumber', 'workflowRunId'] as const
+const STR_ENTRY_KEYS = [
+    'projectOwner',
+    'issueUrl',
+    'prUrl',
+    'prStatus',
+    'workflowName',
+    'workflowStatus',
+    'sessionId',
+] as const
+
+function parseSignificanceType(val: unknown): SignificanceType {
+    return typeof val === 'string' ? (SIGNIFICANCE_TYPE_MAP.get(val) ?? null) : null
+}
+
+function parseValidationStatus(val: unknown): 'passed' | 'failed' | 'none' | undefined {
+    return val === 'passed' || val === 'failed' || val === 'none' ? val : undefined
+}
+
+const optStr = (r: Record<string, unknown>, key: string): string | null | undefined => {
+    const val = r[key]
+    return val === null || typeof val === 'string' ? val : undefined
+}
+
+const optNum = (r: Record<string, unknown>, key: string): number | null | undefined => {
+    const val = r[key]
+    return val === null || typeof val === 'number' ? val : undefined
+}
+
+function attachOptionalEntryFields(entry: JournalEntry, r: Record<string, unknown>): void {
+    for (const k of NUM_ENTRY_KEYS) {
+        const v = optNum(r, k)
+        if (v !== undefined) entry[k] = v
+    }
+    for (const k of STR_ENTRY_KEYS) {
+        const v = optStr(r, k)
+        if (v !== undefined) entry[k] = v
+    }
+    if (typeof r['importanceScore'] === 'number') {
+        entry.importanceScore = Math.round(r['importanceScore'] * 100) / 100
+    }
+    if (typeof r['trustScore'] === 'number') entry.trustScore = r['trustScore']
+    if (typeof r['impactScore'] === 'number') entry.impactScore = r['impactScore']
+    const vs = parseValidationStatus(r['validationStatus'])
+    if (vs !== undefined) entry.validationStatus = vs
+    if (typeof r['workspaceId'] === 'string') entry.workspaceId = r['workspaceId']
+}
+
+function mapRawRowToEntry(r: unknown): JournalEntry {
+    if (!isRecord(r)) {
+        throw new Error('Expected database row object')
+    }
+    const idRaw = r['id']
+    const id = typeof idRaw === 'number' ? idRaw : typeof idRaw === 'bigint' ? Number(idRaw) : 0
+    const entry: JournalEntry = {
+        id,
+        entryType: parseEntryType(r['entryType']),
+        content: typeof r['content'] === 'string' ? r['content'] : '',
+        timestamp: typeof r['timestamp'] === 'string' ? r['timestamp'] : '',
+        isPersonal: Boolean(r['isPersonal']),
+        significanceType: parseSignificanceType(r['significanceType']),
+        autoContext: typeof r['autoContext'] === 'string' ? r['autoContext'] : null,
+        deletedAt: typeof r['deletedAt'] === 'string' ? r['deletedAt'] : null,
+        isArchived: Boolean(r['isArchived']),
+        tags: [],
+        version: typeof r['version'] === 'number' ? r['version'] : 1,
+    }
+    attachOptionalEntryFields(entry, r)
+    return entry
+}
+
 /**
  * Convert multiple generic database rows to JournalEntries
  */
 export function rowsToEntries(tagsMgr: TagsManager, rows: unknown[]): JournalEntry[] {
     if (rows.length === 0) return []
 
-    const entries = rows.map((r) => {
-        const p = r as Partial<JournalEntry>
-        return {
-            ...p,
-            isPersonal: Boolean(p.isPersonal), // SQLite uses 0/1
-            isArchived: Boolean(p.isArchived),
-            tags: [],
-            // Attach importanceScore if the query computed it (importance-sorted results)
-            ...(p.importanceScore !== undefined
-                ? { importanceScore: Math.round(p.importanceScore * 100) / 100 }
-                : {}),
-        } as JournalEntry
-    })
+    const entries = rows.map(mapRawRowToEntry)
 
     const ids = entries.map((e) => e.id)
     const tagsMap = tagsMgr.batchGetTagsForEntries(ids)
@@ -81,31 +154,29 @@ export function rowsToEntries(tagsMgr: TagsManager, rows: unknown[]): JournalEnt
  * Helper: Safely convert a row from execQuery/get to an object.
  */
 export function rowToObject(row: unknown): Record<string, unknown> | undefined {
-    if (row === null || row === undefined) return undefined
-    if (typeof row !== 'object') return undefined
-    return row as Record<string, unknown>
+    return isRecord(row) ? row : undefined
 }
 
 /**
  * Typed wrapper for `db.prepare(sql).get(…params)`.
- * Returns the row cast to a `Record<string, unknown>` for safe access.
+ * Returns the row typed as `Record<string, unknown>` for safe access.
  */
 export function queryRow(
     db: Database,
     sql: string,
     ...params: unknown[]
 ): Record<string, unknown> | undefined {
-    return db.prepare(sql).get(...params) as Record<string, unknown> | undefined
+    return db.prepare<unknown[], Record<string, unknown>>(sql).get(...params)
 }
 
 /**
  * Typed wrapper for `db.prepare(sql).all(…params)`.
- * Returns rows cast to `Record<string, unknown>[]` for safe access.
+ * Returns rows typed as `Record<string, unknown>[]` for safe access.
  */
 export function queryRows(
     db: Database,
     sql: string,
     ...params: unknown[]
 ): Record<string, unknown>[] {
-    return db.prepare(sql).all(...params) as Record<string, unknown>[]
+    return db.prepare<unknown[], Record<string, unknown>>(sql).all(...params)
 }

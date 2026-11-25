@@ -1,18 +1,26 @@
-import { z } from 'zod'
+import type { ErrorResponse } from '../../../types/error-types.js'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import {
+    buildCreateEntryInput,
+    executeGetEntryById,
+    indexCreatedEntry,
+    recordTeamShareOutcome,
+    resolveAndApplyCreateLinks,
+} from './create-entry-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { MemoryJournalMcpError } from '../../../types/errors.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import { logger } from '../../../utils/logger.js'
+import { isRecord } from '../../../utils/type-guards.js'
+import { probeMatchingTeamEntry } from '../search/helpers.js'
+import { assertCanonicalFallbackToolAllowed } from '../team/helpers.js'
 
 import {
     CreateEntrySchema,
     CreateEntrySchemaMcp,
     CreateEntryOutputSchema,
-    GetEntryByIdSchema,
     GetEntryByIdSchemaMcp,
     EntryByIdOutputSchema,
     GetRecentEntriesSchema,
@@ -21,206 +29,289 @@ import {
     GetEntryHistorySchemaMcp,
     GetEntryHistoryOutputSchema,
     TagsListOutputSchema,
-    TestSimpleSchema,
-    TestSimpleOutputSchema,
+    GetRecentEntriesOutputSchema,
+    ListTagsSchema,
+    ListTagsSchemaMcp,
 } from './schemas.js'
-import { EntryOutputSchema, coerceSignificanceAlias } from '../schemas.js'
-import type { RelationshipType } from '../../../types/index.js'
-import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { coerceSignificanceAlias } from '../schemas.js'
+import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveEntryAnchors } from './staleness-tools.js'
+import { getDiagnosticTools } from './diagnostic-tools.js'
 
+function resolveCreateEntryScope(
+    input: ReturnType<typeof CreateEntrySchema.parse>,
+    config: ToolContext['config']
+): { wsId: string; projectNumber: number } | { errorResponse: Record<string, unknown> } {
+    if (input.workspace_id?.trim() === '*') {
+        return {
+            errorResponse: {
+                success: false,
+                error: "workspace_id '*' is a read-only wildcard and cannot be used to create an entry. Pass a specific workspace_id or project_number.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Pass the repository name, such as "memory-journal-mcp", or a project_number.',
+                recoverable: true,
+            },
+        }
+    }
+    const resolved = resolveProjectContext(
+        { workspace_id: input.workspace_id, project_number: input.project_number },
+        config
+    )
+    const projectNumber = resolved.projectNumber
+    if (projectNumber === undefined || projectNumber === null || projectNumber <= 0) {
+        return {
+            errorResponse: {
+                success: false,
+                error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'To find your project_number, call list_projects (or mj.admin.listProjects()), read memory://agent-context/<repo-name> via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-context/memory-journal-mcp")), or inspect memory://briefing/<project-name>. Avoid bare memory://agent-id in multi-project setups. Then pass project_number explicitly in your request.',
+                recoverable: true,
+            },
+        }
+    }
+    return { wsId: resolved.workspaceId, projectNumber }
+}
+
+function notifyRecentEntriesSubscription(context: ToolContext): void {
+    if (!context.config?.subscriptionManager) return
+    void context.config.subscriptionManager
+        .notifyResourceUpdated('memory://recent')
+        .catch((err: unknown) => {
+            logger.debug('Failed to notify resource updated', { error: err })
+        })
+}
+
+async function executeCreateEntry(
+    params: unknown,
+    context: ToolContext
+): Promise<Record<string, unknown> | ErrorResponse> {
+    const { db, progress } = context
+    const paramsCopy: unknown = isRecord(params) ? { ...params } : params
+    coerceSignificanceAlias(paramsCopy)
+    const input = CreateEntrySchema.parse(paramsCopy)
+    const scope = resolveCreateEntryScope(input, context.config)
+    if ('errorResponse' in scope) return scope.errorResponse
+    if ((input.relationships !== undefined && input.relationships.length > 0) || input.auto_link === true) {
+        assertCanonicalFallbackToolAllowed('link_entries', 'relationships', context, false)
+    }
+    const { wsId, projectNumber } = scope
+
+    await sendProgress(progress, 0, 2, 'Creating entry...')
+    const resolvedIssueUrl = await resolveIssueUrl(
+        context,
+        projectNumber,
+        input.issue_number,
+        input.issue_url,
+        wsId
+    )
+    const resolvedAnchors = await resolveEntryAnchors(
+        input.anchors,
+        input.auto_context,
+        wsId,
+        context
+    )
+    const entryInput = buildCreateEntryInput(input, {
+        projectNumber,
+        workspaceId: wsId,
+        issueUrl: resolvedIssueUrl,
+        anchors: resolvedAnchors,
+    })
+    const createdEntry = db.createEntry(entryInput)
+    const id = createdEntry.id
+
+    const relationshipWarnings = linkRequestedRelationships(
+        db,
+        id,
+        input.relationships,
+        wsId,
+        projectNumber
+    )
+    const vectorWarning = await indexCreatedEntry(context, progress, createdEntry)
+    notifyRecentEntriesSubscription(context)
+
+    // [INVARIANT] M2: stamp the team mirror with its personal origin (team-only column, migration 020).
+    const teamShare = input.share_with_team
+        ? await recordTeamShareOutcome(
+              context,
+              { ...entryInput, originPersonalId: id },
+              relationshipWarnings
+          )
+        : { sharedWithTeam: false }
+    const suggestedLinks = await resolveAndApplyCreateLinks({
+        context,
+        createdEntry,
+        input,
+        wsId,
+        projectNumber,
+        relationshipWarnings,
+    })
+    const allWarnings = [
+        ...(vectorWarning !== undefined ? [vectorWarning] : []),
+        ...relationshipWarnings,
+    ]
+    return {
+        success: true,
+        id,
+        entry: createdEntry,
+        ...(allWarnings.length > 0 ? { warning: allWarnings.join('; ') } : {}),
+        ...(teamShare.sharedWithTeam
+            ? { sharedWithTeam: true, ...(teamShare.author !== undefined ? { author: teamShare.author } : {}) }
+            : {}),
+        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+        ...(suggestedLinks.length > 0 ? { suggested_links: suggestedLinks } : {}),
+    }
+}
+
+function executeGetRecentEntries(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    try {
+        const input = GetRecentEntriesSchema.parse(params)
+        const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+        const projectNumber = alignedProjectFilter(
+            wsId,
+            input.project_number,
+            activeProjectRegistry(context.config?.projectRegistry)
+        )
+        const result = context.db.getRecentEntries(
+            input.limit,
+            input.is_personal,
+            input.sort_by,
+            input.cursor,
+            input.include_archived,
+            wsId,
+            projectNumber,
+            input.offset
+        )
+        return {
+            success: true,
+            entries: result.entries,
+            count: result.entries.length,
+            next_cursor: result.nextCursor,
+            hasMore: !!result.nextCursor,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+function executeGetEntryHistory(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    const { db } = context
+    try {
+        const input = GetEntryHistorySchema.parse(params)
+        let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+        const current = db.getEntryById(input.entry_id, wsId)
+        if (current?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+            wsId = current.workspaceId
+        }
+        if (
+            !current ||
+            (input.project_number !== undefined && current.projectNumber !== input.project_number)
+        ) {
+            const matchingTeamEntry =
+                !current &&
+                probeMatchingTeamEntry(
+                    context,
+                    input.entry_id,
+                    wsId,
+                    input.project_number,
+                    'team_get_entry_by_id'
+                )
+            return {
+                success: false,
+                error: `Entry ${String(input.entry_id)} not found`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                ...(matchingTeamEntry
+                    ? {
+                          suggestion: `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_get_entry_by_id (or mj.team.teamGetEntryById / mj.team.getEntryById) instead.`,
+                      }
+                    : {}),
+                recoverable: true,
+            }
+        }
+
+        const rawHistory = db.getEntryHistory(input.entry_id, wsId)
+        const history = rawHistory.map((rev) => ({
+            revisionId: rev.revisionNumber,
+            entryId: rev.entryId,
+            content: rev.contentSnapshot,
+            createdAt: rev.changedAt,
+        }))
+
+        return {
+            success: true,
+            id: input.entry_id,
+            current,
+            history,
+        }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+function executeListTags(
+    params: unknown,
+    context: ToolContext
+): Record<string, unknown> | ErrorResponse {
+    try {
+        const input = ListTagsSchema.parse(params ?? {})
+        const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+        const effectiveProjectFilter = alignedProjectFilter(
+            wsId,
+            input.project_number,
+            activeProjectRegistry(context.config?.projectRegistry)
+        )
+        const tags = context.db
+            .listTags(wsId, effectiveProjectFilter)
+            .map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))
+        return { success: true, tags, count: tags.length }
+    } catch (err) {
+        return formatHandlerError(err)
+    }
+}
+
+function buildCreateEntryTool(context: ToolContext): ToolDefinition {
+    return {
+        name: 'create_entry',
+        title: 'Create Entry',
+        description:
+            'Create a new journal entry. Content must be well-structured markdown ' +
+            'using ## section headers. Select the most accurate entry_type (e.g., retrospective, personal_reflection, technical_note). ' +
+            'For session summaries, use entry_type "retrospective" ' +
+            'with tag "session-summary" and structure content as: ' +
+            '## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
+            'REQUIRED: You MUST include project_number. Extract this by querying memory://agent-context/{+repo} (or memory://briefing/{+repo} at session start). ' +
+            'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
+            'REQUIRED: Pass relationships: [{ targetId, relationType }] to link the entry to a session summary or related entry.',
+        group: 'core',
+        inputSchema: CreateEntrySchemaMcp,
+        outputSchema: CreateEntryOutputSchema,
+        annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
+        },
+        handler: async (params: unknown) => {
+            try {
+                return await executeCreateEntry(params, context)
+            } catch (err) {
+                return formatHandlerError(err)
+            }
+        },
+    }
+}
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
-    const { db, progress } = context
-
     return [
-        {
-            name: 'create_entry',
-            title: 'Create Entry',
-            description:
-                'Create a new journal entry. Content must be well-structured markdown ' +
-                'using ## section headers. Select the most accurate entry_type (e.g., retrospective, personal_reflection, technical_note). ' +
-                'For session summaries, use entry_type "retrospective" ' +
-                'with tag "session-summary" and structure content as: ' +
-                '## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
-                'REQUIRED: You MUST include project_number. Extract this by querying memory://agent-id. ' +
-                'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
-                'REQUIRED: You MUST use related_to to anchor the entry to a session summary or nearby context.',
-            group: 'core',
-            inputSchema: CreateEntrySchemaMcp,
-            outputSchema: CreateEntryOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: async (params: unknown) => {
-                try {
-                    coerceSignificanceAlias(params)
-                    const input = CreateEntrySchema.parse(params)
-                    
-                    const resolved = resolveProjectContext(
-                        {
-                            workspace_id: input.workspace_id,
-                            project_number: input.project_number,
-                            content: input.content,
-                            tags: input.tags
-                        },
-                        context.config
-                    )
-                    const wsId = resolved.workspaceId
-                    const projectNumber = resolved.projectNumber
-
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read the memory://agent-id resource via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-id")), or inspect memory://briefing/<project-name>. Then pass project_number explicitly in your request.',
-                            recoverable: true,
-                        }
-                    }
-
-                    // Optional progress for long operations
-                    await sendProgress(progress, 0, 2, 'Creating entry...')
-
-                    const resolvedIssueUrl = await resolveIssueUrl(
-                        context,
-                        projectNumber,
-                        input.issue_number,
-                        input.issue_url
-                    )
-
-                    const resolvedAnchors = resolveEntryAnchors(
-                        input.anchors,
-                        input.auto_context,
-                        wsId,
-                        context
-                    )
-
-                    const createdEntry = db.createEntry({
-                        content: input.content,
-                        entryType: input.entry_type,
-                        tags: input.tags,
-                        isPersonal: input.is_personal,
-                        significanceType: input.significance_type,
-                        projectNumber: projectNumber,
-                        projectOwner: input.project_owner,
-                        issueNumber: input.issue_number,
-                        issueUrl: resolvedIssueUrl,
-                        prNumber: input.pr_number,
-                        prUrl: input.pr_url,
-                        prStatus: input.pr_status,
-                        workflowRunId: input.workflow_run_id,
-                        workflowName: input.workflow_name,
-                        workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
-                        autoContext: input.auto_context,
-                        workspaceId: wsId,
-                        impactScore: input.impact_score,
-                        trustScore: input.trust_score,
-                        validationStatus: input.validation_status,
-                        sessionId: input.session_id,
-                        ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
-                    })
-                    const id = createdEntry.id
-
-                    if (input.relationships && input.relationships.length > 0) {
-                        for (const rel of input.relationships) {
-                            try {
-                                const canonicalRelType: RelationshipType =
-                                    rel.relationType === 'resolves'
-                                        ? 'resolved'
-                                        : rel.relationType === 'relates_to'
-                                          ? 'references'
-                                          : rel.relationType === 'depends_on'
-                                            ? 'blocked_by'
-                                            : rel.relationType
-                                db.linkEntries(id, rel.targetId, canonicalRelType)
-                            } catch {
-                                // Ignore link failures if target doesn't exist
-                            }
-                        }
-                    }
-
-                    // Vectorize entry
-                    if (context.vectorManager) {
-                        try {
-                            await sendProgress(progress, 1, 2, 'Generating embeddings...')
-                            await context.vectorManager.addEntry(createdEntry)
-                        } catch (e) {
-                            // Soft fail: return success but warn vector indexing failed
-                            // Usually implies disabled or unavailable embedding model
-                            await sendProgress(
-                                progress,
-                                2,
-                                2,
-                                'Entry created (Vector indexing disabled)'
-                            )
-                            return {
-                                success: true,
-                                id,
-                                error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
-                            }
-                        }
-                    }
-
-                    await sendProgress(progress, 2, 2, 'Entry created successfully')
-
-                    if (context.config?.subscriptionManager) {
-                        void context.config.subscriptionManager.notifyResourceUpdated(
-                            'memory://recent'
-                        )
-                    }
-                    const finalEntry = createdEntry
-
-                    let sharedWithTeam = false
-                    let author: string | undefined
-
-                    if (input.share_with_team && context.teamDb) {
-                        enforceAccessBoundary(
-                            'team_create_entry',
-                            'tool',
-                            { requiresTeamScope: true },
-                            context.config?.runtime?.auditLogger
-                        )
-                        author = resolveAuthenticatedAuthor()
-
-                        if (author && author !== 'unknown') {
-                            context.teamDb.createEntry({
-                                content: input.content,
-                                entryType: input.entry_type,
-                                tags: input.tags,
-                                isPersonal: false,
-                                significanceType: input.significance_type,
-                                projectNumber: projectNumber,
-                                projectOwner: input.project_owner,
-                                issueNumber: input.issue_number,
-                                issueUrl: input.issue_url,
-                                prNumber: input.pr_number,
-                                prUrl: input.pr_url,
-                                prStatus: input.pr_status,
-                                workflowRunId: input.workflow_run_id,
-                                workflowName: input.workflow_name,
-                                workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
-                                author: author,
-                                workspaceId: wsId,
-                                impactScore: input.impact_score,
-                                trustScore: input.trust_score,
-                                validationStatus: input.validation_status,
-                            })
-                            context.teamDb.flushSave()
-                            sharedWithTeam = true
-                        }
-                    }
-
-                    return { success: true, id, entry: finalEntry, ...(sharedWithTeam ? { sharedWithTeam, author } : {}) }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
+        buildCreateEntryTool(context),
         {
             name: 'get_entry_by_id',
             title: 'Get Entry by ID',
@@ -236,33 +327,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const input = GetEntryByIdSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const hasExplicitWs = input.workspace_id !== undefined || input.project_number !== undefined
-                    const entry = db.getEntryById(input.entry_id, wsId) ?? (!hasExplicitWs && wsId !== '*' ? db.getEntryById(input.entry_id, '*') : null)
-                    if (!entry) {
-                        return {
-                            success: false,
-                            error: `Entry ${String(input.entry_id)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the entry ID exists and you have access to it',
-                            recoverable: true,
-                        }
-                    }
-
-                    const result: Record<string, unknown> = { success: true, entry }
-
-                    if (input.include_relationships) {
-                        const relationships = db.getRelationships(input.entry_id)
-                        result['relationships'] = relationships
-                    }
-
-                    const importance = db.calculateImportance(input.entry_id)
-                    result['importance'] = importance.score
-                    result['importanceBreakdown'] = importance.breakdown
-
-                    return result
+                    return executeGetEntryById(params, context)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -274,29 +339,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description: 'Get the most recent journal entries',
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
-            outputSchema: z.object({ success: z.boolean().optional(), entries: z.array(EntryOutputSchema).optional(), count: z.number().optional(), next_cursor: z.string().optional(), hasMore: z.boolean().optional() }).extend(ErrorFieldsMixin.shape), // Output schema inline for array wrap
+            outputSchema: GetRecentEntriesOutputSchema,
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    const input = GetRecentEntriesSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, wsId, input.project_number, input.offset)
-                    return {
-                        success: true,
-                        entries: result.entries,
-                        count: result.entries.length,
-                        next_cursor: result.nextCursor,
-                        hasMore: !!result.nextCursor,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeGetRecentEntries(params, context),
         },
         {
             name: 'get_entry_history',
@@ -311,46 +361,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
-                try {
-                    const input = GetEntryHistorySchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const current = db.getEntryById(input.entry_id, wsId)
-                    if (!current) {
-                        return {
-                            success: false,
-                            error: `Entry ${String(input.entry_id)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            recoverable: true,
-                        }
-                    }
-
-                    const rawHistory = db.getEntryHistory(input.entry_id)
-                    const history = rawHistory.map(rev => ({
-                        revisionId: rev.revisionNumber,
-                        entryId: rev.entryId,
-                        content: rev.contentSnapshot,
-                        createdAt: rev.changedAt,
-                    }))
-
-                    return {
-                        success: true,
-                        id: input.entry_id,
-                        current,
-                        history,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeGetEntryHistory(params, context),
         },
         {
             name: 'list_tags',
             title: 'List Tags',
             description: 'List all unique tags used across all entries',
             group: 'core',
-            inputSchema: z.object({}).strict(), // No arguments required
+            inputSchema: ListTagsSchemaMcp,
             outputSchema: TagsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -358,126 +376,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: () => {
-                try {
-                    const tags = db.listTags().map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))
-                    return { success: true, tags, count: tags.length }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
+            handler: (params: unknown) => executeListTags(params, context),
         },
-
-        // ==================================================================
-        // Utility/Debug Tools
-        // ==================================================================
-        {
-            name: 'test_simple',
-            title: 'Test Simple Echo',
-            description: 'A simple echo tool for testing connection and basic parameter parsing.',
-            group: 'core',
-            inputSchema: TestSimpleSchema, // Exact string mapping
-            outputSchema: TestSimpleOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
-                try {
-                    const input = TestSimpleSchema.parse(params)
-                    return {
-                        success: true,
-                        message: `Echo: ${input.message}`,
-                        timestamp: new Date().toISOString(),
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
-        {
-            name: 'trigger_progress',
-            title: 'Test Progress Notifications',
-            description: 'Triggers a sequence of progress notifications to verify the transport layer supports them.',
-            group: 'core',
-            inputSchema: z.object({}).strict(),
-            outputSchema: z.object({ success: z.boolean(), message: z.string() }).extend(ErrorFieldsMixin.shape),
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: async () => {
-                try {
-                    await sendProgress(progress, 0, 3, 'Starting operation...')
-                    // Wait 500ms
-                    await new Promise((resolve) => setTimeout(resolve, 500))
-                    await sendProgress(progress, 1, 3, 'Processing step 1...')
-                    await new Promise((resolve) => setTimeout(resolve, 500))
-                    await sendProgress(progress, 2, 3, 'Processing step 2...')
-                    await new Promise((resolve) => setTimeout(resolve, 500))
-                    await sendProgress(progress, 3, 3, 'Operation complete')
-                    return { success: true, message: 'Progress notifications completed successfully' }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
-        {
-            name: 'test_error_handling',
-            title: 'Test Error Handling',
-            description: 'Throws a specific type of error to verify the server formats and returns them correctly over MCP.',
-            group: 'core',
-            inputSchema: z.object({
-                error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
-                message: z.string().optional().default('Test error message'),
-            }),
-            outputSchema: z.object({}).extend(ErrorFieldsMixin.shape), // Note: Error will bypass normal schema and be formatted
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
-                try {
-                    const input = z.object({
-                        error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
-                        message: z.string().optional().default('Test error message'),
-                    }).parse(params)
-                    
-                    // Helper to simulate database errors which SQLite often throws as raw Error objects
-                    if (input.error_type === 'database') {
-                        const err = new Error(`SQLITE_CONSTRAINT: ${input.message}`)
-                        Object.defineProperty(err, 'code', { value: 'SQLITE_CONSTRAINT', enumerable: true })
-                        throw err
-                    }
-                    
-                    if (input.error_type === 'type') {
-                        throw new TypeError(input.message)
-                    }
-
-                    if (input.error_type === 'memory_journal') {
-                        throw new MemoryJournalMcpError(
-                            input.message,
-                            'TEST_ERROR',
-                            'internal'
-                        )
-                    }
-                    
-                    if (input.error_type === 'zod') {
-                        // Force a zod error
-                        z.object({ required_field: z.string() }).parse({})
-                    }
-                    
-                    throw new Error(input.message)
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
+        ...getDiagnosticTools(context),
     ]
 }

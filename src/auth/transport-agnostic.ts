@@ -7,9 +7,14 @@
  */
 
 import type { TokenClaims } from './types.js'
-import type { TokenValidator } from './token-validator.js'
-import { TokenMissingError, InvalidTokenError, InsufficientScopeError } from './errors.js'
-import { hasScope as checkScope } from './scopes.js'
+import { TokenValidator } from './token-validator.js'
+import {
+    OAuthError,
+    TokenMissingError,
+    InvalidTokenError,
+    InsufficientScopeError,
+} from './errors.js'
+import { hasAnyScope } from './scopes.js'
 
 /**
  * Extract a Bearer token from an Authorization header.
@@ -93,7 +98,7 @@ export async function validateAuth(
     const result = await tokenValidator.validate(token)
 
     if (!result.valid || !result.claims) {
-        throw new InvalidTokenError(result.error ?? 'Invalid token')
+        throw TokenValidator.toOAuthError(result)
     }
 
     const context: AuthenticatedContext = {
@@ -103,8 +108,7 @@ export async function validateAuth(
     }
 
     if (requiredScopes && requiredScopes.length > 0) {
-        const hasRequired = requiredScopes.some((scope) => checkScope(context.scopes, scope))
-        if (!hasRequired) {
+        if (!hasAnyScope(context.scopes, requiredScopes)) {
             throw new InsufficientScopeError(requiredScopes, context.scopes)
         }
     }
@@ -141,13 +145,32 @@ export function formatOAuthError(error: unknown): {
     }
 
     if (error instanceof InsufficientScopeError) {
-        const required = error.details?.['requiredScope'] as string[] | undefined
+        const rawRequired = error.details?.['requiredScope']
+        const required = Array.isArray(rawRequired)
+            ? rawRequired.filter((s): s is string => typeof s === 'string')
+            : undefined
         return {
             status: 403,
             body: {
                 error: 'insufficient_scope',
                 error_description: error.message,
-                scope: required ? required.join(' ') : undefined,
+                scope: required !== undefined && required.length > 0 ? required.join(' ') : undefined,
+            },
+        }
+    }
+
+    if (error instanceof OAuthError) {
+        const errorCode =
+            error.httpStatus === 401
+                ? 'invalid_token'
+                : error.httpStatus === 403
+                  ? 'insufficient_scope'
+                  : 'server_error'
+        return {
+            status: error.httpStatus,
+            body: {
+                error: errorCode,
+                error_description: error.message,
             },
         }
     }

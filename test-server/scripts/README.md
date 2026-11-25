@@ -2,41 +2,25 @@
 
 > **This README is optimized for AI agent consumption.**
 
-This directory contains standalone Node.js integration tests for `memory-journal-mcp` that verify behavior outside of standard MCP tool invocation boundaries (like transport layers, command-line arguments, tool annotations, or background jobs).
+Runtime MCP server and transport integration checks previously in this directory have been migrated into automated Vitest and Playwright suites:
+
+- **Vitest invariants & filter/instruction checks:** [tool-annotations.test.ts](../../tests/handlers/tool-annotations.test.ts), [tool-output-schemas.test.ts](../../tests/handlers/tool-output-schemas.test.ts), [filter-instructions.test.ts](../../tests/server/filter-instructions.test.ts), and [observability-and-resources.test.ts](../../tests/unit/observability-and-resources.test.ts).
+- **Playwright E2E transport & CLI checks:** [boundary.spec.ts](../../tests/e2e/boundary.spec.ts), [stdio-transport.spec.ts](../../tests/e2e/stdio-transport.spec.ts), [tools.spec.ts](../../tests/e2e/tools.spec.ts), [cli-commands.spec.ts](../../tests/e2e/cli-commands.spec.ts), [config-parsing.spec.ts](../../tests/e2e/config-parsing.spec.ts), [subscriptions.spec.ts](../../tests/e2e/subscriptions.spec.ts), [progress-notifications.spec.ts](../../tests/e2e/progress-notifications.spec.ts), [prompts.spec.ts](../../tests/e2e/prompts.spec.ts), [prompts-expanded.spec.ts](../../tests/e2e/prompts-expanded.spec.ts), [payloads-team.spec.ts](../../tests/e2e/payloads-team.spec.ts), and [security.spec.ts](../../tests/e2e/security.spec.ts).
 
 > [!IMPORTANT]
-> The scripts execute `dist/cli.js` directly. Always ensure your code is built (`npm run build`) before executing these scripts.
+> Run `pnpm test` for Vitest invariants and `pnpm run test:e2e` (after `pnpm run build`) for Playwright E2E specs.
+> `test-server-config.json` is data validated automatically by [filter-instructions.test.ts](../../tests/server/filter-instructions.test.ts). Node 26 cannot execute the JSON file.
 
-## Scripts Index
+## Maintenance helpers
 
-| Script                         | Tests                                                                                                                                     | Transport     | Duration |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
-| `verify-schemas.mjs`           | `tools/list` validates that all tools (except `mj_execute_code`) contain a properly serialized `outputSchema` definition                  | stdio         | ~5s      |
-| `test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                              | stdio         | ~10s     |
-| `test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter     | stdio         | ~90s     |
-| `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (108 total)                                                                                  | stdio         | ~5s      |
-| `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 29 prompts (shape + errors)                                                                        | stdio         | ~10s     |
-| `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                                   | HTTP stateful | ~130s    |
-| `test-progress.mjs`            | Two-phase progress notification test: (1) native tool progress via `export_entries`, (2) Code Mode `mj.reportProgress()` sandbox binding. | stdio         | ~8s      |
-| `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests.        | stdio         | ~1s      |
-| `test-50k-boundary.mjs`        | Validates that `create_entry` gracefully handles large string payloads (50,000 characters) via standard Node pipeline.                    | stdio         | ~1s      |
-| `test-team-zod.mjs`            | Validates that the Team Tool group properly intercepts SDK-level Zod validation errors and returns structured JSON-RPC responses.         | stdio         | ~2s      |
-| `test-sdk-boundaries.mjs`      | Validates MCP SDK protocol-layer validation boundaries (strict Zod type rejections instead of silent coercions) and environment dependencies. | stdio         | ~2s      |
-| `test-http.mjs`                | Tests large payloads (50k/100k chars) via HTTP/fetch to ensure they don't break the HTTP transport boundary.                              | HTTP          | ~1s      |
-| `test-long-mcp.mjs`            | Tests large payloads (50k/100k chars) via standard stdio client transport.                                                                | stdio         | ~1s      |
-| `test-subscribe.mjs`           | Validates MCP real-time resource subscriptions, ensuring that mutating tools emit `notifications/resources/updated` via transport.        | stdio         | ~2s      |
-| `test-config-reload.mjs`       | Tests hot-reloading and persistence of server configuration files (`json`/`yaml`) via the `update_configuration` tool.                    | stdio         | ~5s      |
-| `test-dump-config.mjs`         | Tests the `--dump-config` CLI option to ensure sensitive environment variables are properly redacted and config resolution succeeds.      | pipe          | ~1s      |
-| `test-metrics-persistence.mjs` | Integration test for the `MetricsAccumulator`, verifying `--persist-metrics` file persistence and reload logic.                           | internal      | ~1s      |
+These files do not start the MCP server. They check the test-suite map or rewrite prompt files.
 
-## Scheduler Notes
-
-The `test-scheduler.mjs` script requires an active HTTP server with aggressive timing configuration to be running in another terminal.
-
-```powershell
-# Terminal 1: Background server
-node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
-
-# Terminal 2: Test script
-node test-server/scripts/test-scheduler.mjs
-```
+| File | Purpose |
+| ---- | ------- |
+| `test-server-config.json` | Shared config consumed by `MEMORY_JOURNAL_CONFIG` or `--config`. Not a Node program. |
+| `tool-map.json` | Maps each tool name to the test files that cover it. |
+| `prompt-template.md` | Template used when standardizing generated test prompts. |
+| `validate-tools.mjs` | Compares `test-server/tool-reference.md` with `tool-map.json`. Exits 1 when either side has a tool the other lacks. |
+| `check-counts.mjs` | Prints usability files that reference more than five tools. |
+| `check-coverage.mjs` | Compares an SSoT mapping file (`argv[2]` or `SSOT_MAPPING_PATH`) with `tool-map.json`, including usability coverage. Skips `mj_execute_code`. |
+| `standardize-prompts.mjs` | Rewrites test prompt files from `tool-map.json` and `prompt-template.md`. |

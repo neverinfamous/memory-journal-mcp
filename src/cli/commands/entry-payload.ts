@@ -1,102 +1,82 @@
-import { readFileSync } from 'node:fs'
-import type { Command } from 'commander'
-import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { EntryType, ToolHandlerConfig } from '../../types/index.js'
-import { ConfigResolver } from '../../utils/config-resolver.js'
-import { resolveProjectNumberFromPath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
-import { buildServerOptions } from '../server-options-builder.js'
-import { z } from 'zod'
-import * as p from '@clack/prompts'
+import type {
+    EntryType,
+    RelationshipType,
+    SignificanceType,
+    ToolHandlerConfig,
+} from '../../types/index.js'
+import type { CliCommandLike } from '../../utils/config-resolver.js'
+import { resolveProjectContext } from '../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
+import { ValidationError } from '../../types/errors.js'
+import { logger } from '../../utils/logger.js'
 import * as yaml from 'yaml'
-import type { BaseEntryOptionsSchema, createEntryOptionsSchema } from '../schemas.js'
+import type { BaseEntryOptionsSchema } from '../schemas.js'
+import { readBoundedCliInputFile, readPipedStdinWithTimeout } from './cli-input-reader.js'
+import { CliExitError, getCliCommandDb } from './db-core.js'
+import {
+    UNKNOWN_RECORD_SCHEMA,
+    applyCliEntryFlagAliases,
+    parseRelationshipArray,
+    relationshipsFromMetadata,
+    resolveAutoContext,
+    resolveEntryTypeAndTags,
+    resolveExplicitProjectAndWorkspace,
+    resolveScoresAndValidation,
+    type HealedEntryOptions,
+} from './entry-payload-helpers.js'
+
+const MAX_FRONTMATTER_BYTES = 64 * 1024
+const POSITIVE_INT_RE = /^[1-9]\d*$/
 
 export interface EntryPayload {
     entryType: EntryType | undefined
+    significanceType: SignificanceType | undefined
     tags: string[] | undefined
     projectNumber: number | undefined
     workspaceId: string | undefined
+    hasExplicitProject?: boolean
+    hasExplicitWorkspace?: boolean
     trustScore: number | undefined
     impactScore: number | undefined
     validationStatus: 'passed' | 'failed' | 'none' | undefined
     sessionId: string | undefined
     autoContextStr: string | undefined
-    relationships: { target_id: number; relation_type: string }[]
+    relationships: { target_id: number; relation_type: RelationshipType }[]
     relatedIds: number[]
+    anchors?: { anchor_path: string; anchor_type: string }[]
+    autoLink?: boolean | undefined
 }
 
 export async function getDb(
     options: BaseEntryOptionsSchema,
-    command: Command
+    command: CliCommandLike,
+    opts?: { throwOnExit?: boolean }
 ): Promise<{ db: IDatabaseAdapter; config: ToolHandlerConfig }> {
-    let resolver: ConfigResolver
-    const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const configErrors: string[] = []
-
-    try {
-        resolver = new ConfigResolver(command, options, configPath)
-    } catch (err) {
-        configErrors.push(err instanceof Error ? err.message : String(err))
-        resolver = new ConfigResolver(command, {}, undefined)
-    }
-
-    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-
-    if (configErrors.length > 0) {
-        process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exit(1)
-    }
-
-    const useTeamDb = options.team === true
-
-    if (useTeamDb && typeof serverOptions.teamDbPath !== 'string') {
-        process.stderr.write(
-            'Error: Cannot use --team flag because no team database is configured.\n'
-        )
-        process.exit(1)
-    }
-
-    const dbPath = useTeamDb ? String(serverOptions.teamDbPath) : serverOptions.dbPath
-    const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
-    await db.initialize()
+    const { db, serverOptions } = await getCliCommandDb(options, command, opts)
     return { db, config: serverOptions }
 }
 
-export async function parseContent(
-    options: z.infer<typeof createEntryOptionsSchema>
-): Promise<string> {
-    const file = options.file
-    const contentStr = options.content
+export async function parseContent(options: HealedEntryOptions): Promise<string> {
+    const normalizedOptions: HealedEntryOptions = { ...options }
+    applyCliEntryFlagAliases(normalizedOptions)
+    const file = normalizedOptions.file
+    const contentStr = normalizedOptions.content
 
-    if (file) {
-        return readFileSync(file, 'utf-8')
+    if (file !== undefined) {
+        return readBoundedCliInputFile(file, '--file')
     }
     if (contentStr !== undefined) {
         return contentStr
     }
 
     if (!process.stdin.isTTY) {
-        let stdinStr = ''
-
-        const timeout = setTimeout(() => {
-            if (stdinStr.length === 0) {
-                process.stderr.write(
-                    'Error: Timed out waiting for stdin. You must provide --file or --content when running in a non-interactive shell.\n'
-                )
-                process.exit(1)
-            }
-        }, 3000)
-
-        for await (const chunk of process.stdin) {
-            stdinStr += chunk
-        }
-        clearTimeout(timeout)
-
+        const stdinStr = await readPipedStdinWithTimeout()
         if (stdinStr.trim().length > 0) {
             return stdinStr
         }
     } else if (!process.env['CI'] && !process.env['NonInteractive']) {
+        const p = await import('@clack/prompts')
         p.intro('Interactive Entry Creation')
 
         const titlePrompt = await p.text({
@@ -106,7 +86,7 @@ export async function parseContent(
 
         if (p.isCancel(titlePrompt)) {
             p.cancel('Operation cancelled.')
-            process.exit(0)
+            throw new CliExitError(0)
         }
 
         const contentPrompt = await p.text({
@@ -120,7 +100,7 @@ export async function parseContent(
 
         if (p.isCancel(contentPrompt)) {
             p.cancel('Operation cancelled.')
-            process.exit(0)
+            throw new CliExitError(0)
         }
 
         if (titlePrompt) {
@@ -134,41 +114,65 @@ export async function parseContent(
     process.stderr.write(
         'Error: Must provide either --file, --content, pipe data to stdin, or run interactively\n'
     )
-    process.exit(1)
+    throw new CliExitError(1)
+}
+
+function findFrontmatterClose(content: string, openLen: number): { yamlEnd: number; endOffset: number } | null {
+    const emptyCloseEnd = openLen + 3
+    if (content.startsWith('---', openLen)) {
+        const nextChar = content[emptyCloseEnd]
+        const crlfFollow = nextChar === '\r' && content[emptyCloseEnd + 1] === '\n'
+        if (emptyCloseEnd === content.length || nextChar === '\n' || crlfFollow) {
+            const endOffset = emptyCloseEnd === content.length ? emptyCloseEnd : crlfFollow ? emptyCloseEnd + 2 : emptyCloseEnd + 1
+            return { yamlEnd: openLen, endOffset }
+        }
+    }
+    let searchFrom = openLen
+    while (searchFrom < content.length) {
+        const nlIdx = content.indexOf('\n---', searchFrom)
+        if (nlIdx === -1) return null
+        const afterDashes = nlIdx + 4
+        const nextChar = content[afterDashes]
+        const crlfFollow = nextChar === '\r' && content[afterDashes + 1] === '\n'
+        if (afterDashes === content.length || nextChar === '\n' || crlfFollow) {
+            const endOffset = afterDashes === content.length ? afterDashes : crlfFollow ? afterDashes + 2 : afterDashes + 1
+            const yamlEnd = nlIdx > openLen && content[nlIdx - 1] === '\r' ? nlIdx - 1 : nlIdx
+            return { yamlEnd, endOffset }
+        }
+        searchFrom = nlIdx + 4
+    }
+    return null
 }
 
 export function parseFrontmatter(rawContent: string): {
     frontmatter: Record<string, unknown>
     body: string
 } {
-    if (rawContent.startsWith('---\n') || rawContent.startsWith('---\r\n')) {
-        const endOfFrontmatter = rawContent.indexOf('\n---\n', 3)
-        const endOfFrontmatterWindows = rawContent.indexOf('\r\n---\r\n', 4)
-
-        let endIdx = -1
-        let skip = 5
-        if (
-            endOfFrontmatter !== -1 &&
-            (endOfFrontmatterWindows === -1 || endOfFrontmatter < endOfFrontmatterWindows)
-        ) {
-            endIdx = endOfFrontmatter
-            skip = 5
-        } else if (endOfFrontmatterWindows !== -1) {
-            endIdx = endOfFrontmatterWindows
-            skip = 7
-        }
-
-        if (endIdx !== -1) {
-            const yamlStr = rawContent.slice(rawContent.indexOf('\n') + 1, endIdx)
-            const body = rawContent.slice(endIdx + skip).trimStart()
-            try {
-                const parsed: unknown = yaml.parse(yamlStr)
-                const parsedRec = z.record(z.string(), z.unknown()).safeParse(parsed)
-                return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
-            } catch {
-                // Return as-is if parsing fails
-            }
-        }
+    const content = rawContent.startsWith('\uFEFF') ? rawContent.slice(1) : rawContent
+    const openLen = content.startsWith('---\r\n') ? 5 : content.startsWith('---\n') ? 4 : 0
+    if (openLen === 0) {
+        return { frontmatter: {}, body: rawContent }
+    }
+    const closed = findFrontmatterClose(content, openLen)
+    if (closed === null) {
+        return { frontmatter: {}, body: rawContent }
+    }
+    const yamlStr = content.slice(openLen, closed.yamlEnd)
+    if (Buffer.byteLength(yamlStr, 'utf8') > MAX_FRONTMATTER_BYTES) {
+        throw new ValidationError(
+            `Frontmatter exceeds maximum size of ${String(MAX_FRONTMATTER_BYTES)} bytes.`
+        )
+    }
+    const body = content.slice(closed.endOffset).trimStart()
+    try {
+        const parsed: unknown = yaml.parse(yamlStr, { maxAliasCount: 25 })
+        const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(parsed)
+        return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
+    } catch (err) {
+        logger.debug('Frontmatter YAML parse failed; treating as body content', {
+            module: 'CLIEntryPayload',
+            error: err instanceof Error ? err.message : String(err),
+        })
     }
     return { frontmatter: {}, body: rawContent }
 }
@@ -179,237 +183,239 @@ export function parseRelatedTo(relatedToStr: unknown): number[] {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
-        .map(Number)
+        .map((token) => {
+            if (!POSITIVE_INT_RE.test(token)) {
+                throw new ValidationError(
+                    `Invalid --related-to entry ID '${token}'. Expected positive integers separated by commas.`
+                )
+            }
+            const parsed = Number(token)
+            if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== token) {
+                throw new ValidationError(
+                    `Invalid --related-to entry ID '${token}'. Expected a positive integer.`
+                )
+            }
+            return parsed
+        })
 }
 
 export function parseRelationships(
     relationshipsStr: unknown,
     relFileStr: unknown
-): { target_id: number; relation_type: string }[] {
+): { target_id: number; relation_type: RelationshipType }[] {
     let str = relationshipsStr
+    const source = typeof relFileStr === 'string' ? '--rel-file' : '--relationships'
     if (typeof relFileStr === 'string') {
         try {
-            str = readFileSync(relFileStr, 'utf-8')
+            str = readBoundedCliInputFile(relFileStr, '--rel-file')
         } catch (e) {
-            process.stderr.write(
-                `Warning: Failed to read --rel-file: ${e instanceof Error ? e.message : String(e)}\n`
+            throw new Error(
+                `Failed to read --rel-file: ${e instanceof Error ? e.message : String(e)}`,
+                { cause: e }
             )
         }
     }
 
     if (typeof str !== 'string') return []
+    let parsed: unknown
     try {
-        const parsed: unknown = JSON.parse(str)
-        if (Array.isArray(parsed)) {
-            return parsed
-                .map((r: unknown) => {
-                    if (typeof r !== 'object' || r === null) return null
-                    const rec = z.record(z.string(), z.unknown()).parse(r)
-                    return {
-                        target_id: Number(rec['target_id']),
-                        relation_type: String(rec['relation_type']),
-                    }
-                })
-                .filter(
-                    (r): r is { target_id: number; relation_type: string } =>
-                        r !== null && !isNaN(r.target_id) && Boolean(r.relation_type)
-                )
-        }
+        parsed = JSON.parse(str)
     } catch (e) {
-        process.stderr.write(
-            `Warning: Failed to parse relationships JSON: ${e instanceof Error ? e.message : String(e)}\n`
+        throw new Error(
+            `Failed to parse relationships JSON: ${e instanceof Error ? e.message : String(e)}`,
+            { cause: e }
         )
     }
-    return []
+    if (!Array.isArray(parsed)) {
+        throw new Error('Failed to parse relationships JSON: expected a JSON array')
+    }
+    return parseRelationshipArray(parsed, source)
 }
 
 export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
     if (typeof metadataFile !== 'string') return {}
+    let parsed: unknown
     try {
-        const str = readFileSync(metadataFile, 'utf-8')
-        const parsed: unknown = JSON.parse(str)
-        if (typeof parsed === 'object' && parsed !== null) {
-            return z.record(z.string(), z.unknown()).parse(parsed)
-        }
+        const str = readBoundedCliInputFile(metadataFile, '--metadata')
+        parsed = JSON.parse(str)
     } catch (e) {
-        process.stderr.write(
-            `Warning: Failed to parse --metadata JSON: ${e instanceof Error ? e.message : String(e)}\n`
+        throw new Error(
+            `Failed to parse --metadata JSON: ${e instanceof Error ? e.message : String(e)}`,
+            { cause: e }
         )
     }
-    return {}
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return UNKNOWN_RECORD_SCHEMA.parse(parsed)
+    }
+    throw new Error('Failed to parse --metadata JSON: expected a JSON object')
+}
+
+function resolvePayloadScope(
+    explicitWorkspaceId: string | undefined,
+    explicitProjectNum: number | undefined,
+    fallbackWorkspaceId: string | undefined,
+    config?: ToolHandlerConfig
+): { projectNumber: number | undefined; workspaceId: string | undefined } {
+    const resolved = resolveProjectContext(
+        {
+            workspace_id: explicitWorkspaceId ?? fallbackWorkspaceId,
+            project_number: explicitProjectNum,
+            preferCwdOverKeywords: true,
+        },
+        config
+    )
+    const paired = pairStoredScope(
+        resolved.workspaceId,
+        explicitProjectNum ?? resolved.projectNumber,
+        activeProjectRegistry(config?.projectRegistry)
+    )
+    return {
+        projectNumber: paired.projectNumber ?? explicitProjectNum,
+        workspaceId: paired.workspaceId ?? resolved.workspaceId,
+    }
+}
+
+function parseMetadataRelatedTo(raw: unknown): number[] {
+    if (!Array.isArray(raw)) {
+        throw new ValidationError(
+            'Invalid metadata related_to: expected an array of positive integers.'
+        )
+    }
+    return raw.map((item) => {
+        if (typeof item === 'number') {
+            if (Number.isSafeInteger(item) && item > 0) {
+                return item
+            }
+            throw new ValidationError(
+                `Invalid metadata related_to entry '${String(item)}': expected a positive integer.`
+            )
+        }
+        if (typeof item === 'string' && POSITIVE_INT_RE.test(item)) {
+            const parsed = Number(item)
+            if (Number.isSafeInteger(parsed) && parsed > 0) {
+                return parsed
+            }
+        }
+        throw new ValidationError(
+            `Invalid metadata related_to entry '${String(item)}': expected a positive integer.`
+        )
+    })
+}
+
+function resolvePayloadRelationships(
+    options: HealedEntryOptions,
+    metadata: Record<string, unknown>
+): {
+    relationships: { target_id: number; relation_type: RelationshipType }[]
+    relatedIds: number[]
+    anchors?: { anchor_path: string; anchor_type: string }[]
+} {
+    const rawMetaRels = metadata['relationships']
+    if (rawMetaRels !== undefined && rawMetaRels !== null && !Array.isArray(rawMetaRels)) {
+        throw new ValidationError('Invalid metadata.relationships: expected an array.')
+    }
+    const hasCliRels = options.relationships !== undefined || options.relFile !== undefined
+    const relationships = hasCliRels
+        ? parseRelationships(options.relationships, options.relFile)
+        : Array.isArray(rawMetaRels)
+          ? relationshipsFromMetadata(rawMetaRels)
+          : []
+
+    let relatedIds = parseRelatedTo(options.relatedTo)
+    if (metadata['related_to'] !== undefined && metadata['related_to'] !== null) {
+        const metaRelatedIds = parseMetadataRelatedTo(metadata['related_to'])
+        if (relatedIds.length === 0) {
+            relatedIds = metaRelatedIds
+        }
+    }
+    return { relationships, relatedIds }
+}
+
+const ANCHOR_PATH_KEYS = [
+    'anchor_path', 'anchorPath', 'path', 'file', 'file_path', 'filepath',
+    'filePath', 'value', 'target', 'uri', 'location',
+] as const
+
+function normalizeEntryAnchor(rawPath: string, rawType?: unknown): { anchor_path: string; anchor_type: string } {
+    const normalizedPath = rawPath.trim().replace(/\\/g, '/')
+    const customType = typeof rawType === 'string' && rawType.trim().length > 0 ? rawType.trim() : undefined
+    return { anchor_path: normalizedPath, anchor_type: customType ?? (normalizedPath.includes('#') ? 'symbol' : 'file') }
+}
+
+function parseMetadataAnchors(
+    raw: unknown
+): { anchor_path: string; anchor_type: string }[] | undefined {
+    if (!Array.isArray(raw) || raw.length === 0) return undefined
+    const parsed: { anchor_path: string; anchor_type: string }[] = []
+    for (const item of raw) {
+        if (typeof item === 'string') {
+            if (item.trim().length > 0) parsed.push(normalizeEntryAnchor(item))
+        } else if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+            const parsedRec = UNKNOWN_RECORD_SCHEMA.safeParse(item)
+            if (!parsedRec.success) continue
+            const rec = parsedRec.data
+            let pathRaw: string | undefined
+            for (const k of ANCHOR_PATH_KEYS) {
+                const v = rec[k]
+                if (typeof v === 'string' && v.trim().length > 0) {
+                    pathRaw = v
+                    break
+                }
+            }
+            const typeRaw = rec['anchor_type'] ?? rec['anchorType'] ?? rec['type']
+            if (pathRaw !== undefined) parsed.push(normalizeEntryAnchor(pathRaw, typeRaw))
+        }
+    }
+    return parsed.length > 0 ? parsed : undefined
 }
 
 export function buildEntryPayload(
-    options: z.infer<typeof createEntryOptionsSchema>,
+    options: HealedEntryOptions,
     metadata: Record<string, unknown>,
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig,
+    _content?: string,
+    fallbackWorkspaceId?: string
 ): EntryPayload {
-    const entryTypeStr =
-        options.type ??
-        options.category ??
-        metadata['type'] ??
-        metadata['entry_type'] ??
-        metadata['entryType']
-    const entryType = entryTypeStr as EntryType | undefined
+    const normalizedOptions: HealedEntryOptions = { ...options }
+    applyCliEntryFlagAliases(normalizedOptions)
+    const { entryType, tags } = resolveEntryTypeAndTags(normalizedOptions, metadata)
+    const { explicitProjectNum, explicitWorkspaceId } = resolveExplicitProjectAndWorkspace(
+        normalizedOptions,
+        metadata
+    )
 
-    const tagsStr = options.tags
-    let tags: string[] | undefined
-    if (tagsStr !== undefined) {
-        tags = tagsStr
-            .split(/[,\s]+/)
-            .map((t) => t.trim())
-            .filter(Boolean)
-    } else if (metadata['tags'] !== undefined && metadata['tags'] !== null) {
-        tags = Array.isArray(metadata['tags']) ? metadata['tags'].map(String) : undefined
-    }
-
-    const projectRaw =
-        options.project ??
-        options.projectNumber ??
-        options.project_number ??
-        metadata['project'] ??
-        metadata['projectNumber'] ??
-        metadata['project_number']
-    let projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
-    if (projectNumber === undefined || isNaN(projectNumber)) {
-        projectNumber = resolveProjectNumberFromPath(process.cwd())
-    }
-
-    const optsRec = z.record(z.string(), z.unknown()).parse(options)
-    const explicitWorkspaceId =
-        optsRec['workspaceId'] ??
-        optsRec['workspace_id'] ??
-        metadata['workspaceId'] ??
-        metadata['workspace_id']
-    const workspaceId = resolveWorkspaceId(
-        explicitWorkspaceId as string | undefined,
-        projectNumber,
+    const { projectNumber, workspaceId } = resolvePayloadScope(
+        explicitWorkspaceId,
+        explicitProjectNum,
+        fallbackWorkspaceId,
         config
     )
 
-    const trustRaw =
-        options.trustScore ??
-        options.trust_score ??
-        options.confidence ??
-        metadata['trust'] ??
-        metadata['trustScore'] ??
-        metadata['trust_score'] ??
-        metadata['confidence']
-    const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
+    const { trustScore, impactScore, validationStatus, sessionId, significanceType } =
+        resolveScoresAndValidation(normalizedOptions, metadata)
+    const autoContextStr = resolveAutoContext(
+        normalizedOptions.autoContext,
+        normalizedOptions.autoContextFile,
+        metadata
+    )
+    const { relationships, relatedIds } = resolvePayloadRelationships(normalizedOptions, metadata)
+    const anchors = parseMetadataAnchors(metadata['anchors'])
 
-    const impactRaw =
-        options.impactScore ??
-        options.impact_score ??
-        metadata['impact'] ??
-        metadata['impactScore'] ??
-        metadata['impact_score']
-    const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
-
-    const valStatusRaw =
-        options.validationStatus ??
-        options.validation_status ??
-        options.validation ??
-        metadata['validation_status'] ??
-        metadata['validationStatus'] ??
-        metadata['validation']
-    let validationStatus: 'passed' | 'failed' | 'none' | undefined = undefined
-    if (valStatusRaw !== undefined && valStatusRaw !== null) {
-        if (typeof valStatusRaw === 'boolean') {
-            validationStatus = valStatusRaw ? 'passed' : 'failed'
-        } else if (typeof valStatusRaw === 'string') {
-            const lower = valStatusRaw.trim().toLowerCase()
-            if (
-                [
-                    'passed',
-                    'pass',
-                    'success',
-                    'ok',
-                    'validated',
-                    'valid',
-                    'verified',
-                    'true',
-                    '1',
-                ].includes(lower)
-            ) {
-                validationStatus = 'passed'
-            } else if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) {
-                validationStatus = 'failed'
-            } else {
-                validationStatus = 'none'
-            }
-        } else if (typeof valStatusRaw === 'number') {
-            validationStatus = valStatusRaw === 1 ? 'passed' : valStatusRaw === 0 ? 'failed' : 'none'
-        }
-    }
-
-    const sessionIdRaw =
-        options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
-    const sessionId = sessionIdRaw as string | undefined
-
-    let autoContextStr = options.autoContext
-    const autoContextFile = options.autoContextFile
-    if (autoContextFile) {
-        try {
-            autoContextStr = readFileSync(autoContextFile, 'utf-8')
-        } catch (e) {
-            process.stderr.write(
-                `Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`
-            )
-        }
-    } else if (
-        autoContextStr === undefined &&
-        metadata['auto_context'] !== undefined &&
-        metadata['auto_context'] !== null
-    ) {
-        autoContextStr =
-            typeof metadata['auto_context'] === 'string'
-                ? metadata['auto_context']
-                : JSON.stringify(metadata['auto_context'])
-    } else if (
-        autoContextStr === undefined &&
-        metadata['autoContext'] !== undefined &&
-        metadata['autoContext'] !== null
-    ) {
-        autoContextStr =
-            typeof metadata['autoContext'] === 'string'
-                ? metadata['autoContext']
-                : JSON.stringify(metadata['autoContext'])
-    }
-
-    let relationships: { target_id: number; relation_type: string }[]
-    if (
-        metadata['relationships'] !== undefined &&
-        metadata['relationships'] !== null &&
-        Array.isArray(metadata['relationships'])
-    ) {
-        relationships = metadata['relationships']
-            .map((r: unknown) => {
-                const rec = r != null ? z.record(z.string(), z.unknown()).parse(r) : null
-                return {
-                    target_id: Number(rec?.['target_id']),
-                    relation_type: String(rec?.['relation_type']),
-                }
-            })
-            .filter(
-                (r) =>
-                    !isNaN(r.target_id) &&
-                    Boolean(r.relation_type) &&
-                    r.relation_type !== 'undefined'
-            )
-    } else {
-        relationships = parseRelationships(options.relationships, options.relFile)
-    }
-
-    let relatedIds = parseRelatedTo(options.relatedTo)
-    if (relatedIds.length === 0 && Array.isArray(metadata['related_to'])) {
-        relatedIds = metadata['related_to'].map(Number).filter((n) => !isNaN(n))
-    }
+    const autoLink =
+        normalizedOptions.autoLink ??
+        (metadata['auto_link'] === true || metadata['autoLink'] === true ? true : undefined)
 
     return {
         entryType,
+        significanceType,
         tags,
         projectNumber,
         workspaceId,
+        hasExplicitProject: explicitProjectNum !== undefined,
+        hasExplicitWorkspace:
+            typeof explicitWorkspaceId === 'string' &&
+            explicitWorkspaceId.trim().length > 0 &&
+            explicitWorkspaceId.trim() !== '*',
         trustScore,
         impactScore,
         validationStatus,
@@ -417,5 +423,7 @@ export function buildEntryPayload(
         autoContextStr,
         relationships,
         relatedIds,
+        ...(anchors !== undefined ? { anchors } : {}),
+        ...(autoLink !== undefined ? { autoLink } : {}),
     }
 }

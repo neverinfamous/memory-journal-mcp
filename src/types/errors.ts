@@ -16,6 +16,9 @@ interface ErrorOptions {
     /** Actionable suggestion for resolving the error */
     suggestion?: string | undefined
 
+    /** Whether `suggestion` was explicitly provided by caller rather than subclass default */
+    hasExplicitSuggestion?: boolean | undefined
+
     /** Whether the operation can be retried */
     recoverable?: boolean | undefined
 
@@ -49,6 +52,9 @@ export class MemoryJournalMcpError extends Error {
     /** Actionable suggestion for resolving the error */
     readonly suggestion?: string | undefined
 
+    /** Whether `suggestion` came from an explicit caller override rather than a subclass fallback */
+    readonly hasExplicitSuggestion: boolean
+
     /** Whether the operation can be retried */
     readonly recoverable: boolean
 
@@ -61,6 +67,8 @@ export class MemoryJournalMcpError extends Error {
         this.category = category
         this.recoverable = options?.recoverable ?? false
         this.details = options?.details
+        this.hasExplicitSuggestion =
+            options?.hasExplicitSuggestion ?? (options?.suggestion !== undefined)
 
         // Auto-refinement: refine generic codes to specific ones via pattern matching
         const matched = matchSuggestion(message)
@@ -70,8 +78,10 @@ export class MemoryJournalMcpError extends Error {
             this.code = code
         }
 
-        // Apply suggestion: explicit > matched > none
-        this.suggestion = options?.suggestion ?? matched?.suggestion
+        // Apply suggestion: explicit caller suggestion > pattern-matched > subclass default > none
+        this.suggestion = this.hasExplicitSuggestion
+            ? options?.suggestion
+            : (matched?.suggestion ?? options?.suggestion)
     }
 
     /**
@@ -101,6 +111,7 @@ export class ConnectionError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
         super(message, 'CONNECTION_FAILED', 'connection', {
             suggestion: 'Check database path and file permissions',
+            hasExplicitSuggestion: false,
             recoverable: true,
             details,
         })
@@ -115,6 +126,7 @@ export class QueryError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
         super(message, 'QUERY_FAILED', 'query', {
             suggestion: 'Check query parameters and database state',
+            hasExplicitSuggestion: false,
             recoverable: false,
             details,
         })
@@ -131,8 +143,13 @@ export class QueryError extends MemoryJournalMcpError {
  */
 export class ValidationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
+        const explicitSuggestion =
+            typeof details?.['suggestion'] === 'string' && details['suggestion'].trim() !== ''
+                ? details['suggestion']
+                : undefined
         super(message, 'VALIDATION_ERROR', 'validation', {
-            suggestion: 'Check input parameters against the tool schema',
+            suggestion: explicitSuggestion ?? 'Check input parameters against the tool schema',
+            hasExplicitSuggestion: explicitSuggestion !== undefined,
             recoverable: false,
             details,
         })
@@ -153,6 +170,7 @@ export class ConflictError extends MemoryJournalMcpError {
     constructor(message: string, currentState: Record<string, unknown>) {
         super(message, 'VERSION_CONFLICT', 'conflict', {
             suggestion: 'Re-read the entry to get the current version, then retry your update with the new expected_version',
+            hasExplicitSuggestion: false,
             recoverable: true,
             details: currentState,
         })
@@ -176,6 +194,7 @@ export class ResourceNotFoundError extends MemoryJournalMcpError {
             'resource',
             {
                 suggestion: `Verify the ${resourceType.toLowerCase()} identifier and try again`,
+                hasExplicitSuggestion: false,
                 recoverable: false,
                 details: { resourceType, identifier },
             }
@@ -195,6 +214,7 @@ export class ConfigurationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
         super(message, 'CONFIGURATION_ERROR', 'configuration', {
             suggestion: 'Check server configuration and environment variables',
+            hasExplicitSuggestion: false,
             recoverable: false,
             details,
         })
@@ -213,6 +233,7 @@ export class PermissionError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
         super(message, 'PERMISSION_DENIED', 'permission', {
             suggestion: 'Check file permissions and database access rights',
+            hasExplicitSuggestion: false,
             recoverable: false,
             details,
         })
@@ -227,6 +248,7 @@ export class AuthorizationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
         super(message, 'AUTHORIZATION_FAILED', 'authorization', {
             suggestion: 'Check your team role and permissions',
+            hasExplicitSuggestion: false,
             recoverable: false,
             details,
         })

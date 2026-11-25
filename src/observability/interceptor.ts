@@ -18,6 +18,9 @@ import { estimatePayloadTokens } from './token-estimator.js'
 import type { MetricsAccumulator } from './metrics.js'
 import { logger } from '../utils/logger.js'
 import { logAgentIssue } from '../utils/issue-logger.js'
+import { getAuthContext } from '../auth/auth-context.js'
+import { isSilentTeamProbeActive } from '../codemode/rpc-context.js'
+import { isRecord } from '../utils/type-guards.js'
 
 // ============================================================================
 // Types
@@ -35,9 +38,90 @@ export type ToolHandlerFn = (args: Record<string, unknown>) => Promise<unknown>
  * Matches the {success: false, error: string} shape used by formatHandlerError().
  */
 function isErrorResult(result: unknown): boolean {
-    if (typeof result !== 'object' || result === null) return false
-    const obj = result as Record<string, unknown>
-    return obj['success'] === false && typeof obj['error'] === 'string'
+    if (!isRecord(result)) return false
+    return result['success'] === false && typeof result['error'] === 'string'
+}
+
+function recordMetricsUser(accumulator: MetricsAccumulator): void {
+    try {
+        const sub = getAuthContext()?.claims?.sub
+        if (sub !== undefined && sub !== '') accumulator.recordUser(sub)
+    } catch (err) {
+        logger.debug('Failed to record metrics user', {
+            module: 'Metrics',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
+}
+
+function recordInvocationMetrics(
+    accumulator: MetricsAccumulator,
+    toolName: string,
+    durationMs: number,
+    args: Record<string, unknown>,
+    outputTokens: number,
+    isError: boolean,
+    errorContext: 'error' | 'result'
+): void {
+    try {
+        accumulator.record({
+            toolName,
+            durationMs,
+            inputTokens: estimatePayloadTokens(args),
+            outputTokens,
+            isError,
+        })
+    } catch (err) {
+        const msg =
+            errorContext === 'error'
+                ? 'Accumulator failed to record metrics error'
+                : 'Accumulator failed to record metrics:'
+        logger.error(msg, {
+            module: 'Metrics',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
+}
+
+const NOT_FOUND_THROTTLE_WINDOW_MS = 60_000
+const NOT_FOUND_MAX_WRITES_PER_WINDOW = 3
+const NOT_FOUND_THROTTLED_TOOLS = new Set(['get_entry_by_id', 'team_get_entry_by_id'])
+const notFoundIssueTimestamps = new Map<string, number[]>()
+
+function isResourceNotFoundErrorResult(result: unknown): boolean {
+    return isRecord(result) && result['code'] === 'RESOURCE_NOT_FOUND'
+}
+
+function shouldThrottleNotFoundIssue(toolName: string, result: unknown): boolean {
+    if (!NOT_FOUND_THROTTLED_TOOLS.has(toolName) || !isResourceNotFoundErrorResult(result)) {
+        return false
+    }
+    const now = Date.now()
+    const cutoff = now - NOT_FOUND_THROTTLE_WINDOW_MS
+    const recent = (notFoundIssueTimestamps.get(toolName) ?? []).filter((ts) => ts >= cutoff)
+    if (recent.length >= NOT_FOUND_MAX_WRITES_PER_WINDOW) {
+        notFoundIssueTimestamps.set(toolName, recent)
+        return true
+    }
+    recent.push(now)
+    notFoundIssueTimestamps.set(toolName, recent)
+    return false
+}
+
+function reportToolErrorIssue(
+    toolName: string,
+    args: Record<string, unknown>,
+    result: unknown
+): void {
+    if (shouldThrottleNotFoundIssue(toolName, result)) return
+    const errField = isRecord(result) ? result['error'] : undefined
+    const errorMessage = typeof errField === 'string' ? errField : JSON.stringify(errField)
+    logAgentIssue({
+        source: 'MCP',
+        action: toolName,
+        input: args,
+        error: errorMessage,
+    })
 }
 
 // ============================================================================
@@ -59,67 +143,43 @@ export function wrapWithMetrics(
 ): ToolHandlerFn {
     return async (args: Record<string, unknown>): Promise<unknown> => {
         const start = performance.now()
+        recordMetricsUser(accumulator)
+
         let result: unknown
         let isError: boolean
-
         try {
             result = await handler(args)
             isError = isErrorResult(result)
         } catch (err) {
-            // Re-throw so the caller still receives the original exception.
-            // Record the error metric before re-throwing.
             const durationMs = Math.round(performance.now() - start)
-            try {
-                accumulator.record({
-                    toolName,
-                    durationMs,
-                    inputTokens: estimatePayloadTokens(args),
-                    outputTokens: 0,
-                    isError: true,
-                })
-            } catch (err) {
-                logger.error(`Accumulator failed to record metrics error`, {
-                    module: 'Metrics',
+            recordInvocationMetrics(accumulator, toolName, durationMs, args, 0, true, 'error')
+            logAgentIssue(
+                {
+                    source: 'MCP',
+                    action: toolName,
+                    input: args,
                     error: err instanceof Error ? err.message : String(err),
-                })
-            }
-            
-            logAgentIssue({
-                source: 'MCP',
-                action: toolName,
-                input: args,
-                error: err instanceof Error ? err.message : String(err)
-            })
-            
+                },
+                err
+            )
             throw err
         }
 
         const durationMs = Math.round(performance.now() - start)
-
-        try {
-            accumulator.record({
-                toolName,
-                durationMs,
-                inputTokens: estimatePayloadTokens(args),
-                outputTokens: estimatePayloadTokens(result),
-                isError,
-            })
-        } catch (err) {
-            logger.error(`Accumulator failed to record metrics:`, {
-                module: 'Metrics',
-                error: err instanceof Error ? err.message : String(err),
-            })
+        const suppressSilentProbe =
+            isError && isSilentTeamProbeActive() && isResourceNotFoundErrorResult(result)
+        recordInvocationMetrics(
+            accumulator,
+            toolName,
+            durationMs,
+            args,
+            estimatePayloadTokens(result),
+            suppressSilentProbe ? false : isError,
+            'result'
+        )
+        if (isError && !suppressSilentProbe) {
+            reportToolErrorIssue(toolName, args, result)
         }
-
-        if (isError) {
-            logAgentIssue({
-                source: 'MCP',
-                action: toolName,
-                input: args,
-                error: (result as Record<string, unknown>)['error'] as string
-            })
-        }
-
         return result
     }
 }

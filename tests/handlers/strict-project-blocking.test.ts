@@ -93,6 +93,7 @@ describe('Strict Project Blocking in Entry Creation', () => {
     })
 
     it('blocks team_create_entry when project_number cannot be resolved', async () => {
+        process.env['TEAM_AUTHOR'] = 'test-author'
         const res = await callTool('team_create_entry', {
             content: 'Team note without project context',
             entry_type: 'technical_note',

@@ -1,10 +1,84 @@
-import type { JournalEntry, EntryType } from '../../../../types/index.js'
+import type { JournalEntry } from '../../../../types/index.js'
 import {
     ENTRY_COLUMNS,
     type EntriesSharedContext,
     rowsToEntries,
 } from '../shared.js'
-import { sanitizeFtsQuery } from './fts-sanitizer.js'
+import { effectiveWorkspace } from '../../../workspace-scope.js'
+
+export { getSearchFacets, type SearchFacetOptions } from './facets.js'
+
+export function getEntriesAfter(
+    context: EntriesSharedContext,
+    limit: number,
+    order: 'asc' | 'desc' = 'desc',
+    workspaceId = 'default',
+    projectNumber?: number,
+    cursor?: { timestamp: string; id: number }
+): JournalEntry[] {
+    const { db, tagsMgr } = context
+    const scopeId = effectiveWorkspace(workspaceId)
+    const sortDir = order === 'asc' ? 'ASC' : 'DESC'
+    const cmpOp = order === 'asc' ? '>' : '<'
+    const scoped = scopeId !== '*'
+    const pnScoped = projectNumber !== undefined
+    const cursorSql =
+        cursor !== undefined
+            ? ` AND (timestamp ${cmpOp} ? OR (timestamp = ? AND id ${cmpOp} ?))`
+            : ''
+
+    const stmt = db.prepare(`
+        SELECT ${ENTRY_COLUMNS} FROM memory_journal
+        WHERE deleted_at IS NULL${scoped ? ' AND workspace_id = ?' : ''}${pnScoped ? ' AND project_number = ?' : ''}${cursorSql}
+        ORDER BY timestamp ${sortDir}, id ${sortDir}
+        LIMIT ?
+    `)
+    const params: unknown[] = []
+    if (scoped) params.push(scopeId)
+    if (pnScoped) params.push(projectNumber)
+    if (cursor !== undefined) params.push(cursor.timestamp, cursor.timestamp, cursor.id)
+    params.push(limit)
+    return rowsToEntries(tagsMgr, stmt.all(params))
+}
+
+export function getLatestEntryPerProject(
+    context: EntriesSharedContext
+): Map<string, { id: number; timestamp: string; entryType: string }> {
+    const rows = context.db
+        .prepare<
+            unknown[],
+            {
+                workspace_id: string | null
+                project_number: number
+                id: number
+                timestamp: string
+                entry_type: string
+            }
+        >(
+            `SELECT workspace_id, project_number, id, timestamp, entry_type
+             FROM (
+                 SELECT workspace_id, project_number, id, timestamp, entry_type,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY workspace_id, project_number
+                            ORDER BY timestamp DESC, id DESC
+                        ) AS rn
+                 FROM memory_journal
+                 WHERE deleted_at IS NULL AND project_number IS NOT NULL
+             )
+             WHERE rn = 1`
+        )
+        .all()
+    const map = new Map<string, { id: number; timestamp: string; entryType: string }>()
+    for (const r of rows) {
+        const ws = r.workspace_id ?? 'default'
+        map.set(`${ws}:${String(r.project_number)}`, {
+            id: r.id,
+            timestamp: r.timestamp,
+            entryType: r.entry_type,
+        })
+    }
+    return map
+}
 
 export function getEntriesByProject(
     context: EntriesSharedContext,
@@ -15,9 +89,10 @@ export function getEntriesByProject(
     const { db, tagsMgr } = context
     const params: unknown[] = [projectNumber]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -37,9 +112,10 @@ export function getEntriesByIssue(
     const { db, tagsMgr } = context
     const params: unknown[] = [issueNumber]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -59,9 +135,10 @@ export function getEntriesByPR(
     const { db, tagsMgr } = context
     const params: unknown[] = [prNumber]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -81,9 +158,10 @@ export function getEntriesByWorkflowRun(
     const { db, tagsMgr } = context
     const params: unknown[] = [workflowRunId]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -103,9 +181,10 @@ export function getEntriesBySession(
     const { db, tagsMgr } = context
     const params: unknown[] = [sessionId]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -114,137 +193,4 @@ export function getEntriesBySession(
         )
         .all(...params)
     return rowsToEntries(tagsMgr, rows)
-}
-
-export function getSearchFacets(
-    context: EntriesSharedContext,
-    queryStr: string,
-    options?: {
-        isPersonal?: boolean
-        projectNumber?: number
-        issueNumber?: number
-        prNumber?: number
-        prStatus?: string
-        workflowRunId?: number
-        tags?: string[]
-        entryType?: EntryType
-        startDate?: string
-        endDate?: string
-        includeArchived?: boolean
-        workspaceId?: string
-    }
-): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
-    const { db } = context
-
-    const params: unknown[] = []
-    const conditions: string[] = ['e.deleted_at IS NULL']
-
-    const targetWs = options?.workspaceId ?? 'default'
-    if (targetWs !== '*') {
-        conditions.push('e.workspace_id = ?')
-        params.push(targetWs)
-    }
-
-    if (options?.includeArchived !== true) {
-        conditions.push('e.is_archived = 0')
-    }
-
-    const useFts = queryStr.length > 0
-
-    if (useFts) {
-        conditions.push(`fts_content MATCH ?`)
-        params.push(sanitizeFtsQuery(queryStr))
-    }
-
-    if (options?.isPersonal !== undefined) {
-        conditions.push(`e.is_personal = ?`)
-        params.push(options.isPersonal ? 1 : 0)
-    }
-
-    if (options?.projectNumber !== undefined) {
-        conditions.push(`e.project_number = ?`)
-        params.push(options.projectNumber)
-    }
-
-    if (options?.issueNumber !== undefined) {
-        conditions.push(`e.issue_number = ?`)
-        params.push(options.issueNumber)
-    }
-
-    if (options?.prNumber !== undefined) {
-        conditions.push(`e.pr_number = ?`)
-        params.push(options.prNumber)
-    }
-
-    if (options?.prStatus !== undefined) {
-        conditions.push(`e.pr_status = ?`)
-        params.push(options.prStatus)
-    }
-
-    if (options?.workflowRunId !== undefined) {
-        conditions.push(`e.workflow_run_id = ?`)
-        params.push(options.workflowRunId)
-    }
-
-    if (options?.tags !== undefined && options.tags.length > 0) {
-        const placeholders = options.tags.map(() => '?').join(',')
-        conditions.push(`t.name IN (${placeholders})`)
-        params.push(...options.tags)
-    }
-
-    if (options?.entryType !== undefined) {
-        conditions.push(`e.entry_type = ?`)
-        params.push(options.entryType)
-    }
-
-    if (options?.startDate !== undefined && options.startDate.length > 0) {
-        let start = options.startDate
-        if (!start.includes('T')) start += 'T00:00:00.000Z'
-        conditions.push(`e.timestamp >= ?`)
-        params.push(start)
-    }
-
-    if (options?.endDate !== undefined && options.endDate.length > 0) {
-        let end = options.endDate
-        if (!end.includes('T')) end += 'T23:59:59.999Z'
-        conditions.push(`e.timestamp <= ?`)
-        params.push(end)
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-    const fromClause = useFts
-        ? `FROM fts_content fts CROSS JOIN memory_journal e ON e.id = fts.rowid`
-        : `FROM memory_journal e`
-
-    const tagsSql = `
-        SELECT t.name, COUNT(DISTINCT e.id) AS cnt
-        ${fromClause}
-        JOIN entry_tags et ON e.id = et.entry_id
-        JOIN tags t ON et.tag_id = t.id
-        ${whereClause}
-        GROUP BY t.name ORDER BY cnt DESC LIMIT 20
-    `
-
-    const entryTypesJoinTags =
-        options?.tags !== undefined && options.tags.length > 0
-            ? `JOIN entry_tags et ON e.id = et.entry_id JOIN tags t ON et.tag_id = t.id`
-            : ''
-    const entryTypesSql = `
-        SELECT e.entry_type AS name, COUNT(DISTINCT e.id) AS cnt
-        ${fromClause}
-        ${entryTypesJoinTags}
-        ${whereClause}
-        GROUP BY e.entry_type ORDER BY cnt DESC
-    `
-
-    const tagsStmt = db.prepare(tagsSql)
-    const entryTypesStmt = db.prepare(entryTypesSql)
-
-    const tagsRows = tagsStmt.all(params) as { name: string; cnt: number }[]
-    const entryTypesRows = entryTypesStmt.all(params) as { name: string; cnt: number }[]
-
-    return {
-        tags: tagsRows.map((r) => ({ name: r.name, count: r.cnt })),
-        entryTypes: entryTypesRows.map((r) => ({ name: r.name, count: r.cnt })),
-    }
 }

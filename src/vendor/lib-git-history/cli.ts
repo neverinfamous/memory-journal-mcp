@@ -1,12 +1,7 @@
 // @ts-nocheck
 import { parseArgs } from 'node:util';
-
-const pc = {
-  bold: (str: string) => `\x1b[1m${str}\x1b[22m`,
-  red: (str: string) => `\x1b[31m${str}\x1b[39m`,
-};
-
-import { cliArgsSchema, type CliArgs } from './schema.js';
+import type { CliArgs } from './schema.js';
+import { hasControlChar } from './security-utils.js';
 
 export type { CliArgs };
 
@@ -55,19 +50,135 @@ export const CLI_OPTIONS = {
     cwd: { type: 'string' },
   } as const;
 
+const STRING_CLI_OPTIONS = new Set<string>(
+  Object.entries(CLI_OPTIONS)
+    .filter(([, def]) => def.type === 'string')
+    .map(([key]) => key),
+);
+const NUMERIC_ARG_REGEX = /^-?\d+(?:\.\d+)?$/;
+
+const NON_NEGATIVE_INT_ARG_REGEX = /^\d+$/;
+
+const pc = {
+  bold: (str: string) => `\x1b[1m${str}\x1b[22m`,
+  red: (str: string) => `\x1b[31m${str}\x1b[39m`,
+};
+
+function parseNonNegIntArg(raw: string | undefined, flagName: string): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (!NON_NEGATIVE_INT_ARG_REGEX.test(trimmed)) {
+    throw new Error(`Invalid integer value for --${flagName}: "${raw}"`);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`Integer value out of safe range for --${flagName}: "${raw}"`);
+  }
+  return parsed;
+}
+
+function parseSafeStringArg(raw: string | undefined, flagName: string): string | undefined {
+  if (raw === undefined) return undefined;
+  if (raw.length > 4096 || hasControlChar(raw)) throw new Error(`Invalid or unsafe value for --${flagName}`);
+  return raw;
+}
+
+function parseNonBlankArg(raw: string | undefined, flagName = 'option'): string | undefined {
+  const safe = parseSafeStringArg(raw, flagName);
+  if (safe !== undefined && safe.trim().length === 0) throw new Error('Flag value must not be blank');
+  return safe;
+}
+
+type ParsedCliValues = ReturnType<typeof parseArgs<{ options: typeof CLI_OPTIONS; strict: true }>>['values'];
+
+function assignValidatedStrings(values: ParsedCliValues, out: CliArgs): void {
+  const pathVal = parseNonBlankArg(values.path, 'path');
+  const rangeVal = parseNonBlankArg(values.range, 'range');
+  const formatVal = parseNonBlankArg(values.format, 'format');
+  const mailmapVal = parseNonBlankArg(values.mailmap, 'mailmap');
+  const slackMapVal = parseNonBlankArg(values['slack-map'], 'slack-map');
+  const streamFileVal = parseNonBlankArg(values['stream-to-file'], 'stream-to-file');
+  const cwdVal = parseNonBlankArg(values.cwd, 'cwd');
+  if (pathVal !== undefined) out.path = pathVal;
+  if (rangeVal !== undefined) out.range = rangeVal;
+  if (formatVal !== undefined) out.format = formatVal;
+  if (mailmapVal !== undefined) out.mailmap = mailmapVal;
+  if (slackMapVal !== undefined) out['slack-map'] = slackMapVal;
+  if (streamFileVal !== undefined) out['stream-to-file'] = streamFileVal;
+  if (cwdVal !== undefined) out.cwd = cwdVal;
+  const authorVal = parseSafeStringArg(values.author, 'author');
+  const searchVal = parseSafeStringArg(values.search, 'search');
+  const grepVal = parseSafeStringArg(values.grep, 'grep');
+  const sinceVal = parseSafeStringArg(values.since, 'since');
+  const untilVal = parseSafeStringArg(values.until, 'until');
+  const catVal = parseSafeStringArg(values.category, 'category');
+  const typeVal = parseSafeStringArg(values.type, 'type');
+  const impactVal = parseSafeStringArg(values.impact, 'impact');
+  const confVal = parseSafeStringArg(values.confidence, 'confidence');
+  const patchSearchVal = parseSafeStringArg(values['patch-search'], 'patch-search');
+  const pickaxeVal = parseSafeStringArg(values.pickaxe, 'pickaxe');
+  const diffFilterVal = parseSafeStringArg(values['diff-filter'], 'diff-filter');
+  const trackerVal = parseSafeStringArg(values['issue-tracker'], 'issue-tracker');
+  const patternVal = parseSafeStringArg(values['issue-pattern'], 'issue-pattern');
+  if (authorVal !== undefined) out.author = authorVal;
+  if (searchVal !== undefined) out.search = searchVal;
+  if (grepVal !== undefined) out.grep = grepVal;
+  if (sinceVal !== undefined) out.since = sinceVal;
+  if (untilVal !== undefined) out.until = untilVal;
+  if (catVal !== undefined) out.category = catVal;
+  if (typeVal !== undefined) out.type = typeVal;
+  if (impactVal !== undefined) out.impact = impactVal;
+  if (confVal !== undefined) out.confidence = confVal;
+  if (patchSearchVal !== undefined) out['patch-search'] = patchSearchVal;
+  if (pickaxeVal !== undefined) out.pickaxe = pickaxeVal;
+  if (diffFilterVal !== undefined) out['diff-filter'] = diffFilterVal;
+  if (trackerVal !== undefined) out['issue-tracker'] = trackerVal;
+  if (patternVal !== undefined) out['issue-pattern'] = patternVal;
+}
+
+function validateCliValues(values: ParsedCliValues): CliArgs {
+  const out: CliArgs = {};
+  assignValidatedStrings(values, out);
+  const limitVal = parseNonNegIntArg(values.limit, 'limit');
+  const diffCtxVal = parseNonNegIntArg(values['diff-context'], 'diff-context');
+  const maxBodyVal = parseNonNegIntArg(values['max-body-length'], 'max-body-length');
+  const maxPatchVal = parseNonNegIntArg(values['max-patch-length'], 'max-patch-length');
+  if (limitVal !== undefined) out.limit = limitVal;
+  if (diffCtxVal !== undefined) out['diff-context'] = diffCtxVal;
+  if (maxBodyVal !== undefined) out['max-body-length'] = maxBodyVal;
+  if (maxPatchVal !== undefined) out['max-patch-length'] = maxPatchVal;
+  if (values['first-parent'] !== undefined) out['first-parent'] = values['first-parent'];
+  if (values.help !== undefined) out.help = values.help;
+  if (values['include-merges'] !== undefined) out['include-merges'] = values['include-merges'];
+  if (values['include-patch'] !== undefined) out['include-patch'] = values['include-patch'];
+  if (values.breaking !== undefined) out.breaking = values.breaking;
+  if (values.jsonl !== undefined) out.jsonl = values.jsonl;
+  if (values['changelog-only'] !== undefined) out['changelog-only'] = values['changelog-only'];
+  if (values.summary !== undefined) out.summary = values.summary;
+  if (values.stats !== undefined) out.stats = values.stats;
+  if (values.all !== undefined) out.all = values.all;
+  if (values.reverse !== undefined) out.reverse = values.reverse;
+  if (values['no-body'] !== undefined) out['no-body'] = values['no-body'];
+  if (values.cache !== undefined) out.cache = values.cache;
+  if (values['package-version'] !== undefined) out['package-version'] = values['package-version'];
+  if (values.uncommitted !== undefined) out.uncommitted = values.uncommitted;
+  return out;
+}
+
 export function parseArguments(): CliArgs {
   try {
     const rawArgs = process.argv.slice(2);
     const args: string[] = [];
     for (let i = 0; i < rawArgs.length; i++) {
       const curr = rawArgs[i];
+      if (curr === undefined) continue;
+      if (curr === '--') {
+        args.push(...rawArgs.slice(i));
+        break;
+      }
       const next = rawArgs[i + 1];
-      if (
-        next &&
-        curr.startsWith('--') &&
-        !curr.includes('=') &&
-        /^-?\d+(?:\.\d+)?$/.test(next)
-      ) {
+      const optName = curr.startsWith('--') && !curr.includes('=') ? curr.slice(2) : '';
+      if (next && optName !== '' && STRING_CLI_OPTIONS.has(optName) && NUMERIC_ARG_REGEX.test(next)) {
         args.push(`${curr}=${next}`);
         i++;
       } else {
@@ -75,16 +186,19 @@ export function parseArguments(): CliArgs {
       }
     }
     const { values } = parseArgs({ args, options: CLI_OPTIONS, strict: true });
-    
+
     // Map before/after aliases
     if (values.before && !values.until) values.until = values.before;
     if (values.after && !values.since) values.since = values.after;
-    
+
     // Remove aliases to ensure a single source of truth in the returned object
     delete values.before;
     delete values.after;
-    
-    return cliArgsSchema.parse(values);
+    if (typeof values.format === 'string') {
+      values.format = values.format.replace(/^["']|["']$/g, '');
+    }
+
+    return validateCliValues(values);
   } catch (err: unknown) {
     console.error(JSON.stringify({
       error: "InvalidCliArgs",
@@ -131,13 +245,13 @@ ${pc.bold('Search Options:')}
 
 ${pc.bold('Content & Formatting Options:')}
   --uncommitted            Output the current uncommitted working tree state instead of history
-  -f, --format <fmt>       Output format: json (default), markdown, slack, or custom script path
+  -f, --format <fmt>       Output format: json (default), json-array, markdown, slack, or custom script path
   --summary                Output summary metadata only (omits bodies, files, patches)
   --stats                  Output summary metadata plus file stats (omits bodies, patches)
   --no-body                Omit commit bodies from output
   --include-patch          Include full patch diff strings in output
   --jsonl                  Output as JSON Lines format
-  -U, --diff-context <n>   Lines of context for diffs (default: 3)
+  -U, --diff-context <n>   Lines of context for diffs (default: 1 for history, 3 for uncommitted)
   --max-body-length <n>    Truncate commit bodies over this length
   --max-patch-length <n>   Truncate patches over this length
 
@@ -154,6 +268,7 @@ ${pc.bold('Integration Options:')}
   --mailmap <file>         Use a specific mailmap file for author normalization
   --slack-map <file>       Path to JSON map translating authors to Slack IDs
   --package-version        Include the package.json version in the output metadata
+  --cwd <path>             Target repository working directory
   --stream-to-file <file>  Stream JSON output directly to a file instead of stdout
   --cache                  Enable local SQLite caching of processed commits
   -h, --help               Show this help message

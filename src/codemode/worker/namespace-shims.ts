@@ -3,20 +3,52 @@
  * delegating tool wrappers, and `context` proxy fallbacks.
  */
 
+import { createNullProtoRecord } from '../../utils/type-guards.js'
 import { wrapResult } from '../worker-result-proxy.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../../handlers/tools/schemas/constants-and-primitives.js'
+import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from '../api/schema-help.js'
+import {
+    deepFreezeContextClone,
+    IMMUTABLE_PROXY_TRAPS,
+    isCallable,
+    READONLY_MUTATION_TRAPS,
+} from './result-proxy-aliases.js'
 
-export const DB_TO_JOURNAL: Record<string, [string, string]> = {
-    listTables: ['analytics', 'getStatistics'],
-    describeTable: ['analytics', 'getStatistics'],
+export const DB_TO_JOURNAL: Record<string, [string, string]> = createNullProtoRecord<[string, string]>({
     count: ['analytics', 'getStatistics'],
     analyze: ['analytics', 'getStatistics'],
-    vacuum: ['analytics', 'getStatistics'],
-    integrityCheck: ['analytics', 'getStatistics'],
     exists: ['core', 'getEntryById'],
     upsert: ['core', 'createEntry'],
     batchInsert: ['core', 'createEntry'],
     readQuery: ['core', 'readQuery'],
+})
+
+const DB_MAINTENANCE_CALLS = new Set(['vacuum', 'integrityCheck'])
+const SCHEMA_OPS_NOT_RUN = new Set(['listTables', 'describeTable'])
+
+export function isDbMaintenanceCall(name: string): boolean {
+    return SCHEMA_OPS_NOT_RUN.has(name) || DB_MAINTENANCE_CALLS.has(name)
+}
+
+/** [L3] The call name is passed explicitly; no module-global state is shared between calls. */
+export function createMaintenanceUnavailableFn(name: string): () => Promise<{
+    success: false
+    error: string
+    code: string
+}> {
+    if (SCHEMA_OPS_NOT_RUN.has(name)) {
+        return () =>
+            Promise.resolve({
+                success: false,
+                code: 'VALIDATION_ERROR',
+                error: `Schema operation '${name}' did not run`,
+            })
+    }
+    return () =>
+        Promise.resolve({
+            success: false,
+            error: 'Maintenance call is not available',
+            code: 'VALIDATION_ERROR',
+        })
 }
 
 /**
@@ -27,6 +59,7 @@ export function createCallableShim(shimMj: Record<string, unknown>, fnName = 'Me
         return shimMj
     }
     return new Proxy(callableFn, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply(_t, _thisArg, _args): unknown {
             return shimMj
         },
@@ -49,39 +82,51 @@ function isTargetLike(val: unknown): val is object {
     return (typeof val === 'object' && val !== null) || typeof val === 'function'
 }
 
+function isEntryIdAndPatchArgs(args: unknown[]): boolean {
+    if (args.length < 2) return false
+    const first = args[0]
+    const second = args[1]
+    const validId =
+        (typeof first === 'number' && Number.isSafeInteger(first) && first > 0) ||
+        (typeof first === 'string' && /^[1-9]\d*$/.test(first.trim()))
+    return validId && typeof second === 'object' && second !== null && !Array.isArray(second)
+}
+
 /**
  * Creates the `updateMemory` / `setMemory` / `updateJournal` smart router function.
  */
 export function createUpdateMemoryFn(
     shimMj: Record<string, unknown>
-): (arg: unknown) => unknown {
-    const updateMemoryFn = (arg: unknown): unknown => {
-        if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-            const entryId =
-                (Reflect.get(arg, 'entry_id') as unknown) ??
+): (...args: unknown[]) => unknown {
+    const updateMemoryFn = (...args: unknown[]): unknown => {
+        const arg = args[0]
+        const hasObjectEntryId =
+            typeof arg === 'object' &&
+            arg !== null &&
+            !Array.isArray(arg) &&
+            ((Reflect.get(arg, 'entry_id') as unknown) ??
                 (Reflect.get(arg, 'id') as unknown) ??
-                (Reflect.get(arg, 'entryId') as unknown)
-            if (entryId !== undefined && entryId !== null) {
-                const adminGroup = shimMj['admin']
-                const coreGroup = shimMj['core']
-                const fn =
-                    (isTargetLike(adminGroup)
-                        ? ((Reflect.get(adminGroup, 'updateEntry') as unknown) ??
-                          (Reflect.get(adminGroup, 'update_entry') as unknown))
-                        : undefined) ??
-                    (isTargetLike(coreGroup)
-                        ? (Reflect.get(coreGroup, 'updateEntry') as unknown)
-                        : undefined)
-                if (typeof fn === 'function') {
-                    return (fn as (a: unknown) => unknown)(arg)
-                }
+                (Reflect.get(arg, 'entryId') as unknown)) != null
+        if (hasObjectEntryId || isEntryIdAndPatchArgs(args)) {
+            const adminGroup = shimMj['admin']
+            const coreGroup = shimMj['core']
+            const fn =
+                (isTargetLike(adminGroup)
+                    ? ((Reflect.get(adminGroup, 'updateEntry') as unknown) ??
+                      (Reflect.get(adminGroup, 'update_entry') as unknown))
+                    : undefined) ??
+                (isTargetLike(coreGroup)
+                    ? (Reflect.get(coreGroup, 'updateEntry') as unknown)
+                    : undefined)
+            if (isCallable(fn)) {
+                return fn(...args)
             }
         }
         const coreGroup = shimMj['core']
         if (isTargetLike(coreGroup)) {
             const createFn = Reflect.get(coreGroup, 'createEntry') as unknown
-            if (typeof createFn === 'function') {
-                return (createFn as (a: unknown) => unknown)(arg)
+            if (isCallable(createFn)) {
+                return createFn(...args)
             }
         }
         return undefined
@@ -108,8 +153,8 @@ export function createUpdateMemoryFn(
                 const createEntry = Reflect.get(coreGroup, 'createEntry') as unknown
                 if (isTargetLike(createEntry) && 'schema' in createEntry) {
                     const schemaFn: unknown = Reflect.get(createEntry, 'schema')
-                    if (typeof schemaFn === 'function') {
-                        return (schemaFn as () => Promise<unknown>)()
+                    if (isCallable(schemaFn)) {
+                        return Promise.resolve(schemaFn())
                     }
                 }
             }
@@ -129,6 +174,7 @@ export function wrapDelegatingTool(
     targetFnGetter: () => unknown
 ): unknown {
     return new Proxy(fn, {
+        ...IMMUTABLE_PROXY_TRAPS,
         get(target, prop, receiver): unknown {
             const real = targetFnGetter()
             if (
@@ -144,97 +190,37 @@ export function wrapDelegatingTool(
     })
 }
 
-const SHIM_TABLES = [
-    'memory_journal',
-    'tags',
-    'entry_tags',
-    'relationships',
-    'entry_anchors',
-    'entry_revisions',
-    'vec_embeddings',
-    'team_flags',
-]
+const SHIM_TABLES = JOURNAL_TABLES
 
-export const schemaHelpFn = (): Promise<unknown> =>
-    Promise.resolve({
-        group: 'schema',
-        description:
-            'Memory Journal Schema: Embedded SQLite database storing journal entries, tags, relationships, code anchors, revisions, vector embeddings, and team flags.',
-        tables: SHIM_TABLES,
-        entrySchema: {
-            id: 'number (auto-increment primary key)',
-            content: 'string (required, markdown body)',
-            entry_type: ENTRY_TYPES.map((t) => `'${t}'`).join(' | '),
-            timestamp: 'string (ISO 8601 timestamp)',
-            is_personal: 'boolean (default: true)',
-            significance_type: `optional (${SIGNIFICANCE_TYPES.map((t) => `'${t}'`).join(' | ')})`,
-            tags: 'string[] (optional array of kebab-case tags)',
-            workspace_id: 'string (required repository/workspace identifier)',
-            project_number: 'number (optional GitHub project number)',
-            impact_score: 'number (0.0-1.0 blast radius score)',
-            trust_score: 'number (0.0-1.0 confidence score)',
-            validation_status: "'passed' | 'none' | 'failed'",
-            auto_context: 'string (optional JSON metadata string, e.g. { "commits": ["<sha>"] })',
-            session_id: 'string (optional session tracking id)',
-            relationships: 'Array<{ targetId: number, relationType?: string }> (optional entry links)',
-            anchors: 'Array<{ anchor_path: string, anchor_type: string, status?: string }> (optional code anchors)',
-        },
-        methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
-        usage: 'Call mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.',
-    })
+export const schemaHelpFn = Object.freeze((): Promise<unknown> => getSchemaHelp())
 
 /**
  * Creates the `schema` shim proxy for `shimMj`.
  */
 export function createSchemaShim(shimMj: Record<string, unknown>): object {
-    const getStatsFn = (): ((...args: unknown[]) => unknown) | undefined => {
-        const analyticsGroup = shimMj['analytics']
-        if (isTargetLike(analyticsGroup)) {
-            const fn = Reflect.get(analyticsGroup, 'getStatistics') as unknown
-            if (typeof fn === 'function') {
-                return fn as (...args: unknown[]) => unknown
-            }
-        }
-        return undefined
-    }
-
-    const schemaCallable = function (...args: unknown[]): unknown {
-        const fn = getStatsFn()
-        if (fn !== undefined) {
-            return fn(...args)
-        }
+    const schemaCallable = function (): unknown {
         return schemaHelpFn()
     }
     return new Proxy(schemaCallable, {
-        apply(_t, _thisArg, args: unknown[]): unknown {
-            const fn = getStatsFn()
-            if (fn !== undefined) {
-                return Reflect.apply(fn, undefined, args)
-            }
+        ...IMMUTABLE_PROXY_TRAPS,
+        apply(): unknown {
             return schemaHelpFn()
         },
         get(_t, p: string | symbol): unknown {
             if (p === 'then') return undefined
             if (p === 'help' || p === 'describe') return schemaHelpFn
-            if (p === 'listTables') {
-                return (): Promise<unknown> =>
-                    Promise.resolve({
-                        success: true,
-                        tables: SHIM_TABLES,
-                    })
-            }
+            if (p === 'listTables') return listJournalTables
             if (p === 'describeTable' || p === 'getSchema') return schemaHelpFn
             if (p === 'schema') return createSchemaShim(shimMj)
-            if (p === 'tables')
-                return SHIM_TABLES
+            if (p === 'tables') return SHIM_TABLES
             if (p === 'memory_journal' || p === 'entries' || p === 'journal' || p === 'memory') {
                 const coreGroup = shimMj['core']
                 if (isTargetLike(coreGroup)) {
                     const createEntry = Reflect.get(coreGroup, 'createEntry') as unknown
                     if (isTargetLike(createEntry) && 'schema' in createEntry) {
                         const schemaFn: unknown = Reflect.get(createEntry, 'schema')
-                        if (typeof schemaFn === 'function') {
-                            return (schemaFn as () => Promise<unknown>)()
+                        if (isCallable(schemaFn)) {
+                            return schemaFn()
                         }
                     }
                 }
@@ -251,7 +237,7 @@ export function createSchemaShim(shimMj: Record<string, unknown>): object {
 /**
  * Creates an empty iterable/array-like/map-like fallback for missing collection properties on `context`.
  */
-export function createEmptyFallback(_name: string): unknown {
+export function createEmptyFallback(): unknown {
     const emptyIter = function* (): Generator<never, void, unknown> {
         /* empty */
     }
@@ -262,7 +248,7 @@ export function createEmptyFallback(_name: string): unknown {
         forEach: () => undefined,
         get: () => undefined,
         has: () => false,
-        set: () => fallback,
+        set: () => proxy,
         delete: () => false,
         clear: () => undefined,
         size: 0,
@@ -285,16 +271,18 @@ export function createEmptyFallback(_name: string): unknown {
         flat: () => [],
         flatMap: () => [],
     }
-    return new Proxy(fallback, {
+    const proxy: unknown = new Proxy(fallback, {
+        ...IMMUTABLE_PROXY_TRAPS,
         get(t, p): unknown {
             if (p in t) return t[p]
             if (typeof p === 'symbol') return undefined
             return undefined
         },
     })
+    return proxy
 }
 
-const CONTEXT_COLLECTION_NAMES = [
+const CONTEXT_COLLECTION_NAMES: ReadonlySet<string> = new Set([
     'entries',
     'results',
     'projects',
@@ -328,69 +316,92 @@ const CONTEXT_COLLECTION_NAMES = [
     'data',
     'map',
     'list',
-]
+])
 
-/**
- * Builds the frozen `context` global proxy for the sandbox.
- */
-export function createContextProxy(contextObj?: Record<string, unknown>): Record<string, unknown> {
-    const contextProxy = new Proxy(contextObj ?? {}, {
-        get(target, prop): unknown {
-            if (typeof prop === 'symbol') {
-                if (prop === Symbol.toPrimitive) {
-                    return (hint: string) => {
-                        if (hint === 'number') return NaN
-                        try {
-                            return JSON.stringify(target)
-                        } catch {
-                            return '[object Object]'
-                        }
-                    }
-                }
-                return undefined
-            }
-            if (prop === 'toString') {
-                return () => {
-                    try {
-                        return JSON.stringify(target)
-                    } catch {
-                        return '[object Object]'
-                    }
-                }
-            }
-            if (prop === 'toJSON') {
-                return () => target
-            }
-            if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
-                return (key?: string) =>
-                    Promise.resolve(
-                        wrapResult(
-                            typeof key === 'string' && key in target
-                                ? target[key]
-                                : { success: true, ...target }
-                        )
-                    )
-            }
-            if (prop in target) return target[prop]
-            if (
-                prop === 'executeSystemPrompt' ||
-                prop === 'getPrompt' ||
-                prop === 'executePrompt'
-            ) {
-                return (_promptName?: string) =>
-                    Promise.resolve({
-                        success: false,
-                        error: `Code Mode cannot execute MCP Prompts via context.${prop}(). Code Mode is for running JavaScript with mj.* tools. Use mj.core.createEntry to save entries.`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true,
-                    })
-            }
-            if (typeof prop === 'string' && CONTEXT_COLLECTION_NAMES.includes(prop)) {
-                return createEmptyFallback(prop)
-            }
-            return target[prop]
-        },
+function stringifyContextTarget(target: Record<string, unknown>): string {
+    try {
+        return JSON.stringify(target)
+    } catch {
+        return '[object Object]'
+    }
+}
+
+function createContextGetFn(
+    target: Record<string, unknown>
+): (key?: string) => Promise<unknown> {
+    return (key?: string) => {
+        if (typeof key !== 'string') {
+            return Promise.resolve(wrapResult(target))
+        }
+        const snakeKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+        if (Object.hasOwn(target, key)) return Promise.resolve(wrapResult(target[key]))
+        if (snakeKey !== key && Object.hasOwn(target, snakeKey)) {
+            return Promise.resolve(wrapResult(target[snakeKey]))
+        }
+        return Promise.resolve(
+            wrapResult({
+                success: false,
+                error: `Context key '${key}' was not found`,
+                code: 'RESOURCE_NOT_FOUND',
+            })
+        )
+    }
+}
+
+function createPromptBlockedFn(prop: string): (_promptName?: string) => Promise<unknown> {
+    return (_promptName?: string) =>
+        Promise.resolve({
+            success: false,
+            error: `Code Mode cannot execute MCP Prompts via context.${prop}(). Code Mode is for running JavaScript with mj.* tools. Use mj.core.createEntry to save entries.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true,
+        })
+}
+
+function resolveContextProxyProp(target: Record<string, unknown>, prop: string | symbol): unknown {
+    if (Object.hasOwn(target, prop)) {
+        return Reflect.get(target, prop)
+    }
+    if (typeof prop === 'symbol') {
+        if (prop === Symbol.toPrimitive) {
+            return (hint: string) =>
+                hint === 'number' ? NaN : stringifyContextTarget(target)
+        }
+        return undefined
+    }
+    if (prop === 'toString') return () => stringifyContextTarget(target)
+    if (prop === 'toJSON') return () => target
+    if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
+        return createContextGetFn(target)
+    }
+    // [INVARIANT]: Outer MCP parameter normalization converts camelCase keys inside `context`
+    // into snake_case; fall back transparently so `context.myKey` resolves `target.my_key`.
+    const snakeProp = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+    if (snakeProp !== prop && Object.hasOwn(target, snakeProp)) {
+        return target[snakeProp]
+    }
+    if (prop === 'executeSystemPrompt' || prop === 'getPrompt' || prop === 'executePrompt') {
+        return createPromptBlockedFn(prop)
+    }
+    if (CONTEXT_COLLECTION_NAMES.has(prop)) {
+        return createEmptyFallback()
+    }
+    return undefined
+}
+
+export function createContextProxy(
+    contextObj?: Record<string, unknown>,
+    isAlreadyDeepFrozen = false
+): Record<string, unknown> {
+    const target =
+        contextObj !== undefined
+            ? isAlreadyDeepFrozen
+                ? contextObj
+                : deepFreezeContextClone(contextObj)
+            : Object.freeze({})
+    return new Proxy(target, {
+        get: (t, prop): unknown => resolveContextProxyProp(t, prop),
+        ...READONLY_MUTATION_TRAPS,
     })
-    return Object.freeze(contextProxy)
 }

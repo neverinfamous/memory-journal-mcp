@@ -76,19 +76,8 @@ services:
       - METRICS_EXPORT=
       - MJ_METRICS_PORT=
       - MJ_METRICS_HOST=127.0.0.1
-      - BACKUP_INTERVAL=
-      - KEEP_BACKUPS=
-      - VACUUM_INTERVAL=
-      - REBUILD_INDEX_INTERVAL=
-      - DIGEST_INTERVAL=
-      - REPORT_INTERVAL=
-      - REPORT_WEBHOOK_URL=
-      - REPORT_WEBHOOK_AUTH=
-      - REPORT_CONTENT_TYPE=
-      - ALLOW_INSECURE_WEBHOOK_HTTP=
       - EMBEDDING_MODEL=
       - AUTO_REBUILD_INDEX=
-      - AUTO_PRUNE_INTERVAL_MINUTES=
       - ARCHIVE_OLDER_THAN_DAYS=
       - PRUNE_OLDER_THAN_DAYS=
       - HARD_DELETE_OLDER_THAN_DAYS=
@@ -105,8 +94,7 @@ services:
     networks:
       - mcp-net
     stdin_open: true
-    tty: true
-    command: ['node', 'dist/cli.js']
+    tty: false
     restart: unless-stopped
 
   memory-journal-mcp-http:
@@ -186,19 +174,8 @@ services:
       - METRICS_EXPORT=
       - MJ_METRICS_PORT=
       - MJ_METRICS_HOST=127.0.0.1
-      - BACKUP_INTERVAL=
-      - KEEP_BACKUPS=
-      - VACUUM_INTERVAL=
-      - REBUILD_INDEX_INTERVAL=
-      - DIGEST_INTERVAL=
-      - REPORT_INTERVAL=
-      - REPORT_WEBHOOK_URL=
-      - REPORT_WEBHOOK_AUTH=
-      - REPORT_CONTENT_TYPE=
-      - ALLOW_INSECURE_WEBHOOK_HTTP=
       - EMBEDDING_MODEL=
       - AUTO_REBUILD_INDEX=
-      - AUTO_PRUNE_INTERVAL_MINUTES=
       - ARCHIVE_OLDER_THAN_DAYS=
       - PRUNE_OLDER_THAN_DAYS=
       - HARD_DELETE_OLDER_THAN_DAYS=
@@ -216,8 +193,7 @@ services:
       - mcp-net
     ports:
       - '3000:3000'
-    command:
-      ['node', 'dist/cli.js', '--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
+    command: ['--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 30s

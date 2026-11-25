@@ -1,0 +1,101 @@
+# Local OAuth 2.1 Development Stack: Keycloak 26.4.7 + memory-journal-mcp
+#
+# Usage:
+#   docker compose -f examples/oauth-keycloak/docker-compose.yml up -d
+#
+# Access:
+#   - Keycloak Admin Console: http://localhost:8080/admin (admin / admin)
+#   - OAuth Protected Resource: http://localhost:3000/.well-known/oauth-protected-resource
+#   - MCP Streamable HTTP:      http://localhost:3000/mcp
+#   - OAuth Metrics (/metrics): http://localhost:3000/metrics (requires `audit` scope)
+#
+# Design note:
+#   `memory-journal-mcp` shares Keycloak's network namespace (`network_mode: service:keycloak`)
+#   so internal JWKS fetches hit `http://localhost:8080/...` over loopback, satisfying both:
+#   1) TokenValidator origin equality (`OAUTH_ISSUER` === `OAUTH_JWKS_URI` origin)
+#   2) JWKS SSRF loopback guard without weakening production protections.
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.7
+    container_name: mj-keycloak-dev
+    command: ['start-dev', '--import-realm']
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      - KC_HEALTH_ENABLED=true
+    volumes:
+      - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - '8080:8080'
+      - '3000:3000'
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 1024m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q 'UP' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  memory-journal-mcp:
+    image: writenotenow/memory-journal-mcp:latest
+    container_name: mj-mcp-oauth-dev
+    network_mode: 'service:keycloak'
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    command:
+      [
+        '--transport',
+        'http',
+        '--port',
+        '3000',
+        '--server-host',
+        '0.0.0.0',
+        '--oauth-enabled',
+        '--oauth-allow-plaintext-loopback',
+        '--metrics-export',
+        'prometheus',
+      ]
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/data/memory_journal.db
+      - ALLOWED_IO_ROOTS=/app/data
+      - PUBLIC_ORIGIN=http://localhost:3000
+      - OAUTH_ENABLED=true
+      - OAUTH_ISSUER=http://localhost:8080/realms/mcp
+      - OAUTH_AUDIENCE=memory-journal-mcp
+      - OAUTH_JWKS_URI=http://localhost:8080/realms/mcp/protocol/openid-connect/certs
+      - OAUTH_ALLOW_PLAINTEXT_LOOPBACK=true
+      - OAUTH_CLOCK_TOLERANCE=60
+      - METRICS_EXPORT=prometheus
+    volumes:
+      - mj_oauth_data:/app/data
+    restart: unless-stopped
+    stop_grace_period: 15s
+    mem_limit: 1024m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  mj_oauth_data:

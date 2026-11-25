@@ -6,13 +6,11 @@
 export { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
 export { sanitizeFtsQuery } from './fts-sanitizer.js'
 export {
-    ftsRankToRelevance,
     extractSnippet,
     type SearchQueryRow,
     getRecentEntries,
     getEntriesPage,
-    getEntryCount,
-    getFilteredEntryCount,
+    getEntriesAfter,
     searchEntries,
     getSearchFacets,
     searchByDateRange,
@@ -21,4 +19,5 @@ export {
     getEntriesByPR,
     getEntriesByWorkflowRun,
     getEntriesBySession,
+    getLatestEntryPerProject,
 } from './query.js'

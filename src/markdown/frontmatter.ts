@@ -11,21 +11,55 @@
  */
 
 import { z } from 'zod'
+import { isRecord } from '../utils/type-guards.js'
+import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
+import {
+    RELATIONSHIP_TARGET_KEYS,
+    RELATIONSHIP_TYPE_KEYS,
+    pickRecordField,
+} from '../handlers/tools/schemas/constants-and-primitives.js'
+
+function preprocessFrontmatterRelationship(item: unknown): unknown {
+    if (!isRecord(item)) return item
+    const rawTarget = pickRecordField(item, RELATIONSHIP_TARGET_KEYS)
+    const parsedTarget = typeof rawTarget === 'string' ? parseCanonicalPositiveInt(rawTarget) : undefined
+    const target_id = parsedTarget ?? rawTarget
+    const rawType = pickRecordField(item, RELATIONSHIP_TYPE_KEYS)
+    return { type: rawType, target_id }
+}
 
 // ============================================================================
 // Types
 // ============================================================================
 
+export type FrontmatterAnchorStatus =
+    | 'pending'
+    | 'valid'
+    | 'stale'
+    | 'invalidated'
+    | 'unresolvable'
+
+export type FrontmatterAnchor =
+    | string
+    | {
+          anchor_path: string
+          anchor_type?: string | undefined
+          status?: FrontmatterAnchorStatus | undefined
+      }
+
 /** Parsed frontmatter data structure */
 export interface FrontmatterData {
-    mj_id?: number
-    entry_type?: string
-    author?: string
-    tags?: string[]
-    timestamp?: string
-    significance?: string
-    relationships?: { type: string; target_id: number }[]
-    source?: string
+    mj_id?: number | undefined
+    entry_type?: string | undefined
+    author?: string | undefined
+    tags?: string[] | undefined
+    timestamp?: string | undefined
+    significance?: string | undefined
+    workspace_id?: string | undefined
+    project_number?: number | undefined
+    relationships?: { type: string; target_id: number }[] | undefined
+    anchors?: FrontmatterAnchor[] | undefined
+    source?: string | undefined
 }
 
 /** Result of parsing a frontmattered markdown file */
@@ -38,23 +72,41 @@ export interface ParseResult {
 // Validation Schema
 // ============================================================================
 
+const FrontmatterAnchorSchema = z.union([
+    z.string().trim().min(1).max(500),
+    z
+        .object({
+            anchor_path: z.string().trim().min(1).max(500),
+            anchor_type: z.string().min(1).max(50).optional(),
+            status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional(),
+        })
+        .strict(),
+])
+
 const FrontmatterSchema = z.object({
     mj_id: z.number().int().positive().optional(),
-    entry_type: z.string().optional(),
-    author: z.string().optional(),
+    entry_type: z.string().max(255).optional(),
+    author: z.string().max(255).optional(),
     tags: z.array(z.string().max(100)).max(50).optional(),
-    timestamp: z.string().optional(),
-    significance: z.string().optional(),
-    relationships: z
-        .array(
-            z.object({
-                type: z.string(),
-                target_id: z.number().int().positive(),
-            })
-        )
-        .max(100)
-        .optional(),
-    source: z.string().optional(),
+    timestamp: z.string().max(255).optional(),
+    significance: z.string().max(255).optional(),
+    workspace_id: z.string().max(255).optional(),
+    project_number: z.number().int().positive().optional(),
+    relationships:
+        z
+            .array(
+                z.preprocess(
+                    preprocessFrontmatterRelationship,
+                    z.object({
+                        type: z.string().max(100),
+                        target_id: z.number().int().positive(),
+                    })
+                )
+            )
+            .max(100)
+            .optional(),
+    anchors: z.array(FrontmatterAnchorSchema).max(100).optional(),
+    source: z.string().max(255).optional(),
 })
 
 // ============================================================================
@@ -76,8 +128,11 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
     if (data.tags && data.tags.length > 0) cleanData.tags = data.tags
     if (data.timestamp !== undefined) cleanData.timestamp = data.timestamp
     if (data.significance !== undefined) cleanData.significance = data.significance
+    if (data.workspace_id !== undefined) cleanData.workspace_id = data.workspace_id
+    if (data.project_number !== undefined) cleanData.project_number = data.project_number
     if (data.relationships && data.relationships.length > 0)
         cleanData.relationships = data.relationships
+    if (data.anchors && data.anchors.length > 0) cleanData.anchors = data.anchors
     if (data.source !== undefined) cleanData.source = data.source
 
     if (Object.keys(cleanData).length === 0) return ''
@@ -100,33 +155,51 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
  * @throws Error if frontmatter is malformed or fails validation
  */
 export function parseFrontmatter(content: string): ParseResult {
-    const lines = content.split('\n')
+    const withoutBom = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+    const normalized = withoutBom.includes('\r')
+        ? withoutBom.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+        : withoutBom
+    const firstNl = normalized.indexOf('\n')
+    const firstLine = (firstNl === -1 ? normalized : normalized.slice(0, firstNl)).trim()
 
     // Must start with ---
-    if (lines[0]?.trim() !== '---') {
-        return { metadata: {}, body: content }
+    if (firstLine !== '---') {
+        return { metadata: {}, body: normalized }
     }
-
-    // Find closing ---
-    let closingIndex = -1
-    for (let i = 1; i < lines.length; i++) {
-        if (lines[i]?.trim() === '---') {
-            closingIndex = i
-            break
-        }
-    }
-
-    if (closingIndex === -1) {
+    if (firstNl === -1) {
         throw new Error('Invalid frontmatter: Found opening --- fence but no closing --- fence')
     }
 
-    // Try robust JSON parsing first
-    const fmText = lines.slice(1, closingIndex).join('\n').trim()
-    let raw: Record<string, unknown>
+    // Scan lines in header only via indexOf to avoid splitting/rejoining multi-MB bodies
+    let pos = firstNl + 1
+    let closingLineStart = -1
+    let closingLineEnd = -1
+    while (pos <= normalized.length) {
+        const nextNl = normalized.indexOf('\n', pos)
+        const lineEnd = nextNl === -1 ? normalized.length : nextNl
+        if (normalized.slice(pos, lineEnd).trim() === '---') {
+            closingLineStart = pos
+            closingLineEnd = nextNl === -1 ? normalized.length : nextNl + 1
+            break
+        }
+        if (nextNl === -1) break
+        pos = nextNl + 1
+    }
+
+    if (closingLineStart === -1) {
+        throw new Error('Invalid frontmatter: Found opening --- fence but no closing --- fence')
+    }
+
+    const rawFmText = normalized.slice(firstNl + 1, closingLineStart)
+    if (rawFmText.length > 100_000) {
+        throw new Error('Invalid frontmatter: Frontmatter block exceeds maximum size of 100KB.')
+    }
+    const fmText = rawFmText.trim()
+    let raw: unknown
 
     if (fmText.startsWith('{') && fmText.endsWith('}')) {
         try {
-            raw = JSON.parse(fmText) as Record<string, unknown>
+            raw = JSON.parse(fmText) as unknown
         } catch (err: unknown) {
             if (err instanceof Error) {
                 throw new Error(`Invalid JSON frontmatter: ${err.message}`, { cause: err })
@@ -139,6 +212,10 @@ export function parseFrontmatter(content: string): ParseResult {
         )
     }
 
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        throw new Error('Invalid frontmatter: Parsed frontmatter must be a JSON object.')
+    }
+
     // Validate against schema
     const parseResult = FrontmatterSchema.safeParse(raw)
     if (!parseResult.success) {
@@ -147,10 +224,8 @@ export function parseFrontmatter(content: string): ParseResult {
     }
 
     // Body is everything after the closing ---
-    const body = lines
-        .slice(closingIndex + 1)
-        .join('\n')
-        .replace(/^\n/, '')
+    const rawBody = normalized.slice(closingLineEnd)
+    const body = rawBody.startsWith('\n') ? rawBody.slice(1) : rawBody
 
     return { metadata: parseResult.data, body }
 }

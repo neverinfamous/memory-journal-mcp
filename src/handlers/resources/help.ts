@@ -13,22 +13,40 @@ import { ICON_BRIEFING } from '../../constants/icons.js'
 import { HELP_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
-import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import { getAllToolNames, getToolGroup, isToolVisibleForFilter } from '../../filtering/tool-filter.js'
+import {
+    getBaseUri,
+    safeDecodeUriSegment,
+    withResourceTokenMeta,
+    type InternalResourceDef,
+    type ResourceContext,
+    type ResourceResult,
+} from './shared.js'
+import { hasCodemodeFullAccess } from './core/instructions.js'
 import type { getTools } from '../../handlers/tools/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import {
+    extractParameters,
+    peelZodType,
+    type ParameterInfo,
+} from './help-schema-params.js'
+
+export { extractParameters, peelZodType, type ParameterInfo }
 
 // ============================================================================
 // Group Metadata
 // ============================================================================
 
+const CANONICAL_TOOL_NAMES = new Set(getAllToolNames())
+
 /** Human-readable descriptions for each tool group */
 const GROUP_DESCRIPTIONS: Record<string, string> = {
-    core: 'Create, read, update, delete journal entries and manage recent activity',
+    core: 'Journal entries, tags, entry history, and anchor staleness marking',
     search: 'Full-text search, semantic search, date range queries, and vector index stats',
     analytics: 'Entry analytics, importance scoring, and productivity trends',
     relationships: 'Link and visualize relationships between journal entries',
-    io: 'Import and export journal data — JSON export, Markdown round-trip (export/import)',
-    admin: 'Update entries, rebuild indexes, and manage the vector search index',
+    io: 'Markdown & external knowledge-base import/export (JSON frontmatter, Notion/Obsidian/Logseq)',
+    admin: 'Runtime config, entry mutations, batch operations, auto-pruning, project registry, and audit logs',
     github: 'GitHub integration — issues, PRs, milestones, workflow runs, Kanban boards',
     git: 'Git history mining — commit search, release tracking, pattern analysis, and entry anchor staleness checks',
     backup: 'Create and restore database backups',
@@ -37,155 +55,181 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
 }
 
 // ============================================================================
-// Schema Introspection
-// ============================================================================
-
-interface ParameterInfo {
-    name: string
-    type: string
-    required: boolean
-    description?: string
-}
-
-/** Friendly display names for Zod primitive type names */
-const ZOD_TYPE_DISPLAY: Record<string, string> = {
-    ZodString: 'string',
-    ZodNumber: 'number',
-    ZodBoolean: 'boolean',
-    ZodArray: 'array',
-    ZodObject: 'object',
-    ZodEnum: 'enum',
-    ZodNativeEnum: 'enum',
-    ZodLiteral: 'literal',
-    ZodUnion: 'union',
-    ZodIntersection: 'intersection',
-    ZodRecord: 'record',
-    ZodTuple: 'tuple',
-    ZodAny: 'any',
-    ZodUnknown: 'unknown',
-    ZodNull: 'null',
-    ZodUndefined: 'undefined',
-    ZodVoid: 'void',
-}
-
-/** Wrapper type names that make a field optional or supply a default */
-const ZOD_OPTIONAL_WRAPPERS = new Set([
-    'ZodOptional',
-    'ZodDefault',
-    'ZodNullable',
-    'optional',
-    'default',
-    'nullable',
-])
-
-/**
- * Recursively peel ZodOptional / ZodDefault / ZodNullable wrappers from a
- * Zod `_def` object to discover the innermost concrete type, whether the
- * field is optional to callers, and the description (first `_def` that has
- * one, scanning outer → inner). Supports both Zod 3 and Zod 4 shape.
- */
-export function peelZodType(def: Record<string, unknown>): {
-    typeName: string
-    isOptional: boolean
-    description: string | undefined
-} {
-    let isOptional = false
-    let description: string | undefined
-    let current = def
-
-    for (;;) {
-        if (description === undefined && typeof current['description'] === 'string') {
-            description = current['description']
-        }
-
-        // Zod 3 uses .typeName ('ZodString'), Zod 4 uses .type ('string')
-        const tn = (current['typeName'] ?? current['type']) as string | undefined
-        if (!tn) break
-
-        if (ZOD_OPTIONAL_WRAPPERS.has(tn)) {
-            isOptional = true
-            const inner = current['innerType'] as { _def?: Record<string, unknown> } | undefined
-            if (!inner?._def) break
-            current = inner._def
-        } else {
-            const normalized = tn.replace('Zod', '').toLowerCase()
-            const displayName = ZOD_TYPE_DISPLAY[tn] ?? normalized
-            return { typeName: displayName, isOptional, description }
-        }
-    }
-
-    return { typeName: 'unknown', isOptional, description }
-}
-
-/**
- * Extract parameter info from a Zod schema's shape.
- * Works with z.object() schemas that have a `.shape` property.
- */
-export function extractParameters(inputSchema: unknown): ParameterInfo[] {
-    if (inputSchema === undefined || inputSchema === null || typeof inputSchema !== 'object') {
-        return []
-    }
-
-    let schema = inputSchema as Record<string, unknown>
-
-    // Unwrap ZodEffects (.transform, .refine) or ZodPipe (Zod 4 .transform)
-    if (typeof schema['innerType'] === 'function') {
-        const innerTypeFn = schema['innerType'] as () => unknown
-        schema = innerTypeFn() as Record<string, unknown>
-    } else if (
-        schema['_def'] !== undefined &&
-        schema['_def'] !== null &&
-        typeof schema['_def'] === 'object' &&
-        'schema' in schema['_def']
-    ) {
-        schema = (schema['_def'] as Record<string, unknown>)['schema'] as Record<string, unknown>
-    } else if (
-        schema['out'] !== undefined &&
-        schema['out'] !== null &&
-        typeof schema['out'] === 'object' &&
-        'shape' in schema['out']
-    ) {
-        schema = schema['out']
-    } else if (
-        schema['in'] !== undefined &&
-        schema['in'] !== null &&
-        typeof schema['in'] === 'object'
-    ) {
-        schema = schema['in'] as Record<string, unknown>
-    }
-
-    const rawShape: unknown = schema['shape']
-    if (rawShape === undefined || rawShape === null || typeof rawShape !== 'object') {
-        return []
-    }
-
-    const shape = rawShape as Record<string, unknown>
-    const params: ParameterInfo[] = []
-
-    for (const [name, fieldSchema] of Object.entries(shape)) {
-        if (fieldSchema === undefined || fieldSchema === null || typeof fieldSchema !== 'object') {
-            continue
-        }
-        const field = fieldSchema as Record<string, unknown>
-        const rawDef = field['_def'] as Record<string, unknown> | undefined
-        if (!rawDef) continue
-
-        const { typeName, isOptional, description } = peelZodType(rawDef)
-
-        params.push({
-            name,
-            type: typeName,
-            required: !isOptional,
-            ...(description !== undefined ? { description } : {}),
-        })
-    }
-
-    return params
-}
-
-// ============================================================================
 // Resource Definitions
 // ============================================================================
+
+function filterVisibleHelpTools(
+    rawTools: MinimalToolDef[],
+    context: ResourceContext
+): MinimalToolDef[] {
+    const codemodeFull =
+        (context.filterConfig?.enabledTools.has('mj_execute_code') ?? false) &&
+        hasCodemodeFullAccess(context)
+    const filterRaw = context.filterConfig?.raw
+    return rawTools.filter((t) => {
+        if (!isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterRaw)) {
+            return false
+        }
+        if (!context.filterConfig || codemodeFull) return true
+        return context.filterConfig.enabledTools.has(t.name)
+    })
+}
+
+async function handleHelpRootResource(
+    _uri: string,
+    context: ResourceContext
+): Promise<ResourceResult> {
+    const tools = filterVisibleHelpTools(await getAllToolDefinitionsAsync(context), context)
+    const groups = new Map<string, { names: string[]; readOnly: boolean }>()
+    for (const tool of tools) {
+        const existing = groups.get(tool.group)
+        if (existing) {
+            existing.names.push(tool.name)
+            // A group is read-only only if ALL its tools are read-only
+            if (!tool.annotations?.readOnlyHint) existing.readOnly = false
+        } else {
+            groups.set(tool.group, {
+                names: [tool.name],
+                readOnly: tool.annotations?.readOnlyHint ?? false,
+            })
+        }
+    }
+
+    const groupList = Array.from(groups.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, info]) => ({
+            name,
+            description: GROUP_DESCRIPTIONS[name] ?? name,
+            toolCount: info.names.length,
+            readOnly: info.readOnly,
+            tools: info.names.sort(),
+            helpUri: `memory://help/${name}`,
+        }))
+
+    const data = {
+        totalTools: tools.length,
+        totalGroups: groupList.length,
+        staticTopics: ['gotchas', 'templates'],
+        groups: groupList,
+        hint: 'Read memory://help/{group} for detailed parameter info on each tool, or memory://help/gotchas / memory://help/templates.',
+    }
+    return { data: withResourceTokenMeta(data) }
+}
+
+interface HelpToolDetail {
+    name: string
+    title: string
+    description: string
+    parameters: ParameterInfo[]
+    annotations: {
+        readOnly: boolean
+        destructive: boolean
+        idempotent: boolean
+        openWorld: boolean
+    }
+    hasOutputSchema: boolean
+}
+
+function formatGroupToolDetails(
+    groupTools: MinimalToolDef[],
+    context: ResourceContext
+): HelpToolDetail[] {
+    const filterRaw = context.filterConfig?.raw
+    const enabledSet = context.filterConfig?.enabledTools
+    const isCodemodeOnly =
+        filterRaw?.trim() === 'codemode' ||
+        (enabledSet !== undefined &&
+            enabledSet.has('mj_execute_code') &&
+            [...enabledSet].every((t) => t === 'mj_execute_code' || t === 'update_configuration'))
+
+    return groupTools.map((tool) => {
+        let displayName = tool.name
+        if (
+            isCodemodeOnly &&
+            tool.name !== 'mj_execute_code' &&
+            tool.name !== 'update_configuration'
+        ) {
+            const camelCase = tool.name.replace(/_([a-z])/g, (_: string, letter: string) =>
+                letter.toUpperCase()
+            )
+            displayName = `mj.${tool.group}.${camelCase}`
+        }
+        return {
+            name: displayName,
+            title: tool.title,
+            description: tool.description,
+            parameters: extractParameters(tool.inputSchema),
+            annotations: {
+                readOnly: tool.annotations?.readOnlyHint ?? false,
+                destructive: tool.annotations?.destructiveHint ?? false,
+                idempotent: tool.annotations?.idempotentHint ?? false,
+                openWorld: tool.annotations?.openWorldHint ?? false,
+            },
+            hasOutputSchema: tool.outputSchema !== undefined,
+        }
+    })
+}
+
+async function handleHelpGroupResource(
+    uri: string,
+    context: ResourceContext
+): Promise<ResourceResult> {
+    const match = /^memory:\/\/help\/([^/?#]+)$/.exec(getBaseUri(uri))
+    const rawGroupName = match?.[1] ? safeDecodeUriSegment(match[1]) : undefined
+    const groupName = rawGroupName === 'export' ? 'io' : rawGroupName
+
+    if (!groupName) {
+        throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            'Invalid group name in URI. Read memory://help for a list of available groups.'
+        )
+    }
+
+    const staticContent = HELP_CONTENT.get(groupName)
+    // [INVARIANT] Static-only topics (e.g., `gotchas`, `templates`) do not belong to any tool
+    // group; return them immediately without triggering the lazy tools/index.js dynamic import.
+    if (staticContent !== undefined && !Object.hasOwn(GROUP_DESCRIPTIONS, groupName)) {
+        return { data: staticContent }
+    }
+
+    let rawTools: MinimalToolDef[]
+    try {
+        rawTools = await getAllToolDefinitionsAsync(context)
+    } catch (err: unknown) {
+        if (staticContent !== undefined && isStaleModuleNotFoundError(err)) {
+            return { data: staticContent }
+        }
+        throw err
+    }
+
+    const tools = filterVisibleHelpTools(rawTools, context)
+    const groupTools = tools.filter((t) => t.group === groupName)
+
+    if (groupTools.length > 0) {
+        const toolDetails = formatGroupToolDetails(groupTools, context)
+        const result: Record<string, unknown> = {
+            group: groupName,
+            description: GROUP_DESCRIPTIONS[groupName] ?? groupName,
+            toolCount: toolDetails.length,
+            tools: toolDetails,
+        }
+        if (staticContent) {
+            result['helpContent'] = staticContent
+        }
+        return { data: withResourceTokenMeta(result) }
+    }
+
+    if (staticContent) {
+        return { data: staticContent }
+    }
+
+    const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
+    const staticKeys = [...HELP_CONTENT.keys()]
+    throw new ProtocolError(
+        ProtocolErrorCode.InternalError,
+        `Group "${groupName}" not found. Available groups: ${availableGroups.join(', ')}. Static help: ${staticKeys.join(', ')}.`
+    )
+}
 
 /**
  * Get help resource definitions
@@ -201,56 +245,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
-            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const rawTools = await getAllToolDefinitionsAsync(context)
-
-                // Filter out tools disabled by --tool-filter, UNLESS codemode is enabled.
-                // Code Mode exposes the full API surface area via the sandbox,
-                // so we must register all help resources for the agent to reference.
-                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
-                const tools = rawTools.filter(t => {
-                    if (!context.filterConfig || hasCodeMode) return true;
-                    return context.filterConfig.enabledTools.has(t.name);
-                });
-
-                // Group tools by their group field
-                const groups = new Map<string, { names: string[]; readOnly: boolean }>()
-                for (const tool of tools) {
-                    const existing = groups.get(tool.group)
-                    if (existing) {
-                        existing.names.push(tool.name)
-                        // A group is read-only only if ALL its tools are read-only
-                        if (!tool.annotations?.readOnlyHint) existing.readOnly = false
-                    } else {
-                        groups.set(tool.group, {
-                            names: [tool.name],
-                            readOnly: tool.annotations?.readOnlyHint ?? false,
-                        })
-                    }
-                }
-
-                const groupList = Array.from(groups.entries())
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([name, info]) => ({
-                        name,
-                        description: GROUP_DESCRIPTIONS[name] ?? name,
-                        toolCount: info.names.length,
-                        readOnly: info.readOnly,
-                        tools: info.names.sort(),
-                        helpUri: `memory://help/${name}`,
-                    }))
-
-                const data = {
-                    totalTools: tools.length,
-                    totalGroups: groupList.length,
-                    groups: groupList,
-                    hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
-                }
-                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
-                return {
-                    data: { ...data, _meta: { tokenEstimate } }
-                }
-            },
+            handler: handleHelpRootResource,
         },
         {
             uri: 'memory://help/{group}',
@@ -261,88 +256,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/help\/([a-z][a-z0-9-]*)/.exec(uri)
-                const groupName = match?.[1]
-
-                if (!groupName) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid group name in URI. Read memory://help for a list of available groups.')
-                }
-
-                // Resolve dynamic tool data for this group
-                const rawTools = await getAllToolDefinitionsAsync(context)
-                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
-                const tools = rawTools.filter(t => {
-                    if (!context.filterConfig || hasCodeMode) return true;
-                    return context.filterConfig.enabledTools.has(t.name);
-                });
-                const groupTools = tools.filter((t) => t.group === groupName)
-
-                // Check for static help content (codemode, github, etc.)
-                const staticContent = HELP_CONTENT.get(groupName)
-
-                // If the group has dynamic tools, always return JSON (with optional helpContent)
-                if (groupTools.length > 0) {
-                    const isCodemodeOnly =
-                        context.filterConfig &&
-                        context.filterConfig.enabledTools.has('mj_execute_code') &&
-                        !context.filterConfig.enabledTools.has('create_entry')
-
-                    const toolDetails = groupTools.map((tool) => {
-                        let displayName = tool.name
-                        if (isCodemodeOnly) {
-                            const camelCase = tool.name.replace(
-                                /_([a-z])/g,
-                                (_: string, letter: string) => letter.toUpperCase()
-                            )
-                            displayName = `mj.${tool.group}.${camelCase}`
-                        }
-
-                        return {
-                            name: displayName,
-                            title: tool.title,
-                            description: tool.description,
-                            parameters: extractParameters(tool.inputSchema),
-                            annotations: {
-                                readOnly: tool.annotations?.readOnlyHint ?? false,
-                                destructive: tool.annotations?.destructiveHint ?? false,
-                                idempotent: tool.annotations?.idempotentHint ?? false,
-                                openWorld: tool.annotations?.openWorldHint ?? false,
-                            },
-                            hasOutputSchema: tool.outputSchema !== undefined,
-                        }
-                    })
-
-                    const result: Record<string, unknown> = {
-                        group: groupName,
-                        description: GROUP_DESCRIPTIONS[groupName] ?? groupName,
-                        toolCount: toolDetails.length,
-                        tools: toolDetails,
-                    }
-
-                    // Merge static help content alongside dynamic tool data
-                    if (staticContent) {
-                        result['helpContent'] = staticContent
-                    }
-
-                    const tokenEstimate = Math.ceil(JSON.stringify(result).length / 4)
-                    result['_meta'] = { tokenEstimate }
-
-                    return { data: result }
-                }
-
-                // Group has static content only (no dynamic tools) — return markdown
-                if (staticContent) {
-                    return { data: staticContent }
-                }
-
-                // Not found
-                const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
-                const staticKeys = [...HELP_CONTENT.keys()]
-                throw new ProtocolError(ProtocolErrorCode.InternalError, 
-                    `Group "${groupName}" not found. Available groups: ${availableGroups.join(', ')}. Static help: ${staticKeys.join(', ')}.`
-                )
-            },
+            handler: handleHelpGroupResource,
         },
     ]
 }
@@ -373,7 +287,27 @@ interface MinimalToolDef {
 /**
  * Cached reference to handlers/tools/index.js to avoid per-import overhead.
  */
+import { getRuntimeWrapperConfig } from '../tools/tool-cache-helpers.js'
+
 let toolIndexModule: { getTools: typeof getTools } | null = null
+
+/** Detect stale hashed ESM chunk import failures after an out-of-process dist/ rebuild. */
+export function isStaleModuleNotFoundError(err: unknown): boolean {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ERR_MODULE_NOT_FOUND') {
+        return true
+    }
+    const msg = err instanceof Error ? err.message : String(err)
+    return /ERR_MODULE_NOT_FOUND|Cannot find module/i.test(msg)
+}
+
+/** Format tool-definition load errors with actionable restart guidance on stale dist/ chunks. */
+export function formatHelpLoadErrorMessage(err: unknown): string {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isStaleModuleNotFoundError(err)) {
+        return `Failed to load tool definitions: ${message} 🛠️ AUTONOMOUS HEALING: dist/ was likely rebuilt while this MCP server process was running (rotating chunk hashes). Restart the memory-journal-mcp server or click Refresh in your MCP client.`
+    }
+    return `Failed to load tool definitions: ${message}`
+}
 
 /**
  * Get all tool definitions from the context's database.
@@ -389,65 +323,38 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             null,
             context.vectorManager,
             context.github ?? undefined,
-            context.runtime !== undefined ? { runtime: context.runtime } : undefined,
+            getRuntimeWrapperConfig(context.runtime),
             context.teamDb,
             undefined
         )
-        return tools.map((t) => {
-            const regWithGroup = t as typeof t & { group?: string }
-            return {
-                name: t.name,
-                title: t.title ?? t.name,
-                description: t.description,
-                group:
-                    typeof regWithGroup.group === 'string' && regWithGroup.group.length > 0
-                        ? regWithGroup.group
-                        : inferGroupFromName(t.name),
-                inputSchema: t.inputSchema,
-                outputSchema: t.outputSchema,
-                annotations: t.annotations,
-            }
-        })
+        return tools
+            .filter((t) => CANONICAL_TOOL_NAMES.has(t.name))
+            .map((t) => {
+                const regWithGroup = t as typeof t & { group?: string }
+                return {
+                    name: t.name,
+                    title: t.title ?? t.name,
+                    description: t.description,
+                    group:
+                        typeof regWithGroup.group === 'string' && regWithGroup.group.length > 0
+                            ? regWithGroup.group
+                            : inferGroupFromName(t.name),
+                    inputSchema: t.inputSchema,
+                    outputSchema: t.outputSchema,
+                    annotations: t.annotations,
+                }
+            })
     } catch (e: unknown) {
-        logger.error('HELP_LOAD_TOOLS_FAILED', {
-            error: e instanceof Error ? e.message : String(e),
-        })
-        return []
+        const message = e instanceof Error ? e.message : String(e)
+        logger.error('HELP_LOAD_TOOLS_FAILED', { error: message })
+        throw new ProtocolError(ProtocolErrorCode.InternalError, formatHelpLoadErrorMessage(e))
     }
 }
 
 /**
- * Infer tool group from the tool name.
- * Exhaustive map of all 99 tools — team_ and mj_ prefixes handled first,
- * then explicit lookup for the remaining 54 tools.
+ * Infer tool group from the tool name via the canonical tool-filter lookup.
  */
 function inferGroupFromName(name: string): string {
-    if (name.startsWith('team_')) return 'team'
-    if (name.startsWith('mj_')) return 'codemode'
-
-    const groupMap: Record<string, string> = {
-        create_entry: 'core', create_entry_minimal: 'core', get_entry_by_id: 'core',
-        get_recent_entries: 'core', get_entry_history: 'core', test_simple: 'core', list_tags: 'core',
-        search_entries: 'search', search_by_date_range: 'search', semantic_search: 'search',
-        get_vector_index_stats: 'search', list_deleted_entries: 'search', cross_team_search: 'search',
-        get_statistics: 'analytics', get_cross_project_insights: 'analytics',
-        link_entries: 'relationships', visualize_relationships: 'relationships',
-        export_entries: 'io', export_markdown: 'io', import_markdown: 'io', import_external: 'io',
-        update_configuration: 'admin', update_entry: 'admin', delete_entry: 'admin',
-        restore_entry: 'admin', merge_tags: 'admin', rebuild_vector_index: 'admin',
-        add_to_vector_index: 'admin', batch_create_entries: 'admin', batch_update_entries: 'admin',
-        batch_delete_entries: 'admin', search_audit_log: 'admin',
-        backup_journal: 'backup', list_backups: 'backup', restore_backup: 'backup', cleanup_backups: 'backup',
-        get_github_issues: 'github', get_github_prs: 'github', get_github_issue: 'github',
-        get_github_pr: 'github', get_github_context: 'github', get_github_milestones: 'github',
-        get_github_milestone: 'github', create_github_milestone: 'github',
-        update_github_milestone: 'github', delete_github_milestone: 'github',
-        get_kanban_board: 'github', move_kanban_item: 'github', add_kanban_item: 'github',
-        delete_kanban_item: 'github', create_github_issue_with_entry: 'github',
-        close_github_issue_with_entry: 'github', get_repo_insights: 'github', get_copilot_reviews: 'github',
-        get_commit_history: 'git', search_commits: 'git', get_release_info: 'git',
-        get_unreleased_commits: 'git', analyze_commit_patterns: 'git',
-    }
-
-    return groupMap[name] ?? 'core'
+    if (name === 'mj_execute_code') return 'codemode'
+    return getToolGroup(name) ?? 'core'
 }

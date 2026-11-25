@@ -3,8 +3,8 @@ export type ReferenceAction = 'fixes' | 'closes' | 'resolves' | 'none'
 export interface CommitReference {
     raw: string
     number: number
-    owner?: string
-    repo?: string
+    owner?: string | undefined
+    repo?: string | undefined
     action: ReferenceAction
 }
 

@@ -1,4 +1,12 @@
 import type { NativeConnectionManager } from './native-connection.js'
+import { effectiveWorkspace } from '../workspace-scope.js'
+import { isMissingTableError } from './schema-errors.js'
+import { bucketInParams, runImmediateWriteTx } from './row-helpers.js'
+
+/** Initial KNN over-fetch factor applied before the workspace filter. */
+const VECTOR_KNN_OVERFETCH = 4
+/** sqlite-vec rejects k above 4096. */
+const VECTOR_KNN_MAX_K = 4096
 
 export class VectorOperations {
     constructor(private connection: NativeConnectionManager) {}
@@ -26,10 +34,10 @@ export class VectorOperations {
         const insertStmt = db.prepare(
             'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
         )
-        db.transaction(() => {
+        runImmediateWriteTx(db, () => {
             deleteStmt.run(bigId)
             insertStmt.run(bigId, embedding)
-        })()
+        })
     }
 
     upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void {
@@ -39,56 +47,190 @@ export class VectorOperations {
             'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
         )
 
-        db.transaction(() => {
+        runImmediateWriteTx(db, () => {
             for (const vec of vectors) {
                 const bigId = BigInt(vec.entryId)
                 deleteStmt.run(bigId)
                 insertStmt.run(bigId, vec.embedding)
             }
-        })()
+        })
     }
 
     searchVectors(
         embedding: Float32Array,
-        limit: number
+        limit: number,
+        workspaceId?: string,
+        projectNumber?: number
     ): { entry_id: number; distance: number }[] {
+        if (!Number.isSafeInteger(limit) || limit <= 0) {
+            return []
+        }
         const db = this.connection.getNativeDb()
-        return db
-            .prepare(
-                `SELECT v.entry_id, v.distance 
-                 FROM vec_embeddings v
-                 INNER JOIN memory_journal mj ON v.entry_id = mj.id
-                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL 
-                 LIMIT ?`
+        const scopeId = effectiveWorkspace(workspaceId)
+        const wsScoped = scopeId !== '*'
+        const pnScoped = projectNumber !== undefined
+
+        const clauses = ['v.embedding MATCH ?', 'v.k = ?', 'mj.deleted_at IS NULL']
+        if (wsScoped) clauses.push('mj.workspace_id = ?')
+        if (pnScoped) clauses.push('mj.project_number = ?')
+        const sql = `SELECT v.entry_id, v.distance
+             FROM vec_embeddings v
+             CROSS JOIN memory_journal mj ON v.entry_id = mj.id
+             WHERE ${clauses.join(' AND ')}
+             LIMIT ?`
+        const params = (k: number): unknown[] => [
+            embedding,
+            k,
+            ...(wsScoped ? [scopeId] : []),
+            ...(pnScoped ? [projectNumber] : []),
+            limit,
+        ]
+        let runKnn: (kVal: number) => { entry_id: number; distance: number }[]
+        let rows: { entry_id: number; distance: number }[]
+        let k = Math.min(Math.max(1, limit * VECTOR_KNN_OVERFETCH), VECTOR_KNN_MAX_K)
+        try {
+            const stmt = db.prepare<unknown[], { entry_id: number; distance: number }>(sql)
+            runKnn = (kVal: number): { entry_id: number; distance: number }[] =>
+                stmt.all(...params(kVal))
+            rows = runKnn(k)
+        } catch (error: unknown) {
+            if (isMissingTableError(error)) {
+                return []
+            }
+            throw error
+        }
+
+        if (rows.length >= limit || k >= VECTOR_KNN_MAX_K) {
+            return rows
+        }
+
+        // Lazy bounds check: only query total/scoped counts when the initial KNN probe under-fills `limit`.
+        const totalVectors = this.getVectorCount()
+        if (totalVectors === 0) return []
+        const effectiveMaxK = Math.min(VECTOR_KNN_MAX_K, totalVectors)
+        if (k >= effectiveMaxK) return rows
+
+        const countClauses = ['deleted_at IS NULL']
+        const countParams: unknown[] = []
+        if (wsScoped) {
+            countClauses.push('workspace_id = ?')
+            countParams.push(scopeId)
+        }
+        if (pnScoped) {
+            countClauses.push('project_number = ?')
+            countParams.push(projectNumber)
+        }
+        const countRow = db
+            .prepare<unknown[], { count: number }>(
+                `SELECT COUNT(*) as count FROM memory_journal WHERE ${countClauses.join(' AND ')}`
             )
-            .all(embedding, limit * 4, limit) as { entry_id: number; distance: number }[]
+            .get(...countParams)
+        const targetRows = Math.min(limit, countRow?.count ?? 0)
+        if (targetRows === 0) return []
+
+        while (rows.length < targetRows && k < effectiveMaxK) {
+            k = Math.min(k * 2, effectiveMaxK)
+            rows = runKnn(k)
+        }
+        return rows
+    }
+
+    hasVectors(): boolean {
+        try {
+            const row = this.connection.getNativeDb().prepare('SELECT 1 FROM vec_embeddings LIMIT 1').get()
+            return row !== undefined
+        } catch (error) {
+            if (isMissingTableError(error)) {
+                return false
+            }
+            throw error
+        }
+    }
+
+    deleteVectors(entryIds: number[]): number {
+        if (entryIds.length === 0) return 0
+        const db = this.connection.getNativeDb()
+        try {
+            return runImmediateWriteTx(db, () => {
+                let deleted = 0
+                for (const { placeholders, params } of bucketInParams(entryIds)) {
+                    const bigIds = params.map((id) => BigInt(Math.trunc(id)))
+                    const result = db
+                        .prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`)
+                        .run(...bigIds)
+                    deleted += result.changes
+                }
+                return deleted
+            })
+        } catch (error) {
+            if (isMissingTableError(error)) {
+                return 0
+            }
+            throw error
+        }
     }
 
     getVector(entryId: number): Float32Array | null {
         try {
             const db = this.connection.getNativeDb()
             const row = db
-                .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
-                .get(BigInt(entryId)) as { embedding: Buffer } | undefined
+                .prepare<unknown[], { embedding: Buffer }>(
+                    'SELECT embedding FROM vec_embeddings WHERE entry_id = ?'
+                )
+                .get(BigInt(entryId))
             if (!row) return null
-            return new Float32Array(row.embedding.buffer, row.embedding.byteOffset)
+            const count = Math.floor(row.embedding.byteLength / Float32Array.BYTES_PER_ELEMENT)
+            if (row.embedding.byteOffset % Float32Array.BYTES_PER_ELEMENT === 0) {
+                return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, count)
+            }
+            const aligned = row.embedding.buffer.slice(
+                row.embedding.byteOffset,
+                row.embedding.byteOffset + count * Float32Array.BYTES_PER_ELEMENT
+            )
+            return new Float32Array(aligned)
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return null
             }
             throw error
         }
     }
 
-    deleteVector(entryId: number): void {
+    getExistingVectorIds(entryIds: number[]): Set<number> {
+        const existing = new Set<number>()
+        if (entryIds.length === 0) return existing
         try {
-            this.connection
+            const db = this.connection.getNativeDb()
+            for (const { placeholders, params } of bucketInParams(entryIds)) {
+                const bigIds = params.map((id) => BigInt(Math.trunc(id)))
+                const rows = db
+                    .prepare<unknown[], { entry_id: number | bigint }>(
+                        `SELECT entry_id FROM vec_embeddings WHERE entry_id IN (${placeholders})`
+                    )
+                    .all(...bigIds)
+                for (const row of rows) {
+                    existing.add(typeof row.entry_id === 'bigint' ? Number(row.entry_id) : row.entry_id)
+                }
+            }
+            return existing
+        } catch (error: unknown) {
+            if (isMissingTableError(error)) {
+                return existing
+            }
+            throw error
+        }
+    }
+
+    deleteVector(entryId: number): boolean {
+        try {
+            const result = this.connection
                 .getNativeDb()
                 .prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
                 .run(BigInt(entryId))
+            return result.changes > 0
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
-                return
+            if (isMissingTableError(error)) {
+                return false
             }
             throw error
         }
@@ -98,7 +240,7 @@ export class VectorOperations {
         try {
             this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings').run()
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return
             }
             throw error
@@ -109,11 +251,11 @@ export class VectorOperations {
         try {
             const row = this.connection
                 .getNativeDb()
-                .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
-                .get() as { count: number } | undefined
+                .prepare<unknown[], { count: number }>('SELECT COUNT(*) as count FROM vec_embeddings')
+                .get()
             return row?.count ?? 0
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return 0
             }
             throw error
@@ -125,12 +267,12 @@ export class VectorOperations {
             const db = this.connection.getNativeDb()
             const result = db
                 .prepare(
-                    'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+                    'DELETE FROM vec_embeddings WHERE NOT EXISTS (SELECT 1 FROM memory_journal mj WHERE mj.id = vec_embeddings.entry_id AND mj.deleted_at IS NULL)'
                 )
                 .run()
             return result.changes
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return 0
             }
             throw error

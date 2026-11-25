@@ -63,7 +63,8 @@ describe('DatabaseAdapter Batch Operations', () => {
             expect(e2?.content).toBe('Batch 2')
             expect(e2?.tags).toEqual(['b2'])
             expect(e2?.isPersonal).toBe(false)
-            expect(e2?.entryType).toBe('architecture_decision')
+            expect(e2?.entryType).toBe('project_decision')
+            expect(e2?.significanceType).toBe('architecture')
             
             const e3 = db.getEntryById(created[2]!.id)
             expect(e3?.content).toBe('Batch 3')

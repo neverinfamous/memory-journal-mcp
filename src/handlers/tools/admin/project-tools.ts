@@ -1,66 +1,339 @@
-import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import type { ToolDefinition, ToolContext, ProjectRegistryEntry } from '../../../types/index.js'
+import { ConfigManager } from '../../../utils/config-manager.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import {
     RegisterProjectSchemaMcp,
     UpdateProjectSchemaMcp,
     DeleteProjectSchemaMcp,
-    GetProjectSchemaMcp,
-    ListProjectsSchemaMcp,
-    ProjectOutputSchema
+    ProjectOutputSchema,
 } from './schemas.js'
-import fs from 'node:fs'
-import path from 'node:path'
-import os from 'node:os'
-import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
+import {
+    applyDefaultsChange,
+    getProjectReadTools,
+    readLiveProjectRegistry,
+    readRegistryObject,
+    syncManagerRegistry,
+    type RegistryKeyChange,
+    type RegistryMap,
+} from './project-read-tools.js'
+import {
+    findCaseInsensitiveKeyConflict,
+    findProjectNumberConflict,
+    isForbiddenProjectKey,
+    isValidProjectPath,
+} from '../../../utils/project-registry-guards.js'
+import { parsePositiveProjectNumber } from '../../../utils/safe-positive-int.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
+import {
+    readProjectRegistryFile,
+    resolveRegistryConfigPath,
+    writeProjectRegistryFile,
+} from '../../../utils/registry-config-file.js'
+import {
+    clearActiveSessionProject,
+    getActiveSessionProject,
+    setActiveSessionProject,
+} from '../../../utils/workspace-resolver-session.js'
 
-const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-
-function isForbiddenProjectKey(key: string): boolean {
-    return FORBIDDEN_PROJECT_KEYS.has(key)
+function getRegistryConfigPath(context?: ToolContext): string {
+    const configManager = context?.config?.runtime?.configManager
+    const fromManager =
+        configManager instanceof ConfigManager ? configManager.getConfigFilePath() : undefined
+    return resolveRegistryConfigPath(fromManager)
 }
 
-function isValidProjectPath(p: string, allowedRoots?: string[]): boolean {
-    if (!p || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
-        return false
+function loadConfig(context?: ToolContext): Record<string, unknown> {
+    return readProjectRegistryFile(getRegistryConfigPath(context)).config
+}
+
+function omitRegistryKey(registry: RegistryMap, keyToRemove: string): RegistryMap {
+    return Object.fromEntries(Object.entries(registry).filter(([key]) => key !== keyToRemove))
+}
+
+/**
+ * [INTENT] Persist ONLY disk registry entries to disk and propagate the merged live+disk
+ * registry through in-process config (ToolContext + ConfigManager) without dumping CLI/env baselines.
+ */
+function saveConfig(
+    diskConfig: Record<string, unknown>,
+    context?: ToolContext,
+    change?: RegistryKeyChange,
+    inMemoryRegistry?: RegistryMap
+): void {
+    if (change !== undefined) {
+        applyDefaultsChange(diskConfig, change)
     }
-    const normalized = p.replace(/\\/g, '/')
-    if (normalized.split('/').includes('..')) {
-        return false
+    writeProjectRegistryFile(getRegistryConfigPath(context), diskConfig)
+    const effectiveRegistry = inMemoryRegistry ?? readRegistryObject(diskConfig['projectRegistry'])
+    if (context?.config === undefined || effectiveRegistry === undefined) return
+    context.config.projectRegistry = effectiveRegistry
+    applyDefaultsChange(context.config, change)
+    if (context.config.briefingConfig !== undefined) {
+        context.config.briefingConfig.projectRegistry = effectiveRegistry
+        applyDefaultsChange(context.config.briefingConfig, change)
     }
-    if (!path.isAbsolute(p)) {
-        return false
-    }
-    if (allowedRoots && allowedRoots.length > 0) {
-        try {
-            assertSafeDirectoryPath(p, allowedRoots)
-        } catch {
-            return false
+    const runtime = context.config.runtime
+    const activeSession = getActiveSessionProject(runtime)
+    const sessionMatchesWs =
+        change !== undefined &&
+        activeSession.workspaceId?.toLowerCase() === change.from.toLowerCase()
+    const sessionMatchesProj =
+        activeSession.workspaceId === undefined &&
+        change?.previousProjectNumber !== undefined &&
+        activeSession.projectNumber === change.previousProjectNumber
+    if (change !== undefined && (sessionMatchesWs || sessionMatchesProj)) {
+        if (change.to !== undefined) {
+            const nextProj =
+                change.projectNumber !== undefined ? change.projectNumber : activeSession.projectNumber
+            const nextWs = sessionMatchesWs ? change.to : activeSession.workspaceId
+            setActiveSessionProject(nextWs, nextProj ?? null, runtime)
+        } else {
+            clearActiveSessionProject(runtime)
         }
     }
-    return true
+    syncManagerRegistry(runtime?.configManager, effectiveRegistry, change)
 }
 
-function getRegistryConfigPath(): string {
-    return process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+function coerceRegistryProjectNumber(raw: number | string | undefined): number | undefined {
+    return parsePositiveProjectNumber(raw)
 }
 
-function loadConfig(): Record<string, unknown> {
-    const configPath = getRegistryConfigPath()
-    if (fs.existsSync(configPath)) {
-        try {
-            return JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
-        } catch {
-            return { projectRegistry: {} }
+function invalidProjectNumber(raw: number | string | undefined): boolean {
+    return raw !== undefined && coerceRegistryProjectNumber(raw) === undefined
+}
+
+function handleRegisterProject(
+    params: unknown,
+    context: ToolContext,
+    allowedRoots?: string[]
+): Record<string, unknown> {
+    const parsed = RegisterProjectSchemaMcp.parse(params)
+    const cleanName = parsed.name.trim()
+    if (invalidProjectNumber(parsed.project_number)) {
+        return { success: false, error: 'project_number must be a positive integer' }
+    }
+    if (cleanName === '' || isForbiddenProjectKey(cleanName)) {
+        return { success: false, error: `Invalid project name: '${parsed.name}'` }
+    }
+    if (!isValidProjectPath(parsed.absolute_path, allowedRoots)) {
+        return { success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` }
+    }
+
+    const diskConfig = loadConfig(context)
+    const diskRegistry: RegistryMap = readRegistryObject(diskConfig['projectRegistry']) ?? {}
+    diskConfig['projectRegistry'] = diskRegistry
+    const liveRegistry = readLiveProjectRegistry(context)
+    const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
+
+    const keyConflict = findCaseInsensitiveKeyConflict(mergedRegistry, cleanName, cleanName)
+    if (keyConflict !== undefined) {
+        return {
+            success: false,
+            error: `Project '${keyConflict}' already exists (conflicts with '${cleanName}').`,
         }
     }
-    return { projectRegistry: {} }
+
+    const coercedNum = coerceRegistryProjectNumber(parsed.project_number)
+    if (coercedNum !== undefined) {
+        const numConflict = findProjectNumberConflict(mergedRegistry, coercedNum, [cleanName])
+        if (numConflict !== undefined) {
+            return {
+                success: false,
+                error: `Project number ${String(coercedNum)} is already assigned to project '${numConflict}'.`,
+            }
+        }
+    }
+
+    const existing = Object.hasOwn(diskRegistry, cleanName)
+        ? diskRegistry[cleanName]
+        : Object.hasOwn(mergedRegistry, cleanName)
+          ? mergedRegistry[cleanName]
+          : undefined
+    const previousProjNum = existing?.project_number
+    const keyChange: RegistryKeyChange | undefined =
+        existing !== undefined && coercedNum !== undefined && coercedNum !== previousProjNum
+            ? {
+                  from: cleanName,
+                  to: cleanName,
+                  ...(typeof previousProjNum === 'number'
+                      ? { previousProjectNumber: previousProjNum }
+                      : {}),
+                  projectNumber: coercedNum,
+              }
+            : undefined
+    const projectRef: ProjectRegistryEntry = {
+        ...(existing ?? { path: parsed.absolute_path }),
+        path: parsed.absolute_path,
+        ...(coercedNum !== undefined ? { project_number: coercedNum } : {}),
+    }
+    diskRegistry[cleanName] = projectRef
+    saveConfig(diskConfig, context, keyChange, { ...liveRegistry, ...diskRegistry })
+
+    return {
+        success: true,
+        message: `Project '${cleanName}' registered successfully.`,
+        project: { name: cleanName, ...projectRef },
+    }
 }
 
-function saveConfig(config: Record<string, unknown>): void {
-    const configPath = getRegistryConfigPath()
-    fs.mkdirSync(path.dirname(configPath), { recursive: true })
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
-    process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
+function validateUpdateProjectInputs(
+    parsed: ReturnType<typeof UpdateProjectSchemaMcp.parse>,
+    mergedRegistry: RegistryMap,
+    allowedRoots?: string[]
+): { error?: Record<string, unknown>; targetName?: string; resolvedName?: string; coercedUpdateNum?: number } {
+    if (invalidProjectNumber(parsed.project_number)) {
+        return { error: { success: false, error: 'project_number must be a positive integer' } }
+    }
+    if (
+        isForbiddenProjectKey(parsed.name) ||
+        (parsed.new_name !== undefined && isForbiddenProjectKey(parsed.new_name))
+    ) {
+        return { error: { success: false, error: 'Invalid project name.' } }
+    }
+    if (parsed.absolute_path !== undefined && !isValidProjectPath(parsed.absolute_path, allowedRoots)) {
+        return {
+            error: { success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` },
+        }
+    }
+    const resolvedName = Object.hasOwn(mergedRegistry, parsed.name)
+        ? parsed.name
+        : findCanonicalRegistryKey(parsed.name, mergedRegistry)
+    if (resolvedName === undefined || !mergedRegistry[resolvedName]) {
+        return { error: { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` } }
+    }
+    const targetName = parsed.new_name !== undefined ? parsed.new_name.trim() : resolvedName
+    if (isForbiddenProjectKey(targetName)) {
+        return { error: { success: false, error: 'Invalid target project name.' } }
+    }
+    if (targetName !== resolvedName) {
+        if (Object.hasOwn(mergedRegistry, targetName)) {
+            return {
+                error: {
+                    success: false,
+                    error: `Project '${targetName}' already exists; refusing to overwrite it.`,
+                },
+            }
+        }
+        const renameConflict = findCaseInsensitiveKeyConflict(mergedRegistry, targetName, resolvedName)
+        if (renameConflict !== undefined) {
+            return {
+                error: {
+                    success: false,
+                    error: `Project '${renameConflict}' already exists (conflicts with '${targetName}'); refusing to overwrite it.`,
+                },
+            }
+        }
+    }
+    const coercedUpdateNum = coerceRegistryProjectNumber(parsed.project_number)
+    if (coercedUpdateNum !== undefined) {
+        const numConflict = findProjectNumberConflict(mergedRegistry, coercedUpdateNum, [
+            resolvedName,
+            targetName,
+        ])
+        if (numConflict !== undefined) {
+            return {
+                error: {
+                    success: false,
+                    error: `Project number ${String(coercedUpdateNum)} is already assigned to project '${numConflict}'.`,
+                },
+            }
+        }
+    }
+    return coercedUpdateNum !== undefined
+        ? { targetName, resolvedName, coercedUpdateNum }
+        : { targetName, resolvedName }
+}
+
+function handleUpdateProject(
+    params: unknown,
+    context: ToolContext,
+    allowedRoots?: string[]
+): Record<string, unknown> {
+    const parsed = UpdateProjectSchemaMcp.parse(params)
+    const diskConfig = loadConfig(context)
+    const diskRegistry: RegistryMap = readRegistryObject(diskConfig['projectRegistry']) ?? {}
+    diskConfig['projectRegistry'] = diskRegistry
+    const liveRegistry = readLiveProjectRegistry(context)
+    const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
+
+    const validation = validateUpdateProjectInputs(parsed, mergedRegistry, allowedRoots)
+    if (
+        validation.error !== undefined ||
+        validation.targetName === undefined ||
+        validation.resolvedName === undefined
+    ) {
+        return validation.error ?? { success: false, error: 'Invalid update project input' }
+    }
+
+    const { targetName, resolvedName, coercedUpdateNum } = validation
+    const previousProjNum = mergedRegistry[resolvedName]?.project_number
+    const project: ProjectRegistryEntry = {
+        ...(mergedRegistry[resolvedName] ?? { path: '' }),
+        ...(parsed.absolute_path !== undefined ? { path: parsed.absolute_path } : {}),
+        ...(coercedUpdateNum !== undefined ? { project_number: coercedUpdateNum } : {}),
+    }
+
+    const nextDiskRegistry =
+        targetName !== resolvedName ? omitRegistryKey(diskRegistry, resolvedName) : { ...diskRegistry }
+    nextDiskRegistry[targetName] = project
+    diskConfig['projectRegistry'] = nextDiskRegistry
+
+    const nextLiveRegistry =
+        targetName !== resolvedName ? omitRegistryKey(liveRegistry, resolvedName) : liveRegistry
+    const keyChange: RegistryKeyChange | undefined =
+        targetName !== resolvedName || coercedUpdateNum !== undefined
+            ? {
+                  from: resolvedName,
+                  to: targetName,
+                  ...(typeof previousProjNum === 'number'
+                      ? { previousProjectNumber: previousProjNum }
+                      : {}),
+                  ...(coercedUpdateNum !== undefined ? { projectNumber: coercedUpdateNum } : {}),
+              }
+            : undefined
+
+    saveConfig(diskConfig, context, keyChange, { ...nextLiveRegistry, ...nextDiskRegistry })
+    return {
+        success: true,
+        message: `Project '${targetName}' updated.`,
+        project: { name: targetName, ...project },
+    }
+}
+
+function handleDeleteProject(params: unknown, context: ToolContext): Record<string, unknown> {
+    const parsed = DeleteProjectSchemaMcp.parse(params)
+    if (isForbiddenProjectKey(parsed.name)) {
+        return { success: false, error: `Invalid project name: '${parsed.name}'` }
+    }
+    const diskConfig = loadConfig(context)
+    const diskRegistry: RegistryMap = readRegistryObject(diskConfig['projectRegistry']) ?? {}
+    diskConfig['projectRegistry'] = diskRegistry
+    const liveRegistry = readLiveProjectRegistry(context)
+    const mergedRegistry: RegistryMap = { ...liveRegistry, ...diskRegistry }
+
+    const resolvedName = Object.hasOwn(mergedRegistry, parsed.name)
+        ? parsed.name
+        : findCanonicalRegistryKey(parsed.name, mergedRegistry)
+    if (resolvedName === undefined || !mergedRegistry[resolvedName]) {
+        return { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` }
+    }
+
+    const previousProjNum = mergedRegistry[resolvedName]?.project_number
+    const nextDiskRegistry = omitRegistryKey(diskRegistry, resolvedName)
+    diskConfig['projectRegistry'] = nextDiskRegistry
+    const nextLiveRegistry = omitRegistryKey(liveRegistry, resolvedName)
+    saveConfig(
+        diskConfig,
+        context,
+        {
+            from: resolvedName,
+            ...(typeof previousProjNum === 'number'
+                ? { previousProjectNumber: previousProjNum }
+                : {}),
+        },
+        { ...nextLiveRegistry, ...nextDiskRegistry }
+    )
+    return { success: true, message: `Project '${resolvedName}' deleted.` }
 }
 
 export function getProjectTools(context: ToolContext): ToolDefinition[] {
@@ -81,37 +354,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const parsed = RegisterProjectSchemaMcp.parse(params)
-                    if (isForbiddenProjectKey(parsed.name)) {
-                        return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
-                    }
-                    if (!isValidProjectPath(parsed.absolute_path, allowedRoots)) {
-                        return Promise.resolve({ success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` })
-                    }
-                    const config = loadConfig()
-                    config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
-                    const projectRef = Object.hasOwn(registry, parsed.name)
-                        ? (registry[parsed.name] ?? { path: parsed.absolute_path })
-                        : { path: parsed.absolute_path }
-                    projectRef.path = parsed.absolute_path
-                    const coercedNum =
-                        typeof parsed.project_number === 'number'
-                            ? parsed.project_number
-                            : typeof parsed.project_number === 'string' &&
-                                parsed.project_number.trim() !== ''
-                              ? Number(parsed.project_number)
-                              : undefined
-                    if (coercedNum !== undefined && !Number.isNaN(coercedNum)) {
-                        projectRef.project_number = coercedNum
-                    }
-                    registry[parsed.name] = projectRef
-                    
-                    saveConfig(config)
-                    
-                    const message = `Project '${parsed.name}' registered successfully.`
-                    return Promise.resolve({ success: true, message, project: { name: parsed.name, ...registry[parsed.name] } })
+                    return Promise.resolve(handleRegisterProject(params, context, allowedRoots))
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))
                 }
@@ -132,48 +375,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const parsed = UpdateProjectSchemaMcp.parse(params)
-                    if (isForbiddenProjectKey(parsed.name) || (parsed.new_name && isForbiddenProjectKey(parsed.new_name))) {
-                        return Promise.resolve({ success: false, error: `Invalid project name.` })
-                    }
-                    if (parsed.absolute_path && !isValidProjectPath(parsed.absolute_path, allowedRoots)) {
-                        return Promise.resolve({ success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` })
-                    }
-                    const config = loadConfig()
-                    config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
-                    if (!Object.hasOwn(registry, parsed.name) || !registry[parsed.name]) {
-                        return { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` }
-                    }
-                    
-                    const project = registry[parsed.name] ?? { path: '' }
-                    
-                    if (parsed.absolute_path) {
-                        project.path = parsed.absolute_path
-                    }
-                    const coercedUpdateNum =
-                        typeof parsed.project_number === 'number'
-                            ? parsed.project_number
-                            : typeof parsed.project_number === 'string' &&
-                                parsed.project_number.trim() !== ''
-                              ? Number(parsed.project_number)
-                              : undefined
-                    if (coercedUpdateNum !== undefined && !Number.isNaN(coercedUpdateNum)) {
-                        project.project_number = coercedUpdateNum
-                    }
-                    
-                    const targetName = parsed.new_name ?? parsed.name
-                    if (parsed.new_name && parsed.new_name !== parsed.name) {
-                        const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
-                        config['projectRegistry'] = rest
-                    }
-                    
-                    const updatedRegistry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    updatedRegistry[targetName] = project
-                    saveConfig(config)
-                    
-                    return Promise.resolve({ success: true, message: `Project '${targetName}' updated.`, project: { name: targetName, ...updatedRegistry[targetName] } })
+                    return Promise.resolve(handleUpdateProject(params, context, allowedRoots))
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))
                 }
@@ -182,136 +384,25 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'delete_project',
             title: 'Delete Project',
-            description: 'Remove a project from the global registry.',
+            description:
+                'Remove a project from the global registry. Returns success: false when the project is already absent.',
             group: 'admin',
             inputSchema: DeleteProjectSchemaMcp,
             outputSchema: ProjectOutputSchema,
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: true,
-                idempotentHint: true,
+                idempotentHint: false,
                 openWorldHint: false,
             },
             handler: (params: unknown) => {
                 try {
-                    const parsed = DeleteProjectSchemaMcp.parse(params)
-                    if (isForbiddenProjectKey(parsed.name)) {
-                        return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
-                    }
-                    const config = loadConfig()
-                    config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
-                    if (!Object.hasOwn(registry, parsed.name) || !registry[parsed.name]) {
-                        return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` })
-                    }
-                    
-                    const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
-                    config['projectRegistry'] = rest
-                    saveConfig(config)
-                    
-                    return Promise.resolve({ success: true, message: `Project '${parsed.name}' deleted.` })
+                    return Promise.resolve(handleDeleteProject(params, context))
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))
                 }
             }
         },
-        {
-            name: 'list_projects',
-            title: 'List Projects',
-            description: 'List all registered projects.',
-            group: 'admin',
-            inputSchema: ListProjectsSchemaMcp,
-            outputSchema: ProjectOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: () => {
-                try {
-                    const config = loadConfig()
-                    config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
-                    const items = Object.entries(registry).map(([name, data]) => {
-                        const dataObj = data as Record<string, unknown>
-                        const desc = typeof dataObj['description'] === 'string' ? dataObj['description'] : ''
-                        const res: Record<string, unknown> = {
-                            ...data,
-                            name,
-                            description: desc,
-                            path: data.path,
-                        }
-                        if (typeof data.project_number === 'number') {
-                            res['project_number'] = data.project_number
-                            res['projectNumber'] = data.project_number
-                        }
-                        return res
-                    })
-                    
-                    return Promise.resolve({ success: true, projects: registry, items, data: items })
-                } catch (err) {
-                    return Promise.resolve(formatHandlerError(err))
-                }
-            }
-        },
-        {
-            name: 'get_project',
-            title: 'Get Project',
-            description: 'Get details of a specific registered project.',
-            group: 'admin',
-            inputSchema: GetProjectSchemaMcp,
-            outputSchema: ProjectOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
-                try {
-                    const parsed = GetProjectSchemaMcp.parse(params)
-                    if (isForbiddenProjectKey(parsed.name)) {
-                        return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
-                    }
-                    const config = loadConfig()
-                    config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number, id?: number }>
-                    
-                    let foundName = parsed.name
-                    let projectInfo = Object.hasOwn(registry, foundName) ? registry[foundName] : undefined
-                    const rawProjNum = (parsed as Record<string, unknown>)['project_number']
-                    const parsedProjNum = typeof rawProjNum === 'number' ? rawProjNum : undefined
-                    if (!projectInfo && (!isNaN(Number(parsed.name)) || parsedProjNum !== undefined)) {
-                        const targetNum = parsedProjNum ?? Number(parsed.name)
-                        for (const [pName, pData] of Object.entries(registry)) {
-                            if (pData.project_number === targetNum || pData.id === targetNum) {
-                                foundName = pName
-                                projectInfo = pData
-                                break
-                            }
-                        }
-                    }
-
-                    if (!projectInfo) {
-                        return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` })
-                    }
-                    
-                    return Promise.resolve({
-                        success: true,
-                        project: {
-                            name: foundName,
-                            id: projectInfo.project_number ?? projectInfo.id,
-                            project_number: projectInfo.project_number ?? projectInfo.id,
-                            ...projectInfo
-                        }
-                    })
-                } catch (err) {
-                    return Promise.resolve(formatHandlerError(err))
-                }
-            }
-        }
+        ...getProjectReadTools(context, { loadConfig: () => loadConfig(context), coerceRegistryProjectNumber }),
     ]
 }

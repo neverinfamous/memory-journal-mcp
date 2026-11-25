@@ -7,88 +7,168 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-const execCommand = (cmd, args, ignoreError = false) => {
-  try {
-    return execFileSync(cmd, args, { encoding: 'utf-8', stdio: 'pipe', cwd: REPO_ROOT });
-  } catch (e) {
-    if (!ignoreError) {
-      console.error(`Error: ${e.message}`);
+function resolveDockerCommand() {
+    if (process.platform !== 'win32') {
+        return { cmd: 'docker', prefixArgs: [] };
     }
-    return null;
-  }
-};
-
-// Dynamically discover expected containers from docker-compose.yml
-const isWindows = process.platform === 'win32';
-const dockerCmd = isWindows ? 'wsl' : 'docker';
-const dockerArgs = isWindows ? ['docker', 'compose'] : ['compose'];
-
-let servicesRaw = execCommand(dockerCmd, [...dockerArgs, 'config', '--services'], true);
-if (!servicesRaw) {
-    servicesRaw = execCommand(isWindows ? 'wsl' : 'docker-compose', isWindows ? ['docker-compose', 'config', '--services'] : ['config', '--services'], true);
+    try {
+        execFileSync('docker', ['info'], { stdio: 'pipe' });
+        return { cmd: 'docker', prefixArgs: [] };
+    } catch {
+        return { cmd: 'wsl', prefixArgs: ['--exec', 'docker'] };
+    }
 }
 
-let containers = [];
-if (servicesRaw) {
-    containers = servicesRaw.trim().split('\n').filter(Boolean).sort();
-} else {
-    // Ultimate fallback: manually parse docker-compose.yml
+const { cmd: dockerCmd, prefixArgs } = resolveDockerCommand();
+
+const execDocker = (args, ignoreError = false) => {
     try {
-        let yamlContent = fs.readFileSync('docker-compose.yml', 'utf-8');
-        let lines = yamlContent.split('\n');
+        return execFileSync(dockerCmd, [...prefixArgs, ...args], {
+            encoding: 'utf-8',
+            stdio: 'pipe',
+            cwd: REPO_ROOT,
+        });
+    } catch (e) {
+        if (!ignoreError) {
+            console.error(`Error: ${e.message}`);
+        }
+        return null;
+    }
+};
+
+function parseExpectedContainers() {
+    const jsonRaw = execDocker(['compose', 'config', '--format', 'json'], true);
+    if (jsonRaw) {
+        try {
+            const parsed = JSON.parse(jsonRaw);
+            if (parsed && typeof parsed === 'object' && parsed.services) {
+                return Object.entries(parsed.services)
+                    .map(([service, def]) => ({
+                        service,
+                        containerName: def?.container_name || `mj-${service}`,
+                    }))
+                    .sort((a, b) => a.service.localeCompare(b.service));
+            }
+        } catch {
+            // Fallback to YAML parse below
+        }
+    }
+
+    try {
+        const yamlContent = fs.readFileSync(path.join(REPO_ROOT, 'docker-compose.yml'), 'utf-8');
+        const targets = [];
         let inServices = false;
-        for (let line of lines) {
+        let currentService = null;
+        let currentContainer = null;
+
+        for (const line of yamlContent.split('\n')) {
             if (line.startsWith('services:')) {
                 inServices = true;
                 continue;
             }
-            if (inServices) {
-                if (line.match(/^[a-zA-Z]/)) break; // Next top-level block
-                let match = line.match(/^  ([a-zA-Z0-9_-]+):/);
-                if (match) {
-                    containers.push(match[1]);
+            if (!inServices) continue;
+            if (/^[a-zA-Z]/.test(line)) break;
+
+            const svcMatch = line.match(/^  ([a-zA-Z0-9_-]+):\s*$/);
+            if (svcMatch) {
+                if (currentService) {
+                    targets.push({
+                        service: currentService,
+                        containerName: currentContainer || `mj-${currentService}`,
+                    });
                 }
+                currentService = svcMatch[1];
+                currentContainer = null;
+                continue;
+            }
+            const nameMatch = line.match(/^\s+container_name:\s*([^\s#]+)/);
+            if (nameMatch && currentService) {
+                currentContainer = nameMatch[1].replace(/^['"]|['"]$/g, '');
             }
         }
-        containers.sort();
-    } catch (e) {
-        console.error('Failed to read docker-compose.yml services. Are you in the infrastructure directory?');
-        process.exit(1);
-    }
-    
-    if (containers.length === 0) {
-        console.error('Failed to parse any services from docker-compose.yml. Are you in the infrastructure directory?');
+        if (currentService) {
+            targets.push({
+                service: currentService,
+                containerName: currentContainer || `mj-${currentService}`,
+            });
+        }
+        if (targets.length === 0) {
+            console.error('Failed to parse any services from docker-compose.yml.');
+            process.exit(1);
+        }
+        return targets.sort((a, b) => a.service.localeCompare(b.service));
+    } catch {
+        console.error('Failed to read docker-compose.yml services.');
         process.exit(1);
     }
 }
 
-console.log('=== Ecosystem Status Check ===\n');
+async function checkHttpEndpoint(label, url, fallbackContainer = null, fallbackArgs = []) {
+    try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+        if (res.ok) {
+            console.log(`✅ ${label.padEnd(24)} : HTTP ${res.status} (${url})`);
+            return { ok: true, usedFallback: false };
+        }
+        console.log(`❌ ${label.padEnd(24)} : HTTP ${res.status} (${url})`);
+        return { ok: false, usedFallback: false };
+    } catch (err) {
+        if (fallbackContainer && fallbackArgs.length > 0) {
+            const out = execDocker(['exec', fallbackContainer, ...fallbackArgs], true);
+            if (out !== null) {
+                console.log(`✅ ${label.padEnd(24)} : OK via docker exec (${fallbackContainer})`);
+                return { ok: true, usedFallback: true };
+            }
+        }
+        console.log(`❌ ${label.padEnd(24)} : Unreachable (${err instanceof Error ? err.message : String(err)})`);
+        return { ok: false, usedFallback: false };
+    }
+}
 
-console.log(`Container Status (${containers.length} services):`);
+const targets = parseExpectedContainers();
+
+console.log('=== Memory Journal Observability Status Check ===\n');
+console.log(`Container Status (${targets.length} services):`);
 console.log('----------------------------------------');
+
 let allUp = true;
 
-const psOutput = execCommand(dockerCmd, isWindows ? ['docker', 'ps', '-a', '--format', '{{.Names}},{{.State}},{{.Status}}'] : ['ps', '-a', '--format', '{{.Names}},{{.State}},{{.Status}}'], false);
-if (!psOutput) {
-    console.error(`Error: Failed to execute docker ps. Docker daemon might not be running.`);
+const psOutput = execDocker(['ps', '-a', '--format', '{{.Names}}|{{.State}}|{{.Status}}|{{.Image}}'], false);
+if (psOutput === null) {
+    console.error('Error: Failed to execute docker ps. Docker daemon might not be running.');
     process.exit(1);
 }
 
-const runningContainers = psOutput.trim().split('\n').reduce((acc, line) => {
-    const [name, state, status] = line.split(',');
+const runningContainers = {};
+for (const line of psOutput.trim().split('\n')) {
+    if (!line.trim()) continue;
+    const [name, state, status, image] = line.split('|');
     if (name) {
-        acc[name] = { state, status };
+        runningContainers[name.trim()] = {
+            state: (state || '').trim(),
+            status: (status || '').trim(),
+            image: (image || '').trim(),
+        };
     }
-    return acc;
-}, {});
+}
 
-for (const name of containers) {
-    const info = runningContainers[name];
+for (const { service, containerName } of targets) {
+    const info = runningContainers[containerName];
+    const renameOrphan = Object.keys(runningContainers).find((n) => n.endsWith(`_${containerName}`));
+
+    if (renameOrphan) {
+        console.log(
+            `⚠️ ${containerName.padEnd(24)} : Stuck rename-prefix container detected (${renameOrphan}) — run recreate-ecosystem.mjs`
+        );
+        allUp = false;
+        continue;
+    }
+
     if (info) {
-        let displayStatus = info.status;
+        let displayStatus = `${info.status} [${info.image}]`;
         let icon = '✅';
         if (info.state !== 'running') {
-            if (name === 'datadog-unified') {
+            if (service === 'datadog-unified') {
                 icon = '⚠️';
                 displayStatus = `Down (${info.state}) - Expected without DD_API_KEY`;
             } else {
@@ -97,27 +177,104 @@ for (const name of containers) {
                 allUp = false;
             }
         } else if (info.status.includes('unhealthy')) {
-            icon = '⚠️';
+            icon = '❌';
             allUp = false;
         } else if (info.status.includes('health: starting')) {
             icon = '⏳';
             allUp = false;
         }
-        console.log(`${icon} ${name.padEnd(20)} : ${displayStatus}`);
+        console.log(`${icon} ${containerName.padEnd(24)} : ${displayStatus}`);
+    } else if (service === 'datadog-unified') {
+        console.log(`⚠️ ${containerName.padEnd(24)} : Not Found (Expected without DD_API_KEY)`);
     } else {
-        if (name === 'datadog-unified') {
-            console.log(`⚠️ ${name.padEnd(20)} : Not Found (Expected without DD_API_KEY)`);
+        console.log(`❌ ${containerName.padEnd(24)} : Not Found / Offline`);
+        allUp = false;
+    }
+}
+
+console.log('\nHTTP Endpoint & Scrape Target Health:');
+console.log('----------------------------------------');
+const promStatus = await checkHttpEndpoint(
+    'Prometheus (:9091)',
+    'http://localhost:9091/-/healthy',
+    'mj-prometheus',
+    ['wget', '-qO-', 'http://localhost:9090/-/healthy']
+);
+const grafStatus = await checkHttpEndpoint(
+    'Grafana (:3002)',
+    'http://localhost:3002/api/health',
+    'mj-grafana',
+    ['curl', '-sf', 'http://localhost:3000/api/health']
+);
+const lokiStatus = await checkHttpEndpoint(
+    'Loki (:3102)',
+    'http://localhost:3102/ready',
+    'mj-prometheus',
+    ['wget', '-qO-', 'http://loki:3100/ready']
+);
+if (!promStatus.ok || !grafStatus.ok || !lokiStatus.ok) {
+    allUp = false;
+}
+
+if (promStatus.ok) {
+    try {
+        let payload = null;
+        if (!promStatus.usedFallback) {
+            const targetsRes = await fetch('http://localhost:9091/api/v1/targets?state=active', {
+                signal: AbortSignal.timeout(4000),
+            });
+            if (targetsRes.ok) {
+                payload = await targetsRes.json();
+            }
         } else {
-            console.log(`❌ ${name.padEnd(20)} : Not Found / Offline`);
+            const raw = execDocker(
+                ['exec', 'mj-prometheus', 'wget', '-qO-', 'http://localhost:9090/api/v1/targets?state=active'],
+                true
+            );
+            if (raw) {
+                payload = JSON.parse(raw);
+            }
+        }
+        if (payload) {
+            const activeTargets = payload?.data?.activeTargets || [];
+            const downTargets = activeTargets.filter((t) => t.health !== 'up');
+            if (activeTargets.length > 0 && downTargets.length === 0) {
+                console.log(`✅ ${'Prometheus Targets'.padEnd(24)} : ${activeTargets.length} target(s) all UP`);
+            } else if (downTargets.length > 0) {
+                console.log(
+                    `⚠️ ${'Prometheus Targets'.padEnd(24)} : ${downTargets.length}/${activeTargets.length} DOWN (${downTargets.map((t) => t.lastError || t.labels?.job).join('; ')})`
+                );
+                allUp = false;
+            }
+        }
+    } catch {
+        // Non-fatal if targets endpoint unreachable
+    }
+}
+
+const ddInfo = runningContainers['mj-datadog-unified'];
+if (ddInfo && ddInfo.state === 'running') {
+    const ddStatusOut = execDocker(['exec', 'mj-datadog-unified', 'agent', 'status'], true);
+    if (ddStatusOut) {
+        const lines = ddStatusOut.split(/\r?\n/);
+        const errorChecks = lines.filter((l) => l.includes('Instance ID:') && l.includes('[ERROR]'));
+        const okChecks = lines.filter((l) => l.includes('Instance ID:') && l.includes('[OK]'));
+        if (errorChecks.length > 0) {
+            console.log(`❌ ${'Datadog Integrations'.padEnd(24)} : ${errorChecks.length} integration ERROR(s)`);
+            for (const errLine of errorChecks) {
+                console.log(`   ❌ ${errLine.trim()}`);
+            }
             allUp = false;
+        } else if (okChecks.length > 0) {
+            console.log(`✅ ${'Datadog Integrations'.padEnd(24)} : ${okChecks.length} integration checks all OK`);
         }
     }
 }
 
 console.log('\n========================================');
 if (allUp) {
-    console.log('🎉 Ecosystem is fully healthy and ready for testing!');
+    console.log('🎉 Memory Journal observability stack is fully healthy!');
 } else {
-    console.log('⚠️ Ecosystem has issues. Please resolve them before testing.');
+    console.log('⚠️ Ecosystem has issues. Run recreate-ecosystem.mjs or inspect container logs.');
     process.exit(1);
 }

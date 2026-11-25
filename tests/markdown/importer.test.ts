@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { importMarkdownEntries } from '../../src/markdown/importer.js'
+import { ValidationError } from '../../src/types/errors.js'
 import * as fs from 'node:fs/promises'
 
 vi.mock('node:fs/promises', () => ({
@@ -7,17 +8,28 @@ vi.mock('node:fs/promises', () => ({
     opendir: vi.fn(),
     readFile: vi.fn(),
     stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 100 }),
-    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
+    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false, isFile: () => true }),
     realpath: vi.fn(),
     open: vi.fn().mockImplementation(async (path) => {
         const fsPromises = await import('node:fs/promises')
         return {
-            stat: vi.fn().mockResolvedValue({ size: 100 }),
+            stat: vi.fn().mockResolvedValue({ isFile: () => true, size: 100 }),
             readFile: () => fsPromises.readFile(path),
             close: vi.fn(),
         }
     }),
 }))
+
+vi.mock('node:fs', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs')>()
+    const realpathSync = Object.assign(
+        (...args: Parameters<typeof actual.realpathSync>) => actual.realpathSync(...args),
+        {
+            native: vi.fn((p: Parameters<typeof actual.realpathSync.native>[0]) => String(p)),
+        }
+    )
+    return { ...actual, realpathSync }
+})
 
 vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../src/utils/security-utils.js')>()
@@ -31,7 +43,7 @@ describe('importMarkdownEntries', () => {
     const mockDb = {
         getEntryById: vi.fn(),
         createEntry: vi.fn(),
-        updateEntry: vi.fn(),
+        updateEntry: vi.fn((id: number) => ({ id, workspaceId: 'default' })),
         getOrCreateTag: vi.fn(),
         linkEntries: vi.fn(),
         executeInTransaction: vi.fn((cb) => cb()),
@@ -80,6 +92,7 @@ New content`
             content: 'New content',
             entryType: 'personal_reflection',
             tags: ['test'],
+            workspaceId: 'default',
         })
     })
 
@@ -109,6 +122,7 @@ Updated decision content`
             content: 'Updated decision content',
             entryType: 'project_decision',
             tags: undefined,
+            workspaceId: 'default',
         })
         expect(mockDb.createEntry).not.toHaveBeenCalled()
     })
@@ -139,6 +153,7 @@ Restored entry`
             content: 'Restored entry',
             entryType: 'personal_reflection',
             tags: undefined,
+            workspaceId: 'default',
         })
     })
 
@@ -193,8 +208,8 @@ Content`
             process.cwd(),
         ])
 
-        expect(result.success).toBe(true)
-        expect(result.errors).toEqual([]) // It shouldn't be a hard error, just skipped quietly in importer mapping
+        expect(result.success).toBe(false)
+        expect(result.errors.some((error) => error.error.includes('does not exist'))).toBe(true)
         // We ensure `linkEntries` is NOT called if target is missing
         expect(mockDb.linkEntries).not.toHaveBeenCalled()
     })
@@ -265,7 +280,7 @@ Content`
         ])
 
         expect(result.success).toBe(true)
-        expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references')
+        expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references', undefined, 'default')
     })
 
     it('should record vector manager errors without crashing', async () => {
@@ -288,5 +303,40 @@ Content`
         // No hard errors thrown, but it should be recorded
         expect(result.errors.length).toBe(1)
         expect(result.errors[0]?.error).toContain('Vector fail')
+    })
+
+    it('throws ValidationError when frontmatter workspace_id or project_number conflicts with caller options or uses "*"', async () => {
+        vi.mocked(fs.readFile).mockResolvedValueOnce(
+            '---\n{"workspace_id":"core-platform"}\n---\nConflicting workspace body'
+        )
+        await expect(
+            importMarkdownEntries(
+                './import',
+                mockDb as any,
+                { workspaceId: 'memory-journal-mcp' },
+                undefined,
+                [process.cwd()]
+            )
+        ).rejects.toThrow(ValidationError)
+
+        vi.mocked(fs.readFile).mockResolvedValueOnce(
+            '---\n{"project_number":16}\n---\nConflicting project body'
+        )
+        await expect(
+            importMarkdownEntries(
+                './import',
+                mockDb as any,
+                { project_number: 5 },
+                undefined,
+                [process.cwd()]
+            )
+        ).rejects.toThrow(ValidationError)
+
+        vi.mocked(fs.readFile).mockResolvedValueOnce(
+            '---\n{"workspace_id":"*"}\n---\nWildcard workspace body'
+        )
+        await expect(
+            importMarkdownEntries('./import', mockDb as any, {}, undefined, [process.cwd()])
+        ).rejects.toThrow(ValidationError)
     })
 })

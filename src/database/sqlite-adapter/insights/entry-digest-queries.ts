@@ -1,11 +1,66 @@
-import type { JournalEntry, EntryType } from '../../../types/index.js'
+import type { JournalEntry } from '../../../types/index.js'
 import type { NativeConnectionManager } from '../native-connection.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
+import { ENTRY_COLUMNS } from '../entries/shared.js'
+import { bucketInParams } from '../row-helpers.js'
 import {
     saveAnalyticsSnapshot as saveSnapshot,
     getLatestAnalyticsSnapshot as getLatestSnapshot,
     getAnalyticsSnapshots as getSnapshots,
     computeDigest as computeDigestCore,
+    type DigestSnapshot,
 } from '../entries/digest.js'
+
+type RawEntryRow = Omit<JournalEntry, 'tags' | 'isPersonal' | 'isArchived'> & {
+    isPersonal: number | boolean
+    isArchived: number | boolean
+}
+
+function hydrateTagsMap(connection: NativeConnectionManager, entryIds: number[]): Map<number, string[]> {
+    const tagsMap = new Map<number, string[]>()
+    if (entryIds.length === 0) return tagsMap
+    const db = connection.getNativeDb()
+    for (const { placeholders, params } of bucketInParams(entryIds)) {
+        const rows = db
+            .prepare<unknown[], { entryId: number; tag: string }>(
+                `SELECT entry_tags.entry_id as entryId, tags.name as tag
+                 FROM entry_tags
+                 JOIN tags ON entry_tags.tag_id = tags.id
+                 WHERE entry_tags.entry_id IN (${placeholders})`
+            )
+            .all(...params)
+        for (const row of rows) {
+            const list = tagsMap.get(row.entryId)
+            if (list) {
+                list.push(row.tag)
+            } else {
+                tagsMap.set(row.entryId, [row.tag])
+            }
+        }
+    }
+    return tagsMap
+}
+
+function rowsToDigestEntries(
+    connection: NativeConnectionManager,
+    rows: RawEntryRow[]
+): JournalEntry[] {
+    if (rows.length === 0) return []
+    const tagsMap = hydrateTagsMap(
+        connection,
+        rows.map((r) => r.id)
+    )
+    return rows.map((row) => ({
+        ...row,
+        tags: tagsMap.get(row.id) ?? [],
+        isPersonal: Boolean(row.isPersonal),
+        isArchived: Boolean(row.isArchived),
+        significanceType: row.significanceType ?? null,
+        autoContext: row.autoContext ?? null,
+        deletedAt: row.deletedAt ?? null,
+        version: row.version ?? 1,
+    }))
+}
 
 export function getWorkflowActionEntries(
     connection: NativeConnectionManager,
@@ -13,66 +68,20 @@ export function getWorkflowActionEntries(
     workspaceId?: string
 ): JournalEntry[] {
     let sql = `
-        SELECT * FROM memory_journal
+        SELECT ${ENTRY_COLUMNS} FROM memory_journal
         WHERE workflow_run_id IS NOT NULL AND deleted_at IS NULL
     `
     const params: unknown[] = []
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         sql += ` AND workspace_id = ?`
-        params.push(workspaceId)
+        params.push(scopeId)
     }
-    sql += ` ORDER BY timestamp DESC LIMIT ?`
+    sql += ` ORDER BY timestamp DESC, id DESC LIMIT ?`
     params.push(limit)
 
-    const rows = connection.exec(sql, params)
-    if (!rows[0] || rows[0].values.length === 0) return []
-
-    const cols = rows[0].columns
-    const entryIds = rows[0].values.map((row) => row[cols.indexOf('id')] as number)
-    const tagsMap = new Map<number, string[]>()
-
-    if (entryIds.length > 0) {
-        const placeholders = entryIds.map(() => '?').join(',')
-        const tagRows = connection.exec(
-            `SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`,
-            entryIds
-        )
-        if (tagRows[0] && tagRows[0].values.length > 0) {
-            const tagCols = tagRows[0].columns
-            const entryIdIdx = tagCols.indexOf('entry_id')
-            const tagIdx = tagCols.indexOf('tag')
-            for (const row of tagRows[0].values) {
-                const eId = row[entryIdIdx] as number
-                const tag = row[tagIdx] as string
-                const list = tagsMap.get(eId) ?? []
-                list.push(tag)
-                tagsMap.set(eId, list)
-            }
-        }
-    }
-
-    return rows[0].values.map((row: unknown[]): JournalEntry => {
-        const getVal = (idx: number): unknown => row[idx]
-        const id = getVal(cols.indexOf('id')) as number
-        return {
-            id,
-            entryType: getVal(cols.indexOf('entry_type')) as EntryType,
-            content: getVal(cols.indexOf('content')) as string,
-            timestamp: getVal(cols.indexOf('timestamp')) as string,
-            tags: tagsMap.get(id) ?? [],
-            isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
-            projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
-            issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,
-            prNumber: getVal(cols.indexOf('pr_number')) as number | undefined,
-            prStatus: getVal(cols.indexOf('pr_status')) as string | undefined,
-            workflowRunId: getVal(cols.indexOf('workflow_run_id')) as number | undefined,
-            workflowName: getVal(cols.indexOf('workflow_name')) as string | undefined,
-            workflowStatus: getVal(cols.indexOf('workflow_status')) as string | undefined,
-            significanceType: getVal(cols.indexOf('significance_type')) as string | undefined,
-            autoContext: getVal(cols.indexOf('auto_context')) as string | undefined,
-            workspaceId: getVal(cols.indexOf('workspace_id')) as string | undefined,
-        } as JournalEntry
-    })
+    const rows = connection.getNativeDb().prepare<unknown[], RawEntryRow>(sql).all(...params)
+    return rowsToDigestEntries(connection, rows)
 }
 
 export function getSignificantEntries(
@@ -82,7 +91,7 @@ export function getSignificantEntries(
     workspaceId?: string
 ): JournalEntry[] {
     let sql = `
-        SELECT * FROM memory_journal
+        SELECT ${ENTRY_COLUMNS} FROM memory_journal
         WHERE significance_type IS NOT NULL AND deleted_at IS NULL
     `
     const params: unknown[] = []
@@ -90,86 +99,47 @@ export function getSignificantEntries(
         sql += ` AND project_number = ?`
         params.push(projectNumber)
     }
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         sql += ` AND workspace_id = ?`
-        params.push(workspaceId)
+        params.push(scopeId)
     }
-    sql += ` ORDER BY timestamp DESC LIMIT ?`
+    sql += ` ORDER BY timestamp DESC, id DESC LIMIT ?`
     params.push(limit)
 
-    const rows = connection.exec(sql, params)
-    if (!rows[0] || rows[0].values.length === 0) return []
-
-    const cols = rows[0].columns
-    const entryIds = rows[0].values.map((row) => row[cols.indexOf('id')] as number)
-    const tagsMap = new Map<number, string[]>()
-
-    if (entryIds.length > 0) {
-        const placeholders = entryIds.map(() => '?').join(',')
-        const tagRows = connection.exec(
-            `SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`,
-            entryIds
-        )
-        if (tagRows[0] && tagRows[0].values.length > 0) {
-            const tagCols = tagRows[0].columns
-            const entryIdIdx = tagCols.indexOf('entry_id')
-            const tagIdx = tagCols.indexOf('tag')
-            for (const row of tagRows[0].values) {
-                const eId = row[entryIdIdx] as number
-                const tag = row[tagIdx] as string
-                const list = tagsMap.get(eId) ?? []
-                list.push(tag)
-                tagsMap.set(eId, list)
-            }
-        }
-    }
-
-    return rows[0].values.map((row: unknown[]): JournalEntry => {
-        const getVal = (idx: number): unknown => row[idx]
-        const id = getVal(cols.indexOf('id')) as number
-        return {
-            id,
-            entryType: getVal(cols.indexOf('entry_type')) as EntryType,
-            content: getVal(cols.indexOf('content')) as string,
-            timestamp: getVal(cols.indexOf('timestamp')) as string,
-            tags: tagsMap.get(id) ?? [],
-            isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
-            projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
-            issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,
-            prNumber: getVal(cols.indexOf('pr_number')) as number | undefined,
-            significanceType: getVal(cols.indexOf('significance_type')) as string | undefined,
-            workspaceId: getVal(cols.indexOf('workspace_id')) as string | undefined,
-        } as JournalEntry
-    })
+    const rows = connection.getNativeDb().prepare<unknown[], RawEntryRow>(sql).all(...params)
+    return rowsToDigestEntries(connection, rows)
 }
 
 export function saveAnalyticsDigest(
     connection: NativeConnectionManager,
     type: string,
-    data: Record<string, unknown>
+    data: object,
+    workspaceId?: string
 ): number {
-    return saveSnapshot(connection.getNativeDb(), type, data)
+    return saveSnapshot(connection.getNativeDb(), type, data, workspaceId)
 }
 
 export function getLatestAnalyticsDigest(
     connection: NativeConnectionManager,
-    type: string
+    type: string,
+    workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-    return getLatestSnapshot(connection.getNativeDb(), type)
+    return getLatestSnapshot(connection.getNativeDb(), type, workspaceId)
 }
 
 export function getAnalyticsSnapshots(
     connection: NativeConnectionManager,
     type: string,
-    limit?: number
+    limit?: number,
+    workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-    return getSnapshots(connection.getNativeDb(), type, limit)
+    return getSnapshots(connection.getNativeDb(), type, limit, workspaceId)
 }
 
 export function computeDigest(
     connection: NativeConnectionManager,
     workspaceId?: string
-): Record<string, unknown> {
-    const digest = computeDigestCore(connection.getNativeDb(), workspaceId)
-    return { ...digest }
+): DigestSnapshot {
+    return computeDigestCore(connection.getNativeDb(), effectiveWorkspace(workspaceId))
 }

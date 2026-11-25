@@ -57,7 +57,7 @@
 | `migrations/`    | Versioned SQLite schema migrations and legacy upgrades          |
 | `observability/` | Metrics interceptor, Prometheus exporter, token estimator       |
 | `security/`      | Input validation, SQL injection, path traversal                 |
-| `server/`        | MCP server initialization, registration, scheduler, and interceptors |
+| `server/`        | MCP server initialization, registration, auto-prune, and interceptors |
 | `transports/`    | HTTP transport, rate limiting, session behavior                 |
 | `unit/`          | Targeted unit suites for CLI, normalizers, and proxies          |
 | `utils/`         | Error formatting, security helpers, logger, progress utilities  |

@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-const toolMap = JSON.parse(fs.readFileSync('c:\\Users\\chris\\Desktop\\memory-journal-mcp\\test-server\\scripts\\tool-map.json', 'utf8'));
+const toolMap = JSON.parse(fs.readFileSync(new URL('./tool-map.json', import.meta.url), 'utf8'));
 
 const reverseMap = {};
 

@@ -15,10 +15,36 @@
  *   - latency percentiles (p50/p95/p99) via LatencyTracker
  */
 
-import { promises as fs } from 'node:fs'
+import { z } from 'zod'
 import { LatencyTracker } from './latency-tracker.js'
 import type { LatencyPercentiles } from './latency-tracker.js'
 import { logger } from '../utils/logger.js'
+import { readMetricsSnapshotFile, writeMetricsSnapshotFile } from './metrics-persistence.js'
+
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+const ToolMetricsSchema = z.object({
+    callCount: z.number().nonnegative(),
+    errorCount: z.number().nonnegative(),
+    totalDurationMs: z.number().nonnegative(),
+    totalInputTokens: z.number().nonnegative(),
+    totalOutputTokens: z.number().nonnegative(),
+    lastCalledAt: z.string().nullable(),
+})
+
+const ResourceMetricsSchema = z.object({
+    readCount: z.number().nonnegative(),
+    errorCount: z.number().nonnegative(),
+    lastReadAt: z.string().nullable(),
+})
+
+const MetricsStateSchema = z
+    .object({
+        toolData: z.array(z.tuple([z.string(), ToolMetricsSchema])).optional(),
+        resourceData: z.array(z.tuple([z.string(), ResourceMetricsSchema])).optional(),
+        userCounts: z.array(z.tuple([z.string(), z.number().nonnegative()])).optional(),
+    })
+    .loose()
 
 // ============================================================================
 // Types
@@ -63,6 +89,18 @@ export interface SystemMetrics {
 // Accumulator
 // ============================================================================
 
+const MAX_METRIC_KEYS = 1000
+const MAX_DEPRECATION_WARNINGS = 500
+
+function normalizeResourceUri(uri: string): string {
+    const queryIdx = uri.indexOf('?')
+    const hashIdx = uri.indexOf('#')
+    if (queryIdx === -1 && hashIdx === -1) return uri
+    const cutIdx =
+        queryIdx === -1 ? hashIdx : hashIdx === -1 ? queryIdx : Math.min(queryIdx, hashIdx)
+    return uri.slice(0, cutIdx)
+}
+
 export class MetricsAccumulator {
     private readonly toolData = new Map<string, ToolMetrics>()
     private readonly resourceData = new Map<string, ResourceMetrics>()
@@ -79,6 +117,12 @@ export class MetricsAccumulator {
      * Record a deprecation warning to be surfaced in the briefing.
      */
     recordDeprecationWarning(warning: string): void {
+        if (
+            this.deprecationWarnings.size >= MAX_DEPRECATION_WARNINGS &&
+            !this.deprecationWarnings.has(warning)
+        ) {
+            return
+        }
         this.deprecationWarnings.add(warning)
     }
 
@@ -99,7 +143,11 @@ export class MetricsAccumulator {
         outputTokens: number
         isError: boolean
     }): void {
-        const existing = this.toolData.get(opts.toolName)
+        const metricKey =
+            !this.toolData.has(opts.toolName) && this.toolData.size >= MAX_METRIC_KEYS
+                ? 'other'
+                : opts.toolName
+        const existing = this.toolData.get(metricKey)
         const m: ToolMetrics = existing ?? {
             callCount: 0,
             errorCount: 0,
@@ -116,17 +164,23 @@ export class MetricsAccumulator {
         if (opts.isError) m.errorCount++
         m.lastCalledAt = new Date().toISOString()
 
-        this.toolData.set(opts.toolName, m)
+        this.toolData.set(metricKey, m)
 
         // Feed latency tracker for percentile computation
-        this.latencyTracker.record(opts.toolName, opts.durationMs)
+        this.latencyTracker.record(metricKey, opts.durationMs)
     }
 
     /**
      * Record a single resource read.
      */
     recordResourceRead(uri: string, isError = false): void {
-        const existing = this.resourceData.get(uri)
+        const normalizedUri = normalizeResourceUri(uri)
+        if (FORBIDDEN_KEYS.has(normalizedUri)) return
+        const metricUri =
+            !this.resourceData.has(normalizedUri) && this.resourceData.size >= MAX_METRIC_KEYS
+                ? 'other'
+                : normalizedUri
+        const existing = this.resourceData.get(metricUri)
         const m: ResourceMetrics = existing ?? {
             readCount: 0,
             errorCount: 0,
@@ -137,7 +191,7 @@ export class MetricsAccumulator {
         if (isError) m.errorCount++
         m.lastReadAt = new Date().toISOString()
 
-        this.resourceData.set(uri, m)
+        this.resourceData.set(metricUri, m)
     }
 
     /**
@@ -280,54 +334,64 @@ export class MetricsAccumulator {
         })
     }
 
+    private mergeToolMetrics(entries: [string, ToolMetrics][]): void {
+        for (const [key, val] of entries) {
+            if (FORBIDDEN_KEYS.has(key)) continue
+            const existing = this.toolData.get(key)
+            if (!existing) {
+                this.toolData.set(key, { ...val })
+                continue
+            }
+            existing.callCount += val.callCount
+            existing.errorCount += val.errorCount
+            existing.totalDurationMs += val.totalDurationMs
+            existing.totalInputTokens += val.totalInputTokens
+            existing.totalOutputTokens += val.totalOutputTokens
+            if (
+                val.lastCalledAt &&
+                (!existing.lastCalledAt || new Date(val.lastCalledAt) > new Date(existing.lastCalledAt))
+            ) {
+                existing.lastCalledAt = val.lastCalledAt
+            }
+        }
+    }
+
+    private mergeResourceMetrics(entries: [string, ResourceMetrics][]): void {
+        for (const [rawKey, val] of entries) {
+            const key = normalizeResourceUri(rawKey)
+            if (FORBIDDEN_KEYS.has(key)) continue
+            const metricUri =
+                !this.resourceData.has(key) && this.resourceData.size >= MAX_METRIC_KEYS
+                    ? 'other'
+                    : key
+            const existing = this.resourceData.get(metricUri)
+            if (!existing) {
+                this.resourceData.set(metricUri, { ...val })
+                continue
+            }
+            existing.readCount += val.readCount
+            existing.errorCount += val.errorCount
+            if (
+                val.lastReadAt &&
+                (!existing.lastReadAt || new Date(val.lastReadAt) > new Date(existing.lastReadAt))
+            ) {
+                existing.lastReadAt = val.lastReadAt
+            }
+        }
+    }
+
     /**
      * Import metrics state from a JSON string, merging with current state.
      */
     importState(jsonState: string): void {
         try {
-            const parsed = JSON.parse(jsonState) as {
-                toolData?: [string, ToolMetrics][]
-                resourceData?: [string, ResourceMetrics][]
-                userCounts?: [string, number][]
-            }
-            if (parsed.toolData) {
-                for (const [key, val] of parsed.toolData) {
-                    const existing = this.toolData.get(key)
-                    if (existing) {
-                        existing.callCount += val.callCount
-                        existing.errorCount += val.errorCount
-                        existing.totalDurationMs += val.totalDurationMs
-                        existing.totalInputTokens += val.totalInputTokens
-                        existing.totalOutputTokens += val.totalOutputTokens
-                        // Keep the most recent timestamp
-                        if (val.lastCalledAt) {
-                            if (!existing.lastCalledAt || new Date(val.lastCalledAt) > new Date(existing.lastCalledAt)) {
-                                existing.lastCalledAt = val.lastCalledAt
-                            }
-                        }
-                    } else {
-                        this.toolData.set(key, val)
-                    }
-                }
-            }
-            if (parsed.resourceData) {
-                for (const [key, val] of parsed.resourceData) {
-                    const existing = this.resourceData.get(key)
-                    if (existing) {
-                        existing.readCount += val.readCount
-                        existing.errorCount += val.errorCount
-                        if (val.lastReadAt) {
-                            if (!existing.lastReadAt || new Date(val.lastReadAt) > new Date(existing.lastReadAt)) {
-                                existing.lastReadAt = val.lastReadAt
-                            }
-                        }
-                    } else {
-                        this.resourceData.set(key, val)
-                    }
-                }
-            }
+            const rawParsed: unknown = JSON.parse(jsonState)
+            const parsed = MetricsStateSchema.parse(rawParsed)
+            if (parsed.toolData) this.mergeToolMetrics(parsed.toolData)
+            if (parsed.resourceData) this.mergeResourceMetrics(parsed.resourceData)
             if (parsed.userCounts) {
                 for (const [key, val] of parsed.userCounts) {
+                    if (FORBIDDEN_KEYS.has(key)) continue
                     this.userCounts.set(key, (this.userCounts.get(key) ?? 0) + val)
                 }
             }
@@ -337,12 +401,12 @@ export class MetricsAccumulator {
     }
 
     /**
-     * Save metrics to a file asynchronously.
+     * Save metrics to a file atomically via temp file + rename.
      */
     async saveToFile(path: string): Promise<void> {
         try {
             const state = this.exportState()
-            await fs.writeFile(path, state, 'utf8')
+            await writeMetricsSnapshotFile(path, state)
             logger.debug('Metrics saved to disk', { module: 'Metrics', path })
         } catch (error) {
             logger.error('Failed to save metrics to disk', { module: 'Metrics', error: String(error), path })
@@ -354,22 +418,16 @@ export class MetricsAccumulator {
      */
     async loadFromFile(path: string): Promise<void> {
         try {
-            const data = await fs.readFile(path, 'utf8')
+            const data = await readMetricsSnapshotFile(path)
+            if (data === undefined) return
             this.importState(data)
             logger.info('Metrics loaded from disk', { module: 'Metrics', path })
         } catch (error: unknown) {
-            if (
-                typeof error === 'object' &&
-                error !== null &&
-                'code' in error &&
-                error.code !== 'ENOENT'
-            ) {
-                logger.error('Failed to load metrics from disk', { 
-                    module: 'Metrics', 
-                    error: error instanceof Error ? error.message : JSON.stringify(error), 
-                    path 
-                })
-            }
+            logger.error('Failed to load metrics from disk', {
+                module: 'Metrics',
+                error: error instanceof Error ? error.message : String(error),
+                path,
+            })
         }
     }
 }

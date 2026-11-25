@@ -18,22 +18,29 @@ vi.mock('../../src/git/index.js', () => ({
 }))
 
 import { dynamicBriefingResource } from '../../src/handlers/resources/core/briefing/index.js'
+import { buildGitHubSection } from '../../src/handlers/resources/core/briefing/github-section.js'
+import { buildTeamContext } from '../../src/handlers/resources/core/briefing/context-section.js'
+import { logger } from '../../src/utils/logger.js'
 import {
     GitHubIntegration,
     getGitHubIntegration,
 } from '../../src/github/github-integration/index.js'
 
-vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => ({
-    buildJournalContext: vi.fn().mockReturnValue({
+vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => {
+    const journal = {
         totalEntries: 0,
         latestEntries: [],
         sessionSummaries: [{ id: 1, type: 'summary', preview: 'test' }],
-    }),
-    buildTeamContext: vi.fn().mockReturnValue(null),
+    }
+    return {
+        buildJournalContext: vi.fn().mockReturnValue(journal),
+        safeBuildJournalContext: vi.fn().mockReturnValue(journal),
+        buildTeamContext: vi.fn().mockReturnValue(null),
 
-    buildFlagsContext: vi.fn().mockReturnValue(undefined),
-    buildGraphContext: vi.fn().mockReturnValue(undefined),
-}))
+        buildFlagsContext: vi.fn().mockReturnValue(undefined),
+        buildGraphContext: vi.fn().mockReturnValue(undefined),
+    }
+})
 
 vi.mock('../../src/handlers/resources/core/briefing/user-message.js', () => ({
     formatUserMessage: vi.fn().mockReturnValue(''),
@@ -67,5 +74,68 @@ describe('Briefing Resources', () => {
         } as any)
 
         expect((result as any).data).toBeDefined()
+    })
+
+    it('dynamicBriefingResource does not call getGitHubIntegration or leak context.github for default without a registered path', async () => {
+        const result = await dynamicBriefingResource.handler('memory://briefing/default', {
+            github: { repo: 'leaked-cwd' } as never,
+            runtime: { type: 'stdio' },
+            briefingConfig: {
+                projectRegistry: {
+                    'memory-journal-mcp': { path: '/workspace/mj', project_number: 5 },
+                },
+            },
+        } as any)
+
+        expect((result as any).data).toBeDefined()
+        expect(getGitHubIntegration).not.toHaveBeenCalled()
+        expect(buildGitHubSection).toHaveBeenCalledWith(undefined, expect.anything(), undefined)
+    })
+
+    it('skips team context when includeTeam is false and skips insights when insights is false', async () => {
+        const computeDigest = vi.fn()
+        const result = await dynamicBriefingResource.handler('memory://briefing/test-repo', {
+            db: { computeDigest },
+            teamDb: {},
+            runtime: { type: 'stdio' },
+            briefingConfig: {
+                includeTeam: false,
+                insights: false,
+                projectRegistry: {
+                    'test-repo': { path: '/tmp/test', project_number: 5 },
+                },
+            },
+        } as any)
+
+        expect((result as any).data).toBeDefined()
+        expect(buildTeamContext).not.toHaveBeenCalled()
+        expect(computeDigest).not.toHaveBeenCalled()
+    })
+
+    it('logs a warning when buildGitHubSection rejects and still builds briefing', async () => {
+        const warnSpy = vi.spyOn(logger, 'warning').mockImplementation(() => undefined)
+        vi.mocked(buildGitHubSection).mockRejectedValueOnce(new Error('gh exploded'))
+        try {
+            const result = await dynamicBriefingResource.handler('memory://briefing/test-repo', {
+                runtime: { type: 'stdio' },
+                briefingConfig: {
+                    projectRegistry: {
+                        'test-repo': { path: '/tmp/test', project_number: 5 },
+                    },
+                },
+            } as any)
+
+            expect((result as any).data).toBeDefined()
+            expect(warnSpy).toHaveBeenCalledWith(
+                'Briefing GitHub section failed (degraded)',
+                expect.objectContaining({
+                    module: 'BRIEFING',
+                    operation: 'github-section',
+                    error: 'gh exploded',
+                })
+            )
+        } finally {
+            warnSpy.mockRestore()
+        }
     })
 })

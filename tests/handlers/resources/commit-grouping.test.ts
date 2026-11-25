@@ -6,7 +6,7 @@ vi.mock('../../../src/github/commit-references/index.js', () => ({
         {
             hash: 'a1b2c3d',
             subject: 'Add feature',
-            authorName: 'Chris',
+            authorName: 'Alex',
             date: '2023-01-01',
             references: [
                 { type: 'issue', number: 10, title: 'Issue 10' },

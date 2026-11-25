@@ -2,8 +2,23 @@
  * Shared parameter normalization utilities, alias maps, and content healers.
  */
 
-export function isRecord(val: unknown): val is Record<string, unknown> {
-    return typeof val === 'object' && val !== null && !Array.isArray(val)
+import { createNullProtoRecord, isRecord } from '../../utils/type-guards.js'
+
+export { isRecord }
+
+type NormalizerDebugLogger = (message: string, context?: Record<string, unknown>) => void
+let normalizerDebugLogger: NormalizerDebugLogger | undefined
+
+/**
+ * Register a host-side debug logger for normalizer parse warnings.
+ * [BOUNDARY] Avoids pulling `logger.ts` / `security-utils.ts` into Code Mode worker bundles.
+ */
+export function setNormalizerDebugLogger(fn: NormalizerDebugLogger | undefined): void {
+    normalizerDebugLogger = fn
+}
+
+export function logNormalizerDebug(message: string, context?: Record<string, unknown>): void {
+    normalizerDebugLogger?.(message, context)
 }
 
 export function safeString(val: unknown): string {
@@ -24,7 +39,7 @@ export function safeString(val: unknown): string {
  * Maps hallucinated parameter names to their canonical equivalents.
  * Only applied when the canonical name is not already present.
  */
-export const PARAM_ALIASES: Record<string, string> = {
+export const PARAM_ALIASES: Record<string, string> = createNullProtoRecord<string>({
     text: 'content',
     body: 'content',
     note: 'content',
@@ -56,7 +71,6 @@ export const PARAM_ALIASES: Record<string, string> = {
     to: 'to_entry_id',
     kind: 'entry_type',
     format_type: 'format',
-    webhook: 'report_webhook_url',
     comment: 'resolution',
     resolution_comment: 'resolution',
     severity: 'flag_type',
@@ -68,14 +82,14 @@ export const PARAM_ALIASES: Record<string, string> = {
     impactScore: 'impact_score',
     trustScore: 'trust_score',
     validationStatus: 'validation_status',
-    team_id: 'workspace_id',
-    team: 'workspace_id',
-}
+})
 
 /**
- * Common hallucinated entry types -> canonical types
+ * Common hallucinated entry types -> canonical types.
+ * [INVARIANT] Single source of truth for Code Mode entry-type aliasing (key-normalizer and
+ * generic-field-aliases both consume this map).
  */
-export const ENTRY_TYPE_ALIASES: Record<string, string> = {
+export const ENTRY_TYPE_ALIASES: Record<string, string> = createNullProtoRecord<string>({
     'session-summary': 'retrospective',
     'session_summary': 'retrospective',
     'team-session-summary': 'retrospective',
@@ -83,9 +97,19 @@ export const ENTRY_TYPE_ALIASES: Record<string, string> = {
     'team session summary': 'retrospective',
     'summary': 'retrospective',
     'bug': 'bug_fix',
+    'bugfix': 'bug_fix',
+    'bug-fix': 'bug_fix',
+    'hotfix': 'bug_fix',
+    'defect': 'bug_fix',
     'feature': 'feature_implementation',
+    'meeting': 'meeting_notes',
     'note': 'technical_note',
     'technical-note': 'technical_note',
+    'technical': 'technical_note',
+    'documentation': 'technical_note',
+    'chore': 'technical_note',
+    'refactor': 'technical_note',
+    'fix': 'technical_note',
     'reflection': 'personal_reflection',
     'decision': 'project_decision',
     'review': 'code_review',
@@ -93,28 +117,49 @@ export const ENTRY_TYPE_ALIASES: Record<string, string> = {
     'coding': 'technical_note',
     'progress': 'development_note',
     'status': 'development_note',
+    'development': 'development_note',
     'update': 'development_note',
     'test': 'system_integration_test',
     'testing': 'system_integration_test',
     'task': 'technical_note',
-}
+})
 
 /**
- * Common hallucinated tags -> canonical tags
+ * Common hallucinated tags -> canonical tags (canonical definition in `src/types/entities.ts`).
  */
-export const TAG_ALIASES: Record<string, string> = {
-    'session_summary': 'session-summary',
-    'team_session_summary': 'session-summary',
-    'team-session-summary': 'session-summary',
-    'team session summary': 'session-summary',
-    'commit_narrative': 'commit-narrative',
-    'bug_fix': 'bug-fix',
-    'feature_implementation': 'feature',
-}
+export { TAG_ALIASES } from '../../types/entities.js'
 
-function deduplicateSectionHeader(str: string, headerRegexStr: string): string {
+const DEDUP_ACCOMPLISHED_RE = /^#+\s+Accomplished/gim
+const DEDUP_UNFINISHED_RE = /^#+\s+Unfinished \/ Blocked/gim
+const DEDUP_CONTEXT_RE = /^#+\s+Context for Next Session/gim
+const DEDUP_COMMITS_RE = /^#+\s+Commits/gim
+
+const SYNONYM_ACCOMPLISHED_RE =
+    /^#+\s+(?:Accomplishments|Completed|Done|What I did|What we did)\s*$/gim
+const SYNONYM_UNFINISHED_RE = /^#+\s+(?:Blockers|Unfinished|Unfinished\/?Blocked|Blocked)\s*$/gim
+const SYNONYM_CONTEXT_RE = /^#+\s+(?:Next Session|Context|Next steps)\s*$/gim
+const SYNONYM_COMMITS_RE = /^#+\s+(?:Commit History|Git Commits)\s*$/gim
+const LEVEL_ACCOMPLISHED_RE = /^(?:#|#{3,})\s+Accomplished\s*$/gim
+const LEVEL_UNFINISHED_RE = /^(?:#|#{3,})\s+Unfinished \/ Blocked\s*$/gim
+const LEVEL_CONTEXT_RE = /^(?:#|#{3,})\s+Context for Next Session\s*$/gim
+const LEVEL_COMMITS_RE = /^(?:#|#{3,})\s+Commits\s*$/gim
+
+const COLLAPSE_ACCOMPLISHED_RE = /(?:^#+[ \t]+Accomplished[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
+const COLLAPSE_UNFINISHED_RE = /(?:^#+[ \t]+Unfinished \/ Blocked[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
+const COLLAPSE_CONTEXT_RE = /(?:^#+[ \t]+Context for Next Session[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
+const COLLAPSE_COMMITS_RE = /(?:^#+[ \t]+Commits[ \t]*\r?\n-[ \t]*(?:None\.?[ \t]*)?(?:\r?\n|$)){2,}/gim
+
+const REQUIRED_PERIOD_HEADERS: readonly { header: string; testRe: RegExp }[] = [
+    { header: '## Accomplished', testRe: /#+\s+Accomplished/i },
+    { header: '## Unfinished / Blocked', testRe: /#+\s+Unfinished\s*\/\s*Blocked/i },
+    { header: '## Context for Next Session', testRe: /#+\s+Context\s*for\s*Next\s*Session/i },
+    { header: '## Commits', testRe: /#+\s+Commits/i },
+]
+
+function deduplicateSectionHeader(str: string, headerRe: RegExp): string {
     let count = 0
-    return str.replace(new RegExp(headerRegexStr, 'gim'), (match) => {
+    headerRe.lastIndex = 0
+    return str.replace(headerRe, (match) => {
         count++
         return count === 1 ? match : ''
     })
@@ -130,32 +175,29 @@ export function healSessionSummaryContent(
     let healed = content
 
     if (options?.normalizeSynonyms !== false) {
-        healed = healed.replace(/^#+\s+(?:Accomplishments|Completed|Done|What I did|What we did)\s*$/gim, '## Accomplished')
-        healed = healed.replace(/^#+\s+(?:Blockers|Unfinished|Unfinished\/?Blocked|Blocked)\s*$/gim, '## Unfinished / Blocked')
-        healed = healed.replace(/^#+\s+(?:Next Session|Context|Next steps)\s*$/gim, '## Context for Next Session')
+        healed = healed.replace(SYNONYM_ACCOMPLISHED_RE, '## Accomplished')
+        healed = healed.replace(SYNONYM_UNFINISHED_RE, '## Unfinished / Blocked')
+        healed = healed.replace(SYNONYM_CONTEXT_RE, '## Context for Next Session')
+        healed = healed.replace(SYNONYM_COMMITS_RE, '## Commits')
+        healed = healed.replace(LEVEL_ACCOMPLISHED_RE, '## Accomplished')
+        healed = healed.replace(LEVEL_UNFINISHED_RE, '## Unfinished / Blocked')
+        healed = healed.replace(LEVEL_CONTEXT_RE, '## Context for Next Session')
+        healed = healed.replace(LEVEL_COMMITS_RE, '## Commits')
     }
 
-    healed = healed.replace(/(?:^#+\s+Accomplished\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Accomplished\n- None.\n')
-    healed = healed.replace(/(?:^#+\s+Unfinished \/ Blocked\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Unfinished / Blocked\n- None.\n')
-    healed = healed.replace(/(?:^#+\s+Context for Next Session\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Context for Next Session\n- None.\n')
-    healed = healed.replace(/(?:^#+\s+Commits\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Commits\n- None.\n')
+    healed = healed.replace(COLLAPSE_ACCOMPLISHED_RE, '## Accomplished\n- None.\n')
+    healed = healed.replace(COLLAPSE_UNFINISHED_RE, '## Unfinished / Blocked\n- None.\n')
+    healed = healed.replace(COLLAPSE_CONTEXT_RE, '## Context for Next Session\n- None.\n')
+    healed = healed.replace(COLLAPSE_COMMITS_RE, '## Commits\n- None.\n')
 
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Accomplished')
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Unfinished \\/ Blocked')
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Context for Next Session')
-    healed = deduplicateSectionHeader(healed, '^#+\\s+Commits')
+    healed = deduplicateSectionHeader(healed, DEDUP_ACCOMPLISHED_RE)
+    healed = deduplicateSectionHeader(healed, DEDUP_UNFINISHED_RE)
+    healed = deduplicateSectionHeader(healed, DEDUP_CONTEXT_RE)
+    healed = deduplicateSectionHeader(healed, DEDUP_COMMITS_RE)
 
     if (options?.usePeriodOnNone === true) {
-        const requiredHeaders = [
-            '## Accomplished',
-            '## Unfinished / Blocked',
-            '## Context for Next Session',
-            '## Commits',
-        ]
-        for (const header of requiredHeaders) {
-            const cleanHeader = header.replace(/^#+\s+/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s*')
-            const regex = new RegExp(`#+\\s+${cleanHeader}`, 'i')
-            if (!regex.test(healed)) {
+        for (const { header, testRe } of REQUIRED_PERIOD_HEADERS) {
+            if (!testRe.test(healed)) {
                 healed += `\n\n${header}\n- None.`
             }
         }
@@ -177,7 +219,12 @@ export function healAutoContext(result: Record<string, unknown>): void {
     const ac = result['auto_context']
     if (typeof ac === 'string') {
         try {
-            const parsed = JSON.parse(ac.replace(/'/g, '"')) as unknown
+            let parsed: unknown
+            try {
+                parsed = JSON.parse(ac) as unknown
+            } catch {
+                parsed = JSON.parse(ac.replace(/'/g, '"')) as unknown
+            }
             if (!isRecord(parsed)) return
             let changed = false
 
@@ -197,8 +244,11 @@ export function healAutoContext(result: Record<string, unknown>): void {
             if (changed) {
                 result['auto_context'] = JSON.stringify(parsed)
             }
-        } catch {
-            // ignore JSON parse errors
+        } catch (error) {
+            logNormalizerDebug('Failed to parse auto_context JSON during normalization', {
+                module: 'CodeMode',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
     } else if (isRecord(ac)) {
         for (const alias of ['commit_shas', 'shas', 'commit_sha', 'commitShas']) {
@@ -211,4 +261,26 @@ export function healAutoContext(result: Record<string, unknown>): void {
             ac['commits'] = [ac['commits']]
         }
     }
+}
+
+const DB_SOURCE_SELECTOR_RE = /^(?:personal|team)$/i
+const DB_SOURCE_DISCRIMINATOR_KEYS = ['action', 'operation', 'op', 'tool', 'method', 'function'] as const
+
+/** True when `source` specifies a store (`'personal'` | `'team'`) alongside an entry ID or discriminator. */
+export function isDbSourceSelector(
+    obj: Record<string, unknown>,
+    hasDiscriminator?: boolean
+): boolean {
+    if (typeof obj['source'] !== 'string' || !DB_SOURCE_SELECTOR_RE.test(obj['source'].trim())) {
+        return false
+    }
+    if (
+        obj['entry_id'] !== undefined ||
+        obj['entryId'] !== undefined ||
+        obj['id'] !== undefined
+    ) {
+        return true
+    }
+    if (hasDiscriminator !== undefined) return hasDiscriminator
+    return DB_SOURCE_DISCRIMINATOR_KEYS.some((k) => obj[k] !== undefined)
 }

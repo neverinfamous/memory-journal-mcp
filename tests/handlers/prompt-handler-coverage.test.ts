@@ -60,6 +60,7 @@ describe('Prompt Handlers - Coverage', () => {
         })
 
         it('should throw ConfigurationError if teamDb is missing for team-session-summary', async () => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
             await expect(getPrompt('team-session-summary', {}, db)).rejects.toThrow(
                 'Team database not configured'
             )
@@ -81,6 +82,7 @@ describe('Prompt Handlers - Coverage', () => {
                 'adversarial-audit-performance',
                 'adversarial-audit-seo',
                 'adversarial-audit-skill',
+                'adversarial-build-skill',
                 'adversarial-audit-workflow',
             ]
 
@@ -95,6 +97,37 @@ describe('Prompt Handlers - Coverage', () => {
                 const enabledText = enabledRes.messages[0]?.content.text ?? ''
                 expect(enabledText).toContain('Run `gh copilot -- -p')
                 expect(enabledText).not.toContain('**Optional (Skip by default)**')
+
+                if (name === 'adversarial-audit-code-quality') {
+                    expect(defaultText).toContain('generalPurpose')
+                    expect(defaultText).toContain('code-quality-audit')
+                    expect(defaultText).toContain('param-normalizer.ts')
+                    expect(defaultText).toContain('SCAN_OK scanned=')
+                    expect(defaultText).toContain('Prompt revision: 2026-11-25-audit-pass96')
+                    expect(defaultText).toContain('Present the plan as markdown in the chat.')
+                    expect(defaultText).toContain('Do not add an audit plan file to the repository.')
+                    expect(defaultText).not.toContain('docs/audits/')
+                    expect(defaultText).not.toContain('Cursor canvas')
+                    expect(defaultText).not.toContain('invoke_subagent')
+                    expect(defaultText).not.toContain('bun path/to/commit.ts')
+                    expect(enabledText).toContain('audit on {target}')
+                }
+                if (name === 'adversarial-audit-security') {
+                    expect(defaultText).toContain('generalPurpose')
+                    expect(defaultText).not.toContain('invoke_subagent')
+                    expect(defaultText).not.toContain('bun path/to/commit.ts')
+                }
+                if (
+                    name === 'adversarial-audit-performance' ||
+                    name === 'adversarial-audit-seo' ||
+                    name === 'adversarial-audit-skill' ||
+                    name === 'adversarial-build-skill' ||
+                    name === 'adversarial-audit-workflow'
+                ) {
+                    expect(defaultText).toContain('generalPurpose')
+                    expect(defaultText).not.toContain('invoke_subagent')
+                    expect(defaultText).not.toContain('bun path/to/commit.ts')
+                }
             }
         })
     })

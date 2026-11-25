@@ -1,14 +1,28 @@
 import { defineConfig } from '@playwright/test'
 import path from 'node:path'
 
-const WORKERS = Number(process.env.PLAYWRIGHT_WORKERS || 4)
+process.env['DISABLE_ISSUE_LOGGING'] ??= 'true'
+
+const rawPlaywrightWorkers = process.env.PLAYWRIGHT_WORKERS
+let WORKERS = 4
+if (rawPlaywrightWorkers !== undefined && rawPlaywrightWorkers.trim() !== '') {
+    const trimmedWorkers = rawPlaywrightWorkers.trim()
+    const parsedWorkers = Number(trimmedWorkers)
+    if (!/^[1-9]\d*$/.test(trimmedWorkers) || !Number.isSafeInteger(parsedWorkers) || parsedWorkers < 1) {
+        throw new Error(
+            `Invalid PLAYWRIGHT_WORKERS '${rawPlaywrightWorkers}': expected a positive integer.`
+        )
+    }
+    WORKERS = parsedWorkers
+}
 
 const createWebServerConfig = (workerIndex: number) => {
     const port = 3105 + workerIndex
     return {
-        command: `node dist/cli.js --transport http --port ${port} --db ./.test-output/e2e/test-e2e-worker-${workerIndex}.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2`,
+        command: `node dist/cli.js --transport http --port ${port} --db ./.test-output/e2e/test-e2e-worker-${workerIndex}.db`,
         env: {
             ...process.env,
+            DISABLE_ISSUE_LOGGING: 'true',
             MCP_RATE_LIMIT_MAX: '1000',
             TEAM_DB_PATH: `./.test-output/e2e/test-e2e-team-worker-${workerIndex}.db`,
             TEAM_AUTHOR: 'Alice',
@@ -16,6 +30,10 @@ const createWebServerConfig = (workerIndex: number) => {
             ALLOWED_IO_ROOTS: path.join(process.cwd(), '.test-output', 'e2e'),
             METRICS_EXPORT: 'prometheus',
             MEMORY_JOURNAL_CONFIG: path.join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
+            // [INTENT] Staleness checks refuse a workspace that has no registered repository path.
+            PROJECT_REGISTRY: JSON.stringify({
+                default: { path: process.cwd(), project_number: 1 },
+            }),
         },
         url: `http://localhost:${port}/health`,
         reuseExistingServer: !process.env.CI,
@@ -29,7 +47,11 @@ export default defineConfig({
     testDir: './tests/e2e',
     timeout: 60000,
     outputDir: '.test-output/playwright',
-    fullyParallel: true,
+    // [INTENT] Run spec files in parallel across workers while keeping tests within a file
+    // on the same worker by default so `beforeAll` server spawns execute once per describe
+    // instead of duplicating across workers. Specs with independent per-test servers opt into
+    // `test.describe.configure({ mode: 'parallel' })` explicitly.
+    fullyParallel: false,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: WORKERS,

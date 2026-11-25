@@ -4,25 +4,42 @@ import { getCoreTools } from '../tools.js'
 import { getSearchTools } from '../../search/index.js'
 import { getAdminTools } from '../../admin/index.js'
 import { getCodeModeTools } from '../../codemode/handler.js'
+import { findCachedOrFallbackTool } from './cached-tool-lookup.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { healAgentHallucinations } from '../../schemas.js'
+import { methodTokens } from '../../../../codemode/method-tokens.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import {
     DUMMY_ENTRY_CREATION_TOOL_NAMES,
     DUMMY_MJ_FUNC_TOOL_NAMES,
     DUMMY_DOTTED_TOOL_NAMES,
     DUMMY_SQL_EXECUTION_TOOL_NAMES,
     DUMMY_PROJECT_TOOL_NAMES,
+    projectAliasTarget,
 } from './alias-catalog.js'
 
+export { projectAliasTarget }
+
 const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
+
+function toArgsRecord(params: unknown): Record<string, unknown> {
+    return isRecord(params) ? params : {}
+}
+
+function attachHealingNote(res: unknown, successNote: string, failureNote: string): unknown {
+    if (!isRecord(res)) return res
+    return {
+        ...res,
+        _healing_note: res['success'] !== false ? successNote : failureNote,
+    }
+}
 
 export async function handleCreateEntry(
     params: unknown,
     toolName: string,
     context?: ToolContext
 ): Promise<unknown> {
-    const rawArgs =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
+    const rawArgs = toArgsRecord(params)
     const preArgs: Record<string, unknown> = { ...rawArgs }
 
     if (preArgs['topic'] !== undefined) {
@@ -40,23 +57,17 @@ export async function handleCreateEntry(
     }
 
     const healed = healAgentHallucinations(preArgs)
-    const args: Record<string, unknown> =
-        typeof healed === 'object' && healed !== null
-            ? (healed as Record<string, unknown>)
-            : preArgs
+    const args: Record<string, unknown> = isRecord(healed) ? healed : preArgs
 
     if (context !== undefined) {
-        const coreTools = getCoreTools(context)
-        const createTool = coreTools.find((t: ToolDefinition) => t.name === 'create_entry')
+        const createTool = findCachedOrFallbackTool(context, 'create_entry', getCoreTools)
         if (createTool !== undefined) {
             const result = await Promise.resolve(createTool.handler(args))
-            if (typeof result === 'object' && result !== null) {
-                return {
-                    ...(result as Record<string, unknown>),
-                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked directly as an MCP tool. The entry was created successfully. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`,
-                }
-            }
-            return result
+            return attachHealingNote(
+                result,
+                `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked directly as an MCP tool. The entry was created successfully. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`,
+                `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked directly as an MCP tool and routed to create_entry, but the entry was NOT created. Fix the reported error and retry, preferring 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`
+            )
         }
     }
     return {
@@ -76,57 +87,295 @@ async function routeNamedTargetTool(
     context?: ToolContext
 ): Promise<unknown> {
     if (context === undefined) return undefined
-    const tools =
+    const buildGroup =
         group === 'core'
-            ? getCoreTools(context)
+            ? getCoreTools
             : group === 'search'
-              ? getSearchTools(context)
-              : getAdminTools(context)
-    const tool = tools.find((t) => t.name === targetToolName)
+              ? getSearchTools
+              : getAdminTools
+    const tool = findCachedOrFallbackTool(context, targetToolName, buildGroup)
     if (tool === undefined) return undefined
     const res = await Promise.resolve(tool.handler(args))
-    return typeof res === 'object' && res !== null
-        ? {
-              ...(res as Record<string, unknown>),
-              _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetToolName}' and executed successfully.`,
-          }
-        : res
+    return attachHealingNote(
+        res,
+        `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetToolName}' and executed successfully.`,
+        `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetToolName}', but the operation did not succeed. See the reported error.`
+    )
 }
+
+function isProjectAlias(name: string): boolean {
+    return (
+        name === 'mj.projects' ||
+        methodTokens(name).some((token) => token === 'project' || token === 'projects')
+    )
+}
+
+/** True when the alias's whole tokens end with `suffix` (e.g. `mj_core_delete_entry` ends with `delete entry`). */
+function endsWithTokens(tokens: readonly string[], suffix: readonly string[]): boolean {
+    if (tokens.length < suffix.length) return false
+    const offset = tokens.length - suffix.length
+    return suffix.every((token, i) => tokens[offset + i] === token)
+}
+
+const ENTRY_ALIAS_TARGETS: readonly {
+    tokens: string[]
+    target: string
+    group: 'core' | 'search' | 'admin'
+}[] = [
+    { tokens: ['create', 'entry'], target: 'create_entry', group: 'core' },
+    { tokens: ['search', 'entries'], target: 'search_entries', group: 'search' },
+    { tokens: ['get', 'recent', 'entries'], target: 'get_recent_entries', group: 'core' },
+    { tokens: ['get', 'entry', 'by', 'id'], target: 'get_entry_by_id', group: 'core' },
+    { tokens: ['update', 'entry'], target: 'update_entry', group: 'admin' },
+    { tokens: ['delete', 'entry'], target: 'delete_entry', group: 'admin' },
+]
 
 function resolveTargetFromAlias(
     name: string
 ): { target: string; group: 'core' | 'search' | 'admin' } | undefined {
-    if (name.includes('createEntry') || name.includes('create_entry')) {
-        return { target: 'create_entry', group: 'core' }
+    const tokens = methodTokens(name)
+    const has = (t: string): boolean => tokens.includes(t)
+    if (has('team') || has('batch')) return undefined
+
+    for (const candidate of ENTRY_ALIAS_TARGETS) {
+        if (endsWithTokens(tokens, candidate.tokens)) {
+            return { target: candidate.target, group: candidate.group }
+        }
     }
-    if (name.includes('searchEntries') || name.includes('search_entries')) {
-        return { target: 'search_entries', group: 'search' }
-    }
-    if (name.includes('getRecentEntries') || name.includes('get_recent_entries')) {
-        return { target: 'get_recent_entries', group: 'core' }
-    }
-    if (name.includes('getEntryById') || name.includes('get_entry_by_id')) {
-        return { target: 'get_entry_by_id', group: 'core' }
-    }
-    if (name.includes('updateEntry') || name.includes('update_entry')) {
-        return { target: 'update_entry', group: 'core' }
-    }
-    if (name.includes('deleteEntry') || name.includes('delete_entry')) {
-        return { target: 'delete_entry', group: 'core' }
-    }
-    if (name.includes('getProject') || name.includes('get_project')) {
-        return { target: 'get_project', group: 'admin' }
-    }
-    if (
-        name.includes('listProjects') ||
-        name.includes('list_projects') ||
-        name.includes('getProjects') ||
-        name.includes('get_projects') ||
-        name.startsWith('mj.projects')
-    ) {
-        return { target: 'list_projects', group: 'admin' }
+    if (isProjectAlias(name)) {
+        const target = projectAliasTarget(name)
+        if (target === undefined) return undefined
+        return { target, group: 'admin' }
     }
     return undefined
+}
+
+const NON_READONLY_ALIAS_TARGETS = new Set(['create_entry', 'update_entry', 'delete_entry'])
+
+function isReadOnlyDummyAlias(name: string): boolean {
+    const resolved = resolveTargetFromAlias(name)
+    return resolved !== undefined && !NON_READONLY_ALIAS_TARGETS.has(resolved.target)
+}
+
+function buildSearchEntriesFallbackTool(context?: ToolContext): ToolDefinition {
+    return {
+        name: 'search_entries',
+        title: 'Search Entries (Code Mode Fallback)',
+        description: 'Fallback handler for `search_entries` when called directly in Code Mode.',
+        group: 'core',
+        inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+        outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+        annotations: { readOnlyHint: true, openWorldHint: false },
+        handler: async (params: unknown) => {
+            const args = toArgsRecord(params)
+            if (context !== undefined) {
+                const searchTool = findCachedOrFallbackTool(context, 'search_entries', getSearchTools)
+                if (searchTool !== undefined) {
+                    const result = await Promise.resolve(searchTool.handler(args))
+                    return attachHealingNote(
+                        result,
+                        '🛠️ AUTONOMOUS HEALING: `search_entries` was invoked directly while in Code Mode. Search completed successfully. In Code Mode, prefer using `mj_execute_code` with `mj.search.searchEntries({ ... })`.',
+                        '🛠️ AUTONOMOUS HEALING: `search_entries` was invoked directly while in Code Mode. Search did not succeed. In Code Mode, prefer using `mj_execute_code` with `mj.search.searchEntries({ ... })`.'
+                    )
+                }
+            }
+            return {
+                success: false,
+                error: '🛠️ AUTONOMOUS HEALING: `search_entries` is not directly active in Code Mode. Use `mj_execute_code` with `mj.search.searchEntries({ ... })`.',
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            }
+        },
+    }
+}
+
+function buildCoreCrudFallbackTools(context?: ToolContext): ToolDefinition[] {
+    return (
+        [
+            ['get_recent_entries', 'Get Recent Entries', true, 'getRecentEntries'],
+            ['get_entry_by_id', 'Get Entry By ID', true, 'getEntryById'],
+            ['update_entry', 'Update Entry', false, 'updateEntry'],
+            ['delete_entry', 'Delete Entry', false, 'deleteEntry'],
+        ] as const
+    ).map(
+        ([name, label, readOnly, camelMethod]): ToolDefinition => ({
+            name,
+            title: `${label} (Code Mode Fallback)`,
+            description: `Fallback handler for \`${name}\` when called directly in Code Mode.`,
+            group: 'core',
+            inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            annotations: { readOnlyHint: readOnly, openWorldHint: false },
+            handler: async (params: unknown) => {
+                const args = toArgsRecord(params)
+                const isAdminMutation = name === 'update_entry' || name === 'delete_entry'
+                const targetNs = isAdminMutation ? 'admin' : 'core'
+                if (context !== undefined) {
+                    const buildGroup = isAdminMutation ? getAdminTools : getCoreTools
+                    const tool = findCachedOrFallbackTool(context, name, buildGroup)
+                    if (tool !== undefined) {
+                        const res = await Promise.resolve(tool.handler(args))
+                        return attachHealingNote(
+                            res,
+                            `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode and succeeded. In Code Mode, prefer using 'mj_execute_code' with 'mj.${targetNs}.${camelMethod}({ ... })'.`,
+                            `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode, but the operation did not succeed. In Code Mode, prefer using 'mj_execute_code' with 'mj.${targetNs}.${camelMethod}({ ... })'.`
+                        )
+                    }
+                }
+                return {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: \`${name}\` is not directly active in Code Mode. Use \`mj_execute_code\` with \`mj.${targetNs}.${camelMethod}({ ... })\`.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                }
+            },
+        })
+    )
+}
+
+function buildAliasRoutingFallbackTools(
+    names: readonly string[],
+    titlePrefix: string,
+    isDotted: boolean,
+    context?: ToolContext
+): ToolDefinition[] {
+    return names.map(
+        (name): ToolDefinition => ({
+            name,
+            title: `${titlePrefix} (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
+            group: 'core',
+            inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            annotations: { readOnlyHint: isReadOnlyDummyAlias(name), openWorldHint: false },
+            handler: async (params: unknown) => {
+                const args = toArgsRecord(params)
+                const resolved = resolveTargetFromAlias(name)
+                if (resolved !== undefined) {
+                    const routed = await routeNamedTargetTool(
+                        name,
+                        resolved.target,
+                        resolved.group,
+                        args,
+                        context
+                    )
+                    if (routed !== undefined) return routed
+                }
+                const canonical = isDotted
+                    ? name
+                    : name
+                          .replace(/^mj_([a-z]+)_/, 'mj.$1.')
+                          .replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+                const funcKind = isDotted ? 'Code Mode JavaScript function' : 'Code Mode function'
+                return {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: '${name}' is a ${funcKind}, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${canonical}({ ... })).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                }
+            },
+        })
+    )
+}
+
+function normalizeSqlFallbackParams(params: unknown): unknown {
+    if (!isRecord(params)) return params
+    const rec: Record<string, unknown> = { ...params }
+    if (rec['repo'] === undefined && rec['repo_name'] !== undefined) {
+        rec['repo'] = rec['repo_name']
+        delete rec['repo_name']
+    }
+    return rec
+}
+
+function buildSqlExecutionFallbackTools(context?: ToolContext): ToolDefinition[] {
+    return DUMMY_SQL_EXECUTION_TOOL_NAMES.map(
+        (name): ToolDefinition => ({
+            name,
+            title: `SQL / Code Mode Execution Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Routes automatically to \`mj_execute_code\`.`,
+            group: 'core',
+            inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            annotations: { readOnlyHint: false, openWorldHint: false },
+            handler: async (params: unknown) => {
+                if (context !== undefined) {
+                    const codemodeTool = findCachedOrFallbackTool(
+                        context,
+                        'mj_execute_code',
+                        getCodeModeTools
+                    )
+                    if (codemodeTool !== undefined) {
+                        const res = await Promise.resolve(
+                            codemodeTool.handler(normalizeSqlFallbackParams(params))
+                        )
+                        return attachHealingNote(
+                            res,
+                            `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool. It was automatically translated and executed via Code Mode ('mj_execute_code').`,
+                            `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool and translated to Code Mode ('mj_execute_code'), but the execution did not succeed. Fix the reported error and prefer calling 'mj_execute_code' directly.`
+                        )
+                    }
+                }
+                return {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: '${name}' was called, but direct SQLite execution tools are not active in memory-journal-mcp. Use 'mj_execute_code' with JavaScript (e.g. return await mj.core.getRecentEntries({ limit: 10 })).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                }
+            },
+        })
+    )
+}
+
+function buildProjectFallbackTools(context?: ToolContext): ToolDefinition[] {
+    return DUMMY_PROJECT_TOOL_NAMES.map(
+        (name): ToolDefinition => ({
+            name,
+            title: `Project Tool Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Returns project registry info.`,
+            group: 'admin',
+            inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: async (params: unknown) => {
+                const args = toArgsRecord(params)
+                const targetTool = projectAliasTarget(name)
+                if (targetTool === undefined) {
+                    return {
+                        success: false,
+                        error: `🛠️ AUTONOMOUS HEALING: '${name}' was not routed to a project tool.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true,
+                        _healing_note: 'The operation was not executed.',
+                    }
+                }
+                if (context !== undefined) {
+                    const tool = findCachedOrFallbackTool(context, targetTool, getAdminTools)
+                    if (tool !== undefined) {
+                        const res = await Promise.resolve(tool.handler(args))
+                        // [INVARIANT] M5: never claim success for a failed routed call.
+                        return attachHealingNote(
+                            res,
+                            `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetTool}' and executed successfully.`,
+                            `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetTool}', but the operation did not succeed. See the reported error.`
+                        )
+                    }
+                }
+                return {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: '${name}' failed because admin tools are not available.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                }
+            },
+        })
+    )
 }
 
 export function getEntryAndCodemodeFallbackToolDefinitions(
@@ -145,231 +394,21 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                 handler: async (params: unknown) => handleCreateEntry(params, name, context),
             })
         ),
-        {
-            name: 'search_entries',
-            title: 'Search Entries (Code Mode Fallback)',
-            description: 'Fallback handler for `search_entries` when called directly in Code Mode.',
-            group: 'core',
-            inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-            outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-            annotations: { readOnlyHint: true, openWorldHint: false },
-            handler: async (params: unknown) => {
-                const args =
-                    typeof params === 'object' && params !== null
-                        ? (params as Record<string, unknown>)
-                        : {}
-                if (context !== undefined) {
-                    const searchTool = getSearchTools(context).find(
-                        (t: ToolDefinition) => t.name === 'search_entries'
-                    )
-                    if (searchTool !== undefined) {
-                        const result = await Promise.resolve(searchTool.handler(args))
-                        if (typeof result === 'object' && result !== null) {
-                            return {
-                                ...(result as Record<string, unknown>),
-                                _healing_note:
-                                    '🛠️ AUTONOMOUS HEALING: `search_entries` was invoked directly while in Code Mode. Search completed successfully. In Code Mode, prefer using `mj_execute_code` with `mj.search.searchEntries({ ... })`.',
-                            }
-                        }
-                        return result
-                    }
-                }
-                return {
-                    success: false,
-                    error: '🛠️ AUTONOMOUS HEALING: `search_entries` is not directly active in Code Mode. Use `mj_execute_code` with `mj.search.searchEntries({ ... })`.',
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    recoverable: true,
-                }
-            },
-        },
-        ...(
-            [
-                ['get_recent_entries', 'Get Recent Entries', true, 'getRecentEntries'],
-                ['get_entry_by_id', 'Get Entry By ID', true, 'getEntryById'],
-                ['update_entry', 'Update Entry', false, 'updateEntry'],
-                ['delete_entry', 'Delete Entry', false, 'deleteEntry'],
-            ] as const
-        ).map(
-            ([name, label, readOnly, camelMethod]): ToolDefinition => ({
-                name,
-                title: `${label} (Code Mode Fallback)`,
-                description: `Fallback handler for \`${name}\` when called directly in Code Mode.`,
-                group: 'core',
-                inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                annotations: { readOnlyHint: readOnly, openWorldHint: false },
-                handler: async (params: unknown) => {
-                    const args =
-                        typeof params === 'object' && params !== null
-                            ? (params as Record<string, unknown>)
-                            : {}
-                    if (context !== undefined) {
-                        const tool = getCoreTools(context).find(
-                            (t: ToolDefinition) => t.name === name
-                        )
-                        if (tool !== undefined) {
-                            return await Promise.resolve(tool.handler(args))
-                        }
-                    }
-                    return {
-                        success: false,
-                        error: `🛠️ AUTONOMOUS HEALING: \`${name}\` is not directly active in Code Mode. Use \`mj_execute_code\` with \`mj.core.${camelMethod}({ ... })\`.`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true,
-                    }
-                },
-            })
+        buildSearchEntriesFallbackTool(context),
+        ...buildCoreCrudFallbackTools(context),
+        ...buildAliasRoutingFallbackTools(
+            DUMMY_MJ_FUNC_TOOL_NAMES,
+            'Code Mode Function Fallback',
+            false,
+            context
         ),
-        ...DUMMY_MJ_FUNC_TOOL_NAMES.map(
-            (name): ToolDefinition => ({
-                name,
-                title: `Code Mode Function Fallback (${name})`,
-                description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
-                group: 'core',
-                inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                annotations: { readOnlyHint: false, openWorldHint: false },
-                handler: async (params: unknown) => {
-                    const args =
-                        typeof params === 'object' && params !== null
-                            ? (params as Record<string, unknown>)
-                            : {}
-                    const resolved = resolveTargetFromAlias(name)
-                    if (resolved !== undefined) {
-                        const routed = await routeNamedTargetTool(
-                            name,
-                            resolved.target,
-                            resolved.group,
-                            args,
-                            context
-                        )
-                        if (routed !== undefined) return routed
-                    }
-                    const canonical = name.replace(/^mj_/, '').replace('_', '.')
-                    return {
-                        success: false,
-                        error: `🛠️ AUTONOMOUS HEALING: '${name}' is a Code Mode function, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${canonical}({ ... })).`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true,
-                    }
-                },
-            })
+        ...buildAliasRoutingFallbackTools(
+            DUMMY_DOTTED_TOOL_NAMES,
+            'Code Mode Dotted Function Fallback',
+            true,
+            context
         ),
-        ...DUMMY_DOTTED_TOOL_NAMES.map(
-            (name): ToolDefinition => ({
-                name,
-                title: `Code Mode Dotted Function Fallback (${name})`,
-                description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
-                group: 'core',
-                inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                annotations: { readOnlyHint: false, openWorldHint: false },
-                handler: async (params: unknown) => {
-                    const args =
-                        typeof params === 'object' && params !== null
-                            ? (params as Record<string, unknown>)
-                            : {}
-                    const resolved = resolveTargetFromAlias(name)
-                    if (resolved !== undefined) {
-                        const routed = await routeNamedTargetTool(
-                            name,
-                            resolved.target,
-                            resolved.group,
-                            args,
-                            context
-                        )
-                        if (routed !== undefined) return routed
-                    }
-                    return {
-                        success: false,
-                        error: `🛠️ AUTONOMOUS HEALING: '${name}' is a Code Mode JavaScript function, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${name}({ ... })).`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true,
-                    }
-                },
-            })
-        ),
-        ...DUMMY_SQL_EXECUTION_TOOL_NAMES.map(
-            (name): ToolDefinition => ({
-                name,
-                title: `SQL / Code Mode Execution Fallback (${name})`,
-                description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Routes automatically to \`mj_execute_code\`.`,
-                group: 'core',
-                inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                annotations: { readOnlyHint: false, openWorldHint: false },
-                handler: async (params: unknown) => {
-                    if (context !== undefined) {
-                        const codemodeTools = getCodeModeTools(context)
-                        const codemodeTool = codemodeTools.find(
-                            (t: ToolDefinition) => t.name === 'mj_execute_code'
-                        )
-                        if (codemodeTool !== undefined) {
-                            const res = await Promise.resolve(codemodeTool.handler(params))
-                            if (typeof res === 'object' && res !== null) {
-                                return {
-                                    ...(res as Record<string, unknown>),
-                                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool. It was automatically translated and executed via Code Mode ('mj_execute_code').`,
-                                }
-                            }
-                            return res
-                        }
-                    }
-                    return {
-                        success: false,
-                        error: `🛠️ AUTONOMOUS HEALING: '${name}' was called, but direct SQLite execution tools are not active in memory-journal-mcp. Use 'mj_execute_code' with JavaScript (e.g. return await mj.core.getRecentEntries({ limit: 10 })).`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true,
-                    }
-                },
-            })
-        ),
-        ...DUMMY_PROJECT_TOOL_NAMES.map(
-            (name): ToolDefinition => ({
-                name,
-                title: `Project Tool Fallback (${name})`,
-                description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Returns project registry info.`,
-                group: 'admin',
-                inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-                annotations: { readOnlyHint: true, openWorldHint: false },
-                handler: async (params: unknown) => {
-                    const args =
-                        typeof params === 'object' && params !== null
-                            ? (params as Record<string, unknown>)
-                            : {}
-                    const lowerName = name.toLowerCase()
-                    const isGetter =
-                        lowerName.includes('get_project') ||
-                        (lowerName.includes('getproject') && !lowerName.includes('projects'))
-                    const targetTool = isGetter ? 'get_project' : 'list_projects'
-
-                    if (context !== undefined) {
-                        const tool = getAdminTools(context).find((t) => t.name === targetTool)
-                        if (tool !== undefined) {
-                            const res = await Promise.resolve(tool.handler(args))
-                            return typeof res === 'object' && res !== null
-                                ? {
-                                      ...(res as Record<string, unknown>),
-                                      _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetTool}' and executed successfully.`,
-                                  }
-                                : res
-                        }
-                    }
-                    return {
-                        success: false,
-                        error: `🛠️ AUTONOMOUS HEALING: '${name}' failed because admin tools are not available.`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true,
-                    }
-                },
-            })
-        ),
+        ...buildSqlExecutionFallbackTools(context),
+        ...buildProjectFallbackTools(context),
     ]
 }

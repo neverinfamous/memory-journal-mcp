@@ -1,73 +1,68 @@
 # 🤖 Agent README: lib-git-history
 
-> **[INTENT]**: Serves as the SSoT for Git history extraction. **[INVARIANT]**: Do NOT parse raw git logs or statuses. Always rely on the JSON payloads emitted by this module.
+> **[INTENT]**: Serves as the SSoT for Git history and working-tree extraction. **[INVARIANT]**: Do NOT parse raw `git log`, `git show`, `git status`, or `git diff` text. Always rely on the structured JSON payloads emitted by this module.
 
-**Purpose**: This module serves as a **structured repository intelligence layer**, elevating raw version control data far beyond a simple changelog parser into an actionable, semantic model. It is the **Single Source of Truth (SSoT)** for Git history extraction within the `adamic` repository.
-
-By pairing this deterministic history model with a deterministic execution bridge (`lib-agent-exec`), we eliminate the two largest sources of friction in agentic workflows: unpredictable command execution and opaque repository state. 
+**Purpose**: A **structured repository intelligence layer** that turns raw Git history and working-tree state into a deterministic, structurally validated semantic model (with Zod v4 parity contracts in `schema.ts`) across repositories.
 
 ## Architecture
 
-The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leveraging `NUL` byte delimiting to perfectly parse complex repository states (e.g., file renames, carriage returns, spaces in file names) without string escaping flaws.
+Uses native Git `--raw --numstat -z` (single-pass uncached), `--name-status -z`, and per-process UUID boundary separators (`RECORD_SEPARATOR`, `FIELD_SEPARATOR`, `NUMSTAT_BOUNDARY_STR`, `PATCH_BOUNDARY_STR`) so filenames with spaces, quotes, renames, or carriage returns parse without escaping flaws.
 
-1. **`git-runner.ts`**: The execution bridge. It directly interfaces with `git` and handles low-level NUL-byte parsing to extract raw metric data (additions, deletions, statuses). Accepts an optional `cwd` argument, allowing cross-repository and vendor execution contexts without pathing errors.
-   - **`git-numstat.ts`** & **`git-patch.ts`**: Specialized modules for extracting NUL-delimited file statistics, rename statuses, and bounded diff patches.
-2. **`parser.ts`**: The semantic engine export hub. To respect strict size constraints, the heavy parsing logic is split into specialized modules:
-   - **`parser-record.ts`**: Natively parses raw NUL-delimited strings, `feat(scope)!`, `BREAKING CHANGE:` trailers, revert references (`revertedCommit`), and issue references. It extracts mapped trailers (`History-Category`, `History-Entry`, `History-Significance`, `History-Impact`, `History-Confidence`, `History-Validation`, `History-Journal`, `History-Journal-Project`, and deprecated `Trust`) into the commit's `metadata` object using pattern matching, populates `trailersObj` and `customTrailers`, and manages error boundaries.
-   - **`parser-batch.ts`**: Handles the asynchronous correlation of patch data, numstats, and base commit data, and computes qualitative sizes (XS, S, M, L, XL). Sets boundary flags like `isPatchTruncated` and `isFilesTruncated` when output exceeds configured constraints.
-   - **`parser-metadata.ts`** & **`parser-utils.ts`**: Provide helper utilities for evaluating and extracting numeric metadata (like Impact, Confidence, and deprecated Trust) and normalizing parsed commit fields.
-3. **`schema.ts`**, **`constants.ts`**, **`cache.ts`**, & **`cli.ts`**: The contract and runtime layer. `schema.ts` uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics), `constants.ts` defines shared limits and delimiters, `cache.ts` provides commit caching, and `cli.ts` handles CLI argument parsing and formatting. **Always consult `schema.ts`** if modifying the data returned by the parser.
-4. **`.agents/scripts/get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve `metadata` without the heavy patch/body diffs, or the `--stats` flag for lightweight file modification metrics.
-5. **`.agents/scripts/search-conversation-history.ts`**: The conversation history search wrapper. Target-binds execution (`process.chdir`) to the `~/.gemini` repository to allow agents to search past conversation logs, session history, and system state snapshots.
+| Module | Responsibility |
+| :--- | :--- |
+| `../get-git-history-json.ts` | Primary CLI entrypoint (`bun`). Validates `--help` and custom `--format` paths before cache/output setup; short-circuits `--limit 0` and `--uncommitted` before tag-range probes; skips DB creation on read-only `--cache` runs when no DB exists; streams single-pass `--raw --numstat` on cold/uncached runs and delegates warm `--cache` runs to `cache-stream.ts`; batches stdout/file writes in 64KB chunks; tears down processes, streams, and cache in `finally`/signal handlers. |
+| `cli.ts` & `constants.ts` | `util.parseArgs` (honoring POSIX `--` end-of-options) + zero-dep `validateCliValues` parity validation (non-negative integers & non-blank strings), `--help` manual, limits, linear O(N) regex constants (`REGEX_CONVENTIONAL_COMMIT`, `REGEX_BREAKING_CHANGE`, etc.), `flattenString`, `truncateSafely`, `getLanguage`, and `GIT_EXCLUDE_PATTERNS`. |
+| `git-runner.ts` & `git-stream-buffers.ts` | Subprocess bridge (`cwd`-aware, `windowsHide: true`, `--end-of-options`, `stdio: 'ignore'` when unused, throttled 1s idle-timeout resets), single-spawn `getGitTagRange` (`describe --tags --long --abbrev=40 --always`), `buildGitBaseArgs` (never leaking standalone `-U`/`-c` that imply `-p`), chunk-buffered `TextStreamState`/`BinaryStreamState` O(N) boundary draining with slab detachment and 1-byte OOM guards, and `cleanupProcesses`. |
+| `git-numstat.ts` & `git-patch.ts` | Shared `parseNumstatLineIntoMap` + `NUMSTAT_MAPS_WITH_ALIASES` (used by inline `--raw --numstat` and fallback `--stdin --no-walk`), `wantsPatchOutput`, and bounded `-p` patch streaming. |
+| `uncommitted.ts` | Extracts staged, unstaged, and untracked working-tree status (`-uall`, `-uno` under `--no-body`, `--no-optional-locks`, 64KB chunk-streamed non-binary line counts up to 5MB with `path.relative` containment and 8-worker async concurrency). Clean-repo sync short-circuit, fails closed on `git status` errors, falls back to `git diff --cached` on unborn `HEAD`, and honors `--diff-context` / `--max-patch-length`. Exports sync `getUncommittedState` and concurrent async `getUncommittedStateAsync` (`Promise.allSettled`). |
+| `parser.ts` | Semantic engine barrel re-exporting `parseGitRecord`, `processBatch`, and `extractNumericMetadata`. |
+| `parser-record.ts` | Cursor-based record splitter, single-pass `--raw --numstat` / `--name-status` / `countOnly` (`--summary`) file parser, early `--type` & trailer-only filter short-circuits, conventional commit/breaking/revert/issue extraction, and cross-runtime ASCII/UTF-16LE `flattenString` detachment. |
+| `parser-trailers.ts` | Frozen `EMPTY_TRAILERS_RESULT` singleton fast-path and `switch`-based trailer parser (`History-*`, `BREAKING-CHANGE`, `Co-authored-by`, `Reviewed-by`, references, `customTrailers`, `trailersObj`) with prototype-pollution guards (`Object.create(null)`) and `\u200B` multiline stripping. |
+| `parser-metadata.ts` & `parser-utils.ts` | Strict finite numeric metadata extraction/filtering (linear `FINITE_DECIMAL_RE`), shared `WeakMap`-cached CLI filter matching (`matchesTrailerFilters`, `matchesCommitEntryFilters`, `matchesRawRecordFilters`), `getLanguage`, O(1) `Set`-based `isNoiseFile`, linear cursor-based `extractIssues` (bounded custom regex cache, O(1) trailing-delim trim, linear `SIMPLE_LIST_REGEX`), cached `expandIssueTrackerUrl`/`resolveIssueTrackerUrl`, `getSlackMap` (cwd-keyed structurally validated cache without Zod), and `truncateSafely`. |
+| `parser-batch.ts` | Uses inline numstats when present (lazily falling back to dynamic `getNumstatMap`/`getPatchMap` via `Promise.allSettled`), skips unused `files`/`body` construction under `--summary`/`--no-body`/uncached `--stats`, memoizes `patch: ''` on targeted empty/excluded commits (`preFetchedPatchMap = null` suppresses duplicate retry), computes size (`XS`–`XL`) with `SIZE_L_THRESHOLD` noise short-circuit, and validates via Zod-free structural `collectCommitEntryIssues` + `parseWithFallbacks` (contract-tested against `schema.ts`). |
+| `schema.ts` | Zod v4 contracts (`entrySchema` — 38 fields, `fileStatusSchema` with strict `.int()` metrics, `cliArgsSchema`). Zero runtime `zod` or `./schema.js` imports outside `schema.ts`. **Always consult before altering parser output.** |
+| `security-utils.ts` & `security-regex.ts` | Containment/symlink/Win32 path syntax validation (`hasUnsafeWin32PathSyntax`, `isPathContained`, `assertContainedExistingFile`, `readContainedTextFileSync`, `openContainedWriteFd`), `scrubCredentialUrls`, pre-escape C0/C1/bidi display & log sanitizers (`stripUnsafeDisplayChars`, `sanitizeLogText`), `escapeMarkdown*` / `escapeSlackMrkdwn`, prototype-safe record copiers, and linear O(N) non-`/u` ReDoS static validators (`isSafeRegexPattern`, `isSafeCustomIssuePattern`). |
+| `security-sqlite.ts` & `security-git.ts` | SQLite containment/symlink/mode guards (`assertSafeSqlitePath`, `safeChmodSqliteFiles`) and exact schema/FK poisoning checks (`isValidSqliteCommitsSchema`, `dropPoisonedSchemaObjects`); Git safety args (`GIT_LOG_SAFE_CONFIG_ARGS`, `GIT_LOG_SAFE_POST_ARGS`) suppressing external diff/textconv, signatures, mailmap, attributes, `/dev/null` orderfiles, submodules, and color output, plus `buildSafeUncommittedGitContext*` (`core.worktree` containment + `--show-scope` neutralization of repo `filter.<driver>.*` and `core.excludesFile`). |
+| `cache.ts` | `bun:sqlite` `STRICT` cache (`PRAGMA trusted_schema = OFF` before schema checks on both RO and RW handles, `busy_timeout=5000` before `WAL`, `synchronous=NORMAL`, `temp_store=MEMORY`, `cache_size=-16384`, `user_version=4` with probe columns first and large `files`/`body`/`patch` columns last, `PRAGMA foreign_keys = OFF` around `dropPoisonedSchemaObjects` inside `BEGIN IMMEDIATE`, readonly open mode for read-only queries, partial `idx_commits_isBreaking_true WHERE isBreaking = 1`, `stmtCache` (32) LRU + finalization + `PRAGMA optimize` on RW `closeCache()`), Zod-free structural `hydrateCachedRow` (rejecting empty required strings), positional `insertCommits`, targeted `updateCommitPatches`, `hasCachedCommits`, 3–5 column `batchProbeCommitFilters` via `JOIN json_each(?)`, and 5-projection `CHUNK=500` `batchQueryCommits` (`full`/`no-patch`/`stats`/`summary`/`no-body`). |
+| `output.ts`, `cache-stream.ts` & `formatters/{markdown,slack}.ts` | Delete-free `projectCommitEntry` & `stripChangelogFields`, `isCacheEligibleQuery`, `validateCustomFormatPath`, concurrent `resolveRepoOriginAsync`, CLI-only `cache-stream.ts` (warm SHA-only `git log --format=%H`, 3–5 column TS-filter probe with Phase 2 recovery, adaptive batching, concurrent coalesced mixed-batch `git log -p`, single-spawn cold cache writer), built-in Markdown/Slack formatters (escaping inline/multiline tokens, leading block markers, links, and C0/C1/bidi controls), and contained custom `.hbs`/`.txt`/JS/TS formatter loader (`allowProtoPropertiesByDefault: false`, `allowProtoMethodsByDefault: false`, `toNullProtoVersionMap`). |
+
+## ⚡ Fast-Path Agent Command Recipes
+
+Pick the lightest flag that satisfies your task (cost increases top to bottom):
+
+| Goal | Recommended Command | Subprocesses / Diff Cost |
+| :--- | :--- | :--- |
+| Working-tree status + diffstat | the host's `get-git-history-json.ts --uncommitted --stats` wrapper (add `--path <dir>` to scope) | Concurrent `status` + `diff --numstat` + `config --get-regexp` (`--no-optional-locks`) |
+| Latest commit metadata only | the host's `get-git-history-json.ts -n 1 --no-body` wrapper | 1 `git log` (no `--name-status`, no numstat, no patch) |
+| Commit summaries + trailers | the host's `get-git-history-json.ts -n 20 --summary` wrapper | 1 `git log --name-status` (`countOnly` file scan, skips numstat & patch) |
+| Commit metadata + file metrics | the host's `get-git-history-json.ts -n 20 --stats` wrapper | 1 `git log --raw --numstat` (single-pass inline numstats) |
+| Warm cached history / TS filters | the host's `get-git-history-json.ts --cache -n 50 --stats` wrapper | 1 `git log --format=%H` + SQLite projected read / 3–5 col probe (0 tree diffs on hits) |
+| Full diff search + patches | the host's `get-git-history-json.ts -G "<regex>" --include-patch` wrapper | Sequential per-batch `-p` on uncached/cold runs (`-G` is non-cacheable); concurrent `--raw --numstat` + `-p` on warm-cache partial misses |
+| Changelog output | the host's `get-git-history-json.ts -r "v1.0.0..HEAD" -f markdown --changelog-only` wrapper | Single-pass `--numstat` + concurrent `remote.origin.url`; supports `json`, `json-array`, `markdown`, `slack`, or custom path |
 
 ## 🧹 Scratch Workspace Protocol
 
 > [!CAUTION]
-> **STRICT SCRATCH FILE POLICY**: Agents often mistakenly create temporary files or mock repositories in `.agents/scratch`, `.agents/scripts/scratch-repo`, or the root workspace. This is **STRICTLY FORBIDDEN** and creates a messy workspace.
-> 
-> **ALWAYS** write your test/scratch files exclusively to the isolated conversation directory:
-> `<appDataDir>\brain\<conversation-id>\scratch\`
-> 
-> NEVER leave scratch files or temporary databases in the active project workspace.
+> **STRICT SCRATCH FILE POLICY**: Never create temporary files, test DBs, or mock repositories in `.agents/scratch`, `.agents/scripts/scratch-repo`, or the repository root.
+> **ALWAYS** write scratch scripts/fixtures exclusively to `<appDataDir>\brain\<conversation-id>\scratch\` (and temp SQLite DBs to `os.tmpdir()` with `.db`/`-wal`/`-shm` cleanup in `finally`).
 
 ## 🚫 Anti-Patterns
 
-- **NEVER** use `git log`, `git shortlog`, or `git show` to read or parse commit history in any repository. 
-- **NEVER** use `git status` or `git diff` and try to parse the raw text to read the current uncommitted state.
-- The `get-git-history-json.ts` script is the required mechanism for all history AND current uncommitted state exploration. 
-- If you simply need the current HEAD SHA, use `git rev-parse HEAD` or `git rev-parse --short HEAD`.
+- **NEVER** run raw `git log`, `git shortlog`, `git show`, `git status`, or `git diff` to parse history or working-tree state.
+- **OK**: `git rev-parse HEAD` / `git rev-parse --short HEAD` when you only need the bare HEAD SHA.
+- **NEVER** use `Promise.all` for parallel `git` child-process spawns (use `Promise.allSettled` so an early rejection never leaves sibling processes holding Windows `cwd` locks).
 
-## 🛠️ Usage Guidelines for Agents
+## 🛠️ Usage & Modification Guidelines
 
-- **CLI Help**: The script has a comprehensive built-in manual. Run `bun .\.agents\scripts\get-git-history-json.ts --help` to explore all available filtering and formatting options. Key flags include:
-  - `--type <type>`, `--category <cat>`, `--breaking` (filter by conventional commit parameters)
-  - `--impact <val>`, `--confidence <val>` (filter by numerical impact/confidence thresholds)
-  - `--diff-filter <filter>`, `--patch-search <pattern>`, `--reverse` (filter by file status, patch content, or order)
-  - `--diff-context <lines>`, `--max-body-length <bytes>`, `--max-patch-length <bytes>` (constrain diff patch and body memory boundaries)
-- **Uncommitted State**: To get a deterministic JSON readout of the current staged, unstaged, and untracked files in the working directory, use `bun .\.agents\scripts\get-git-history-json.ts --uncommitted --stats`. Do NOT parse raw `git status` text.
-- **Execution Contexts (WSL & Docker)**: The underlying `git-runner.ts` explicitly accepts a `cwd`. When operating across OS boundaries (e.g., executing Git natively from PowerShell 7+ targeting a WSL Container UNC path `\\wsl.localhost\...` or a Docker mount), the wrapper maintains deterministic string isolation. Ensure you pass the correct mapped Windows path to `--cwd`.
-- **Historical Conversation Search**: To search Antigravity conversation logs, session histories, or state snapshots tracked in `~/.gemini`, use `bun .\.agents\scripts\search-conversation-history.ts` (e.g., `--search "query"` or `--summary`).
-- **Output Formats & Streaming**: The default output is a JSON object. Use `--jsonl` to stream JSON Lines output. Use `--stream-to-file <path>` to write directly to disk and avoid stdout buffer limits. Use `--no-body` to skip retrieving expensive diff patches, file metrics, and commit bodies. You can also specify `--max-body-length` (default 100MB) to constrain parser memory.
-- **Context & Caching**: Use `--package-version` to inject the `package.json` version into the output metadata. Enable caching with `--cache` and auto-expand issue references (e.g., `#123`) using `--issue-tracker <url>`.
-- **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous test suite using **Bun** (`bun test`) to prevent regressions. Do NOT attempt to run Vitest or Playwright.
-- **Data Coercion**: Metrics inside `totalInsertions`, `totalDeletions`, `similarityScore`, `insertions` and `deletions` are explicitly strict integers. Do not attempt to parse them loosely or pass floating point decimals.
-- **File Renames**: Be aware that file renames (status `R`) are structured with both an `oldFile` and `file` property in the file status object.
-- **Trailers & Metadata**: Custom trailers (such as `History-Journal` and `History-Journal-Project` generated by the memory journal integration) are fully extracted into `trailersObj` and `metadata.customTrailers`. Explicitly mapped metadata are stored natively at the root of the strongly-typed `metadata` object. *Note: Internally, the `commit.ts` CLI normalizes multiline text with zero-width spaces (`\u200B`) to bypass Git's trailer block truncation rules on empty lines, and `parser-record.ts` explicitly removes them when extracting JSON.*
-- **Validation**: Any changes to this module **must** pass `bun run check`. The tests depend on carefully constructed mock Git histories.
-- **Custom Formatting**: The script supports custom templating using `.hbs` or `.txt` Handlebars templates, as well as JS/TS modules (`.ts`, `.js`, `.mjs`, `.cjs`) that export a `default` or `format` function. Provide the absolute path to your template/module via the `--format <path>` flag. The template has access to a `commits` array and a structured `versionMap`. Note that custom formatters (and built-in markdown/slack) will include ALL commits by default; if you want to restrict output to a changelog (only feat, fix, etc.), you MUST explicitly pass the `--changelog-only` flag.
+- **CLI Flags**: Run the host's `get-git-history-json.ts --help` wrapper for the full reference. Key filters: `--type`, `--category`, `--breaking`, `--impact`, `--confidence`, `--author`, `--path`, `--since`/`--until`, `--diff-filter`, `--patch-search` (`-G`), `--pickaxe` (`-S`), `--reverse`, `--first-parent`, `--include-merges`, `--all`.
+- **Memory & Truncation Bounds**: `--max-body-length <chars>` controls output body truncation (default `DEFAULT_MAX_BODY_LEN = 10,000` chars; the text record stream ceiling defaults to `150MB` (`100MB` default + `50MB` headroom), or `max-body-length + 50MB` when explicitly set (`50MB` floor), while binary streams default to `GIT_STREAM_BUFFER_DEFAULT = 100MB` and patch streams cap per record to `max(4KB, max-patch-length * 4 + 4KB)`). `--max-patch-length <chars>` defaults to `20,000` chars. Use `--jsonl` or `--stream-to-file <path>` for large histories.
+- **Cross-OS & Context**: Always pass explicit `--cwd <path>` when targeting another repository (including mapped Windows/WSL UNC paths `\\wsl.localhost\...`). Use `--package-version`, `--cache`, `--issue-tracker <url>`, `--issue-pattern <regex>`, `--mailmap <file>`, and `--slack-map <file>` as needed.
+- **Schema & Trailer Contracts**: `totalInsertions`, `totalDeletions`, `similarityScore`, `insertions`, `deletions`, and `fileCount` are strict `.int()` integers. Renames (`R`) carry both `oldFile` and `file`. Mapped trailers populate `metadata`; all trailers populate `trailersObj` and `metadata.customTrailers` (`parser-trailers.ts` strips `\u200B` multiline markers emitted by `commit.ts`).
+- **Custom Formatting**: `--format <path>` (resolved relative to `--cwd`) supports `.hbs`/`.txt` Handlebars templates and `.ts`/`.js`/`.mjs`/`.cjs` modules exporting `default` or `format`. Built-in (`markdown`, `slack`) and custom formatters include all commits unless `--changelog-only` is passed.
+- **Git Config Hardening & Stderr Sanitization**: Pass `-c diff.orderFile=/dev/null` (never empty `''`, which fails Git open) when disabling repo orderfiles, keep `--ignore-submodules=all` + `diff.ignoreSubmodules=all` on uncommitted `status`/`diff` calls to prevent submodule filter execution, keep `log.mailmap=false`/`mailmap.file=`/`mailmap.blob=`/`--no-use-mailmap` unless `--mailmap` is explicitly validated, neutralize local/worktree `core.excludesFile` and `filter.<driver>.*` via `--show-scope` + `GIT_CONFIG_COUNT`, suppress `color.ui`/`color.diff`/`color.status`, and wrap untrusted stderr warning interpolations in `sanitizeLogText`.
+- **Code Quality & Vendor Budgets**: Keep every non-test `.ts` file `<= 450` lines (`24` files total), every function `<= 80` lines with control-flow nesting `<= 4`, preserve `-z`/UUID delimiters and `--end-of-options`, keep zero runtime `zod`/`schema.js` imports outside `schema.ts`, and keep all files/docs 100% path-neutral (no machine-local paths or private repo names). Register any newly extracted `.ts` file in downstream `VENDOR.json`.
+- **Validation**: After modifying this library, run **strictly sequentially**: `bunx eslint --no-cache .agents/scripts/get-git-history-json.ts .agents/scripts/lib-git-history/` (or `bun run lint`) → `bun run typecheck` → sequential batched `bun test --timeout 30000 --parallel` runs across the host's `lib-git-history/tests/` (do NOT use Vitest or Playwright in this repo).
 
-## 📖 Related Context
+## 📖 Related Context & Usability Testing
 
-- If you need to write a commit using this system, use the `/mcp:memory-journal-mcp:commit` or `/mcp:memory-journal-mcp:quick-commit` prompts.
-- Do NOT edit `.agents/workflows/changelog.md` (or similar changelog files); always extract history using `get-git-history-json.ts` instead.
-
-## 🧪 Usability & Hallucination Testing
-
-If you are modifying the history parsing logic, you MUST run the usability testing suite to ensure LLMs do not hallucinate or break when piping large JSON responses.
-- **Run the Fuzzing Suite:** Ask the user to "Execute the `/dynamic-audit-usability` workflow", or manually trigger the subagents defined in `.agents/scripts/usability/coordinator-workflow.md`.
-- **Test Auto-Generation:** The tests in `test-usability-*.md` are **auto-generated**. Do not edit them directly. Update `.agents/scripts/usability/scripts/test-manifest.ts` or the `content/` partials instead, then run `bun .\.agents\scripts\usability\scripts\generate-tests.ts`.
-
----
-
-## 📈 Continuous Self-Improvement
-As an agent operating within this workspace, you are expected to practice continuous self-improvement. If you identify gaps, ambiguities, or missing instructions during an audit or execution task, **proactively update this `AGENT_README.md`** and relevant testing prompts. You are empowered to refine your own processes.
+- **Committing**: Use `pnpm exec tsx scripts/commit.ts` with explicit `--add <path>` flags (never raw `git commit`). Do not hand-edit generated changelogs.

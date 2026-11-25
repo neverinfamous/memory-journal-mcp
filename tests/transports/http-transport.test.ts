@@ -6,6 +6,7 @@
  * and route handler logic — without spinning up real HTTP servers.
  */
 
+import * as dns from 'node:dns'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ============================================================================
@@ -50,7 +51,13 @@ const {
         }),
         listen: vi.fn().mockImplementation((_port: number, _host: string, cb?: () => void) => {
             if (cb) cb()
-            return { close: vi.fn(), on: vi.fn(), setTimeout: vi.fn() }
+            return {
+                close: vi.fn((cb?: (err?: Error) => void) => {
+                    cb?.()
+                }),
+                on: vi.fn(),
+                setTimeout: vi.fn(),
+            }
         }),
     }
 
@@ -129,6 +136,8 @@ vi.mock('../../src/utils/logger.js', () => ({
 // ============================================================================
 
 import { HttpTransport, type HttpTransportConfig } from '../../src/transports/http/index.js'
+import { AuthorizationServerDiscovery } from '../../src/auth/authorization-server-discovery.js'
+import { AuthServerDiscoveryError } from '../../src/auth/errors.js'
 
 // ============================================================================
 // Helpers
@@ -209,7 +218,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             expect(mockApp.use).toHaveBeenCalled()
             expect(mockApp.listen).toHaveBeenCalledWith(3000, '127.0.0.1', expect.any(Function))
@@ -223,7 +232,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await expect(transport.start((() => mockServer) as never, null)).rejects.toThrow(
+            await expect(transport.start((() => mockServer) as never)).rejects.toThrow(
                 /FATAL/
             )
         })
@@ -243,7 +252,7 @@ describe('HttpTransport', () => {
                 authToken: 'test-token-123',
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             expect(mockApp.use).toHaveBeenCalled()
         })
@@ -279,7 +288,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             // Find middleware that sets security headers (position is dynamic due to hostHeaderValidation)
             const securityMw = findMiddleware((res) => {
@@ -311,7 +320,7 @@ describe('HttpTransport', () => {
                 enableHSTS: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             // Find security headers middleware by behavior
             const securityMw = findMiddleware((res) => {
@@ -340,7 +349,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             // Find the OPTIONS middleware by behavior (returns 204 for OPTIONS)
             let optionsMw: Function | undefined
@@ -378,9 +387,22 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
-            const corsMw = mockMiddlewares[1]
+            const corsMw = mockMiddlewares.find((mw) => {
+                const probe = mockRes()
+                try {
+                    mw(mockReq(), probe, () => {})
+                } catch {
+                    return false
+                }
+                const calls = (probe['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [
+                    string,
+                    unknown,
+                ][]
+                return calls.some((c) => c[0] === 'X-Content-Type-Options')
+            })
+            expect(corsMw).toBeDefined()
             const req = mockReq({ method: 'POST' })
             const res = mockRes()
             let nextCalled = false
@@ -404,7 +426,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             const handler = mockRoutes['get']!['/health']
             expect(handler).toBeDefined()
@@ -425,7 +447,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             const handler = mockRoutes['get']!['/']
             expect(handler).toBeDefined()
@@ -445,7 +467,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             // Find the OPTIONS middleware by behavior (position is dynamic)
             let optionsMw: Function | undefined
@@ -483,9 +505,20 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
-            const optionsMw = mockMiddlewares[1]
+            const optionsMw = mockMiddlewares.find((mw) => {
+                const probe = mockRes()
+                try {
+                    mw(mockReq({ method: 'OPTIONS' }), probe, () => {})
+                } catch {
+                    return false
+                }
+                return (probe['status'] as ReturnType<typeof vi.fn>).mock.calls.some(
+                    (c: unknown[]) => c[0] === 204
+                )
+            })
+            expect(optionsMw).toBeDefined()
             const req = mockReq({ method: 'POST' })
             const res = mockRes()
             let nextCalled = false
@@ -503,7 +536,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             // 404 handler is the last registered middleware
             const lastMw = mockMiddlewares[mockMiddlewares.length - 1]
@@ -528,7 +561,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             const handler = mockRoutes['get']!['/mcp']
             expect(handler).toBeDefined()
@@ -540,34 +573,11 @@ describe('HttpTransport', () => {
     })
 
     // ========================================================================
-    // start — scheduler
-    // ========================================================================
-
-    describe('scheduler', () => {
-        it('should start scheduler after server listen', async () => {
-            const config: HttpTransportConfig = {
-                port: 3000,
-                host: '127.0.0.1',
-                corsOrigins: ['http://localhost'],
-                stateless: true,
-            }
-            const mockScheduler = { start: vi.fn(), stop: vi.fn() }
-            const transport = new HttpTransport(config)
-            await transport.start(
-                (() => mockServer) as never,
-                mockScheduler as unknown as Parameters<HttpTransport['start']>[1]
-            )
-
-            expect(mockScheduler.start).toHaveBeenCalled()
-        })
-    })
-
-    // ========================================================================
     // stop
     // ========================================================================
 
     describe('stop', () => {
-        it('should clean up on stop', async () => {
+        it('should close all active servers on stop', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
@@ -575,27 +585,9 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
-            await transport.stop(null)
+            await transport.start((() => mockServer) as never)
+            await transport.stop()
             // Should not throw
-        })
-
-        it('should stop scheduler on stop', async () => {
-            const config: HttpTransportConfig = {
-                port: 3000,
-                host: '127.0.0.1',
-                corsOrigins: ['http://localhost'],
-                stateless: true,
-            }
-            const mockScheduler = { start: vi.fn(), stop: vi.fn() }
-            const transport = new HttpTransport(config)
-            await transport.start(
-                (() => mockServer) as never,
-                mockScheduler as unknown as Parameters<HttpTransport['start']>[1]
-            )
-            await transport.stop(mockScheduler as unknown as Parameters<HttpTransport['stop']>[0])
-
-            expect(mockScheduler.stop).toHaveBeenCalled()
         })
     })
 
@@ -613,7 +605,7 @@ describe('HttpTransport', () => {
                 enableRateLimit: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             let rateLimiterMw: Function | undefined
             for (const mw of mockMiddlewares) {
@@ -644,7 +636,7 @@ describe('HttpTransport', () => {
             expect(healthRes['status'] as any).toHaveBeenCalledWith(429)
 
             // Cleanup any intervals started by HttpTransport for rate limiting
-            await transport.stop(null)
+            await transport.stop()
         })
     })
 
@@ -662,7 +654,7 @@ describe('HttpTransport', () => {
                 authToken: 'secret-token',
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            await transport.start((() => mockServer) as never)
 
             // Auth middleware checks req.path and authorization header.
             // It's registered via app.use() after security, CORS, json, rate-limit.
@@ -716,7 +708,18 @@ describe('HttpTransport', () => {
                 ok: true,
                 json: async () => ({ keys: [] }),
             }) as unknown as typeof fetch
+            const discoverSpy = vi
+                .spyOn(AuthorizationServerDiscovery.prototype, 'discover')
+                .mockRejectedValueOnce(
+                    new AuthServerDiscoveryError(
+                        'https://auth.example.com',
+                        new Error('HTTP 404: Not Found')
+                    )
+                )
 
+            const lookupSpy = vi
+                .spyOn(dns.promises, 'lookup')
+                .mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
             try {
                 const config: HttpTransportConfig = {
                     port: 3000,
@@ -728,11 +731,13 @@ describe('HttpTransport', () => {
                     oauthAudience: 'test-audience',
                 }
                 const transport = new HttpTransport(config)
-                await transport.start((() => mockServer) as never, null)
+                await transport.start((() => mockServer) as never)
 
                 // Should register the well-known route
                 expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
             } finally {
+                lookupSpy.mockRestore()
+                discoverSpy.mockRestore()
                 global.fetch = originalFetch
             }
         })

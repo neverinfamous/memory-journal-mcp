@@ -104,7 +104,7 @@ push to main / tag v*
           publish-npm (npm publish with provenance)
 ```
 
-For manual feature releases, the maintainer runs `/bump-deploy` locally which pushes a `v*` tag, triggering the gatekeeper pipeline and subsequent release jobs.
+A release is a `v*` tag push (for example `v9.1.0`). `gatekeeper.yml` runs the five gates on every push to `main` and on every `v*` tag. It calls `docker-publish.yml` only when `github.ref` starts with `refs/tags/v` and all five gates succeed. Pushes to `main` do not publish.
 
 ---
 

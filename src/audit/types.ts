@@ -51,16 +51,24 @@ export interface AuditEntry {
 
     /** Estimated token count of the tool response (~4 bytes per token) */
     tokenEstimate?: number | undefined
+
+    /** Optional workspace ID associated with the audited operation */
+    workspaceId?: string | undefined
+
+    /** Optional project number associated with the audited operation */
+    projectNumber?: number | undefined
 }
 
 /** Filters for searching the audit log */
 export interface AuditSearchFilters {
-    tool_name?: string
-    user?: string
-    date_range?: { start?: string; end?: string }
-    status?: boolean
-    category?: AuditCategory
-    limit?: number
+    tool_name?: string | undefined
+    user?: string | undefined
+    date_range?: { start?: string | undefined; end?: string | undefined } | undefined
+    status?: boolean | undefined
+    category?: AuditCategory | undefined
+    limit?: number | undefined
+    workspace_id?: string | undefined
+    project_number?: number | undefined
 }
 
 /** Audit log configuration */

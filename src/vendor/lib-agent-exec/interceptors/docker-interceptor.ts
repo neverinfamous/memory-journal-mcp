@@ -1,403 +1,411 @@
 // @ts-nocheck
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
-import { ExecutionContext } from './types.js';
+import {
+  DOCKER_GLOBAL_VALUE_FLAGS,
+  applyDockerWslRoutingAndTimeouts,
+  handleKubectlInterception,
+  splitDockerMultiTargets,
+} from './docker-lifecycle-guards.js';
+import { DOCKER_VALUE_FLAG_SET, absorbsNextDockerShortValue, guardDockerTtyAndRepl } from './docker-tty-repl-guard.js';
+import { type ExecutionContext } from './types.js';
 
-export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
-  const dockerCmds = ['docker', 'docker.exe', 'docker.bat'];
-  const dockerComposeCmds = ['docker-compose', 'docker-compose.exe', 'docker-compose.bat'];
-  const kubectlCmds = ['kubectl', 'kubectl.exe'];
+const DOCKER_CMD_SET: ReadonlySet<string> = new Set(['docker', 'docker.exe', 'docker.bat']);
+const DOCKER_COMPOSE_CMD_SET: ReadonlySet<string> = new Set(['docker-compose', 'docker-compose.exe', 'docker-compose.bat']);
+const KUBECTL_CMD_SET: ReadonlySet<string> = new Set(['kubectl', 'kubectl.exe']);
+const COMPOSE_GLOBAL_VALUE_FLAGS = new Set(['-f', '--file', '-p', '--project-name', '--profile', '--env-file', '--project-directory', '--progress', '--ansi']);
+const PRUNE_CATEGORY_SET: ReadonlySet<string> = new Set(['system', 'image', 'volume', 'network', 'container', 'builder']);
+const MULTI_TARGET_SUBCMD_SET: ReadonlySet<string> = new Set(['inspect', 'stop', 'start', 'restart', 'rm', 'rmi', 'kill', 'pause', 'unpause']);
+const BUILDX_VALUE_FLAG_SET: ReadonlySet<string> = new Set(['--builder']);
+const EMPTY_DOCKER_FLAG_SET: ReadonlySet<string> = new Set();
 
-  if (kubectlCmds.includes(cmdBasename)) {
-    const subCmd = args.filter(a => !a.startsWith('-'))[0];
-    if (['edit', 'attach', 'debug'].includes(subCmd)) {
-      console.error(`\n   💡 AGENT HINT: 'kubectl ${subCmd}' is highly interactive and will hang. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
+function isLeadingDockerHelp(args: readonly string[], isComposeCmd: boolean): boolean {
+  let firstSub: string | undefined;
+  let inRunOrExec = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (a === '--help' || (firstSub === undefined && a === '-h')) return true;
+    const activeFlags = inRunOrExec
+      ? DOCKER_VALUE_FLAG_SET
+      : ((isComposeCmd || firstSub === 'compose') ? COMPOSE_GLOBAL_VALUE_FLAGS : DOCKER_GLOBAL_VALUE_FLAGS);
+    if (activeFlags.has(a) || (inRunOrExec && absorbsNextDockerShortValue(a))) { i++; continue; }
+    if (a.startsWith('-')) continue;
+    if (inRunOrExec) return false;
+    if (firstSub === undefined) {
+      firstSub = a;
+      if (a === 'run' || a === 'exec') inRunOrExec = true;
+      continue;
     }
-    if (subCmd === 'logs') {
-      const hasFollow = args.some(a => a === '-f' || a === '--follow');
-      if (hasFollow) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'kubectl logs -f' runs indefinitely and will cause a timeout. Automatically stripping '-f / --follow' flag... (Frictionless Recovery)`);
-        for (let i = args.length - 1; i >= 0; i--) {
-          if (args[i] === '-f' || args[i] === '--follow') args.splice(i, 1);
-        }
-      }
-
-      const hasTailOrLimit = args.some(a =>
-        a === '--tail' ||
-        a.startsWith('--tail=') ||
-        a === '--since' ||
-        a.startsWith('--since=')
-      );
-
-      if (!hasTailOrLimit) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'kubectl logs' called without a limit. Automatically appending '--tail 1000' to prevent output from exceeding maxBuffer... (Frictionless Recovery)`);
-        const logsIdx = args.indexOf('logs');
-        if (logsIdx !== -1) {
-          args.splice(logsIdx + 1, 0, '--tail', '1000');
-        } else {
-          args.push('--tail', '1000');
-        }
-      }
-    }
-  }
-
-  if (!dockerCmds.includes(cmdBasename) && !dockerComposeCmds.includes(cmdBasename)) return;
-
-  const positionalArgs = args.filter(a => !a.startsWith('-'));
-  const knownDockerCmds = ['compose', 'buildx', 'run', 'exec', 'logs', 'build', 'up', 'down', 'start', 'stop', 'restart', 'ps', 'pull', 'push', 'images', 'rm', 'rmi', 'network', 'volume', 'system', 'info', 'version', 'inspect', 'cp', 'export', 'import', 'save', 'load', 'login', 'logout', 'search', 'tag', 'history', 'commit', 'events', 'port', 'top', 'stats', 'attach', 'wait', 'rename', 'update', 'kill', 'pause', 'unpause', 'create', 'plugin'];
-  const knownComposeCmds = ['up', 'down', 'run', 'exec', 'logs', 'build', 'start', 'stop', 'restart', 'ps', 'pull', 'push', 'config', 'cp', 'create', 'events', 'images', 'kill', 'ls', 'pause', 'port', 'rm', 'top', 'unpause', 'wait', 'watch'];
-  
-  const subCmd = dockerCmds.includes(cmdBasename) ? (args.find(a => knownDockerCmds.includes(a)) || positionalArgs[0]) : positionalArgs[0];
-  const isComposePlugin = dockerCmds.includes(cmdBasename) && subCmd === 'compose';
-  const isBuildxPlugin = dockerCmds.includes(cmdBasename) && subCmd === 'buildx';
-  
-  const composeSubCmd = isComposePlugin 
-      ? (args.slice(args.indexOf('compose') + 1).find(a => knownComposeCmds.includes(a)) || positionalArgs[1]) 
-      : (dockerComposeCmds.includes(cmdBasename) ? (args.find(a => knownComposeCmds.includes(a)) || positionalArgs[0]) : null);
-
-  const buildxSubCmd = isBuildxPlugin
-      ? (args.slice(args.indexOf('buildx') + 1).filter(a => !a.startsWith('-'))[0])
-      : null;
-  
-  let isDockerTtySensitive = false;
-  let isComposeExec = false;
-  let isComposeRun = false;
-
-  if (dockerCmds.includes(cmdBasename) && subCmd === 'build') {
-     if (!args.includes('--progress=plain') && !args.includes('--progress')) args.push('--progress=plain');
-  }
-
-  if (isBuildxPlugin && buildxSubCmd === 'build') {
-     if (!args.includes('--progress=plain') && !args.includes('--progress')) args.push('--progress=plain');
-  }
-
-  if ((dockerComposeCmds.includes(cmdBasename) || isComposePlugin) && composeSubCmd === 'build') {
-     if (!args.includes('--progress=plain') && !args.includes('--progress')) args.push('--progress=plain');
-  }
-
-  const isDockerBuild = 
-    (dockerCmds.includes(cmdBasename) && subCmd === 'build') ||
-    (isBuildxPlugin && buildxSubCmd === 'build') ||
-    ((dockerComposeCmds.includes(cmdBasename) || isComposePlugin) && composeSubCmd === 'build');
-
-  const isDockerScout = 
-    (dockerCmds.includes(cmdBasename) && (subCmd === 'scout' || args.includes('scout')));
-
-  if (isDockerBuild || isDockerScout) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout to 600s for Docker build/scout... (Frictionless Recovery)`);
-    payload.bypassInterceptors = true;
-    if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
-      payload.timeoutMs = 600000;
+    if ((firstSub === 'container' || firstSub === 'compose') && (a === 'run' || a === 'exec')) {
+      inRunOrExec = true;
     }
   }
+  return false;
+}
 
-  if (dockerCmds.includes(cmdBasename) && !isComposePlugin && (subCmd === 'run' || subCmd === 'exec' || (subCmd === 'container' && (positionalArgs[1] === 'run' || positionalArgs[1] === 'exec')))) {
-    isDockerTtySensitive = true;
-  } else if (dockerComposeCmds.includes(cmdBasename) && (composeSubCmd === 'run' || composeSubCmd === 'exec')) {
-    isDockerTtySensitive = true;
-    if (composeSubCmd === 'exec') isComposeExec = true;
-    if (composeSubCmd === 'run') isComposeRun = true;
-  } else if (isComposePlugin && (composeSubCmd === 'run' || composeSubCmd === 'exec')) {
-    isDockerTtySensitive = true;
-    if (composeSubCmd === 'exec') isComposeExec = true;
-    if (composeSubCmd === 'run') isComposeRun = true;
+function walkSubcommands(args: readonly string[], startIdx: number, valueFlags: ReadonlySet<string>): { pos: string[]; idx: number } {
+  const pos: string[] = [];
+  for (let i = startIdx; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (valueFlags.has(a)) { i++; continue; }
+    if (a.startsWith('-')) continue;
+    pos.push(a);
+    return { pos, idx: i };
   }
+  return { pos, idx: -1 };
+}
 
-  if (dockerCmds.includes(cmdBasename) && subCmd === 'login') {
-    if (!args.includes('-u') && !args.includes('--username') && !args.includes('--password-stdin')) {
-      console.error(`\n   💡 AGENT HINT: 'docker login' called without credentials (-u or --password-stdin).\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang waiting for a username. Blocking execution.`);
-      process.exit(1);
+function findComposeProgressSpan(scanSlice: readonly string[]): { idx: number; count: number } | null {
+  for (let i = 0; i < scanSlice.length; i++) {
+    const a = scanSlice[i];
+    if (a !== undefined && a.startsWith('--progress=')) return { idx: i, count: 1 };
+    if (a === '--progress') return { idx: i, count: i + 1 < scanSlice.length ? 2 : 1 };
+  }
+  return null;
+}
+
+function injectPlainProgressIfMissing(args: string[], composeBuildIdx = -1, onSync?: () => void): void {
+  const ddIdx = args.indexOf('--');
+  const scanSlice = ddIdx === -1 ? args : args.slice(0, ddIdx);
+  const existing = findComposeProgressSpan(scanSlice);
+  if (existing !== null) {
+    if (composeBuildIdx !== -1 && existing.idx > composeBuildIdx) {
+      const moved = args.splice(existing.idx, existing.count);
+      args.splice(composeBuildIdx, 0, ...moved);
+      onSync?.();
     }
-    if (args.includes('--password-stdin') && (!payload.stdin || payload.stdin.trim().length === 0)) {
-      console.error(`\n   💡 AGENT HINT: 'docker login --password-stdin' requires credentials via stdin.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   You provided the flag but no valid 'stdin' payload. Blocking execution to prevent hanging.`);
-      process.exit(1);
-    }
+    return;
   }
-
-  if (dockerCmds.includes(cmdBasename) && subCmd === 'plugin' && args.includes('install')) {
-    if (!args.includes('--grant-all-permissions')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker plugin install' asks for confirmation. Automatically injecting '--grant-all-permissions'... (Frictionless Recovery)`);
-      args.push('--grant-all-permissions');
-    }
+  if (composeBuildIdx !== -1 && (ddIdx === -1 || composeBuildIdx < ddIdx)) {
+    args.splice(composeBuildIdx, 0, '--progress=plain');
+  } else if (ddIdx !== -1) {
+    args.splice(ddIdx, 0, '--progress=plain');
+  } else {
+    args.push('--progress=plain');
   }
+  onSync?.();
+}
 
-  if (dockerCmds.includes(cmdBasename) && subCmd === 'start') {
-    if (args.includes('-i') || args.includes('--interactive') || args.includes('-a') || args.includes('--attach')) {
-      console.error(`\n   💡 AGENT HINT: 'docker start' with interactive/attach flags will hang indefinitely. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-      process.exit(1);
-    }
-  }
+const SHORT_FOLLOW_CLUSTER_RE = /^-[a-zA-Z]*f[a-zA-Z]*$/;
+const SHORT_FOLLOW_EQ_RE = /^(-[a-zA-Z]+)f=(.*)$/;
+const FALSY_BOOL_VAL_RE = /^(?:false|0)$/i;
+const SHORT_N_DIGITS_RE = /^-n\d+$/;
+const SHORT_FLAGS_EQ_RE = /^-[a-zA-Z]+=/;
+const SHORT_IA_BEFORE_EQ_RE = /[ia]/;
+const SHORT_IA_CLUSTER_RE = /^-[a-zA-Z]*[ia][a-zA-Z]*$/;
+const WATCH_CLUSTER_RE = /^-[dVw]*w[dVw]*$/;
+const WATCH_CLUSTER_EQ_RE = /^(-[dVw]+)w=(.*)$/;
+const SHORT_W_EQ_FALSY_RE = /^-w=(?:false|0)$/i;
+const DETACH_SHORT_RE = /^-[a-zA-Z]*d[a-zA-Z]*$/;
 
-  if (dockerCmds.includes(cmdBasename) && subCmd === 'attach') {
-    console.error(`\n   💡 AGENT HINT: 'docker attach' inherently connects stdio to the container and hangs in non-interactive modes. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-    process.exit(1);
-  }
-
-  if (dockerCmds.includes(cmdBasename) && !isComposePlugin) {
-    if (subCmd === 'events' || subCmd === 'wait' || (subCmd === 'system' && args.includes('events')) || (subCmd === 'stats' && !args.includes('--no-stream'))) {
-       console.error(`\n   💡 AGENT HINT: 'docker ${subCmd}' runs indefinitely or blocks execution. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
-       process.exit(1);
-    }
-  }
-
-  const isLogsCmd = 
-    (dockerCmds.includes(cmdBasename) && !isComposePlugin && subCmd === 'logs') ||
-    (dockerComposeCmds.includes(cmdBasename) && composeSubCmd === 'logs') ||
-    (isComposePlugin && composeSubCmd === 'logs');
-
-  if (isLogsCmd) {
-    const hasFollow = args.some(a => a === '-f' || a === '--follow' || a.startsWith('--follow='));
-    if (hasFollow) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} logs -f' runs indefinitely and will cause a timeout. Automatically stripping '-f / --follow' flag... (Frictionless Recovery)`);
-      for (let i = args.length - 1; i >= 0; i--) {
-        if (args[i] === '-f' || args[i] === '--follow' || args[i].startsWith('--follow=')) args.splice(i, 1);
+function stripFollowFromLogsArgs(args: string[], startIdx: number, endIdx: number): boolean {
+  let stripped = false;
+  for (let i = endIdx - 1; i >= startIdx; i--) {
+    const a = args[i];
+    if (a === undefined) continue;
+    const low = a.toLowerCase();
+    if (a === '-f' || a === '--follow' || (low.startsWith('--follow=') && low !== '--follow=false' && a !== '--follow=0') || (a.startsWith('-f=') && low !== '-f=false' && a !== '-f=0')) {
+      args.splice(i, 1);
+      stripped = true;
+    } else if (SHORT_FOLLOW_CLUSTER_RE.test(a)) {
+      const rest = a.replaceAll('f', '');
+      if (rest === '-') args.splice(i, 1);
+      else args[i] = rest;
+      stripped = true;
+    } else {
+      const m = SHORT_FOLLOW_EQ_RE.exec(a);
+      if (m !== null && !FALSY_BOOL_VAL_RE.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replaceAll('f', '');
+        if (rest === '-') args.splice(i, 1);
+        else args[i] = rest;
+        stripped = true;
       }
     }
+  }
+  return stripped;
+}
 
-    const hasTailOrLimit = args.some(a =>
-      a === '--tail' ||
-      a.startsWith('--tail=') ||
-      a === '-n' ||
-      a.startsWith('-n=') ||
-      a === '--since' ||
-      a.startsWith('--since=') ||
-      a === '--until' ||
-      a.startsWith('--until=')
+function handleDockerLogsCmd(cmdBasename: string, args: string[], ctx: ExecutionContext, resolvedLogsIdx?: number): void {
+  const logsIdx = resolvedLogsIdx !== undefined && resolvedLogsIdx >= 0 ? resolvedLogsIdx : args.indexOf('logs');
+  const startIdx = logsIdx !== -1 ? logsIdx + 1 : 0;
+  const ddIdx = args.indexOf('--', startIdx);
+  const endIdx = ddIdx === -1 ? args.length : ddIdx;
+  if (stripFollowFromLogsArgs(args, startIdx, endIdx)) {
+    if (ctx.payload.type === 'command') ctx.payload.args = args;
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} logs -f' runs indefinitely and will cause a timeout. Automatically stripping '-f / --follow' flag... (Frictionless Recovery)`);
+  }
+  const postLogsDd = args.indexOf('--', startIdx);
+  const postLogsSlice = args.slice(startIdx, postLogsDd === -1 ? args.length : postLogsDd);
+  const hasTailOrLimit = postLogsSlice.some(a =>
+    a === '--tail' || a.startsWith('--tail=') || a === '-n' || a.startsWith('-n=') || SHORT_N_DIGITS_RE.test(a) ||
+    a === '--since' || a.startsWith('--since=') || a === '--until' || a.startsWith('--until=')
+  );
+  if (!hasTailOrLimit) {
+    if (logsIdx !== -1) args.splice(logsIdx + 1, 0, '--tail', '1000');
+    else args.push('--tail', '1000');
+    if (ctx.payload.type === 'command') ctx.payload.args = args;
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} logs' called without a limit. Automatically appending '--tail 1000' to prevent output from exceeding maxBuffer... (Frictionless Recovery)\x1b[0m`);
+  }
+}
+
+function hasDockerStartInteractiveFlag(args: readonly string[], startSubIdx = -1): boolean {
+  const startIdx = startSubIdx >= 0 ? startSubIdx : args.indexOf('start');
+  const start = startIdx !== -1 ? startIdx + 1 : 0;
+  for (let i = start; i < args.length; i++) {
+    const a = args[i];
+    if (a === undefined || a === '--') break;
+    if (a === '--detach-keys' || a === '--checkpoint' || a === '--checkpoint-dir') { i++; continue; }
+    const low = a.toLowerCase();
+    const eqIdx = !a.startsWith('--') && SHORT_FLAGS_EQ_RE.test(a) ? a.indexOf('=') : -1;
+    const shortEqActive = eqIdx !== -1 && (SHORT_IA_BEFORE_EQ_RE.test(a.slice(1, eqIdx - 1)) || ((a[eqIdx - 1] === 'i' || a[eqIdx - 1] === 'a') && !FALSY_BOOL_VAL_RE.test(a.slice(eqIdx + 1))));
+    if (
+      a === '--interactive' ||
+      a === '--attach' ||
+      (low.startsWith('--attach=') && low !== '--attach=false' && low !== '--attach=0') ||
+      (low.startsWith('--interactive=') && low !== '--interactive=false' && low !== '--interactive=0') ||
+      (!a.startsWith('--') && SHORT_IA_CLUSTER_RE.test(a)) ||
+      shortEqActive
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function stripWatchFromComposeUpArgs(args: string[], composeSubIdx: number, endIdx: number): boolean {
+  let strippedWatch = false;
+  for (let i = endIdx - 1; i > composeSubIdx; i--) {
+    const a = args[i];
+    if (a === undefined) continue;
+    if (a === '--watch' || a === '-w' || (a.startsWith('--watch=') && a.toLowerCase() !== '--watch=false' && a !== '--watch=0') || (a.startsWith('-w=') && !SHORT_W_EQ_FALSY_RE.test(a))) {
+      args.splice(i, 1);
+      strippedWatch = true;
+    } else if (WATCH_CLUSTER_RE.test(a)) {
+      const rest = a.replaceAll('w', '');
+      if (rest === '-') args.splice(i, 1);
+      else args[i] = rest;
+      strippedWatch = true;
+    } else {
+      const m = WATCH_CLUSTER_EQ_RE.exec(a);
+      if (m !== null && !FALSY_BOOL_VAL_RE.test(m[2] ?? '')) {
+        const rest = (m[1] ?? '').replaceAll('w', '');
+        if (rest === '-') args.splice(i, 1);
+        else args[i] = rest;
+        strippedWatch = true;
+      }
+    }
+  }
+  return strippedWatch;
+}
+
+function guardDockerComposeSubcmd(
+  ctx: ExecutionContext,
+  args: string[],
+  composeSubCmd: string | undefined,
+  composeSubIdx: number,
+): void {
+  const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = args; };
+  if (composeSubCmd === 'up') {
+    const subStart = Math.max(0, composeSubIdx + 1);
+    const ddIdx = args.indexOf('--', subStart);
+    const preDd = ddIdx === -1 ? args.slice(subStart) : args.slice(subStart, ddIdx);
+    const hasDetach = preDd.some(a =>
+      a === '-d' || a === '--detach' || a === '--detach=true' || (!a.startsWith('--') && DETACH_SHORT_RE.test(a)),
     );
-
-    if (!hasTailOrLimit) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} logs' called without a limit. Automatically appending '--tail 1000' to prevent output from exceeding maxBuffer... (Frictionless Recovery)\x1b[0m`);
-      const logsIdx = args.indexOf('logs');
-      if (logsIdx !== -1) {
-        args.splice(logsIdx + 1, 0, '--tail', '1000');
-      } else {
-        args.push('--tail', '1000');
-      }
-    }
-  }
-
-  const isUpCmd = 
-    (isComposePlugin && composeSubCmd === 'up') ||
-    (dockerComposeCmds.includes(cmdBasename) && composeSubCmd === 'up');
-
-  if (isUpCmd) {
-    const hasDetach = args.some(a => a === '-d' || a === '--detach');
     if (!hasDetach) {
+      if (ddIdx !== -1) args.splice(ddIdx, 0, '-d');
+      else args.push('-d');
+      syncArgs();
       console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose up' was called without '-d' or '--detach'. Automatically appending '-d' flag to prevent indefinite blocking... (Frictionless Recovery)`);
-      args.push('-d');
     }
-    const watchIdx = args.findIndex(a => a === '--watch');
-    if (watchIdx !== -1) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose up --watch' runs indefinitely and will cause a timeout. Automatically stripping '--watch' flag... (Frictionless Recovery)`);
-      args.splice(watchIdx, 1);
+    const postDdIdx = args.indexOf('--', Math.max(0, composeSubIdx + 1));
+    const endIdx = postDdIdx === -1 ? args.length : postDdIdx;
+    if (stripWatchFromComposeUpArgs(args, composeSubIdx, endIdx)) {
+      syncArgs();
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose up --watch' runs indefinitely and will cause a timeout. Automatically stripping '--watch / -w' flag... (Frictionless Recovery)`);
     }
   }
-
-  const isWatchCmd = 
-    (isComposePlugin && composeSubCmd === 'watch') ||
-    (dockerComposeCmds.includes(cmdBasename) && composeSubCmd === 'watch');
-
-  if (isWatchCmd) {
+  if (composeSubCmd === 'watch') {
     console.error(`\n   💡 AGENT HINT: 'docker compose watch' runs indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
     console.error(`   Please run this command manually in a separate terminal if you need live syncing.`);
     process.exit(1);
   }
+  const subDdIdx = args.indexOf('--', Math.max(0, composeSubIdx + 1));
+  const subScanEnd = subDdIdx === -1 ? args.length : subDdIdx;
+  const postSubArgs = composeSubIdx >= 0 ? args.slice(composeSubIdx + 1, subScanEnd) : args.slice(0, subScanEnd);
+  if (composeSubCmd === 'wait' || composeSubCmd === 'attach' || composeSubCmd === 'events' || (composeSubCmd === 'stats' && !postSubArgs.includes('--no-stream'))) {
+    console.error(`\n   💡 AGENT HINT: 'docker compose ${composeSubCmd}' blocks or streams indefinitely. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+    process.exit(1);
+  }
+  if (composeSubCmd === 'rm' && !postSubArgs.some(a => a === '--force' || SHORT_FOLLOW_CLUSTER_RE.test(a))) {
+    if (subDdIdx !== -1) args.splice(subDdIdx, 0, '-f');
+    else args.push('-f');
+    syncArgs();
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose rm' asks for confirmation. Automatically appending '-f' flag to prevent indefinite blocking... (Frictionless Recovery)`);
+  }
+}
 
-  const isComposeWaitCmd = 
-    (isComposePlugin && composeSubCmd === 'wait') ||
-    (dockerComposeCmds.includes(cmdBasename) && composeSubCmd === 'wait');
+function guardDockerPrune(
+  args: string[],
+  isDockerCmd: boolean,
+  subCmd: string | undefined,
+  secondSubPos: string | undefined,
+  isBuildxPlugin: boolean,
+  buildxSubCmd: string | undefined,
+  preArgs: readonly string[],
+  syncArgs: () => void,
+): void {
+  const needsSubPrune = isDockerCmd && subCmd !== undefined && PRUNE_CATEGORY_SET.has(subCmd) && secondSubPos === 'prune';
+  const needsBuildxPrune = isBuildxPlugin && buildxSubCmd === 'prune';
+  if ((!needsSubPrune && !needsBuildxPrune) || preArgs.some(a => a === '--force' || SHORT_FOLLOW_CLUSTER_RE.test(a))) return;
+  const ddIdx = args.indexOf('--');
+  if (ddIdx !== -1) args.splice(ddIdx, 0, '-f');
+  else args.push('-f');
+  syncArgs();
+  const label = needsSubPrune ? subCmd : 'buildx';
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker ${label} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
+}
 
-  if (isComposeWaitCmd) {
-    console.error(`\n   💡 AGENT HINT: 'docker compose wait' blocks execution indefinitely. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+function guardNonInteractiveDockerSubcmds(
+  ctx: ExecutionContext,
+  cmdBasename: string,
+  args: string[],
+  subCmd: string | undefined,
+  composeSubCmd: string | undefined,
+  composeSubIdx: number,
+  buildxSubCmd: string | undefined,
+  containerSubCmd: string | undefined,
+  secondSubPos: string | undefined,
+  resolvedLogsIdx: number,
+  isComposePlugin: boolean,
+  isBuildxPlugin: boolean,
+  isDockerCmd: boolean,
+  isComposeCmd: boolean,
+  stdin: string | undefined,
+): void {
+  const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = args; };
+  const targetSub = isDockerCmd && subCmd === 'container' ? containerSubCmd : subCmd;
+  if (isDockerCmd && subCmd === 'login') {
+    const hasUsername = args.some(a => a === '-u' || a === '--username' || a.startsWith('--username=') || a.startsWith('-u=') || (a.startsWith('-u') && !a.startsWith('--') && a.length > 2));
+    const hasPasswordStdin = args.includes('--password-stdin');
+    const hasPasswordFlag = args.some(a => a === '-p' || a === '--password' || a.startsWith('--password=') || a.startsWith('-p=') || (a.startsWith('-p') && !a.startsWith('--') && a.length > 2));
+    if (!hasUsername && !hasPasswordStdin) {
+      console.error(`\n   💡 AGENT HINT: 'docker login' called without credentials (-u or --password-stdin).\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang waiting for a username. Blocking execution.`);
+      process.exit(1);
+    }
+    if (hasPasswordStdin && (!stdin || stdin.trim().length === 0)) {
+      console.error(`\n   💡 AGENT HINT: 'docker login --password-stdin' requires credentials via stdin.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`   You provided the flag but no valid 'stdin' payload. Blocking execution to prevent hanging.`);
+      process.exit(1);
+    }
+    if (!hasPasswordStdin && !hasPasswordFlag) {
+      console.error(`\n   💡 AGENT HINT: 'docker login' without --password or --password-stdin will prompt for a password interactively. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
+      process.exit(1);
+    }
+  }
+  const ddIdx = args.indexOf('--');
+  const preArgs = ddIdx === -1 ? args : args.slice(0, ddIdx);
+
+  if (isDockerCmd && subCmd === 'plugin' && secondSubPos === 'install' && !preArgs.includes('--grant-all-permissions')) {
+    if (ddIdx !== -1) args.splice(ddIdx, 0, '--grant-all-permissions');
+    else args.push('--grant-all-permissions');
+    syncArgs();
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker plugin install' asks for confirmation. Automatically injecting '--grant-all-permissions'... (Frictionless Recovery)`);
+  }
+  if (isDockerCmd && targetSub === 'start' && hasDockerStartInteractiveFlag(args, resolvedLogsIdx)) {
+    console.error(`\n   💡 AGENT HINT: 'docker start' with interactive/attach flags will hang indefinitely. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
+    process.exit(1);
+  }
+  if (isDockerCmd && targetSub === 'attach') {
+    console.error(`\n   💡 AGENT HINT: 'docker attach' inherently connects stdio to the container and hangs in non-interactive modes. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
+    process.exit(1);
+  }
+  if (isDockerCmd && !isComposePlugin && (targetSub === 'events' || targetSub === 'wait' || (subCmd === 'system' && secondSubPos === 'events') || (targetSub === 'stats' && !preArgs.includes('--no-stream')))) {
+    console.error(`\n   💡 AGENT HINT: 'docker ${targetSub}' runs indefinitely or blocks execution. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
 
-  const isRmCmd = 
-    (isComposePlugin && composeSubCmd === 'rm') ||
-    (dockerComposeCmds.includes(cmdBasename) && composeSubCmd === 'rm');
+  const isComposeOrPlugin = isComposePlugin || isComposeCmd;
+  if ((isDockerCmd && !isComposePlugin && targetSub === 'logs') || (isComposeOrPlugin && composeSubCmd === 'logs')) {
+    handleDockerLogsCmd(cmdBasename, args, ctx, resolvedLogsIdx);
+  }
+  if (isComposeOrPlugin) guardDockerComposeSubcmd(ctx, args, composeSubCmd, composeSubIdx);
+  guardDockerPrune(args, isDockerCmd, subCmd, secondSubPos, isBuildxPlugin, buildxSubCmd, preArgs, syncArgs);
+}
 
-  if (isRmCmd) {
-    const hasForce = args.some(a => a === '-f' || a === '--force');
-    if (!hasForce) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose rm' asks for confirmation. Automatically appending '-f' flag to prevent indefinite blocking... (Frictionless Recovery)`);
-      args.push('-f');
-    }
+export function dockerInterceptor(ctx: ExecutionContext): void {
+  const { cmdBasename, args, payload } = ctx;
+  const lowerCmd = cmdBasename.toLowerCase();
+  if (KUBECTL_CMD_SET.has(lowerCmd)) {
+    handleKubectlInterception(args, ctx);
+    return;
   }
 
-  const pruneCategories = ['system', 'image', 'volume', 'network', 'container', 'builder'];
-  if (dockerCmds.includes(cmdBasename) && pruneCategories.includes(subCmd) && args.includes('prune')) {
-    if (!args.includes('-f') && !args.includes('--force')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker ${subCmd} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
-      args.push('-f');
-    }
+  const isDockerCmd = DOCKER_CMD_SET.has(lowerCmd);
+  const isComposeCmd = DOCKER_COMPOSE_CMD_SET.has(lowerCmd);
+  if (!isDockerCmd && !isComposeCmd) return;
+  if (isLeadingDockerHelp(args, isComposeCmd)) return;
+
+  const firstInfo = walkSubcommands(args, 0, isComposeCmd ? COMPOSE_GLOBAL_VALUE_FLAGS : DOCKER_GLOBAL_VALUE_FLAGS);
+  const subCmd = isDockerCmd ? firstInfo.pos[0] : undefined;
+  const isComposePlugin = isDockerCmd && subCmd === 'compose';
+  const isBuildxPlugin = isDockerCmd && subCmd === 'buildx';
+
+  const composeInfo = isComposePlugin
+    ? walkSubcommands(args, firstInfo.idx + 1, COMPOSE_GLOBAL_VALUE_FLAGS)
+    : (isComposeCmd ? firstInfo : { pos: [], idx: -1 });
+  const composeSubCmd = composeInfo.pos[0];
+  const buildxSubCmd = isBuildxPlugin
+    ? walkSubcommands(args, firstInfo.idx + 1, BUILDX_VALUE_FLAG_SET).pos[0]
+    : undefined;
+  const secondInfo = (isDockerCmd && subCmd !== undefined && (PRUNE_CATEGORY_SET.has(subCmd) || subCmd === 'plugin'))
+    ? walkSubcommands(args, firstInfo.idx + 1, EMPTY_DOCKER_FLAG_SET)
+    : { pos: [], idx: -1 };
+  const secondSubPos = secondInfo.pos[0];
+  const containerSubCmd = subCmd === 'container' ? secondSubPos : undefined;
+
+  const isDockerBuild = (isDockerCmd && subCmd === 'build') ||
+    (isBuildxPlugin && buildxSubCmd === 'build') ||
+    ((isComposeCmd || isComposePlugin) && composeSubCmd === 'build');
+  const syncArgs = (): void => { if (ctx.payload.type === 'command') ctx.payload.args = args; };
+  if (isDockerBuild) {
+    const composeBuildIdx = (isComposeCmd || isComposePlugin) && composeSubCmd === 'build' ? composeInfo.idx : -1;
+    injectPlainProgressIfMissing(args, composeBuildIdx, syncArgs);
   }
 
-  if (isBuildxPlugin && buildxSubCmd === 'prune') {
-    if (!args.includes('-f') && !args.includes('--force')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker buildx prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
-      args.push('-f');
-    }
+  const isDockerScout = isDockerCmd && subCmd === 'scout';
+  applyDockerWslRoutingAndTimeouts(ctx, isDockerBuild, isDockerScout);
+
+  const isComposeOrPlugin = isComposePlugin || isComposeCmd;
+  const resolvedLogsIdx = isComposeOrPlugin
+    ? composeInfo.idx
+    : (subCmd === 'container' ? secondInfo.idx : firstInfo.idx);
+  guardNonInteractiveDockerSubcmds(
+    ctx, cmdBasename, args, subCmd, composeSubCmd, composeInfo.idx,
+    buildxSubCmd, containerSubCmd, secondSubPos, resolvedLogsIdx,
+    isComposePlugin, isBuildxPlugin, isDockerCmd, isComposeCmd, payload.stdin,
+  );
+
+  const targetMultiSub = subCmd === 'container' ? containerSubCmd : subCmd;
+  const targetMultiIdx = subCmd === 'container' ? secondInfo.idx : firstInfo.idx;
+  if (isDockerCmd && !isComposePlugin && !isBuildxPlugin && targetMultiSub !== undefined && MULTI_TARGET_SUBCMD_SET.has(targetMultiSub)) {
+    splitDockerMultiTargets(args, targetMultiSub, ctx, targetMultiIdx);
   }
 
-  if (isDockerTtySensitive) {
-    const dockerValueFlags = ['-v', '--volume', '-p', '--publish', '--name', '-e', '--env', '--env-file', '--build-arg', '-f', '--file', '-w', '--workdir', '-u', '--user', '--network', '--entrypoint', '-m', '--memory', '--cpus', '--label', '--hostname', '--add-host', '--dns', '--cap-add', '--cap-drop', '--device', '--log-driver', '--log-opt', '--restart', '--mount', '--tmpfs', '--ulimit', '--pid', '--ipc', '--uts', '--userns', '--cgroupns', '--runtime', '--isolation', '--security-opt', '--storage-opt', '--sysctl', '--link', '--health-cmd', '--health-interval', '--health-retries', '--health-timeout', '--stop-signal', '--stop-timeout', '--shm-size', '--gpus', '--ip', '--ip6', '--mac-address', '--init', '--read-only', '--sig-proxy', '--platform', '--pull', '-l', '-h', '--group-add', '--expose', '--domainname', '--blkio-weight', '--cidfile', '--cgroup-parent'];
-    
-    const hasTtyFlag = args.some(arg => 
-      /^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg) || 
-      arg.startsWith('--tty') || 
-      arg.startsWith('--interactive')
+  const isContainerExec = (isDockerCmd && !isComposePlugin && (subCmd === 'run' || subCmd === 'exec' || (subCmd === 'container' && (containerSubCmd === 'run' || containerSubCmd === 'exec')))) ||
+    (isComposeOrPlugin && (composeSubCmd === 'run' || composeSubCmd === 'exec'));
+  if (isContainerExec) {
+    const runExecIdx = isComposeOrPlugin
+      ? composeInfo.idx
+      : (subCmd === 'container' ? secondInfo.idx : firstInfo.idx);
+    guardDockerTtyAndRepl(
+      ctx,
+      isComposeOrPlugin && composeSubCmd === 'exec',
+      isComposeOrPlugin && composeSubCmd === 'run',
+      runExecIdx >= 0 ? runExecIdx : undefined,
     );
-    if (hasTtyFlag) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: You attempted to run a Docker command with a TTY flag. Because 'agent-exec.ts' uses \`shell: false\` and pipes stdio, TTY allocation is NOT supported. Automatically stripping TTY flags (-t, --tty) to prevent process hanging... (Frictionless Recovery)`);
-      
-      const requiresInteractive = !!payload.stdin;
-      if (!requiresInteractive) {
-         console.error(`   Also stripping interactive flags (-i, --interactive) since no stdin payload was provided.`);
-      }
-
-      let stopStripping = false;
-      let seenRunOrExec = false;
-      
-      const newArgs = [];
-      for (let i = 0; i < args.length; i++) {
-         const arg = args[i];
-         if (stopStripping) { newArgs.push(arg); continue; }
-         
-         if (!seenRunOrExec) {
-            if (arg === 'run' || arg === 'exec') seenRunOrExec = true;
-            newArgs.push(arg);
-            continue;
-         }
-         
-         if (!arg.startsWith('-')) {
-            const prev = args[i-1];
-            if (!dockerValueFlags.includes(prev)) stopStripping = true;
-            newArgs.push(arg);
-            continue;
-         }
-
-         if (arg === '--tty' || arg === '-t' || arg.startsWith('--tty=')) continue;
-         if (arg === '--interactive' || arg === '-i' || arg.startsWith('--interactive=')) {
-            if (requiresInteractive) newArgs.push(arg);
-            continue;
-         }
-         if (/^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg)) {
-             let newArg = arg.replace(/t/g, '');
-             if (!requiresInteractive) newArg = newArg.replace(/i/g, '');
-             if (newArg !== '-') newArgs.push(newArg);
-             continue;
-         }
-         newArgs.push(arg);
-      }
-      
-      // Update args array in place
-      args.length = 0;
-      args.push(...newArgs);
-    }
-
-    if ((isComposeExec || isComposeRun) && !args.includes('-T')) {
-      const targetCmd = isComposeExec ? 'exec' : 'run';
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-T' into docker compose ${targetCmd} to forcefully disable TTY allocation... (Frictionless Recovery)`);
-      const targetIndex = args.indexOf(targetCmd);
-      if (targetIndex !== -1) {
-        args.splice(targetIndex + 1, 0, '-T');
-      }
-    }
-
-    // Container Shell/REPL Detection: Block headless hangs when docker exec/run
-    // targets a known interactive shell or REPL without execution flags.
-    const containerShells = ['bash', 'sh', 'zsh', 'ash', 'dash', 'fish', 'csh', 'tcsh', 'ksh'];
-    const containerJsRuntimes = ['node', 'bun', 'deno', 'tsx', 'ts-node'];
-    const containerPython = ['python', 'python3', 'pypy', 'pypy3'];
-    const containerRuby = ['ruby', 'irb'];
-    const containerPerl = ['perl'];
-    const containerPhp = ['php'];
-    const containerOtherRepls = ['ghci', 'erl', 'iex', 'scala', 'clojure', 'r', 'R', 'lua'];
-    const containerDbRepls = ['psql', 'mysql', 'sqlite3', 'mongo', 'mongosh', 'redis-cli'];
-    const allContainerRepls = [
-      ...containerShells,
-      ...containerJsRuntimes,
-      ...containerPython,
-      ...containerRuby,
-      ...containerPerl,
-      ...containerPhp,
-      ...containerOtherRepls,
-      ...containerDbRepls,
-    ];
-
-    let foundRunExec = false;
-    let skipNextValue = false;
-    let containerName: string | null = null;
-    let containerCmd: string | null = null;
-    const containerCmdArgs: string[] = [];
-
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i];
-      if (!foundRunExec) {
-        if (arg === 'run' || arg === 'exec') foundRunExec = true;
-        continue;
-      }
-      if (skipNextValue) { skipNextValue = false; continue; }
-      if (arg === '-T' || arg === '--no-TTY') continue;
-      if (!containerCmd && arg.startsWith('-')) {
-        if (dockerValueFlags.includes(arg) || (arg.startsWith('--') && arg.includes('='))) {
-          if (!arg.includes('=')) skipNextValue = true;
-        }
-        continue;
-      }
-      if (!containerName) { containerName = arg; continue; }
-      if (!containerCmd) { containerCmd = arg; continue; }
-      containerCmdArgs.push(arg);
-    }
-
-    if (containerCmd && allContainerRepls.includes(containerCmd)) {
-      const isNonInteractive = (() => {
-        if (payload.stdin) return true;
-        if (containerCmdArgs.length === 0) return false;
-        if (containerShells.includes(containerCmd)) {
-          return containerCmdArgs.some(a => ['-c', '--command'].includes(a)) ||
-            containerCmdArgs.some(a => !a.startsWith('-'));
-        }
-        if (containerJsRuntimes.includes(containerCmd)) {
-          return containerCmdArgs.some(a => ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'].includes(a)) ||
-            containerCmdArgs.some(a => !a.startsWith('-'));
-        }
-        if (containerPython.includes(containerCmd)) {
-          return containerCmdArgs.some(a => ['-c', '-m', '-v', '--version', '-h', '--help'].includes(a)) ||
-            containerCmdArgs.some(a => !a.startsWith('-'));
-        }
-        if (containerRuby.includes(containerCmd)) {
-          return containerCmdArgs.some(a => ['-e', '-v', '--version', '-h', '--help'].includes(a)) ||
-            containerCmdArgs.some(a => !a.startsWith('-'));
-        }
-        if (containerPerl.includes(containerCmd)) {
-          return containerCmdArgs.some(a => ['-e', '-E', '-v', '--version', '-h', '--help'].includes(a)) ||
-            containerCmdArgs.some(a => !a.startsWith('-'));
-        }
-        if (containerPhp.includes(containerCmd)) {
-          return containerCmdArgs.some(a => ['-r', '-v', '--version', '-h', '--help'].includes(a)) ||
-            containerCmdArgs.some(a => !a.startsWith('-'));
-        }
-        if (containerDbRepls.includes(containerCmd)) {
-          const dbExecFlags = ['-c', '--command', '-e', '--execute', '--eval', '-f', '--file', '-v', '--version', '-h', '--help'];
-          if (containerCmdArgs.some(a => dbExecFlags.includes(a))) return true;
-          if (containerCmd === 'sqlite3' && containerCmdArgs.filter(a => !a.startsWith('-')).length >= 2) return true;
-          if (containerCmd === 'redis-cli' && containerCmdArgs.filter(a => !a.startsWith('-')).length >= 1) return true;
-          return false;
-        }
-        return containerCmdArgs.some(a => ['-e', '-v', '--version', '-h', '--help'].includes(a)) ||
-          containerCmdArgs.some(a => !a.startsWith('-'));
-      })();
-
-      if (!isNonInteractive) {
-        console.error(`\n   💡 AGENT HINT: 'docker ... ${containerCmd}' targets an interactive shell/REPL inside the container.\n${AUTONOMOUS_HEALING_MSG}`);
-        console.error(`   Without execution flags (e.g., -c 'command') or a script file or stdin, it will hang indefinitely.`);
-        console.error(`   Please provide a command or script to execute: e.g., docker exec <container> ${containerCmd} -c 'your command'`);
-        process.exit(1);
-      }
-    }
   }
 }

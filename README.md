@@ -5,13 +5,13 @@
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp) [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp) [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp) [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md) [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp) [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-85.23%25-green.svg) ![E2E](https://img.shields.io/badge/E2E-450%20passing%20%C2%B7%200%20skipped-blue.svg) ![Tests](https://img.shields.io/badge/Tests-2556_passed-brightgreen.svg) [![Benchmarks](https://img.shields.io/badge/Benchmarks-11_passed-brightgreen.svg)](https://github.com/neverinfamous/memory-journal-mcp/wiki/Performance) [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
+![Coverage](https://img.shields.io/badge/Coverage-86.77%25-green.svg) ![E2E](https://img.shields.io/badge/E2E-466%20passing%20%C2%B7%200%20skipped-blue.svg) ![Tests](https://img.shields.io/badge/Tests-2556_passed-brightgreen.svg) [![Benchmarks](https://img.shields.io/badge/Benchmarks-22_passed-brightgreen.svg)](https://github.com/neverinfamous/memory-journal-mcp/wiki/Performance) [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 **[📚 Full Documentation (Wiki)](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](CHANGELOG.md)** • **[Security](SECURITY.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
 > [!TIP]
 > **Value Proposition**
-> Bridge disconnected AI sessions seamlessly. Enable persistent project memory instantly. Automate handoffs with robust GitHub integration. Eliminate AI amnesia today.
+> Bridge disconnected AI sessions seamlessly. Enable persistent project memory instantly. Automate handoffs with robust GitHub integration. Keep project context across AI sessions. Recall past decisions, hand work off through GitHub, and resume without rebuilding the history by hand.
 
 **🚀 Quick Deploy:**
 
@@ -36,20 +36,21 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-commander` (`triage` workflow) on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
-- _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
+- _"Commit the changes and record a structured journal entry with the `commit` prompt or `create_entry`."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
-**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, and metrics/latency). Dynamic repo variants also support cross-repo targeting (like `memory://briefing/{+repo}` or `memory://kanban/{+repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://skills`, `memory://health`, `memory://help`, `memory://staleness`, `memory://graph`, GitHub status/milestones, team stats, and metrics/latency). Dynamic repo variants also support cross-repo targeting (like `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://graph/{+repo}`, or `memory://kanban/{+repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
 ## 🎯 What Sets Us Apart
 
-**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **Cognitive Automations (CMS)** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                          |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **Session Intelligence**      | Auto-query project history, create checkpoints, and hand off context between sessions automatically.                 |
+| **Cognitive Automations**     | Consolidate episodic notes nightly (`CMS-02`), audit soft-deletions, and self-heal recurring tool friction (`CMS-04`). |
 | **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Access Copilot reviews and repository insights.          |
 | **Dynamic Project Routing**   | Switch contexts seamlessly and access CI/Issue tracking across multiple repositories from a single server instance.  |
 | **Knowledge Graphs**          | Link specifications, implementations, tests, and PRs visually using Mermaid diagrams.                                |
@@ -60,7 +61,7 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 | **Heuristic Scoring**         | Optimize context delivery by scoring entries based on veracity and impact.                                           |
 | **Team Collaboration**        | Share databases across teams with cross-project insights, author attribution, and role-based access control.         |
 | **Data Interoperability**     | Export schemas safely, sync Markdown directories, and maintain a unified IO namespace.                               |
-| **Backup & Restore**          | Secure data with automated scheduling, retention policies, and one-command restores.                                 |
+| **Backup & Restore**          | Secure data with CLI/CMS maintenance automation, retention policies, and one-command restores.                       |
 | **Auto-Pruning**              | Soft-delete low-value entries automatically to maintain search relevance over long-running projects.                 |
 | **Security & Transport**      | Ensure secure connections with OAuth 2.1, Streamable HTTP, rate limiting, and SQL injection prevention.              |
 | **Structured Error Handling** | Provide agents with classification, remediation hints, and recoverability signals on every tool call.                |
@@ -74,8 +75,8 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 
 Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
 
-- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace. It matches `project_number` against `PROJECT_REGISTRY`, checks content/tag keyword aliases, or inspects `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
-- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces. External write and mutation paths reject wildcard overrides.
+- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace. It matches `project_number` against `PROJECT_REGISTRY` or inspects `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
+- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces. `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace. `update_entry` with `workspace_id: "*"` and `target_workspace_id` moves an entry. `delete_entry`, `restore_entry`, and batch deletes accept `*` and then match by id without a workspace predicate.
 - **Immutability & Controlled Migration:** Entries receive a `workspace_id` upon creation that standard updates cannot overwrite directly. To migrate an entry across workspaces, call `update_entry` with `workspace_id: "*"` and `target_workspace_id`.
 - **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance. This lets you run multiple isolated journal interfaces on a single physical database.
 
@@ -132,7 +133,7 @@ _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
 When the user initializes the session context by executing the `load-briefing` prompt:
 
-1. You will receive the output of the `memory://briefing/{repo_name}` resource.
+1. You will receive the output of the `memory://briefing/{+repo}` resource.
 2. Prepend your response EXACTLY as:
    > **📋 Briefing loaded** — `{repo_name}`
    > _{paste ENTIRE briefing here}_
@@ -151,7 +152,7 @@ When the user initializes the session context by executing the `load-briefing` p
 Control which tools are exposed using any of the 3 configuration sources (precedence: CLI flag > environment variable > config file):
 
 - **CLI flag**: `--tool-filter <filter>`
-- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` _(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)_
+- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` (`TOOL_FILTER` is not read)
 - **`memory-journal.config.{yaml,yml,json}` key**: `"toolFilter"`
 
 | Filter               | Use Case                           |
@@ -159,10 +160,12 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 | `full`               | All tools (default)                |
 | `starter`            | Core + search + codemode           |
 | `essential`          | Minimal footprint                  |
-| `readonly`           | Disable all mutations              |
+| `readonly`           | core, search, analytics, relationships, io, git, codemode |
 | `codemode`           | `mj_execute_code` + runtime config |
 | `-github`            | Exclude a group                    |
 | `-github,-analytics` | Exclude multiple groups            |
+
+`readonly` exposes `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode`, then drops tools whose `readOnlyHint` is not `true` from registration, `tools/list`, and `tools/call`. `update_configuration` and `mj_execute_code` stay registered. Code Mode also limits `mj.*` dispatch to `readOnlyHint: true`.
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -196,19 +199,19 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 
 ### 🎯 **Workflow Prompts**
 
-Specialized workflow prompts cover session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, and journal optimization. Additional prompts support CMS REM supervision, adversarial plan reviews, code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Specialized workflow prompts cover session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, and journal optimization. Additional prompts support CMS REM supervision, adversarial plan reviews, code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)** • **[Automations guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)**
 
 ### 📡 **Resources**
 
 See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
 
-- **Dynamic Resource Templates**: Resources `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://agent-id/{+repo}`, `memory://actions/recent/{+repo}`, `memory://github/status/{+repo}`, `memory://github/milestones/{+repo}`, `memory://milestones/{+repo}/{number}`, and `memory://kanban/{+repo}/{project_number}` accept an RFC 6570 `{+repo}` path parameter for targeted project context.
+- **Dynamic Resource Templates**: Resources `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://agent-id/{+repo}`, `memory://graph/{+repo}`, `memory://actions/recent/{+repo}`, `memory://github/status/{+repo}`, `memory://github/milestones/{+repo}`, `memory://milestones/{+repo}/{number}`, and `memory://kanban/{+repo}/{project_number}` accept an RFC 6570 `{+repo}` path parameter for targeted project context.
 
 ---
 
-## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
+## ⚡ Code Mode
 
-Code Mode (`mj_execute_code`) **reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
+Code Mode (`mj_execute_code`) runs many journal operations in one sandboxed call, so the client does not resend every tool schema. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
 Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** designed as a secure multi-tenant process isolation environment. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
@@ -221,7 +224,7 @@ Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm
 - **Hard timeouts** — configurable execution limit (default 30s) with bounded async timer tracking (`setTimeout`/`sleep` capped and cleared on completion)
 - **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM via oversized payloads
 - **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
-- **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured `{ success: false, error: "..." }` response to the agent instead of a raw MCP protocol exception.
+- **Readonly filter** — A filter containing `readonly` (and not `-readonly`) drops tools whose `readOnlyHint` is not `true` from registration, `tools/list`, and `tools/call`. `update_configuration` and `mj_execute_code` stay registered. Code Mode also limits `mj.*` dispatch to `readOnlyHint: true`.
 
 ### ⚡ Code Mode Minimal Surface (Maximum Token Savings)
 
@@ -244,13 +247,13 @@ This exposes only `mj_execute_code` and `update_configuration` to the client's `
 
 ## 🚀 Quick Start & Deployment
 
-_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`._
+_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults` (see [`memory-journal-config-example.json`](memory-journal-config-example.json), [`examples/configs/memory-journal.config.yaml`](examples/configs/memory-journal.config.yaml), [`mcp-config-example.json`](mcp-config-example.json), and [`examples/`](examples/README.md))._
 
 > 🛠️ **Debugging Configuration:** Run `memory-journal-mcp --dump-config` (or pass `--dump-config` as an arg) to print the fully resolved configuration payload with automatically redacted secrets. This is the primary method for diagnosing overriding issues.
 
 ### Configure Basics Quickly
 
-> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]` in your terminal to automatically bootstrap and update your MCP configuration!
+> 💡 **Tip:** `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]` writes `projectRegistry` to `memory-journal.config.json` (default `~/.gemini/config/memory-journal.config.json`, or `MEMORY_JOURNAL_CONFIG`). It does not edit the `PROJECT_REGISTRY` environment variable. A `PROJECT_REGISTRY` value in the MCP client overrides the file. Leave `PROJECT_REGISTRY` unset so the server loads that file.
 
 ```json
 {
@@ -271,7 +274,7 @@ _Note: Configuration is resolved using strict precedence: `CLI flags > Environme
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
 
-> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
+> 💡 **Tip:** `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]` writes `projectRegistry` to `memory-journal.config.json` (default `~/.gemini/config/memory-journal.config.json`, or `MEMORY_JOURNAL_CONFIG`). It does not edit the `PROJECT_REGISTRY` environment variable. A `PROJECT_REGISTRY` value in the MCP client overrides the file. Leave `PROJECT_REGISTRY` unset so the server loads that file.
 
 ```json
 {
@@ -313,16 +316,16 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 
 The `memory://briefing` resource is **dynamically assembled** at each session start to provide rich, token-efficient ambient context. By default, it automatically surfaces:
 
-- **System State:** Server version, capability statuses, resource/tool counts, test health, and `memory://metrics/summary` breadcrumbs.
-- **Repository Context:** Git working tree status, unreleased changes, exact code-map paths, and prioritized gatekeeper CI workflows.
-- **Ambient Context:** Active workspace paths, local time, analytics.
+- **Repository & Tracking:** Active branch, CI workflow status, local dirty tree status, open issues/PRs, active branch PR, Copilot reviews, and milestones.
+- **Journal & Graph:** Recent personal/team entries, session summaries, 14-day knowledge graph pivots (node degrees, top hubs, active threads, commit→entry links, linkage rate), and recent git commits.
+- **Config & Insights:** Active tool filter, access mode (`RO`/`RW`), I/O roots, repo stats/traffic, analytics digest, and optional health/deprecation alerts.
 
 You control exactly what additional content your agent sees across three dimensions:
 
 | Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                        |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | **Focus**             | `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config: `"toolFilter"`)                                                                                                  | Control tool exposure: `full` (default), `starter`, `essential`, `readonly`, `codemode` |
-| **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`                                              | How many recent entries, session summaries, commits, and whether team entries appear    |
+| **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`, `BRIEFING_GRAPH`, `BRIEFING_INSIGHTS`       | How many recent entries, session summaries, commits, whether team entries, graph pivots, and the Insights row appear |
 | **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing     |
 
 **Context Injections:** Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface user rules and agent skills as companion resources (`memory://rules`, `memory://skills`) alongside the briefing.
@@ -398,13 +401,13 @@ For remote access or web-based clients, run the server in HTTP mode:
 memory-journal-mcp --transport http --port 3000 --allowed-io-roots /path/to/allowed/dir
 ```
 
-To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest), you MUST provide both `ALLOWED_IO_ROOTS` and an authentication token:
+To bind to all interfaces (required for containers), you MUST provide both `ALLOWED_IO_ROOTS` and an authentication token:
 
 ```bash
 export MCP_AUTH_TOKEN="your_secure_random_token"
 export MCP_AUTH_SCOPES="full" # Defaults to "read" if omitted
 export ALLOWED_IO_ROOTS="/path/to/allowed/dir"
-memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-interval 1440
+memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 ```
 
 **Endpoints:**
@@ -450,59 +453,51 @@ curl -X POST http://localhost:3000/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
-#### Stateless Mode (Serverless)
+#### Stateless Mode (No-Session HTTP)
 
-For serverless deployments (Lambda, Workers, Vercel), use stateless mode:
+For container or load-balanced Node deployments without sticky sessions (requires a Node process with a local SQLite file; edge/serverless runtimes are not supported), use stateless mode:
 
 ```bash
 memory-journal-mcp --transport http --port 3000 --stateless --allowed-io-roots /path/to/projects
 ```
 
-| Mode                      | Progress Notifications | Legacy SSE | Serverless |
-| ------------------------- | ---------------------- | ---------- | ---------- |
-| Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Complex |
-| Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Native  |
+| Mode                      | Progress Notifications | Legacy SSE | Horizontal Scaling |
+| ------------------------- | ---------------------- | ---------- | ------------------ |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Sticky sessions |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Any instance    |
 
-#### Automated Scheduling (HTTP Only)
+#### Maintenance, Auto-Prune & Scheduled Jobs
 
-When running in HTTP/SSE mode, enable periodic maintenance jobs with CLI flags. These jobs run in-process on `setInterval` — no external cron needed.
+Startup auto-prune enforces two-stage data lifecycle hygiene automatically on boot (`0` = disabled), and one-shot `admin` CLI subcommands handle database maintenance (`backup`, `restore`, `vacuum`, `prune`, `rebuild-index`) without running a background scheduler inside the MCP server.
 
-> **Note:** These flags are ignored for stdio transport because stdio sessions are short-lived (tied to your IDE session). For stdio, use OS-level scheduling (Task Scheduler, cron) or run the backup/cleanup tools manually.
+> **Note:** For recurring automation across IDE sessions, use client-driven **[Nightly CMS Automations →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** (`CMS-02` / `CMS-04`) or OS-level scheduling (`cron`, Windows Task Scheduler) invoking `memory-journal-mcp admin <command>` or `mj_execute_code` tools directly.
 
 ```bash
-memory-journal-mcp --transport http --port 3000 \
-  --allowed-io-roots /path/to/projects \
-  --backup-interval 60 --keep-backups 10 \
-  --vacuum-interval 1440 \
-  --rebuild-index-interval 720
+memory-journal-mcp --archive-older-than-days 90 \
+  --prune-older-than-days 5 --hard-delete-older-than-days 5 \
+  --prune-importance-threshold 0.15
+
+# One-shot maintenance commands (stdio or headless hosts)
+memory-journal-mcp admin backup
+memory-journal-mcp admin vacuum
+memory-journal-mcp admin prune
+memory-journal-mcp admin rebuild-index
 ```
 
 | Flag                                   | Default | Description                                                                        |
 | -------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
-| `--backup-interval <min>`              | 0 (off) | Create timestamped database backups and prune old ones automatically               |
-| `--keep-backups <count>`               | 5       | Max backups retained during automated cleanup                                      |
-| `--vacuum-interval <min>`              | 0 (off) | Run `PRAGMA optimize` and flush database to disk                                   |
-| `--rebuild-index-interval <min>`       | 0 (off) | Full vector index rebuild to maintain semantic search quality                      |
-| `--report-interval <min>`              | 0 (off) | Scheduled report generation interval in minutes                                    |
-| `--report-webhook-url <url>`           | —       | HTTPS webhook URL for scheduled report delivery                                    |
-| `--report-webhook-auth <header>`       | —       | Custom `Authorization` header for webhook requests                                 |
-| `--report-content-type <type>`         | `slack` | Webhook payload format: `slack`, `discord`, or `json` (env: `REPORT_CONTENT_TYPE`) |
-| `--digest-interval <min>`              | 0 (off) | Scheduled periodic digest analysis report                                          |
-| `--auto-prune-interval <min>`          | 0 (off) | Run autonomous garbage collection (archive, soft-delete, hard-delete)              |
-| `--archive-older-than-days <days>`     | 0 (off) | Auto-archive low-importance entries older than N days                              |
-| `--prune-older-than-days <days>`       | 0 (off) | Auto soft-delete entries older than N days                                         |
-| `--hard-delete-older-than-days <days>` | 0 (off) | Permanently purge soft-deleted entries older than N days                           |
+| `--archive-older-than-days <days>`     | 0 (off) | Auto-archive low-importance entries older than N days on startup / prune           |
+| `--prune-older-than-days <days>`       | 0 (off) | Auto soft-delete entries older than N days on startup / prune                      |
+| `--hard-delete-older-than-days <days>` | 0 (off) | Permanently purge soft-deleted entries older than N days on startup / prune        |
 | `--prune-importance-threshold <score>` | 0.15    | Max importance score (`0.0`–`1.0`) eligible for archiving/pruning                  |
 | `--prune-dry-run`                      | false   | Log auto-prune candidates without mutating entries                                 |
-| `--prune-exclude-tags <tags>`          | —       | Comma-separated tags exempt from auto-prune (`archived` always kept)               |
-
-Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
+| `--prune-exclude-tags <tags>`          | —       | Comma-separated tags exempt from auto-prune (default: `[]` — only tags passed here are exempt; `is_archived = 1` skips re-archiving while soft-delete selects by age and importance) |
 
 ### Integrate Seamlessly with GitHub
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
-**Multi-Project Workflows**: For agents to seamlessly support multiple projects, configure your **`PROJECT_REGISTRY`** (tip: use `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]`).
+**Multi-Project Workflows**: `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]` writes `projectRegistry` to `memory-journal.config.json` (default `~/.gemini/config/memory-journal.config.json`, or `MEMORY_JOURNAL_CONFIG`). It does not edit the `PROJECT_REGISTRY` environment variable. A `PROJECT_REGISTRY` value in the MCP client overrides the file. Leave `PROJECT_REGISTRY` unset so the server loads that file.
 
 #### Dynamic Context Resolution & Auto-Detection
 
@@ -537,7 +532,7 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 | Scope   | Tool Groups                                                                                                                                                    |
 | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git`                                                       |
-| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
+| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)`                                                               |
 | `audit` | `memory://audit resource access (included in admin/full; search_audit_log requires admin or full)`                                                             |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`                                                                                                 |
@@ -566,13 +561,30 @@ export OAUTH_CLOCK_TOLERANCE=60
 memory-journal-mcp --transport http --port 3000
 ```
 
-> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN` environment variable, or runs without authentication.
+> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN` environment variable, or runs without authentication. For a turnkey local Keycloak 26.4.7 OAuth 2.1 Compose setup, see [`examples/oauth-keycloak/`](examples/oauth-keycloak/README.md).
 
 ### 🔄 Session Management
 
-1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{repo}`) and shows project context
+1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{+repo}`) and shows project context
 2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
+
+### 🌙 Automate Nightly Cognitive Maintenance (CMS)
+
+Keep project memory self-cleaning, drift-free, and self-healing across stdio and HTTP setups using the **Cognitive Management System (CMS)**:
+
+- **Session Hooks & Issue Telemetry** — Pair client `SessionStart` / `PostToolUse` hooks (Google Antigravity `hooks.json`, Cursor `.cursor/hooks.json`) with built-in server error telemetry (`logs/agent-issues.jsonl`) to inject `workspace_id` + `project_number` context at startup and capture validation friction automatically.
+- **`CMS-02`: NREM Memory Consolidation (`optimize-journal`)** — Unattended Data-Plane / Zero-Build curation: timestamped backups, unassigned entry migration, Git/GitHub ground-truth & anchor staleness checks, episodic-to-semantic compaction, tag/graph defrag, auto-pruning, and vector index parity.
+- **`CMS-04`: REM Meta-Cognitive Supervisor (`cms-rem-supervisor`)** — Control-Plane safety audit: automatic restoration of erroneously soft-deleted high-value entries, `logs/agent-issues.jsonl` telemetry mining, and batched schema/prompt healing behind a Dirty-Tree Conditional Validation Gate.
+
+Trigger either workflow on demand or via scheduled background agents in **Cursor**, **Google Antigravity**, **Claude Code**, or **Windsurf**:
+
+```text
+/mcp:memory-journal-mcp:optimize-journal mode="full" autoRun="true" limit="0"
+/mcp:memory-journal-mcp:cms-rem-supervisor lookbackHours="24" autoRestore="true"
+```
+
+**[Complete Automations, Hooks & Cross-Client Scheduling Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)**
 
 ## 🔧 Configuration
 
@@ -587,10 +599,11 @@ memory-journal-mcp --transport http --port 3000
 | `TEAM_AUTHOR`                                                                                                                                                                               | Display name attached to team entries (used for local author identity; OAuth identity claims take precedence when creating team entries and RBAC ownership under active OAuth)                                                                                         |
 | `TEAM_DEFAULT_ROLE`                                                                                                                                                                         | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`)                                                                                                                                     |
 | `TEAM_ADMIN`                                                                                                                                                                                | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`)                                                                                                                                                                               |
-| `ADDITIONAL_TEAM_DBS`                                                                                                                                                                       | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`)                                                                                                                                                            |
+| `ADDITIONAL_TEAM_DBS`                                                                                                                                                                       | JSON map of label to absolute path for extra team databases searched by `cross_team_search` (CLI: `--additional-team-dbs`). Connections are read-write and team migrations are applied on open.                                                                         |
 | `DEFAULT_WORKSPACE_ID`                                                                                                                                                                      | Default workspace ID for multi-tenant isolation (CLI: `--default-workspace-id`, default: `default`; `MCP_WORKSPACE_ID` provides a session-scoped schema-healing fallback on tool payloads)                                                                             |
 | `MEMORY_JOURNAL_CONFIG`                                                                                                                                                                     | Path to configuration file (`.yaml`, `.yml`, `.json`; CLI: `--config`)                                                                                                                                                                                                 |
-| `LOG_LEVEL`                                                                                                                                                                                 | Server log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical` (CLI `--log-level` accepts `debug`, `info`, `warning`, `error`; default: `info`)                                                                                                       |
+| `LOG_LEVEL`                                                                                                                                                                                 | Server log verbosity: `debug`, `info`, `warning`, `error` (CLI: `--log-level`, default: `info`)                                                                                                                                                                        |
+| `INSTRUCTION_LEVEL`                                                                                                                                                                         | Server instruction verbosity: `essential`, `detailed`, or `full` (CLI: `--instruction-level`, default: `detailed`)                                                                                                                                                     |
 | `TRANSPORT` / `PORT` / `MCP_HOST` / `STATELESS`                                                                                                                                             | Transport mode (`stdio` or `http`; CLI: `--transport`), HTTP port (`--port`, default: `3000`), bind address (`--server-host`, fallback: `HOST`, default: `localhost`), and stateless HTTP mode (`--stateless`, default: `false`)                                       |
 | `CORS_ORIGIN` / `MCP_CORS_ORIGIN` / `MCP_RATE_LIMIT_MAX`                                                                                                                                    | Allowed CORS origins (`--cors-origin`) and per-IP/minute HTTP rate limit (default: `100`)                                                                                                                                                                              |
 | `GITHUB_TOKEN`                                                                                                                                                                              | Personal access token for GitHub integrations                                                                                                                                                                                                                          |
@@ -600,7 +613,7 @@ memory-journal-mcp --transport http --port 3000
 | `AUTO_REBUILD_INDEX`                                                                                                                                                                        | Rebuild vector search index on startup (`true`/`false`, CLI: `--auto-rebuild-index`)                                                                                                                                                                                   |
 | **Security & Tooling**                                                                                                                                                                      |                                                                                                                                                                                                                                                                        |
 | `ALLOWED_IO_ROOTS`                                                                                                                                                                          | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used)                                                                                                                                     |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER`                                                                                                                                                            | Control tool exposure (`full`, `starter`, `essential`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only)                                           |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER`                                                                                                                                                            | Control tool exposure (`full`, `starter`, `essential`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. `TOOL_FILTER` is not read by the filter parser)                                           |
 | `CODE_MODE_MAX_RESULT_SIZE`                                                                                                                                                                 | Max execution payload buffer size in Code Mode (bytes, default: `102400`)                                                                                                                                                                                              |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                                                                                                                                                             | Allow Code Mode to bypass tool filters internally (default: `false`)                                                                                                                                                                                                   |
 | `MCP_AGENT_HEALING`                                                                                                                                                                         | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`)                                                                                                                                                                         |
@@ -613,20 +626,20 @@ memory-journal-mcp --transport http --port 3000
 | `BRIEFING_COMMIT_COUNT`                                                                                                                                                                     | Number of git commits in briefing (default: 3)                                                                                                                                                                                                                         |
 | `BRIEFING_IMPORTANCE_THRESHOLD`                                                                                                                                                             | Minimum importance score for briefing entries (default: 0.3)                                                                                                                                                                                                           |
 | `BRIEFING_INCLUDE_TEAM`                                                                                                                                                                     | Include entries from the team database (default: false)                                                                                                                                                                                                                |
+| `BRIEFING_GRAPH`                                                                                                                                                                            | Include relationship graph pivots & 14-day linkage hints in `memory://briefing` (default: true; disable via `false` or `--no-briefing-graph`)                                                                                                                          |
+| `BRIEFING_INSIGHTS`                                                                                                                                                                         | Include the Insights row (GitHub repo stats/traffic + analytics digest) in `memory://briefing`; `false` skips those API calls (default: true; disable via `false` or `--no-briefing-insights`)                                      |
 | `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT` / `BRIEFING_PR_STATUS`                                                                                                                         | GitHub Issues (default: `0`), PRs (default: `0`), and PR status breakdown (default: `false`) in briefing                                                                                                                                                               |
 | `BRIEFING_MILESTONE_COUNT`                                                                                                                                                                  | GitHub Milestones to list with titles (default: `3`)                                                                                                                                                                                                                   |
 | `BRIEFING_WORKFLOW_COUNT` / `BRIEFING_WORKFLOW_STATUS` / `BRIEFING_COPILOT_REVIEWS`                                                                                                         | CI workflow runs (default: `0`), status breakdown (default: `false`), and Copilot review state (default: `false`)                                                                                                                                                      |
 | `STALENESS_ACTIVE_HOURS` / `STALENESS_RECENT_DAYS` / `STALENESS_STALE_DAYS`                                                                                                                 | Thresholds for `memory://staleness` project classification (defaults: `24`h / `7`d / `30`d)                                                                                                                                                                            |
-| `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY`                                                                                                                   | Injected behavioral rules, skills boundaries, and workflow summary                                                                                                                                                                                                     |
+| `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY`                                                                                                                   | Injected behavioral rules, skills index, and workflow summary (`memory-journal.config.{yaml,yml,json}` keys: `"rulesFile"`, `"skillsDir"`, `"workflowSummary"`)                                                                                                        |
 | **OAuth (HTTP Mode)**                                                                                                                                                                       |                                                                                                                                                                                                                                                                        |
 | `OAUTH_ENABLED`                                                                                                                                                                             | Enable OAuth 2.1 authentication (default: false)                                                                                                                                                                                                                       |
 | `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` / `PUBLIC_ORIGIN` / `OAUTH_ALLOW_PLAINTEXT_LOOPBACK`                                                         | OAuth token verification parameters (clock tolerance default: 60s), non-loopback RFC 9728 public origin (`--public-origin`), and local dev plaintext loopback issuer flag (`--oauth-allow-plaintext-loopback`)                                                         |
 | **Telemetry & Administration**                                                                                                                                                              |                                                                                                                                                                                                                                                                        |
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE`                                                                                                                    | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB)                                                                                                                                                    |
-| `METRICS_EXPORT` / `PERSIST_METRICS` / `METRICS_PATH` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST`                                                                                               | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics (`--persist-metrics`, `--metrics-path`), and dedicated scrape port/host |
-| `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags                                                                                                |
-| `BACKUP_INTERVAL` / `KEEP_BACKUPS` / `VACUUM_INTERVAL` / `REBUILD_INDEX_INTERVAL` / `DIGEST_INTERVAL`                                                                                       | Scheduled HTTP maintenance intervals in minutes (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) and backup retention count (`--keep-backups`, default: `5`)                                                                |
-| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` / `REPORT_WEBHOOK_AUTH` / `REPORT_CONTENT_TYPE` / `ALLOW_INSECURE_WEBHOOK_HTTP`                                                                    | Scheduled HTTP reports, webhook delivery headers/content-type, and local dev HTTP webhook override                                                                                                                                                                     |
+| `METRICS_EXPORT` / `PERSIST_METRICS` / `METRICS_PATH` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST`                                                                                               | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport — skipped fail-closed when OAuth 2.1 is enabled without `--auth-token`/`MCP_AUTH_TOKEN`), disk-persisted metrics (`--persist-metrics`, `--metrics-path`), and dedicated scrape port/host |
+| `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Startup lifecycle archiving and pruning (days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags                                                                                                     |
 | `DEBUG` / `DISABLE_ISSUE_LOGGING`                                                                                                                                                           | Verbose debug logging and suppression of automated runtime issue logging                                                                                                                                                                                               |
 
 ### GitHub Integration (Optional)
@@ -643,14 +656,14 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 
 | Capability Source  | Purpose                                                                                    |
 | ------------------ | ------------------------------------------------------------------------------------------ |
-| **MCP Server**     | Specialized features: Kanban visualization, Milestones, journal linking, project timelines |
-| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases              |
+| **MCP Server**     | `create_github_issue_with_entry`, `close_github_issue_with_entry`, milestone create/update/delete, and Kanban moves |
+| **Agent (gh CLI)** | Merging pull requests and managing releases                                                |
 
 **MCP Server Tools (Read + Kanban + Milestones + Issue Lifecycle):**
 
 See the **[Complete tools reference](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)** for all supported GitHub integration capabilities, including query commands, Kanban management, milestone tracking, analytics, and issue lifecycle events.
 
-> **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, Milestones, timeline resources, context linking). Standard GitHub mutations (create/close issues, merge PRs, manage releases) are handled directly by agents via `gh` CLI.
+> Issue create and close are server tools: `create_github_issue_with_entry` and `close_github_issue_with_entry`, plus milestone create/update/delete and Kanban moves. Merging pull requests and managing releases stay with `gh`.
 
 **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
 
@@ -726,11 +739,12 @@ flowchart TB
 
 ### Performance Benchmarks
 
-Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite across database, vector search, and MCP server routines to maintain these baseline guarantees:
+Memory Journal is designed for extremely low overhead during AI task execution. We include a sequential `vitest bench --run --no-file-parallelism` suite (22 benchmarks across database, vector search, Code Mode sandbox, and MCP server routines) to maintain these baseline guarantees:
 
-- **Database Operations (`sqlite-adapter.bench.ts`)**: `calculateImportance` runs at **~51,600 ops/sec** (~0.03ms mean, ~27x faster than retrieving 50 recent entries) via a 256-entry LRU prepared statement cache. `getRecentEntries (limit 50)` executes at **~1,870 ops/sec** (~0.63ms mean), `updateEntry` at **~2,380 ops/sec** (~0.79ms mean), `createEntry` at **~1,060 ops/sec** (~1.69ms mean), and `searchEntries` (FTS5 BM25 + batch importance hydration) at **~176 ops/sec** (~6.2ms mean).
-- **Vector Search Engine (`vector-search.bench.ts`)**: Both k-NN similarity search (**~1,050 ops/sec**, ~1.8ms mean with batch entry hydration) and vector indexing (**~4,220 ops/sec**, ~0.41ms mean) are high-throughput via `sqlite-vec` (`vec0` with `chunk_size=256`).
-- **Core MCP Routines (`mcp-server.bench.ts`)**: `getTools` uses cached O(1) dispatch (**~7.2M–9.4M ops/sec**, ~0.0001ms). Full end-to-end `callTool` invocations (including interceptor, token estimation, and project registry resolution) run at **~1,775 ops/sec** (~0.65ms) for `get_recent_entries`, **~205 ops/sec** (~5.4ms) for `search_entries`, and **~800 ops/sec** (~2.4ms) for `create_entry`.
+- **Database Operations (`sqlite-adapter.bench.ts`, post-seed `ANALYZE`)**: `calculateImportance` runs at **~4,250 ops/sec** (~0.28ms mean) via a 256-entry insertion-order prepared statement cache. `updateEntry` executes at **~3,510 ops/sec** (~0.57ms mean), `getRecentEntries (limit 50)` at **~2,510 ops/sec** (~0.45ms mean; **~1,875 ops/sec** scoped by workspace + project), `getEntriesByIds (batch 50)` at **~2,450 ops/sec** (~0.46ms mean), `createEntry` at **~1,795 ops/sec** (~1.20ms mean), and `searchEntries` (FTS5 BM25 + post-`LIMIT` batch importance hydration) at **~220 ops/sec** (~4.86ms mean).
+- **Vector Search Engine (`vector-search.bench.ts`, 1,000 indexed entries, post-seed `ANALYZE`)**: `addEntry` runs at **~5,890 ops/sec** (~0.36ms mean) via `sqlite-vec` (`vec0` with `chunk_size=256`), and k-NN similarity `search` with batch entry hydration runs at **~587 ops/sec** (~1.82ms mean; **~266 ops/sec** / ~4.01ms scoped by workspace + project).
+- **Core MCP Routines (`mcp-server.bench.ts`)**: `getTools` uses cached O(1) dispatch (**~7.5M ops/sec**, ~0.0002ms; **~5.8M ops/sec** filtered `-team,-github` via `WeakMap` cache). Full end-to-end `callTool` invocations (including interceptor, token estimation, and project registry resolution) run at **~1,480 ops/sec** (~0.74ms) for `get_recent_entries` (**~1,460 ops/sec** / ~0.80ms with `progressToken`), **~960 ops/sec** (~1.60ms) for `create_entry`, and **~543 ops/sec** (~2.21ms) for `search_entries` (rotating 8-term cache-miss workload).
+- **Code Mode Sandbox (`codemode-sandbox.bench.ts`)**: `getOrCreateCodemodeBundle` (warm cache hit) runs at **~3.99M ops/sec** (~0.0003ms), `healCodeModeScript` at **~113,700 ops/sec** (~0.012ms no-op fast path) / **~51,600 ops/sec** (~0.023ms import rewrite), `validateSandboxCode` at **~51,800 ops/sec** (~0.036ms), `callTool mj_execute_code` (warm worker scalar) at **~33,300 ops/sec** (~0.049ms), and warm worker RPC at **~12,960 ops/sec** (~0.13ms).
 
 To run the benchmarking suite locally:
 
@@ -745,7 +759,7 @@ Extensively tested across two frameworks:
 | Suite                     | Command             | Covers                                                                                                                                                  |
 | ------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Vitest (unit/integration) | `pnpm test`         | Extensive Vitest unit and integration suite with strict quality gates (database, tools, resources, handlers, security, GitHub, vector search, codemode) |
-| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler                                                                                   |
+| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers                                                                                              |
 
 ```bash
 pnpm test          # Unit + integration tests
@@ -759,7 +773,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 - **Deterministic error handling** - Every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses with actionable context — no raw exceptions, no silent failures, no misleading messages
 - **Local-first** - All data stored locally, no external API calls (except optional GitHub)
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention, and `<untrusted_remote_content>` prompt-injection boundary tagging
-- **Path traversal & SSRF protection** - `ALLOWED_IO_ROOTS` sandbox containment with URL-decode/symlink verification, backup path validation, and outbound webhook DNS/IP SSRF blocking
+- **Path traversal protection** - `ALLOWED_IO_ROOTS` sandbox containment with URL-decode/symlink verification and backup path validation
 - **Multi-tenant & filter enforcement** - End-to-end `workspace_id` isolation across SQLite and Vector search, plus execution-layer `--tool-filter` enforcement across `tools/call`, Code Mode (`mj.*`), and fallback handlers
 - **MCP 2025-11-25 annotations & icons** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.) and capability icons
 - **HTTP transport hardening** - OAuth 2.1 `tokenClaims` propagation, principal-bound stateful sessions (`100` max active sessions), comprehensive security headers, configurable multi-origin CORS, 1MB body/stream limit, built-in per-subject/IP rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, and localhost-bound metrics (`METRICS_EXPORT=prometheus` automatically starts the standalone metrics server on `127.0.0.1:9465`, customizable via `MJ_METRICS_PORT` and `MJ_METRICS_HOST`, in addition to mounting `/metrics` on the HTTP transport)
@@ -777,7 +791,8 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 ## 📚 Documentation & Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
-- **[Copilot Setup Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Cross-agent memory bridge between IDE agents and GitHub Copilot
+- **[Examples & Deployment Templates](examples/README.md)** - Prometheus/Grafana/Loki/Datadog stack, Keycloak 2.1 OAuth, and YAML config
+- **[Automations Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** - Nightly CMS consolidation (`CMS-02`), REM self-healing supervisor (`CMS-04`), and cross-client scheduling
 - **[Deployment Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Deployment)** - CI/CD pipeline, environments, and version bump checklist
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Container images
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution

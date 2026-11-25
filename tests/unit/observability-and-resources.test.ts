@@ -198,7 +198,9 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
                 { body: { jsonrpc: '2.0', id: 1, method: 'tools/list' } } as unknown as Request,
                 postResMock
             )
-            expect(onMessageSpy).toHaveBeenCalledWith({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
+            expect(onMessageSpy).toHaveBeenCalledWith(
+                { jsonrpc: '2.0', id: 1, method: 'tools/list' }
+            )
             expect(postResMock.status).toHaveBeenCalledWith(202)
 
             // Handle POST message (invalid body)
@@ -236,12 +238,15 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
             const mockVm = { addEntry: vi.fn().mockResolvedValue(true) }
             expect(await autoIndexEntry(mockVm as never, db, 99999)).toBe('failed')
 
-            // 3. Success when entry exists and addEntry succeeds
-            expect(await autoIndexEntry(mockVm as never, db, entry.id)).toBe('success')
+            // 3. Failed when the caller does not name a workspace
+            expect(await autoIndexEntry(mockVm as never, db, entry.id)).toBe('failed')
 
-            // 4. Failed when addEntry throws
+            // 4. Success when the entry's workspace is supplied and addEntry succeeds
+            expect(await autoIndexEntry(mockVm as never, db, entry.id, entry.workspaceId)).toBe('success')
+
+            // 5. Failed when addEntry throws
             const throwingVm = { addEntry: vi.fn().mockRejectedValue(new Error('Embed error')) }
-            expect(await autoIndexEntry(throwingVm as never, db, entry.id)).toBe('failed')
+            expect(await autoIndexEntry(throwingVm as never, db, entry.id, entry.workspaceId)).toBe('failed')
         })
     })
 
@@ -361,7 +366,7 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
 
         it('should bridge --auth-scopes to process.env.MCP_AUTH_SCOPES and use safe default fallbacks in buildServerOptions', () => {
             const emptyConfigPath = path.join(os.tmpdir(), `mj-empty-cfg-${String(Date.now())}.json`)
-            fs.writeFileSync(emptyConfigPath, '{}', 'utf-8')
+            fs.writeFileSync(emptyConfigPath, '{}', { encoding: 'utf-8', mode: 0o600 })
             try {
                 delete process.env['CODEMODE_INTERNAL_FULL_ACCESS']
                 delete process.env['ARCHIVE_OLDER_THAN_DAYS']
@@ -395,7 +400,7 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
                 content: 'Test entry content',
                 project_number: 5,
             }) as Record<string, unknown>
-            expect(healed['workspace_id']).toBe('default')
+            expect(healed['workspace_id']).toBeUndefined()
 
             process.env['STALENESS_ACTIVE_HOURS'] = ''
             process.env['STALENESS_RECENT_DAYS'] = '  '
@@ -403,7 +408,7 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
             db.createEntry({
                 content: 'Recent entry for staleness check',
                 projectNumber: 5,
-                workspaceId: 'default',
+                workspaceId: 'memory-journal-mcp',
             })
 
             const stalenessDefs = getStalenessResourceDefinitions()

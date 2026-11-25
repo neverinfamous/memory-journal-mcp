@@ -17,10 +17,19 @@
  * propagate to tool callers.
  */
 
-import { appendFile, mkdir, open, rename, stat, readFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
+import { getRequestContext } from '../utils/request-context.js'
+import { getErrnoCode } from '../utils/type-guards.js'
+import { bigintReplacer } from '../observability/token-estimator.js'
+import {
+    appendRegularFileNoFollow,
+    rotateAuditLogFiles,
+    searchAuditFileBackward,
+} from './audit-file-helpers.js'
+import { compileAuditSearchFilters } from './audit-filter-helpers.js'
 
 // ============================================================================
 // Constants
@@ -38,13 +47,6 @@ const DEFAULT_RECENT_COUNT = 50
 /** Special logPath value that routes audit output to stderr */
 const STDERR_SENTINEL = 'stderr'
 
-/**
- * Maximum bytes to read from the end of the audit log for `recent()`.
- * 64 KB is enough for ~100+ typical JSONL audit entries (~500 bytes each).
- * Files smaller than this are read in full; larger files only read the tail.
- */
-const TAIL_READ_BYTES = 65_536
-
 /** Default number of archives to keep */
 const MAX_ARCHIVES = 5
 
@@ -52,29 +54,121 @@ const MAX_ARCHIVES = 5
 // AuditLogger Class
 // ============================================================================
 
+const MAX_AUDIT_LINE_BYTES = 262_144
+
+function capAuditString(value: string | undefined, maxLen: number): string | undefined {
+    if (value === undefined) return undefined
+    return value.length > maxLen ? value.slice(0, maxLen) : value
+}
+
+function capBoundedAuditEntry(entry: AuditEntry, lineBytes: number): AuditEntry {
+    const boundedScopes = Array.isArray(entry.scopes)
+        ? entry.scopes.slice(0, 32).map((sc) => sc.slice(0, 64))
+        : []
+    const boundedError =
+        entry.error !== undefined && entry.error.length > 4096
+            ? `${entry.error.slice(0, 4096)}...[truncated]`
+            : entry.error
+    return {
+        timestamp: entry.timestamp.slice(0, 64),
+        requestId: entry.requestId.slice(0, 128),
+        ...(entry.sessionId !== undefined ? { sessionId: capAuditString(entry.sessionId, 256) } : {}),
+        tool: entry.tool.slice(0, 256),
+        category: entry.category,
+        scope: entry.scope,
+        user: entry.user !== null ? entry.user.slice(0, 256) : null,
+        scopes: boundedScopes,
+        durationMs: entry.durationMs,
+        tokenEstimate: entry.tokenEstimate,
+        ...(entry.workspaceId !== undefined ? { workspaceId: capAuditString(entry.workspaceId, 255) } : {}),
+        ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
+        success: entry.success,
+        ...(boundedError !== undefined ? { error: boundedError } : {}),
+        ...(entry.args !== undefined ? { args: { _truncated: true, originalBytes: lineBytes } } : {}),
+    }
+}
+
+function serializeAuditEntryWithFallback(target: AuditEntry): string {
+    try {
+        const json = JSON.stringify(target)
+        if (typeof json === 'string') return json
+    } catch {
+        // Fall through to bigint-coercing / stripped fallback below
+    }
+    try {
+        return JSON.stringify(target, bigintReplacer)
+    } catch {
+        return JSON.stringify({
+            timestamp: target.timestamp,
+            requestId: target.requestId,
+            ...(target.sessionId !== undefined ? { sessionId: target.sessionId } : {}),
+            tool: target.tool,
+            category: target.category,
+            scope: target.scope,
+            user: target.user,
+            scopes: target.scopes,
+            durationMs: target.durationMs,
+            tokenEstimate: target.tokenEstimate,
+            ...(target.workspaceId !== undefined ? { workspaceId: target.workspaceId } : {}),
+            ...(target.projectNumber !== undefined ? { projectNumber: target.projectNumber } : {}),
+            success: target.success,
+            ...(target.error !== undefined ? { error: target.error.slice(0, 4096) } : {}),
+            args: { _serializationError: 'Audit args could not be JSON serialized' },
+        })
+    }
+}
+
+function serializeBoundedAuditEntry(entry: AuditEntry): string {
+    const serialized = serializeAuditEntryWithFallback(entry)
+    if (serialized.length * 3 <= MAX_AUDIT_LINE_BYTES) return serialized
+    const lineBytes = Buffer.byteLength(serialized, 'utf8')
+    if (lineBytes <= MAX_AUDIT_LINE_BYTES) return serialized
+
+    // Keep the serialized JSONL line well below the 1 MB backward-reader skip ceiling across ALL fields
+    const bounded = serializeAuditEntryWithFallback(capBoundedAuditEntry(entry, lineBytes))
+    if (Buffer.byteLength(bounded, 'utf8') <= MAX_AUDIT_LINE_BYTES) return bounded
+
+    return JSON.stringify({
+        timestamp: entry.timestamp.slice(0, 64),
+        requestId: entry.requestId.slice(0, 128),
+        tool: entry.tool.slice(0, 256),
+        category: entry.category,
+        scope: entry.scope,
+        user: entry.user !== null ? entry.user.slice(0, 128) : null,
+        scopes: [],
+        durationMs: entry.durationMs,
+        tokenEstimate: entry.tokenEstimate,
+        success: entry.success,
+        args: { _truncated: true, originalBytes: lineBytes },
+    })
+}
+
 export class AuditLogger {
     readonly config: AuditConfig
 
     private buffer: string[] = []
-    private flushTimer: ReturnType<typeof setInterval> | null = null
+    private flushTimer: ReturnType<typeof setTimeout> | null = null
     private flushQueue: Promise<void> = Promise.resolve()
     private closed = false
+    private flushError: Error | null = null
     private dirEnsured = false
     private readonly stderrMode: boolean
+    private approxSizeBytes: number | null = null
 
     private _droppedCount = 0
 
     constructor(config: AuditConfig) {
         this.config = config
         this.stderrMode = config.logPath.toLowerCase() === STDERR_SENTINEL
+    }
 
-        if (config.enabled) {
-            // Use unref() so the timer doesn't keep the process alive
-            this.flushTimer = setInterval(() => {
-                void this.flush()
-            }, FLUSH_INTERVAL_MS)
-            this.flushTimer.unref()
-        }
+    private scheduleFlush(): void {
+        if (this.flushTimer !== null || this.closed || !this.config.enabled) return
+        this.flushTimer = setTimeout(() => {
+            this.flushTimer = null
+            void this.flush()
+        }, FLUSH_INTERVAL_MS)
+        this.flushTimer.unref()
     }
 
     /**
@@ -82,6 +176,13 @@ export class AuditLogger {
      */
     get droppedCount(): number {
         return this._droppedCount
+    }
+
+    /**
+     * Whether audit logging is configured for write-only stderr output.
+     */
+    isStderrOnly(): boolean {
+        return this.stderrMode
     }
 
     /**
@@ -96,7 +197,8 @@ export class AuditLogger {
     log(entry: AuditEntry): void {
         if (this.closed || !this.config.enabled) return
 
-        this.buffer.push(JSON.stringify(entry))
+        const serialized = serializeBoundedAuditEntry(entry)
+        this.buffer.push(serialized)
 
         // Hard cap to prevent unbounded heap growth if flush loop hangs
         if (this.buffer.length > 5000) {
@@ -110,31 +212,20 @@ export class AuditLogger {
             this._droppedCount++
         }
 
-        // Eagerly flush when the buffer is full
-        if (this.buffer.length >= BUFFER_HIGH_WATER) {
-            void this.flush()
-        }
+        if (this.buffer.length >= BUFFER_HIGH_WATER) void this.flush()
+        else this.scheduleFlush()
     }
 
-    /**
-     * Log a denied access attempt.
-     */
+    /** Log a denied access attempt. */
     logDenial(
         toolName: string,
         reason: string,
-        context?: {
-            user?: string | null
-            scopes?: string[]
-            category?: AuditEntry['category']
-            scope?: string
-            requestId?: string
-            sessionId?: string
-        }
+        context?: { user?: string | null; scopes?: string[]; category?: AuditEntry['category']; scope?: string; requestId?: string; sessionId?: string }
     ): void {
         this.log({
             timestamp: new Date().toISOString(),
             requestId: context?.requestId ?? `denied-${Date.now().toString()}`,
-            sessionId: context?.sessionId ?? undefined,
+            sessionId: context?.sessionId ?? getRequestContext()?.sessionId ?? undefined,
             tool: toolName,
             category: context?.category ?? 'read',
             scope: context?.scope ?? '',
@@ -151,7 +242,14 @@ export class AuditLogger {
      * Safe to call concurrently — serialises via `this.flushQueue` Promise chain.
      */
     async flush(): Promise<void> {
-        if (this.buffer.length === 0) return
+        if (this.flushTimer !== null) {
+            clearTimeout(this.flushTimer)
+            this.flushTimer = null
+        }
+        if (this.buffer.length === 0) {
+            await this.flushQueue
+            return
+        }
 
         this.flushQueue = this.flushQueue
             .then(async () => {
@@ -165,18 +263,25 @@ export class AuditLogger {
                 this.buffer = []
 
                 try {
+                    const payload = lines.join('\n') + '\n'
                     if (this.stderrMode) {
                         // Stderr mode: write directly, no buffering to disk
-                        process.stderr.write(lines.join('\n') + '\n')
+                        process.stderr.write(payload)
                     } else {
                         await this.ensureDirectory()
-                        // One appendFile call with all buffered lines — each terminated by \n
-                        await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
+                        await appendRegularFileNoFollow(this.config.logPath, payload)
+                        if (this.approxSizeBytes !== null) {
+                            this.approxSizeBytes += Buffer.byteLength(payload, 'utf-8')
+                        }
                     }
+                    // A successful write supersedes any earlier (retried) failure
+                    this.flushError = null
                 } catch (err) {
-                    // Never throw — telemetry must not break tool execution
+                    // Never throw from flush() — telemetry must not break tool execution.
+                    // The failure is recorded so close() can surface it.
                     const message = err instanceof Error ? err.message : String(err)
                     logger.error(`Write failed: ${message}`, { module: 'Audit' })
+                    this.flushError = err instanceof Error ? err : new Error(String(err))
                     // Re-queue the failed lines so they aren't lost
                     this.buffer.unshift(...lines)
                     // Prevent infinite memory leak under permanent IO failure
@@ -191,8 +296,8 @@ export class AuditLogger {
                     }
                 }
             })
-            .catch(() => {
-                /* ignore */
+            .catch((err: unknown) => {
+                this.flushError = err instanceof Error ? err : new Error(String(err))
             })
 
         await this.flushQueue
@@ -205,11 +310,16 @@ export class AuditLogger {
         this.closed = true
 
         if (this.flushTimer) {
-            clearInterval(this.flushTimer)
+            clearTimeout(this.flushTimer)
             this.flushTimer = null
         }
 
         await this.flush()
+        if (this.flushError !== null) {
+            const flushError = this.flushError
+            this.flushError = null
+            throw flushError
+        }
     }
 
     /**
@@ -222,53 +332,26 @@ export class AuditLogger {
      */
     async recent(count: number = DEFAULT_RECENT_COUNT): Promise<AuditEntry[]> {
         // Stderr mode has no file to read from
-        if (this.stderrMode) return []
+        if (this.stderrMode || count <= 0) return []
 
         // Force flush buffered entries to ensure the read includes up-to-the-millisecond events
         await this.flush()
 
         try {
-            // Open directly — avoids TOCTOU race between stat() and open()
-            let fh: Awaited<ReturnType<typeof open>>
-            try {
-                fh = await open(this.config.logPath, 'r')
-            } catch {
-                // File does not exist yet
-                return []
+            const results: AuditEntry[] = []
+            const { skippedLines } = await searchAuditFileBackward(
+                this.config.logPath,
+                {},
+                count,
+                results
+            )
+            if (skippedLines > 0) {
+                logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s)`, {
+                    module: 'Audit',
+                    logPath: this.config.logPath,
+                })
             }
-
-            try {
-                // stat after open — file is guaranteed to exist since we hold the FD
-                const info = await fh.stat()
-                if (info.isDirectory()) return []
-                const fileSize = info.size
-                if (fileSize === 0) return []
-
-                // Read only the tail of the file — avoids loading entire log into memory
-                const readSize = Math.min(fileSize, TAIL_READ_BYTES)
-                const startOffset = fileSize - readSize
-
-                const buf = Buffer.alloc(readSize)
-                await fh.read(buf, 0, readSize, startOffset)
-                const chunk = buf.toString('utf-8')
-
-                // Split into lines: if we started mid-file, discard the first
-                // (likely partial) line
-                const rawLines = chunk.split('\n').filter(Boolean)
-                const lines = startOffset > 0 ? rawLines.slice(1) : rawLines
-                const tail = lines.slice(-count)
-
-                return tail.reduce<AuditEntry[]>((acc, line) => {
-                    try {
-                        acc.push(JSON.parse(line) as AuditEntry)
-                    } catch {
-                        // Gracefully ignore corrupted or partial log entries
-                    }
-                    return acc
-                }, [])
-            } finally {
-                await fh.close()
-            }
+            return results.reverse()
         } catch (err) {
             throw new Error(
                 `Failed to read telemetry log: ${err instanceof Error ? err.message : String(err)}`,
@@ -283,54 +366,39 @@ export class AuditLogger {
      */
     async search(filters: AuditSearchFilters): Promise<AuditEntry[]> {
         if (this.stderrMode) return []
-        
+
         await this.flush()
-        
+
         const results: AuditEntry[] = []
         const limit = filters.limit ?? 100
-        
-        // Search current log first, then older rotated logs .1 through .5
+        if (limit <= 0) return []
+
+        const compiledFilters = compileAuditSearchFilters(filters)
         const files = [this.config.logPath]
         for (let i = 1; i <= MAX_ARCHIVES; i++) {
             files.push(`${this.config.logPath}.${String(i)}`)
         }
-        
-        for (const file of files) {
-            try {
-                const content = await readFile(file, 'utf-8')
-                const lines = content.split('\n').filter(Boolean)
-                // Read backwards to get newest first
-                for (let i = lines.length - 1; i >= 0; i--) {
-                    try {
-                        const line = lines[i]
-                        if (!line) continue
-                        const entry = JSON.parse(line) as AuditEntry
-                        
-                        // Apply filters
-                        if (filters.tool_name && entry.tool !== filters.tool_name) continue
-                        if (filters.user && entry.user !== filters.user) continue
-                        if (filters.status !== undefined && entry.success !== filters.status) continue
-                        if (filters.category && entry.category !== filters.category) continue
-                        if (filters.date_range?.start && entry.timestamp < filters.date_range.start) continue
-                        if (filters.date_range?.end && entry.timestamp > filters.date_range.end) continue
-                        
-                        results.push(entry)
-                        
-                        if (results.length >= limit) {
-                            return results
-                        }
-                    } catch {
-                        // ignore parse errors for individual lines
-                    }
+
+        const { skippedLines, limitReached } = await files.reduce<
+            Promise<{ skippedLines: number; limitReached: boolean }>
+        >(
+            async (accPromise, file) => {
+                const acc = await accPromise
+                if (acc.limitReached) return acc
+                const res = await searchAuditFileBackward(file, compiledFilters, limit, results)
+                return {
+                    skippedLines: acc.skippedLines + res.skippedLines,
+                    limitReached: res.limitReached,
                 }
-            } catch (err) {
-                // Ignore if file doesn't exist (e.g. rotation hasn't happened yet)
-                if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-                    throw err
-                }
-            }
+            },
+            Promise.resolve({ skippedLines: 0, limitReached: false })
+        )
+        if (limitReached) return results
+
+        if (skippedLines > 0) {
+            logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s) during search`, { module: 'Audit' })
         }
-        
+
         return results
     }
 
@@ -344,11 +412,16 @@ export class AuditLogger {
     private async ensureDirectory(): Promise<void> {
         if (this.dirEnsured) return
         try {
-            await mkdir(dirname(this.config.logPath), { recursive: true })
+            await mkdir(dirname(this.config.logPath), { recursive: true, mode: 0o700 })
             this.dirEnsured = true
-        } catch {
-            // Directory may already exist — that's fine
-            this.dirEnsured = true
+        } catch (err: unknown) {
+            if (getErrnoCode(err) === 'EEXIST') {
+                this.dirEnsured = true
+                return
+            }
+            const message = err instanceof Error ? err.message : String(err)
+            logger.error(`Failed to create audit directory: ${message}`, { module: 'Audit' })
+            throw err
         }
     }
 
@@ -359,24 +432,16 @@ export class AuditLogger {
      */
     private async rotateIfNeeded(): Promise<void> {
         if (this.stderrMode || !this.config.maxSizeBytes) return
-        try {
-            const info = await stat(this.config.logPath).catch(() => null)
-            if (!info || info.size < this.config.maxSizeBytes) return
-
-            // Cascade rename from .4 to .5, .3 to .4, etc. to keep 5 backups
-            for (let i = MAX_ARCHIVES - 1; i >= 1; i--) {
-                const oldFile = `${this.config.logPath}.${String(i)}`
-                const newFile = `${this.config.logPath}.${String(i + 1)}`
-                await rename(oldFile, newFile).catch(() => null)
-            }
-
-            // Rename current directly to .1 to avoid a crash window where data is left in a .tmp file
-            const rotatedPath = `${this.config.logPath}.1`
-            await rename(this.config.logPath, rotatedPath)
-        } catch (err) {
-            // Rotation failure must not block logging
-            const message = err instanceof Error ? err.message : String(err)
-            logger.error(`Rotate failed: ${message}`, { module: 'Audit' })
+        if (this.approxSizeBytes !== null && this.approxSizeBytes < this.config.maxSizeBytes) {
+            return
+        }
+        const nextSize = await rotateAuditLogFiles(
+            this.config.logPath,
+            this.config.maxSizeBytes,
+            MAX_ARCHIVES
+        )
+        if (nextSize !== null) {
+            this.approxSizeBytes = nextSize
         }
     }
 }

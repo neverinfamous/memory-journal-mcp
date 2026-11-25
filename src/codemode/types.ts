@@ -18,8 +18,6 @@ export interface SandboxOptions {
     memoryLimitMb?: number
     /** Execution timeout in milliseconds (default: 30000) */
     timeoutMs?: number
-    /** CPU time limit in milliseconds (default: 10000) */
-    cpuLimitMs?: number
 }
 
 /**
@@ -42,7 +40,6 @@ export interface PoolOptions {
 export const DEFAULT_SANDBOX_OPTIONS: Required<SandboxOptions> = {
     memoryLimitMb: 128,
     timeoutMs: 30000,
-    cpuLimitMs: 10000,
 }
 
 /**
@@ -115,7 +112,7 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     blockedPatterns: [
         /\brequire\s*\(/, // No require()
         /\bimport\s*\(/, // No dynamic import()
-        /\bimport\s+[\s\S]*?\bfrom\b/, // No static ES module import from
+        /\bimport\s+(?:type\s+)?[\w$*\s{},]{1,240}?\bfrom\s*['"`]/, // No static ES module import from
         /\bimport\s*[{*]/, // No static ES module import statement
         /\bprocess\s*\./, // No process access (including whitespace before dot)
         /\bglobal\s*\./, // No global access
@@ -126,9 +123,11 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
         /\bconstructor\s*\.\s*constructor/, // No constructor chaining
         /\[\s*['"`]constructor['"`]\s*\]/i, // No bracket-notation constructor access
         /\bObject\s*\.\s*(?:getPrototypeOf|setPrototypeOf|defineProperty|defineProperties)\b/, // No prototype/descriptor manipulation
-        /\bReflect\s*\./i, // No Reflect API access (getPrototypeOf, ownKeys, construct, etc.)
+        /\b(?:getPrototypeOf|setPrototypeOf|defineProperty|defineProperties|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__)\b/, // No destructured prototype helpers
+        /\bReflect\b/, // No Reflect API access or destructuring
         /\bSymbol\s*\./i, // No Symbol access (hasInstance, toPrimitive, etc.)
         /\bnew\s+Proxy\s*\(/i, // No Proxy construction
+        /\bwith\s*\(/, // No sloppy-mode scope injection
         /\bchild_process\b/, // No child processes
         /\bfs\s*\./, // No filesystem
         /\bnet\s*\./, // No networking
@@ -145,6 +144,8 @@ export interface ValidationResult {
     valid: boolean
     /** Validation errors (if any) */
     errors: string[]
+    /** Pre-stripped code produced during validation for reuse by downstream delimiter checks */
+    strippedCode?: string
 }
 
 /**
@@ -220,6 +221,20 @@ export interface RpcRequest {
     method: string
     /** Arguments to pass to the method */
     args: unknown[]
+    /** Enforced read-only constraint propagated from nested sandbox execution */
+    readonly?: boolean
+    /** Enforced dry-run constraint propagated from nested sandbox execution */
+    dryRun?: boolean
+    /** Enforced test-database isolation propagated from nested sandbox execution */
+    useTestDb?: boolean
+    /** Narrowed workspace scope propagated from nested sandbox execution */
+    workspaceId?: string
+    /** Narrowed project number propagated from nested sandbox execution */
+    projectNumber?: number
+    /** Session identifier propagated from nested sandbox execution */
+    sessionId?: string
+    /** Auto-version flag propagated from nested sandbox execution */
+    autoVersion?: boolean
 }
 
 /**

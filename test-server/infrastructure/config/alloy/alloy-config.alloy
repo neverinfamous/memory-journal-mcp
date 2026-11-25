@@ -5,15 +5,22 @@
 // Discover log files to tail
 local.file_match "mcp_logs" {
   path_targets = [{
-    "__path__" = "/var/log/memory-journal-mcp/*.jsonl",
+    "__path__" = "/var/log/memory-journal-mcp/mcp-audit.jsonl",
     "job"      = "memory_journal_mcp_logs",
   }]
+  sync_period = "10s"
 }
 
 // Tail matched files, tracking positions across restarts
+// tail_from_end + explicit file_watch polling prevent WSL2 9p inotify/rotation re-read loops
 loki.source.file "mcp_logs" {
-  targets    = local.file_match.mcp_logs.targets
-  forward_to = [loki.process.mcp_logs.receiver]
+  targets       = local.file_match.mcp_logs.targets
+  forward_to    = [loki.process.mcp_logs.receiver]
+  tail_from_end = true
+  file_watch {
+    min_poll_frequency = "1s"
+    max_poll_frequency = "5s"
+  }
 }
 
 // Parse JSON log entries and promote structured fields as labels
@@ -26,7 +33,6 @@ loki.process "mcp_logs" {
       tool       = "tool",
       category   = "category",
       scope      = "scope",
-      status     = "status",
       success    = "success",
       durationMs = "durationMs",
       requestId  = "requestId",
@@ -39,7 +45,6 @@ loki.process "mcp_logs" {
       tool     = "",
       category = "",
       scope    = "",
-      status   = "",
       success  = "",
     }
   }

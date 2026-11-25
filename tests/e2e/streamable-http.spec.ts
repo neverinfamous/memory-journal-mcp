@@ -13,17 +13,14 @@
 import { test, expect } from './test-fixture.js'
 import { Client } from '@modelcontextprotocol/client'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
-import { startServer, stopServer } from './helpers.js'
+import { getBaseURL } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-const STREAM_PORT = 5108 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
-const STREAM_BASE = `http://localhost:${STREAM_PORT}`
-
 test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
-    async function createStreamableClient() {
-        const transport = new StreamableHTTPClientTransport(new URL(`${STREAM_BASE}/mcp`), {
-            requestInit: { headers: { Authorization: 'Bearer test-token' } }
+    async function createStreamableClient(baseUrl: string) {
+        const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+            requestInit: { headers: { Authorization: 'Bearer test-token' } },
         })
         const client = new Client(
             { name: 'playwright-streamable-test', version: '1.0.0' },
@@ -33,16 +30,8 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
         return client
     }
 
-    test.beforeAll(async () => {
-        await startServer(STREAM_PORT, [], 'streamable-http')
-    })
-
-    test.afterAll(() => {
-        stopServer(STREAM_PORT)
-    })
-
-    test('should initialize via Streamable HTTP', async () => {
-        const client = await createStreamableClient()
+    test('should initialize via Streamable HTTP', async ({ baseURL: _baseURL }, testInfo) => {
+        const client = await createStreamableClient(getBaseURL(testInfo))
         try {
             // Connection succeeded — Streamable HTTP handshake works
             const tools = await client.listTools()
@@ -52,8 +41,8 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
         }
     })
 
-    test('should list tools via Streamable HTTP', async () => {
-        const client = await createStreamableClient()
+    test('should list tools via Streamable HTTP', async ({ baseURL: _baseURL }, testInfo) => {
+        const client = await createStreamableClient(getBaseURL(testInfo))
         try {
             const listResponse = await client.listTools()
 
@@ -69,8 +58,8 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
         }
     })
 
-    test('should call a read tool via Streamable HTTP', async () => {
-        const client = await createStreamableClient()
+    test('should call a read tool via Streamable HTTP', async ({ baseURL: _baseURL }, testInfo) => {
+        const client = await createStreamableClient(getBaseURL(testInfo))
         try {
             const response = await client.callTool({
                 name: 'get_recent_entries',
@@ -85,8 +74,8 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
         }
     })
 
-    test('should call a write tool via Streamable HTTP', async () => {
-        const client = await createStreamableClient()
+    test('should call a write tool via Streamable HTTP', async ({ baseURL: _baseURL }, testInfo) => {
+        const client = await createStreamableClient(getBaseURL(testInfo))
         try {
             const response = await client.callTool({
                 name: 'create_entry',
@@ -104,8 +93,8 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
         }
     })
 
-    test('should list and read resources via Streamable HTTP', async () => {
-        const client = await createStreamableClient()
+    test('should list and read resources via Streamable HTTP', async ({ baseURL: _baseURL }, testInfo) => {
+        const client = await createStreamableClient(getBaseURL(testInfo))
         try {
             const listResponse = await client.listResources()
             expect(listResponse.resources.length).toBeGreaterThan(0)
@@ -121,8 +110,8 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
         }
     })
 
-    test('should list and get prompts via Streamable HTTP', async () => {
-        const client = await createStreamableClient()
+    test('should list and get prompts via Streamable HTTP', async ({ baseURL: _baseURL }, testInfo) => {
+        const client = await createStreamableClient(getBaseURL(testInfo))
         try {
             const listResponse = await client.listPrompts()
             expect(listResponse.prompts.length).toBeGreaterThan(0)

@@ -7,9 +7,14 @@
  */
 
 import { createRequire } from 'node:module'
+import { isRecord } from './utils/type-guards.js'
 
 const require = createRequire(import.meta.url)
-const pkg = require('../package.json') as { version: string }
+const pkg: unknown = require('../package.json')
+
+if (!isRecord(pkg) || typeof pkg['version'] !== 'string') {
+    throw new Error('Invalid package.json: missing string "version" field')
+}
 
 /** The current server version, read from package.json */
-export const VERSION: string = pkg.version
+export const VERSION: string = pkg['version']

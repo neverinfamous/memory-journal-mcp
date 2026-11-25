@@ -16,6 +16,8 @@ import {
 } from './errors.js'
 import { parseScopes } from './scopes.js'
 import { logger } from '../utils/logger.js'
+import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
+import { createPinnedJwksFetch } from './jwks-custom-fetch.js'
 
 // =============================================================================
 // Token Validator
@@ -29,13 +31,18 @@ import { logger } from '../utils/logger.js'
 export class TokenValidator {
     /** Resolved configuration with all defaults applied */
     private readonly jwksUri: string
+    private readonly jwksUrl: URL
+    private readonly jwksHost: string
     private readonly issuer: string
     private readonly audience: string
     private readonly clockTolerance: number
     private readonly jwksCacheTtl: number
+    private readonly algorithms: string[]
 
     private jwks: jose.JWTVerifyGetKey | null = null
     private jwksExpiry = 0
+    private preloadedJwksResponse: Response | null = null
+    private preloadedJwksExpiry = 0
 
     constructor(config: TokenValidatorConfig) {
         this.jwksUri = config.jwksUri
@@ -43,33 +50,55 @@ export class TokenValidator {
         this.audience = config.audience
         this.clockTolerance = config.clockTolerance ?? 60
         this.jwksCacheTtl = config.jwksCacheTtl ?? 3600
+        this.algorithms =
+            config.algorithms !== undefined && config.algorithms.length > 0
+                ? config.algorithms
+                : ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA']
 
         const issuerUrl = new URL(this.issuer)
-        const jwksUrl = new URL(this.jwksUri)
+        this.jwksUrl = new URL(this.jwksUri)
+        if (issuerUrl.username !== '' || issuerUrl.password !== '' || this.jwksUrl.username !== '' || this.jwksUrl.password !== '') {
+            throw new Error('Security Violation: Issuer and JWKS URLs must not include embedded credentials')
+        }
+        this.jwksHost = this.jwksUrl.hostname
 
         const isLoopback = (host: string): boolean =>
-            host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+            host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
 
-        if (issuerUrl.protocol !== 'https:' && !isLoopback(issuerUrl.hostname)) {
+        const isAllowedProtocol = (url: URL): boolean =>
+            url.protocol === 'https:' || (isLoopback(url.hostname) && url.protocol === 'http:')
+
+        if (!isAllowedProtocol(issuerUrl)) {
             throw new Error(
                 `Security Violation: Issuer must use HTTPS protocol (got ${this.issuer})`
             )
         }
 
-        if (jwksUrl.protocol !== 'https:' && !isLoopback(jwksUrl.hostname)) {
+        if (!isAllowedProtocol(this.jwksUrl)) {
             throw new Error(
                 `Security Violation: JWKS URI must use HTTPS protocol (got ${this.jwksUri})`
             )
         }
 
-        if (issuerUrl.origin !== jwksUrl.origin) {
+        if (issuerUrl.origin !== this.jwksUrl.origin) {
             throw new Error(
-                `Security Violation: JWKS URI origin (${jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`
+                `Security Violation: JWKS URI origin (${this.jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`
             )
         }
 
-        const issuerHost = new URL(this.issuer).hostname
-        logger.info(`Token Validator initialized for issuer: ${issuerHost}`, {
+        if (!isLoopback(issuerUrl.hostname) && isPrivateOrLoopbackAddress(issuerUrl.hostname)) {
+            throw new Error(
+                `Security Violation: SSRF Protection blocks private/loopback Issuer host (${issuerUrl.hostname})`
+            )
+        }
+
+        if (!isLoopback(this.jwksUrl.hostname) && isPrivateOrLoopbackAddress(this.jwksUrl.hostname)) {
+            throw new Error(
+                `Security Violation: SSRF Protection blocks private/loopback JWKS host (${this.jwksUrl.hostname})`
+            )
+        }
+
+        logger.info(`Token Validator initialized for issuer: ${issuerUrl.hostname}`, {
             module: 'AUTH',
             operation: 'init',
         })
@@ -87,20 +116,35 @@ export class TokenValidator {
             const jwks = this.getJwks()
 
             // Verify the token
-            const { payload } = await jose.jwtVerify(token, jwks, {
+            const { payload, protectedHeader } = await jose.jwtVerify(token, jwks, {
                 issuer: this.issuer,
                 audience: this.audience,
                 clockTolerance: this.clockTolerance,
-                algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA'],
+                algorithms: this.algorithms,
                 // jose only checks `exp` when it is present. Require it so a validly signed token
                 // without an expiry cannot become a permanent credential.
                 requiredClaims: ['exp'],
             })
 
+            if (protectedHeader.typ !== undefined) {
+                const normalizedTyp = protectedHeader.typ
+                    .trim()
+                    .toLowerCase()
+                    .replace(/^application\//, '')
+                if (normalizedTyp !== 'jwt' && normalizedTyp !== 'at+jwt') {
+                    throw new jose.errors.JWTClaimValidationFailed(
+                        `Unsupported JWT typ header: ${protectedHeader.typ}`,
+                        payload,
+                        'typ',
+                        'check_failed'
+                    )
+                }
+            }
+
             // Extract and normalize claims
             const claims = this.extractClaims(payload)
 
-            logger.info(`Token validated for subject: ${claims.sub}`, {
+            logger.debug(`Token validated for subject: ${claims.sub}`, {
                 module: 'AUTH',
                 operation: 'validate',
                 entityId: claims.sub,
@@ -123,25 +167,46 @@ export class TokenValidator {
         if (this.jwks && Date.now() < this.jwksExpiry) {
             return this.jwks
         }
+        if (this.preloadedJwksResponse !== null && Date.now() >= this.preloadedJwksExpiry) {
+            this.preloadedJwksResponse = null
+            this.preloadedJwksExpiry = 0
+        }
 
-        const jwksHost = (() => {
-            try {
-                return new URL(this.jwksUri).hostname
-            } catch {
-                return '[configured]'
-            }
-        })()
-        logger.info(`Fetching JWKS from: ${jwksHost}`, {
+        logger.info(`Fetching JWKS from: ${this.jwksHost || '[configured]'}`, {
             module: 'AUTH',
             operation: 'jwks-fetch',
         })
 
         try {
-            // Create JWKS remote key set
-            this.jwks = jose.createRemoteJWKSet(new URL(this.jwksUri), {
+            const pinnedFetch = createPinnedJwksFetch()
+            const jwksFetch: typeof fetch = async (input, init) => {
+                const cached = this.preloadedJwksResponse
+                if (cached !== null) {
+                    if (Date.now() >= this.preloadedJwksExpiry) {
+                        this.preloadedJwksResponse = null
+                        this.preloadedJwksExpiry = 0
+                    } else {
+                        const urlStr =
+                            typeof input === 'string'
+                                ? input
+                                : input instanceof URL
+                                  ? input.href
+                                  : input.url
+                        if (urlStr === this.jwksUrl.href || urlStr === this.jwksUri) {
+                            this.preloadedJwksResponse = null
+                            this.preloadedJwksExpiry = 0
+                            return cached
+                        }
+                    }
+                }
+                return pinnedFetch(input, init)
+            }
+            // Create JWKS remote key set with SSRF-pinned custom fetch
+            this.jwks = jose.createRemoteJWKSet(this.jwksUrl, {
                 cooldownDuration: 30000, // 30 seconds between retries
                 cacheMaxAge: this.jwksCacheTtl * 1000,
                 timeoutDuration: 5000, // Explicit 5s timeout to prevent socket hangs
+                [jose.customFetch]: jwksFetch,
             })
 
             this.jwksExpiry = Date.now() + this.jwksCacheTtl * 1000
@@ -192,8 +257,21 @@ export class TokenValidator {
             )
         }
 
+        const rawSub: unknown = payload.sub
+        const sub = typeof rawSub === 'string' ? rawSub.trim() : ''
+        if (sub.length === 0) {
+            throw new jose.errors.JWTClaimValidationFailed(
+                'missing required "sub" claim',
+                payload,
+                'sub',
+                'missing'
+            )
+        }
+
+        const { client_id: rawClientId, ...restPayload } = payload
         return {
-            sub: payload.sub ?? 'unknown',
+            ...restPayload,
+            sub,
             scopes,
             exp,
             iat: payload.iat ?? 0,
@@ -201,9 +279,7 @@ export class TokenValidator {
             aud: payload.aud,
             nbf: payload.nbf ?? undefined,
             jti: payload.jti,
-            client_id: payload['client_id'] as string | undefined,
-            // Include all other claims
-            ...payload,
+            ...(typeof rawClientId === 'string' ? { client_id: rawClientId } : {}),
         }
     }
 
@@ -285,6 +361,7 @@ export class TokenValidator {
     refreshJwks(): void {
         this.jwks = null
         this.jwksExpiry = 0
+        this.preloadedJwksResponse = null
         this.getJwks()
         logger.info('JWKS cache refreshed', { module: 'AUTH', operation: 'jwks-refresh' })
     }
@@ -295,6 +372,7 @@ export class TokenValidator {
     clearCache(): void {
         this.jwks = null
         this.jwksExpiry = 0
+        this.preloadedJwksResponse = null
         logger.info('Token validator cache cleared', { module: 'AUTH', operation: 'cache-clear' })
     }
 
@@ -333,14 +411,14 @@ export class TokenValidator {
         })
 
         try {
-            const response = await fetch(this.jwksUri, {
+            const jwksFetch = createPinnedJwksFetch()
+            this.preloadedJwksResponse = await jwksFetch(this.jwksUri, {
                 method: 'GET',
                 signal: AbortSignal.timeout(10000),
                 redirect: 'error',
             })
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`)
-            }
+            this.preloadedJwksExpiry = Date.now() + this.jwksCacheTtl * 1000
+            this.getJwks()
         } catch (error) {
             const cause = error instanceof Error ? error : new Error(String(error))
             logger.error('Failed to pre-fetch JWKS at startup', {

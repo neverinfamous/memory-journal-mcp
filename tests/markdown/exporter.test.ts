@@ -5,6 +5,7 @@ import {
     generateFilename,
 } from '../../src/markdown/exporter.js'
 import * as fs from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -12,6 +13,7 @@ import { join, resolve } from 'node:path'
 const mockHandle = {
     writeFile: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
+    stat: vi.fn().mockResolvedValue({ isFile: () => true }),
 }
 
 vi.mock('node:fs/promises', () => ({
@@ -71,8 +73,10 @@ describe('exportEntriesToMarkdown', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        vi.mocked(realpathSync.native).mockImplementation((p) => String(p))
         mockHandle.writeFile.mockResolvedValue(undefined)
         mockHandle.close.mockResolvedValue(undefined)
+        mockHandle.stat.mockResolvedValue({ isFile: () => true })
         vi.mocked(fs.open).mockResolvedValue(mockHandle as any)
         mockDb.getTagsForEntry.mockReturnValue([])
         mockDb.getRelationships.mockReturnValue([])
@@ -181,10 +185,13 @@ describe('exportEntriesToMarkdown', () => {
     })
 
     it('should abort if directory is swapped for a symlink during export (TOCTOU)', async () => {
-        const { realpathSync } = await import('node:fs')
-        vi.mocked(realpathSync.native)
-            .mockReturnValueOnce('/mock/safe/path') // preRealpath
-            .mockReturnValueOnce('/mock/unsafe/swapped/path') // postRealpath
+        let swapped = false
+        mockHandle.writeFile.mockImplementationOnce(async () => {
+            swapped = true
+        })
+        vi.mocked(realpathSync.native).mockImplementation((p) =>
+            swapped && String(p) === resolve('./export') ? '/mock/unsafe/swapped/path' : String(p)
+        )
 
         const entries = [
             {
@@ -197,5 +204,27 @@ describe('exportEntriesToMarkdown', () => {
         await expect(
             exportEntriesToMarkdown(entries as any, './export', mockDb as any, [process.cwd()])
         ).rejects.toThrow(/Directory swapped during export operation/)
+    })
+
+    it('should reject pre-existing file symlink before calling open (Windows O_NOFOLLOW fallback)', async () => {
+        vi.mocked(fs.lstat).mockResolvedValueOnce({
+            isSymbolicLink: () => true,
+            isFile: () => false,
+        } as never)
+
+        const entries = [
+            {
+                id: 99,
+                content: 'Symlink target test',
+                timestamp: '2026-11-19T06:00:00Z',
+                entryType: 'note',
+            },
+        ]
+        const result = await exportEntriesToMarkdown(entries as any, './export', mockDb as any, [
+            process.cwd(),
+        ])
+        expect(result.exported_count).toBe(0)
+        expect(result.skipped).toBe(1)
+        expect(fs.open).not.toHaveBeenCalled()
     })
 })

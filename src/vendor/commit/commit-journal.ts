@@ -1,0 +1,403 @@
+// @ts-nocheck
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import {
+  normalizeRegistryPath,
+  persistJournalEntryFile,
+  readNormalizedMemoryJournalRegistry,
+  resolveInProcessEntryModule,
+  resolveMemoryJournalCli,
+  tryCreateJournalEntryInProcess,
+  type NormalizedRegistryEntry,
+} from './commit-journal-bridge.js';
+import { cleanupPrivateTempDir, createPrivateTempFile, redactSensitiveText } from './commit-security.js';
+
+export {
+  resolveInProcessEntryModule,
+  resolveMemoryJournalCli,
+  tryCreateJournalEntryInProcess,
+};
+
+export const VALID_CATEGORIES = ['Added', 'Changed', 'Fixed', 'Removed', 'Security', 'Deprecated'] as const;
+export type CommitCategory = (typeof VALID_CATEGORIES)[number];
+
+const VALID_CATEGORY_SET: ReadonlySet<string> = new Set(VALID_CATEGORIES);
+
+export const TYPE_TO_CATEGORY: Record<string, CommitCategory> = {
+  feat: 'Added',
+  fix: 'Fixed',
+  perf: 'Changed',
+  refactor: 'Changed',
+  remove: 'Removed',
+  drop: 'Removed',
+  security: 'Security',
+  docs: 'Changed',
+  style: 'Changed',
+  test: 'Changed',
+  chore: 'Changed',
+};
+
+const HISTORY_CATEGORY_REGEX = /^([A-Za-z]+):\s*([\s\S]+)$/;
+const JOURNAL_PREFIX = 'journal-';
+
+export interface CommitRelationSpec {
+  targetId: number;
+  relationType: string;
+}
+
+export interface CommitJournalArgs {
+  impact: number;
+  confidence: number;
+  validation: 'passed' | 'none' | 'failed';
+  journal: boolean;
+  'journal-project'?: number | undefined;
+  'session-id'?: string | undefined;
+  tags?: string[] | undefined;
+  significance?: string | undefined;
+  relate?: CommitRelationSpec[] | undefined;
+  category?: CommitCategory | undefined;
+  'no-history': boolean;
+  'no-auto-link'?: boolean | undefined;
+  'dry-run-links'?: boolean | undefined;
+}
+
+export interface ResolvedJournalTarget {
+  workspaceId?: string;
+  projectNumber?: number;
+  conflictReason?: string;
+}
+
+export function capitalizeCategory(val: string): string {
+  return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+}
+
+export function isValidCategory(cat: string): cat is CommitCategory {
+  return VALID_CATEGORY_SET.has(cat);
+}
+
+function getCandidateRegistryPaths(cwd: string): string[] {
+  const logical = normalizeRegistryPath(cwd);
+  try {
+    const real = fs.realpathSync.native(cwd);
+    const canonical = normalizeRegistryPath(real);
+    return canonical !== logical ? [logical, canonical] : [logical];
+  } catch {
+    return [logical];
+  }
+}
+
+function findLongestRegistryPathMatch(
+  entries: readonly NormalizedRegistryEntry[],
+  candidatePaths: readonly string[]
+): { workspaceId: string; projectNumber?: number; matchLen: number } | undefined {
+  let best: { workspaceId: string; projectNumber?: number; matchLen: number } | undefined;
+  for (const entry of entries) {
+    const entryPaths =
+      entry.canonicalNormalizedPath !== undefined
+        ? [entry.normalizedPath, entry.canonicalNormalizedPath]
+        : [entry.normalizedPath];
+    for (const cwdPath of candidatePaths) {
+      for (const entryPath of entryPaths) {
+        const isMatch = cwdPath === entryPath || cwdPath.startsWith(`${entryPath}/`);
+        if (isMatch && (best === undefined || entryPath.length > best.matchLen)) {
+          best = {
+            workspaceId: entry.workspaceId,
+            ...(entry.projectNumber !== undefined ? { projectNumber: entry.projectNumber } : {}),
+            matchLen: entryPath.length,
+          };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function findWorkspacesByProjectNumber(
+  entries: readonly NormalizedRegistryEntry[],
+  projectNumber: number
+): string[] {
+  const matches: string[] = [];
+  for (const entry of entries) {
+    if (entry.projectNumber === projectNumber) {
+      matches.push(entry.workspaceId);
+    }
+  }
+  return matches;
+}
+
+const BOM_RE = /^\uFEFF/;
+const CRLF_RE = /\r\n/g;
+const CR_RE = /\r/g;
+const LINE_BREAK_RE = /[\r\n]/g;
+const COMMIT_SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+// [INTENT]: Resolves deterministic workspace_id and project_number from memory-journal.config.json projectRegistry so commit.ts --journal never falls back to keyword-alias matching.
+export function resolveJournalTarget(
+  cwd: string,
+  explicitProjectNumber?: number,
+  configPath?: string
+): ResolvedJournalTarget {
+  const result: ResolvedJournalTarget = {};
+  if (explicitProjectNumber !== undefined) {
+    result.projectNumber = explicitProjectNumber;
+  }
+
+  const entries = readNormalizedMemoryJournalRegistry(configPath);
+  if (entries === undefined) {
+    return result;
+  }
+
+  const bestPathMatch = findLongestRegistryPathMatch(entries, getCandidateRegistryPaths(cwd));
+  if (explicitProjectNumber !== undefined) {
+    if (bestPathMatch !== undefined && bestPathMatch.projectNumber === explicitProjectNumber) {
+      result.workspaceId = bestPathMatch.workspaceId;
+    } else if (bestPathMatch !== undefined) {
+      const registeredLabel = bestPathMatch.projectNumber !== undefined
+        ? `#${String(bestPathMatch.projectNumber)}`
+        : 'unassigned project';
+      const conflictReason = `--journal-project ${String(explicitProjectNumber)} conflicts with registered workspace '${bestPathMatch.workspaceId}' (${registeredLabel}). Refusing cross-workspace journal write.`;
+      result.workspaceId = bestPathMatch.workspaceId;
+      result.conflictReason = conflictReason;
+      console.warn(`⚠️ AUTONOMOUS HEALING: ${conflictReason}`);
+    } else {
+      const matchedWorkspaces = findWorkspacesByProjectNumber(entries, explicitProjectNumber);
+      if (matchedWorkspaces.length === 1) {
+        const onlyWorkspace = matchedWorkspaces[0];
+        if (onlyWorkspace !== undefined) {
+          result.workspaceId = onlyWorkspace;
+        }
+      } else if (matchedWorkspaces.length > 1) {
+        const conflictReason = `--journal-project ${String(explicitProjectNumber)} matches multiple registered workspaces (${matchedWorkspaces.join(', ')}). Refusing ambiguous journal write.`;
+        result.conflictReason = conflictReason;
+        console.warn(`⚠️ AUTONOMOUS HEALING: ${conflictReason}`);
+      }
+    }
+  } else if (bestPathMatch !== undefined) {
+    result.workspaceId = bestPathMatch.workspaceId;
+    if (bestPathMatch.projectNumber !== undefined) {
+      result.projectNumber = bestPathMatch.projectNumber;
+    }
+  }
+
+  return result;
+}
+
+export function parseCategory(history: string, type: string): { category: string; entry: string } {
+  const cleanHistory = history.replace(BOM_RE, '').replace(CRLF_RE, '\n').replace(CR_RE, '\n');
+  const categoryMatch = cleanHistory.match(HISTORY_CATEGORY_REGEX);
+
+  if (categoryMatch !== null) {
+    const matchedCat = categoryMatch[1] ?? '';
+    const entryBody = (categoryMatch[2] ?? '').trim();
+    const capitalizedMatch = capitalizeCategory(matchedCat);
+
+    if (isValidCategory(capitalizedMatch)) {
+      return { category: capitalizedMatch, entry: entryBody };
+    }
+
+    const lowerCat = matchedCat.toLowerCase();
+    const mapped = Object.hasOwn(TYPE_TO_CATEGORY, lowerCat) ? TYPE_TO_CATEGORY[lowerCat] : undefined;
+    if (mapped !== undefined) {
+      console.warn(`⚠️ AUTONOMOUS HEALING: Invalid history category '${matchedCat}' mapped to '${mapped}'.`);
+      return { category: mapped, entry: entryBody };
+    }
+
+    console.warn(`⚠️ AUTONOMOUS HEALING: Unrecognized history category '${matchedCat}'. Falling back to default category.`);
+    const fallbackCategory = (Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : undefined) ?? 'Changed';
+    return { category: fallbackCategory, entry: entryBody };
+  }
+
+  const category = (Object.hasOwn(TYPE_TO_CATEGORY, type) ? TYPE_TO_CATEGORY[type] : undefined) ?? 'Changed';
+  return { category, entry: cleanHistory.trim() };
+}
+
+export function generateHistoryEntry(
+  args: CommitJournalArgs,
+  type: string,
+  historyContent: string,
+  cwd?: string,
+  resolvedTarget?: ResolvedJournalTarget,
+  configPath?: string
+): string {
+  const parsedCategory = parseCategory(historyContent, type);
+  const category = args.category ?? parsedCategory.category;
+
+  let entry = parsedCategory.entry;
+
+  if (entry.length > 0) {
+    entry = entry
+      .replace(/\0/g, '')
+      .replace(CRLF_RE, '\n')
+      .replace(CR_RE, '\n')
+      .split('\n')
+      .map(line => line.trim() === '' ? '\u200B' : line)
+      .join('\n')
+      .replace(/\n/g, '\n  ');
+  }
+
+  let body = `\n\nHistory-Category: ${category}`;
+
+  if (entry.length > 0 || !args['no-history']) {
+    body += `\nHistory-Entry: ${entry}`;
+  }
+
+  if (args.significance !== undefined && args.significance.length > 0) {
+    const safeSig = args.significance.replace(/\0/g, '').replace(LINE_BREAK_RE, ' ').trim();
+    if (safeSig.length > 0) {
+      body += `\nHistory-Significance: ${safeSig}`;
+    }
+  }
+  body += `\nHistory-Impact: ${args.impact}`;
+  body += `\nHistory-Confidence: ${args.confidence}`;
+  body += `\nHistory-Validation: ${args.validation}`;
+  if (args.journal) {
+    body += `\nHistory-Journal: true`;
+    const effectiveTarget =
+      resolvedTarget ?? (cwd !== undefined ? resolveJournalTarget(cwd, args['journal-project'], configPath) : undefined);
+    const journalProject =
+      effectiveTarget?.conflictReason !== undefined
+        ? undefined
+        : args['journal-project'] ?? effectiveTarget?.projectNumber;
+    if (journalProject !== undefined) {
+      body += `\nHistory-Journal-Project: ${journalProject}`;
+    }
+  }
+
+  return body;
+}
+
+export function extractCommittedFiles(sha: string, cwd: string, limit = 25): string[] {
+  if (!COMMIT_SHA_RE.test(sha) || fs.statSync(cwd, { throwIfNoEntry: false }) === undefined) {
+    return [];
+  }
+  try {
+    const out = execFileSync(
+      'git',
+      ['diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '-z', sha],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+    );
+    return out
+      .split('\0')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(0, limit);
+  } catch (err: unknown) {
+    console.warn(`⚠️ Failed to extract committed files for ${sha.slice(0, 7)}: ${redactSensitiveText(err instanceof Error ? err.message : String(err))}`);
+    return [];
+  }
+}
+
+export function buildCommitJournalContent(
+  sha: string,
+  header: string,
+  args: CommitJournalArgs,
+  historyContent: string,
+  cwd: string,
+  configPath?: string,
+  committedFiles?: readonly string[],
+  resolvedTarget?: ResolvedJournalTarget
+): string {
+  const resolved = resolvedTarget ?? resolveJournalTarget(cwd, args['journal-project'], configPath);
+  const mergedTags = Array.from(new Set(['commit-narrative', ...(args.tags ?? [])]));
+  const changedFiles =
+    committedFiles !== undefined && committedFiles.length > 0
+      ? committedFiles.slice(0, 25)
+      : extractCommittedFiles(sha, cwd);
+  const frontmatterLines = [
+    '---',
+    'type: "technical_note"',
+    `tags: ${JSON.stringify(mergedTags)}`,
+  ];
+
+  if (resolved.workspaceId !== undefined && resolved.workspaceId.length > 0) {
+    frontmatterLines.push(`workspace_id: ${JSON.stringify(resolved.workspaceId)}`);
+  }
+  if (resolved.projectNumber !== undefined) {
+    frontmatterLines.push(`project: ${resolved.projectNumber}`);
+  }
+  if (args['session-id'] !== undefined && args['session-id'].length > 0) {
+    frontmatterLines.push(`session_id: ${JSON.stringify(args['session-id'])}`);
+  }
+  if (args.significance !== undefined && args.significance.length > 0) {
+    frontmatterLines.push(`significance_type: ${JSON.stringify(args.significance)}`);
+  }
+  if (args.relate !== undefined && args.relate.length > 0) {
+    frontmatterLines.push(`relationships: ${JSON.stringify(args.relate)}`);
+  }
+  if (changedFiles.length > 0) {
+    frontmatterLines.push(`anchors: ${JSON.stringify(changedFiles)}`);
+  }
+
+  frontmatterLines.push(`impact: ${args.impact}`);
+  frontmatterLines.push(`trust: ${args.confidence}`);
+  frontmatterLines.push(`validation_status: ${JSON.stringify(args.validation)}`);
+  if (args['no-auto-link'] !== true) {
+    frontmatterLines.push('auto_link: true');
+  }
+
+  frontmatterLines.push('auto_context:');
+  frontmatterLines.push('  type: "session-commits"');
+  frontmatterLines.push(`  commits: [${JSON.stringify(sha)}]`);
+  frontmatterLines.push('---');
+
+  const journalBody = historyContent.trim().length > 0 ? historyContent : header;
+  return `${frontmatterLines.join('\n')}\n${journalBody}\n\nCommit: ${sha}`;
+}
+
+export async function createJournalEntry(
+  sha: string,
+  header: string,
+  args: CommitJournalArgs,
+  historyContent: string,
+  cwd: string,
+  formatError: (error: unknown) => string,
+  committedFiles?: readonly string[],
+  resolvedTarget?: ResolvedJournalTarget,
+  configPath?: string
+): Promise<void> {
+  if (!args.journal) {
+    const ignoredFlags: string[] = [];
+    if (args['dry-run-links'] === true) ignoredFlags.push('--dry-run-links');
+    if (args.relate !== undefined && args.relate.length > 0) ignoredFlags.push('--relate');
+    if (args.tags !== undefined && args.tags.length > 0) ignoredFlags.push('--tags');
+    if (args['session-id'] !== undefined && args['session-id'].length > 0) ignoredFlags.push('--session-id');
+    if (args['no-auto-link'] === true) ignoredFlags.push('--no-auto-link');
+    if (ignoredFlags.length > 0) {
+      console.warn(
+        `⚠️ AUTONOMOUS HEALING: Journal-only flag(s) (${ignoredFlags.join(', ')}) ignored without --journal. Pass --journal to record a journal entry.`
+      );
+    }
+    return;
+  }
+
+  console.log(`\n📓 Creating automated journal entry for ${sha}...`);
+  try {
+    const resolved = resolvedTarget ?? resolveJournalTarget(cwd, args['journal-project'], configPath);
+    if (resolved.conflictReason !== undefined) {
+      throw new Error(resolved.conflictReason);
+    }
+    const journalContent = buildCommitJournalContent(
+      sha,
+      header,
+      args,
+      historyContent,
+      cwd,
+      configPath,
+      committedFiles,
+      resolved
+    );
+    const { dirPath: journalDir, filePath: journalFile } = createPrivateTempFile(
+      JOURNAL_PREFIX,
+      `${sha.slice(0, 12)}.md`,
+      journalContent
+    );
+
+    try {
+      await persistJournalEntryFile(journalFile, cwd, args['dry-run-links'], configPath);
+    } finally {
+      cleanupPrivateTempDir(journalDir);
+    }
+  } catch (e: unknown) {
+    console.error(`\n⚠️ Failed to create journal entry: ${formatError(e)}`);
+  }
+}

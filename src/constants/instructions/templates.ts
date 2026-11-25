@@ -1,8 +1,8 @@
 export const TEMPLATES_HELP = `# Content Templates
 
-These templates define the REQUIRED structure for journal entry content by type. Do NOT invent additional top-level sections. Do NOT omit required sections.
+The \`Session Summary\` 4-section H2 structure below is schema-enforced when tag \`session-summary\` (\`entry_type: "retrospective"\`) is set. All other templates represent recommended conventions by \`entry_type\`.
 
-## Session Summary (entry\\_type: "retrospective", tag: "session-summary")
+## Session Summary (entry_type: "retrospective", tag: "session-summary")
 
 \`\`\`
 ## Accomplished
@@ -19,11 +19,24 @@ These templates define the REQUIRED structure for journal entry content by type.
 - \`<sha>\` — [Brief commit summary or "None"]
 \`\`\`
 
-Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes").
+Do NOT add extra top-level H2 sections (no "## Summary", "## Overview", "## Notes").
 Do NOT omit any of the four required sections.
-Always remember to populate the \`auto_context\` payload parameter with the session's commit SHAs.
+Include \`auto_context: { commits: ["<sha>"] }\` when commits were made during the session; omit \`auto_context\` on zero-commit sessions.
 
-## Feature Implementation (entry\\_type: "feature\\_implementation")
+## Project Decision (entry_type: "project_decision", significance_type: "architecture" | "decision")
+
+\`\`\`
+## Context
+[Problem statement, constraints, and alternatives considered]
+
+## Decision
+- [Chosen architecture or pattern and why]
+
+## Consequences
+- [Tradeoffs, invariants, and superseded entries via \`evolves_from\` / \`resolved\`]
+\`\`\`
+
+## Feature Implementation (entry_type: "feature_implementation")
 
 \`\`\`
 ## Summary
@@ -39,7 +52,7 @@ Always remember to populate the \`auto_context\` payload parameter with the sess
 - [Any gotchas, follow-ups, or related entries]
 \`\`\`
 
-## Bug Fix (entry\\_type: "bug\\_fix")
+## Bug Fix (entry_type: "bug_fix")
 
 \`\`\`
 ## Problem
@@ -55,7 +68,7 @@ Always remember to populate the \`auto_context\` payload parameter with the sess
 - [How the fix was verified]
 \`\`\`
 
-## Planning (entry\\_type: "planning")
+## Planning (entry_type: "planning")
 
 \`\`\`
 ## Goal
@@ -68,7 +81,7 @@ Always remember to populate the \`auto_context\` payload parameter with the sess
 - [Unresolved decisions or dependencies]
 \`\`\`
 
-## Technical Note (entry\\_type: "technical\\_note")
+## Technical Note (entry_type: "technical_note")
 
 \`\`\`
 ## Topic

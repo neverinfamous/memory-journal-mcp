@@ -1,21 +1,48 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'tsup'
 
-export default defineConfig({
-    entry: {
-        index: 'src/index.ts',
-        cli: 'src/cli/index.ts',
-        'cli/index': 'src/cli/index.ts',
-        'worker-script': 'src/codemode/worker-script.ts',
-    },
-    format: ['esm'],
+const pkgJson = JSON.parse(
+    readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+) as { version: string; dependencies: Record<string, string> }
+
+const sharedOptions = {
+    format: ['esm'] as ('esm')[],
+    platform: 'node' as const,
     dts: false,
-    clean: false,
-    treeshake: true,
-    splitting: true,
+    // [INTENT] esbuild performs native ESM tree-shaking; disabling tsup's secondary
+    // Rollup pass avoids spurious UNUSED_EXTERNAL_IMPORT warnings on split vendor chunks.
+    treeshake: false,
     sourcemap: false,
     minify: false,
     outDir: 'dist',
-    target: 'es2022',
+    target: 'es2022' as const,
     tsconfig: 'tsconfig.build.json',
-    external: ['better-sqlite3', 'sqlite-vec', '@huggingface/transformers'],
-})
+    define: {
+        __MJ_PACKAGE_VERSION__: JSON.stringify(pkgJson.version),
+    },
+}
+
+export default defineConfig([
+    {
+        ...sharedOptions,
+        entry: {
+            index: 'src/index.ts',
+            cli: 'src/cli/index.ts',
+            'cli/index': 'src/cli/index.ts',
+            'cli/commands/entry': 'src/cli/commands/entry.ts',
+            'vendor/commit/commit': 'src/vendor/commit/commit.ts',
+        },
+        clean: false,
+        splitting: true,
+        external: Object.keys(pkgJson.dependencies),
+    },
+    {
+        ...sharedOptions,
+        entry: {
+            'worker-script': 'src/codemode/worker-script.ts',
+        },
+        clean: false,
+        splitting: false,
+        external: [],
+    },
+])

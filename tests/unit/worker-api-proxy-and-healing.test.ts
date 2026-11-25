@@ -68,9 +68,10 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         }
         expect(await createFn.schema()).toBe('{ content: string }')
 
-        // Callable group invokes primary method (create_entry)
+        // Calling a group as a function is rejected instead of dispatching the first method
         const callableRes = (await core('Callable content')) as Record<string, unknown>
-        expect(callableRes['method']).toBe('create_entry')
+        expect(callableRes['success']).toBe(false)
+        expect(callableRes['code']).toBe('VALIDATION_ERROR')
 
         // Empty group callable returns validation error
         const emptyCallable = mj['emptyGroup'] as (...a: unknown[]) => Promise<Record<string, unknown>>
@@ -109,9 +110,13 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         )
         expect(rrRes['error']).toContain('mj.core.getRecentEntries()')
 
-        // Team prefix routing & cross-group routing from core
+        // Team prefix routing & cross-group routing from core (blocked across namespaces)
         const teamRouted = core['customOnly'] as () => Promise<Record<string, unknown>>
-        expect((await teamRouted())['method']).toBe('team_custom_only')
+        expect((await teamRouted())['success']).toBe(false)
+        const explicitTeam = (
+            mj['team'] as Record<string, () => Promise<Record<string, unknown>>>
+        )['customOnly']!
+        expect((await explicitTeam())['method']).toBe('team_custom_only')
 
         const crossRouted = core['searchEntries'] as (p: unknown) => Promise<Record<string, unknown>>
         expect((await crossRouted({ query: 'hi' }))['method']).toBe('search_entries')
@@ -154,7 +159,7 @@ describe('Worker API Proxy (buildApiProxy)', () => {
 
         // Schema proxy
         const schema = mj['schema'] as Record<string, unknown> & (() => Promise<Record<string, unknown>>)
-        expect((await schema())['method']).toBe('get_statistics')
+        expect((await schema())['group']).toBe('schema')
         expect(((await (schema['help'] as () => Promise<Record<string, unknown>>)())['tables'] as string[]).length).toBeGreaterThan(0)
         expect(((await (schema['listTables'] as () => Promise<Record<string, unknown>>)())['tables'] as string[])).toContain('memory_journal')
         expect(schema['tables']).toContain('memory_journal')
@@ -171,19 +176,23 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         expect((await projects['register']!({ name: 'p' }))['method']).toBe('register_project')
         expect((await projects['update']!({ name: 'p' }))['method']).toBe('update_project')
         expect((await projects['delete']!({ name: 'p' }))['method']).toBe('delete_project')
-        expect((await projects['dynamicListAll']!())['method']).toBe('list_projects')
-        expect((await projects['dynamicFindOne']!('p'))['method']).toBe('get_project')
-        expect((await projects['dynamicAddProj']!({}))['method']).toBe('register_project')
-        expect((await projects['dynamicEditProj']!({}))['method']).toBe('update_project')
-        expect((await projects['dynamicRemoveProj']!({}))['method']).toBe('delete_project')
+        expect((await projects['getProjects']!())['method']).toBe('list_projects')
+        expect((await projects['deleteAll']!())['method']).toBe('delete_project')
+        expect(projects['dynamicListAll']).toBeUndefined()
+        expect(projects['dynamicFindOne']).toBeUndefined()
+        expect(projects['dynamicAddProj']).toBeUndefined()
+        expect(projects['dynamicEditProj']).toBeUndefined()
+        expect(projects['dynamicRemoveProj']).toBeUndefined()
 
         // Tags proxy
         const tags = mj['tags'] as Record<string, (...a: unknown[]) => Promise<Record<string, unknown>>> &
             (() => Promise<Record<string, unknown>>)
         expect((await tags())['method']).toBe('list_tags')
         expect((await tags['merge']!({ source_tag: 'a', target_tag: 'b' }))['method']).toBe('merge_tags')
-        expect((await tags['dynamicMerge']!({ source_tag: 'a', target_tag: 'b' }))['method']).toBe('merge_tags')
-        expect((await tags['dynamicSearchTags']!())['method']).toBe('list_tags')
+        expect((await tags['mergeTags']!({ source_tag: 'a', target_tag: 'b' }))['method']).toBe('merge_tags')
+        expect((await tags['search']!())['method']).toBe('list_tags')
+        expect(tags['dynamicMerge']).toBeUndefined()
+        expect(tags['dynamicSearchTags']).toBeUndefined()
 
         // System proxy
         const sys = mj['system'] as Record<string, () => Promise<Record<string, unknown>>> &
@@ -191,7 +200,8 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         expect((await sys())['method']).toBe('get_statistics')
         expect((await sys['ping']!())['status']).toBe('pong')
         expect((await sys['version']!())['name']).toBe('memory-journal-mcp')
-        expect((await sys['customSysCheck']!())['method']).toBe('get_statistics')
+        expect((await sys['check']!())['method']).toBe('get_statistics')
+        expect(sys['customSysCheck']).toBeUndefined()
 
         // Context proxy
         const ctx = mj['context'] as Record<string, unknown> & ((k?: string) => Promise< unknown>)
@@ -212,10 +222,16 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         expect(new getClient()['core'] === mj['core']).toBe(true)
         expect(getClient['core'] === mj['core']).toBe(true)
 
-        // Top-level alias, team routing, and cross-group routing
+        // Top-level alias, explicit team routing isolation, and cross-group routing
         expect(((await (mj['recent'] as () => Promise<Record<string, unknown>>)?.()) ?? {})).toBeDefined()
         const topTeam = mj['onlyFunc'] as () => Promise<Record<string, unknown>>
-        expect((await topTeam())['method']).toBe('team_only_func')
+        expect((await topTeam())['success']).toBe(false)
+        const topTeamPrefixed = mj['team_only_func'] as () => Promise<Record<string, unknown>>
+        expect((await topTeamPrefixed())['method']).toBe('team_only_func')
+        const namespacedTeamFn = (
+            mj['team'] as Record<string, () => Promise<Record<string, unknown>>>
+        )['onlyFunc']!
+        expect((await namespacedTeamFn())['method']).toBe('team_only_func')
         const topCross = mj['updateConfiguration'] as (p: unknown) => Promise<Record<string, unknown>>
         expect((await topCross({ tool_filter: 'core' }))['method']).toBe('update_configuration')
 
@@ -319,7 +335,7 @@ describe('Dummy Healing Tools (getDummyHealingTools & searchDirectory)', () => {
             ]
         ).toBeDefined()
         expect(
-            ((await findTool('get_entry_by_id').handler({ entry_id: 1 })) as Record<string, unknown>)[
+            ((await findTool('get_entry_by_id').handler({ entry_id: 1, workspace_id: 'ws-1' })) as Record<string, unknown>)[
                 'entry'
             ]
         ).toBeDefined()

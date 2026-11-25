@@ -1,7 +1,11 @@
 import fs from 'fs';
 
-const ssot = fs.readFileSync('C:\\Users\\chris\\.gemini\\antigravity\\brain\\daf6d3e9-c680-4057-b48b-fb7ea3b403bd\\scratch\\ssot-mapping.md', 'utf8');
-const toolMap = JSON.parse(fs.readFileSync('c:\\Users\\chris\\Desktop\\memory-journal-mcp\\test-server\\scripts\\tool-map.json', 'utf8'));
+const ssotPath = process.argv[2] ?? process.env['SSOT_MAPPING_PATH'];
+if (!ssotPath) {
+  throw new Error('Provide the SSoT mapping file path as argv[2] or SSOT_MAPPING_PATH');
+}
+const ssot = fs.readFileSync(ssotPath, 'utf8');
+const toolMap = JSON.parse(fs.readFileSync(new URL('./tool-map.json', import.meta.url), 'utf8'));
 
 const ssotTools = new Set();
 for (const line of ssot.split('\n')) {

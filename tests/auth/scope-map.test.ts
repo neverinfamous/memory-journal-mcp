@@ -62,8 +62,10 @@ describe('scope-map', () => {
                     // team_import_markdown now requires team scope (SEC-1.3)
                     if (tool === 'import_markdown') {
                         expected = 'write'
-                    } else if (tool === 'team_import_markdown') {
+                    } else if (tool === 'team_import_markdown' || tool === 'cross_team_search') {
                         expected = 'team'
+                    } else if (tool === 'search_audit_log') {
+                        expected = 'audit'
                     } else if (
                         [
                             'create_entry',
@@ -72,10 +74,27 @@ describe('scope-map', () => {
                             'export_markdown',
                             'import_external',
                             'mark_anchors_stale',
-                            'verify_entry',
+                            'check_entry_staleness',
                         ].includes(tool)
                     ) {
                         expected = 'write'
+                    } else if (
+                        [
+                            'team_add_member',
+                            'team_remove_member',
+                            'team_update_member_role',
+                            'team_backup',
+                            'team_merge_tags',
+                            'team_rebuild_vector_index',
+                            'team_export_markdown',
+                            'team_add_author_alias',
+                            'team_remove_author_alias',
+                            'team_list_author_aliases',
+                            'team_resolve_author',
+                            'team_consolidate_authors',
+                        ].includes(tool)
+                    ) {
+                        expected = 'admin'
                     } else if (
                         [
                             'list_projects',

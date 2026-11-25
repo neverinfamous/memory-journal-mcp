@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
 import { parseArgs } from 'node:util'
 
@@ -7,61 +7,177 @@ const { values } = parseArgs({
     options: {
         in: { type: 'string' },
         out: { type: 'string' },
-        key: { type: 'string' },
     },
 })
 
 const inPath = values.in
 const outPath = values.out
-const key = values.key || process.env['DB_ENCRYPTION_KEY']
+const key = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
 
 if (!inPath || !outPath || !key) {
-    console.error('Usage: npm run encrypt-db -- --in <plaintext.db> --out <encrypted.db> [--key <secret>]')
-    console.error('If --key is omitted, DB_ENCRYPTION_KEY environment variable will be used.')
+    console.error('Usage: DB_ENCRYPTION_KEY=<secret> npm run encrypt-db -- --in <plaintext.db> --out <encrypted.db>')
+    console.error('Set MJ_DB_ENCRYPTION_KEY or DB_ENCRYPTION_KEY in the environment (CLI --key flag disabled to prevent process-table exposure).')
+    process.exit(1)
+}
+if (key.includes('\0')) {
+    console.error('Invalid encryption key: NUL bytes are not allowed.')
     process.exit(1)
 }
 
-if (!fs.existsSync(inPath)) {
+const inStat = fs.lstatSync(inPath, { throwIfNoEntry: false })
+if (inStat === undefined) {
     console.error(`Input database not found: ${inPath}`)
     process.exit(1)
 }
+if (inStat.isSymbolicLink() || !inStat.isFile()) {
+    console.error(`Refusing symlink or non-regular input database: ${inPath}`)
+    process.exit(1)
+}
 
-if (fs.existsSync(outPath)) {
-    console.error(`Output database already exists: ${outPath}`)
+const outStat = fs.lstatSync(outPath, { throwIfNoEntry: false })
+if (outStat !== undefined) {
+    console.error(`Output database already exists (or is a symlink): ${outPath}`)
     process.exit(1)
 }
 
 console.log(`Encrypting ${inPath} -> ${outPath}...`)
 
-try {
-    // SQLite3 Multiple Ciphers uses PRAGMA rekey for in-place encryption
-    // So we copy the database, open the copy, and apply the rekey PRAGMA.
-    fs.copyFileSync(inPath, outPath)
-    
-    const db = new Database(outPath)
-    
-    // Perform the encryption in-place on the copy
-    if (key.startsWith("x'") && key.endsWith("'")) {
-        db.pragma(`rekey = "${key}"`)
+const SQLITE_PLAIN_HEADER = 'SQLite format 3\u0000'
+
+function applyKey(db: Database.Database, pragma: 'key' | 'rekey', secret: string): void {
+    if (secret.startsWith("x'") || secret.startsWith("X'")) {
+        if (!/^x'(?:[0-9a-fA-F]{2})+'$/i.test(secret)) {
+            throw new Error("Invalid hex encryption key: expected x'<even hex digits>'")
+        }
+        db.pragma(`${pragma} = ${secret}`)
     } else {
-        db.pragma(`rekey = '${key}'`)
+        db.pragma(`${pragma} = '${secret.replace(/'/g, "''")}'`)
     }
-    
-    // Close to save
-    db.close()
-    
-    console.log('✅ Database encrypted successfully.')
-    console.log(`To use it, start the server with DB_ENCRYPTION_KEY=${key}`)
+}
+
+function sanitizeScriptError(err: unknown, secret?: string): string {
+    const raw = err instanceof Error ? err.message : String(err)
+    let safe = raw
+        .replace(/x'[0-9a-fA-F]*'/gi, "x'[REDACTED]'")
+        .replace(/(pragma\s+(?:re)?key\s*=\s*)(?:"(?:[^"]|"")*"|'(?:[^']|'')*')/gi, "$1'[REDACTED]'")
+    if (secret !== undefined && secret.length > 0) {
+        safe = safe.replaceAll(secret, '[REDACTED]')
+        const escaped = secret.replace(/'/g, "''")
+        if (escaped !== secret) {
+            safe = safe.replaceAll(escaped, '[REDACTED]')
+        }
+    }
+    return safe
+}
+
+const tmpPath = `${outPath}.tmp-${String(process.pid)}-${crypto.randomBytes(6).toString('hex')}`
+
+function copyPlaintextSecurely(srcPath: string, destPath: string): void {
+    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0)
+    const dstFd = fs.openSync(destPath, flags, 0o600)
+    let srcFd: number | undefined
+    const buf = Buffer.allocUnsafe(64 * 1024)
+    try {
+        const srcFlags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)
+        srcFd = fs.openSync(srcPath, srcFlags)
+        for (;;) {
+            const bytesRead = fs.readSync(srcFd, buf, 0, buf.length, null)
+            if (bytesRead === 0) break
+            let offset = 0
+            while (offset < bytesRead) {
+                offset += fs.writeSync(dstFd, buf, offset, bytesRead - offset)
+            }
+        }
+    } finally {
+        if (srcFd !== undefined) fs.closeSync(srcFd)
+        fs.closeSync(dstFd)
+    }
+}
+
+function removeIfExists(filePath: string): void {
+    if (!fs.existsSync(filePath)) return
+    try {
+        fs.unlinkSync(filePath)
+    } catch (e) {
+        console.warn(`Warning: Failed to clean up temporary file ${filePath}: ${sanitizeScriptError(e, key)}`)
+    }
+}
+
+let renamedToOut = false
+try {
+    // [INVARIANT] Fold pending WAL frames into the main file first; copying only the .db would silently drop them.
+    const source = new Database(inPath, { fileMustExist: true })
+    try {
+        source.pragma('busy_timeout = 5000')
+        const ckpt = source.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy?: number }>
+        if (!Array.isArray(ckpt) || ckpt.length === 0 || ckpt[0]?.busy !== 0) {
+            throw new Error(
+                'Source database has active WAL locks (wal_checkpoint failed or busy != 0); retry when idle.'
+            )
+        }
+    } finally {
+        source.close()
+    }
+
+    // SQLite3 Multiple Ciphers uses PRAGMA rekey for in-place encryption
+    // Stage into an exclusively created temp file with 0600 mode and swap atomically only after verification.
+    copyPlaintextSecurely(inPath, tmpPath)
+
+    const db = new Database(tmpPath)
+    try {
+        // [INVARIANT] rekey is unsupported in WAL mode; switch the copy to rollback journaling.
+        db.pragma('journal_mode = DELETE')
+        applyKey(db, 'rekey', key)
+    } finally {
+        db.close()
+    }
+
+    // Verify: the header must no longer be plaintext, and the key must open & pass integrity_check.
+    const header = Buffer.alloc(16)
+    const fd = fs.openSync(tmpPath, 'r')
+    try {
+        fs.readSync(fd, header, 0, 16, 0)
+    } finally {
+        fs.closeSync(fd)
+    }
+    if (header.toString('latin1') === SQLITE_PLAIN_HEADER) {
+        throw new Error('PRAGMA rekey had no effect: output still has a plaintext SQLite header (is SQLite3 Multiple Ciphers loaded?).')
+    }
+    const verify = new Database(tmpPath, { fileMustExist: true })
+    try {
+        applyKey(verify, 'key', key)
+        const integrity = verify.pragma('integrity_check', { simple: true })
+        if (integrity !== 'ok') {
+            throw new Error(`Encrypted database integrity check failed: ${String(integrity)}`)
+        }
+        const fkViolations = verify.pragma('foreign_key_check') as unknown[]
+        if (fkViolations.length > 0) {
+            throw new Error(
+                `Encrypted database foreign_key_check failed with ${String(fkViolations.length)} violation(s)`
+            )
+        }
+    } finally {
+        verify.close()
+    }
+
+    fs.renameSync(tmpPath, outPath)
+    renamedToOut = true
+    try {
+        fs.chmodSync(outPath, 0o600)
+    } catch {
+        // chmod 0600 is best-effort on Windows filesystems
+    }
+
+    console.log('✅ Database encrypted and verified successfully.')
+    console.log('To use it, start the server with DB_ENCRYPTION_KEY=<your-key>')
     console.log(`and point the database configuration to ${outPath}.`)
 } catch (error) {
-    console.error('❌ Failed to encrypt database:', error)
-    if (fs.existsSync(outPath)) {
-        try {
-            fs.unlinkSync(outPath)
-            console.log(`Cleaned up partial output file: ${outPath}`)
-        } catch (e) {
-            // ignore
-        }
+    console.error('❌ Failed to encrypt database:', sanitizeScriptError(error, key))
+    removeIfExists(tmpPath)
+    removeIfExists(`${tmpPath}-wal`)
+    removeIfExists(`${tmpPath}-shm`)
+    if (renamedToOut) {
+        removeIfExists(outPath)
     }
     process.exit(1)
 }

@@ -95,40 +95,40 @@ describe('SQLite Database Extended Operations', () => {
             expect(db.resolveAuthors([]).size).toBe(0)
 
             // Self-alias throws
-            expect(() => db.addAuthorAlias('Chris', 'chris')).toThrow(/themselves/i)
+            expect(() => db.addAuthorAlias('Alex', 'alex')).toThrow(/themselves/i)
 
             // Add aliases
-            const alias1 = db.addAuthorAlias('chris-laptop', 'chris-canonical', 'admin')
-            expect(alias1.alias).toBe('chris-laptop')
-            expect(alias1.canonicalAuthor).toBe('chris-canonical')
+            const alias1 = db.addAuthorAlias('alex-laptop', 'alex-canonical', 'admin')
+            expect(alias1.alias).toBe('alex-laptop')
+            expect(alias1.canonicalAuthor).toBe('alex-canonical')
 
-            db.addAuthorAlias('chris-ci', 'chris-canonical')
+            db.addAuthorAlias('alex-ci', 'alex-canonical')
 
             // Duplicate alias throws
-            expect(() => db.addAuthorAlias('chris-laptop', 'other')).toThrow(/already exists/i)
+            expect(() => db.addAuthorAlias('alex-laptop', 'other')).toThrow(/already exists/i)
 
             // List all and filtered by canonicalAuthor
             expect(db.listAuthorAliases().length).toBe(2)
-            expect(db.listAuthorAliases('chris-canonical').length).toBe(2)
+            expect(db.listAuthorAliases('alex-canonical').length).toBe(2)
             expect(db.listAuthorAliases('nobody').length).toBe(0)
 
             // Resolve single and batch
-            expect(db.resolveAuthor('CHRIS-LAPTOP')).toBe('chris-canonical')
-            const batchMap = db.resolveAuthors(['CHRIS-LAPTOP', 'unmapped-user'])
-            expect(batchMap.get('CHRIS-LAPTOP')).toBe('chris-canonical')
+            expect(db.resolveAuthor('ALEX-LAPTOP')).toBe('alex-canonical')
+            const batchMap = db.resolveAuthors(['ALEX-LAPTOP', 'unmapped-user'])
+            expect(batchMap.get('ALEX-LAPTOP')).toBe('alex-canonical')
             expect(batchMap.get('unmapped-user')).toBe('unmapped-user')
 
             // Create entries with alias author and consolidate
             db.createEntry({
                 content: 'Entry from laptop alias',
-                author: 'chris-laptop',
+                author: 'alex-laptop',
             })
-            const consolidated = db.consolidateAuthors('chris-canonical')
+            const consolidated = db.consolidateAuthors('alex-canonical')
             expect(consolidated).toBe(1)
 
             // Remove alias
             expect(db.removeAuthorAlias('nonexistent')).toBe(false)
-            expect(db.removeAuthorAlias('chris-laptop')).toBe(true)
+            expect(db.removeAuthorAlias('alex-laptop')).toBe(true)
         })
     })
 
@@ -136,7 +136,7 @@ describe('SQLite Database Extended Operations', () => {
         it('should compute single and batch importance scores with relationships and anchors', () => {
             // Nonexistent entry returns 0
             const missingImp = db.calculateImportance(999999)
-            expect(missingImp.score).toBe(0)
+            expect(missingImp).toBeNull()
 
             // Empty batch returns empty map
             expect(db.getEntriesByIdsWithImportance([]).size).toBe(0)
@@ -149,6 +149,7 @@ describe('SQLite Database Extended Operations', () => {
                 impactScore: 0.9,
                 trustScore: 0.9,
                 validationStatus: 'passed',
+                workspaceId: 'my-registered-project',
                 projectNumber: 77,
                 anchors: [{ anchorPath: 'src/index.ts', anchorType: 'file' }],
             })
@@ -158,20 +159,25 @@ describe('SQLite Database Extended Operations', () => {
                 impactScore: 0.4,
                 trustScore: 0.5,
                 validationStatus: 'failed',
+                workspaceId: 'default',
                 projectNumber: 88,
                 issueUrl: 'https://github.com/owner/fallback-repo/issues/12',
             })
 
-            db.linkEntries(e2.id, e1.id, 'caused', 'Caused by decision')
-            db.linkEntries(e1.id, e2.id, 'resolved', 'Resolved issue')
+            db.linkEntries(e2.id, e1.id, 'caused', 'Caused by decision', '*')
+            db.linkEntries(e1.id, e2.id, 'resolved', 'Resolved issue', '*')
 
             // Verify anchors were inserted and update anchor status
-            const anchors = db.getAnchorsByEntryId(e1.id)
+            const anchors = db.getAnchorsByEntryId(e1.id, 'my-registered-project')
             expect(anchors.length).toBe(1)
             expect(anchors[0]?.anchorPath).toBe('src/index.ts')
 
-            // Calculate importance with pending anchor
-            const impPending = db.calculateImportance(e1.id)
+            // Cross-workspace peers do not inflate scoped single-entry importance (H4)
+            const impScoped = db.calculateImportance(e1.id, 'my-registered-project')
+            expect(impScoped?.breakdown.relationships).toBe(0)
+
+            // Calculate importance with pending anchor across global scope '*'
+            const impPending = db.calculateImportance(e1.id, '*')
             expect(impPending.score).toBeGreaterThan(0)
             expect(impPending.breakdown.significance).toBeGreaterThan(0)
             expect(impPending.breakdown.relationships).toBeGreaterThan(0)
@@ -179,23 +185,23 @@ describe('SQLite Database Extended Operations', () => {
 
             // Update anchor status to stale (rank 2 -> 0.8x) and invalidated (rank 1 -> 0.1x)
             if (anchors[0]) {
-                db.updateAnchorStatus(anchors[0].id, 'stale')
-                const impStale = db.calculateImportance(e1.id)
+                db.updateAnchorStatus(anchors[0].id, 'stale', 'my-registered-project')
+                const impStale = db.calculateImportance(e1.id, '*')
                 expect(impStale.score).toBeLessThan(impPending.score)
 
-                db.updateAnchorStatus(anchors[0].id, 'invalidated')
-                const impInvalid = db.calculateImportance(e1.id)
+                db.updateAnchorStatus(anchors[0].id, 'invalidated', 'my-registered-project')
+                const impInvalid = db.calculateImportance(e1.id, '*')
                 expect(impInvalid.score).toBeLessThan(impStale.score)
             }
 
             // Batch importance calculation
-            const batchImp = db.getEntriesByIdsWithImportance([e1.id, e2.id])
+            const batchImp = db.getEntriesByIdsWithImportance([e1.id, e2.id], '*')
             expect(batchImp.size).toBe(2)
             expect(batchImp.get(e1.id)?.importance.score).toBeDefined()
             expect(batchImp.get(e2.id)?.importance.score).toBeDefined()
 
             // Statistics with projectBreakdown (resolving project 77 from config and project 88 from URL)
-            const stats = db.getStatistics('day', '2020-01-01', '2030-12-31', true)
+            const stats = db.getStatistics('day', '2020-01-01', '2030-12-31', true, '*')
             const breakdown = stats['projectBreakdown'] as {
                 project_number: number
                 name?: string
@@ -279,6 +285,8 @@ describe('SQLite Database Extended Operations', () => {
             expect(decodeCursor(encoded)).toEqual({ offset: 25 })
 
             expect(decodeCursor('!!!not-valid-base64-json!!!')).toBeNull()
+            const wrongShape = Buffer.from(JSON.stringify({ hello: 'world' })).toString('base64')
+            expect(decodeCursor(wrongShape)).toBeNull()
         })
     })
 })

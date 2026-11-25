@@ -2,11 +2,92 @@
 
 import { spawnGitBinaryStream, PATCH_BOUNDARY_STR } from './git-runner.js';
 import type { CliArgs } from './cli.js';
-import { DEFAULT_MAX_PATCH_LEN, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
+import { DEFAULT_MAX_PATCH_LEN, flattenString, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT, truncateSafely, wantsPatchOutput } from './constants.js';
 import { extractShaFromBuffer } from './parser-utils.js';
+import { GIT_LOG_SAFE_CONFIG_ARGS, GIT_LOG_SAFE_POST_ARGS } from './security-git.js';
+import { assertValidDiffContext, assertValidLockedGitArgs, assertValidStdinShas } from './security-utils.js';
 
-export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string, cwd: string = process.cwd()) {
-  if (!args['include-patch'] && args['diff-context'] === undefined) return new Map();
+export { wantsPatchOutput };
+
+const DIFF_HEADER_NL = Buffer.from('\ndiff --git ');
+const DIFF_HEADER_START = Buffer.from('diff --git ');
+
+function isWhitespaceOnlyBuffer(buf: Buffer, start: number): boolean {
+  const len = buf.length;
+  for (let i = start; i < len; i++) {
+    const b = buf[i] ?? 0;
+    if (b < 0x80) {
+      if (b !== 0x20 && b !== 0x09 && b !== 0x0A && b !== 0x0D && b !== 0x0B && b !== 0x0C) {
+        return false;
+      }
+      continue;
+    }
+    let end = Math.min(len, i + 64);
+    while (end < len && end < i + 67 && ((buf[end] ?? 0) & 0xC0) === 0x80) {
+      end++;
+    }
+    if (buf.toString('utf-8', i, end).trim().length > 0) return false;
+    i = end - 1;
+  }
+  return true;
+}
+
+function truncateOversizedPatch(
+  recordBuf: Buffer,
+  startOffset: number,
+  maxPatchLen: number,
+): { patch: string; truncated: boolean } {
+  const processedDiffs: string[] = [];
+  let searchStart = startOffset;
+  let truncated = false;
+  let remainingBudget = maxPatchLen;
+
+  const probeEnd = Math.min(recordBuf.length, searchStart + 10 + DIFF_HEADER_START.length);
+  const firstDiff = recordBuf.subarray(searchStart, probeEnd).indexOf(DIFF_HEADER_START);
+  if (firstDiff !== -1 && firstDiff < 10) {
+    searchStart += firstDiff;
+  }
+
+  while (searchStart < recordBuf.length) {
+    if (remainingBudget <= 0) {
+      truncated = true;
+      processedDiffs.push('...[remaining file patches truncated due to length]');
+      break;
+    }
+
+    const nextDiff = recordBuf.indexOf(DIFF_HEADER_NL, searchStart + 1);
+    const diffEnd = nextDiff !== -1 ? nextDiff : recordBuf.length;
+
+    const maxBytes = remainingBudget * 3 + 64;
+    const decodeEnd = diffEnd - searchStart > maxBytes ? searchStart + maxBytes : diffEnd;
+    const diffText = recordBuf.toString('utf-8', searchStart, decodeEnd).trim();
+
+    if (decodeEnd < diffEnd || diffText.length > remainingBudget) {
+      truncated = true;
+      processedDiffs.push(flattenString(truncateSafely(diffText, remainingBudget, '\n...[patch truncated due to length]')));
+      remainingBudget = 0;
+    } else if (diffText.length > 0) {
+      processedDiffs.push(diffText);
+      remainingBudget -= diffText.length;
+    }
+
+    if (nextDiff === -1) break;
+    searchStart = nextDiff + 1;
+  }
+
+  return { patch: processedDiffs.filter(Boolean).join('\n'), truncated };
+}
+
+export async function getPatchMap(
+  lockedArgs: string[],
+  args: CliArgs,
+  stdinShas?: string,
+  cwd: string = process.cwd(),
+): Promise<Map<string, { patch: string; truncated: boolean }>> {
+  assertValidStdinShas(stdinShas);
+  assertValidLockedGitArgs(lockedArgs);
+  const diffContext = assertValidDiffContext(args['diff-context']);
+  if (!wantsPatchOutput(args)) return new Map();
   const patchBaseArgs = [...lockedArgs];
   const excludes = GIT_EXCLUDE_PATTERNS;
   if (patchBaseArgs.includes('--')) {
@@ -14,56 +95,32 @@ export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas
   } else {
     patchBaseArgs.push('--', ...excludes);
   }
-  const patchArgs = ['--no-pager', '-c', 'core.quotePath=false', 'log', '-p', args['diff-context'] !== undefined ? `-U${args['diff-context']}` : '-U1', `--pretty=format:${PATCH_BOUNDARY_STR}%H%x0A`];
+  const patchArgs = [
+    '--no-pager', ...GIT_LOG_SAFE_CONFIG_ARGS,
+    'log', '-p', '--submodule=short', ...GIT_LOG_SAFE_POST_ARGS,
+    diffContext !== undefined ? `-U${diffContext}` : '-U1',
+    `--pretty=format:${PATCH_BOUNDARY_STR}%H%x0A`,
+  ];
   if (stdinShas) patchArgs.push('--stdin', '--no-walk');
   patchArgs.push(...patchBaseArgs);
 
   const map = new Map<string, { patch: string; truncated: boolean }>();
   const parsedMaxPatchLen = args['max-patch-length'];
   const maxPatchLen = (parsedMaxPatchLen !== undefined && !Number.isNaN(parsedMaxPatchLen) && parsedMaxPatchLen >= 0) ? parsedMaxPatchLen : DEFAULT_MAX_PATCH_LEN;
+  const truncateAtBytes = Math.min(GIT_STREAM_BUFFER_DEFAULT, Math.max(4096, maxPatchLen * 4 + 4096));
 
-  for await (const recordBuf of spawnGitBinaryStream(patchArgs, PATCH_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd)) {
+  for await (const recordBuf of spawnGitBinaryStream(patchArgs, PATCH_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd, truncateAtBytes)) {
     const { sha: hash, shaEnd: hashEnd } = extractShaFromBuffer(recordBuf);
-    if (hash) {
-      const patchByteLen = recordBuf.length - (hashEnd + 1);
-      
-      if (patchByteLen > maxPatchLen) {
-        const DIFF_HEADER = Buffer.from('\ndiff --git ');
-        const processedDiffs: string[] = [];
-        let searchStart = hashEnd + 1;
-        let truncated = false;
-        
-        // Handle the first diff --git which might not have a leading newline
-        if (searchStart < recordBuf.length && recordBuf.subarray(searchStart, searchStart + 11).toString('utf-8') !== 'diff --git ') {
-           // It's possible there is some preamble before the first diff, though usually it starts right away.
-        }
-        
-        const firstDiff = recordBuf.indexOf(Buffer.from('diff --git '), searchStart);
-        if (firstDiff !== -1 && firstDiff - searchStart < 10) {
-           searchStart = firstDiff;
-        }
-
-        while (searchStart < recordBuf.length) {
-          const nextDiff = recordBuf.indexOf(DIFF_HEADER, searchStart + 1);
-          const diffEnd = nextDiff !== -1 ? nextDiff : recordBuf.length;
-          
-          const diffLen = diffEnd - searchStart;
-          if (diffLen > maxPatchLen) {
-            truncated = true;
-            processedDiffs.push(recordBuf.toString('utf-8', searchStart, searchStart + maxPatchLen).trim() + '\n...[patch truncated due to length]');
-          } else {
-            processedDiffs.push(recordBuf.toString('utf-8', searchStart, diffEnd).trim());
-          }
-          
-          if (nextDiff === -1) break;
-          searchStart = nextDiff + 1; // skip the leading newline so it starts with 'diff --git '
-        }
-        
-        map.set(hash, { patch: processedDiffs.filter(Boolean).join('\n'), truncated });
+    if (!hash) continue;
+    const patchByteLen = recordBuf.length - (hashEnd + 1);
+    if (patchByteLen > maxPatchLen) {
+      if (maxPatchLen === 0 && isWhitespaceOnlyBuffer(recordBuf, hashEnd + 1)) {
+        map.set(hash, { patch: '', truncated: false });
       } else {
-        const patch = recordBuf.toString('utf-8', hashEnd + 1).trim();
-        map.set(hash, { patch, truncated: false });
+        map.set(hash, truncateOversizedPatch(recordBuf, hashEnd + 1, maxPatchLen));
       }
+    } else {
+      map.set(hash, { patch: recordBuf.toString('utf-8', hashEnd + 1).trim(), truncated: false });
     }
   }
 

@@ -7,6 +7,10 @@
  */
 
 import { type McpServer } from '@modelcontextprotocol/server'
+import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
+import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
+import { onLogLevelChange } from './logger.js'
+import { createNullProtoRecord, isRecord } from './type-guards.js'
 
 /**
  * Narrow interface for MCP protocol log notification dispatch.
@@ -52,6 +56,23 @@ interface LogData {
     [key: string]: unknown
 }
 
+const VALID_MCP_LOG_LEVELS: readonly McpLogLevel[] = [
+    'emergency',
+    'alert',
+    'critical',
+    'error',
+    'warning',
+    'notice',
+    'info',
+    'debug',
+]
+
+function resolveInitialMcpLogLevel(): McpLogLevel {
+    const raw = process.env['LOG_LEVEL']?.trim().toLowerCase()
+    if (raw === 'warn') return 'warning'
+    return VALID_MCP_LOG_LEVELS.find((lvl) => lvl === raw) ?? 'info'
+}
+
 /**
  * MCP Protocol Logger
  *
@@ -60,7 +81,7 @@ interface LogData {
  */
 export class McpLogger {
     private server: McpLoggingReceiver | null = null
-    private minLevel: McpLogLevel = 'info'
+    private minLevel: McpLogLevel = resolveInitialMcpLogLevel()
 
     /**
      * Connect to MCP server for protocol logging
@@ -73,7 +94,7 @@ export class McpLogger {
      * Set minimum log level (from logging/setLevel request)
      */
     setLevel(level: McpLogLevel): void {
-        if (level in LOG_LEVEL_PRIORITY) {
+        if (Object.hasOwn(LOG_LEVEL_PRIORITY, level)) {
             this.minLevel = level
         }
     }
@@ -92,23 +113,122 @@ export class McpLogger {
         return LOG_LEVEL_PRIORITY[level] <= LOG_LEVEL_PRIORITY[this.minLevel]
     }
 
+    private sanitizeValue(
+        value: unknown,
+        depth = 0,
+        seen = new WeakSet()
+    ): unknown {
+        if (isCrossRealmError(value)) {
+            return sanitizeErrorForLogging(`${value.name}: ${value.message}`).replace(
+                /[\r\n]+/g,
+                ' '
+            )
+        }
+        if (typeof value === 'string') {
+            return sanitizeErrorForLogging(value).replace(/[\r\n]+/g, ' ')
+        }
+        if (typeof value === 'bigint') {
+            return value.toString()
+        }
+        if (isCrossRealmDate(value)) {
+            return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+        }
+        if (value instanceof URL) {
+            return sanitizeErrorForLogging(value.toString()).replace(/[\r\n]+/g, ' ')
+        }
+        if (typeof value === 'function') {
+            return '[Function]'
+        }
+        if (value === null || typeof value !== 'object') {
+            return value
+        }
+        if (seen.has(value)) {
+            return '[Circular]'
+        }
+        if (depth >= 6) {
+            return '[Truncated]'
+        }
+        seen.add(value)
+        try {
+            if (Array.isArray(value)) {
+                return value.map((item) => this.sanitizeValue(item, depth + 1, seen))
+            }
+            const jsonRes = tryResolveToJson(value)
+            if (jsonRes.resolved) {
+                return this.sanitizeValue(jsonRes.value, depth + 1, seen)
+            }
+            if (!isRecord(value)) {
+                return '[Unserializable]'
+            }
+            return this.sanitizePlainRecord(value, depth, seen)
+        } finally {
+            seen.delete(value)
+        }
+    }
+
+    private sanitizePlainRecord(
+        record: Record<string, unknown>,
+        depth = 0,
+        seen = new WeakSet()
+    ): Record<string, unknown> {
+        const sanitized = createNullProtoRecord()
+        for (const [k, v] of Object.entries(record)) {
+            if (
+                k === '__proto__' ||
+                k === 'constructor' ||
+                k === 'prototype' ||
+                k === 'toJSON' ||
+                typeof v === 'function'
+            ) {
+                continue
+            }
+            const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
+            sanitized[safeKey] =
+                SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
+                    ? '[REDACTED]'
+                    : this.sanitizeValue(v, depth + 1, seen)
+        }
+        return sanitized
+    }
+
+    private sanitizeData(data: LogData): LogData {
+        const { message: rawMessage, ...restData } = data
+        const cleanedMessage =
+            typeof rawMessage === 'string'
+                ? sanitizeErrorForLogging(rawMessage).replace(/[\r\n]+/g, ' ')
+                : ''
+        const rootSeen = new WeakSet()
+        rootSeen.add(data)
+        try {
+            const rest = this.sanitizePlainRecord(restData, 0, rootSeen)
+            return { ...rest, message: cleanedMessage }
+        } finally {
+            rootSeen.delete(data)
+        }
+    }
+
     /**
      * Format message for stderr fallback
      */
-    private formatForStderr(level: McpLogLevel, loggerName: string, data: LogData): string {
+    private formatSanitizedForStderr(level: McpLogLevel, loggerName: string, sanitized: LogData): string {
         const timestamp = new Date().toISOString()
         const levelUpper = level.toUpperCase().padEnd(9)
-        const module = loggerName ? `[${loggerName}]` : ''
+        const safeLogger = sanitizeErrorForLogging(loggerName).replace(/[\r\n]+/g, ' ')
+        const module = safeLogger ? `[${safeLogger}]` : ''
 
-        let formatted = `[${timestamp}] [${levelUpper}] ${module} ${data.message}`
+        let formatted = `[${timestamp}] [${levelUpper}] ${module} ${sanitized.message}`
 
         // Add extra context (filter out message and module)
         const extras = Object.fromEntries(
-            Object.entries(data).filter(([key]) => key !== 'message' && key !== 'module')
+            Object.entries(sanitized).filter(([key]) => key !== 'message' && key !== 'module')
         )
 
         if (Object.keys(extras).length > 0) {
-            formatted += ` ${JSON.stringify(extras)}`
+            try {
+                formatted += ` ${JSON.stringify(extras)}`
+            } catch {
+                formatted += ' {"_serializationError":"unserializable log context"}'
+            }
         }
 
         return formatted
@@ -120,49 +240,64 @@ export class McpLogger {
     log(level: McpLogLevel, loggerName: string, data: LogData): void {
         if (!this.shouldLog(level)) return
 
+        const sanitized = this.sanitizeData(data)
+        const safeLogger = sanitizeErrorForLogging(loggerName).replace(/[\r\n]+/g, ' ')
+
         // Send via MCP protocol if server connected
         if (this.server) {
             try {
-                void this.server.sendLoggingMessage({
-                    level,
-                    logger: loggerName,
-                    data,
+                void Promise.resolve(
+                    this.server.sendLoggingMessage({
+                        level,
+                        logger: safeLogger,
+                        data: sanitized,
+                    })
+                ).catch(() => {
+                    // stderr fallback is written below
                 })
             } catch {
-                // Fallback to stderr if MCP send fails
-                console.error(this.formatForStderr(level, loggerName, data))
+                // stderr fallback is written below
             }
         }
 
         // Always also log to stderr for local debugging
-        console.error(this.formatForStderr(level, loggerName, data))
+        console.error(this.formatSanitizedForStderr(level, safeLogger, sanitized))
     }
 
     // Convenience methods
     debug(loggerName: string, message: string, context?: Record<string, unknown>): void {
-        this.log('debug', loggerName, { message, ...context })
+        if (!this.shouldLog('debug')) return
+        this.log('debug', loggerName, { ...context, message })
     }
 
     info(loggerName: string, message: string, context?: Record<string, unknown>): void {
-        this.log('info', loggerName, { message, ...context })
+        if (!this.shouldLog('info')) return
+        this.log('info', loggerName, { ...context, message })
     }
 
     notice(loggerName: string, message: string, context?: Record<string, unknown>): void {
-        this.log('notice', loggerName, { message, ...context })
+        if (!this.shouldLog('notice')) return
+        this.log('notice', loggerName, { ...context, message })
     }
 
     warning(loggerName: string, message: string, context?: Record<string, unknown>): void {
-        this.log('warning', loggerName, { message, ...context })
+        if (!this.shouldLog('warning')) return
+        this.log('warning', loggerName, { ...context, message })
     }
 
     error(loggerName: string, message: string, context?: Record<string, unknown>): void {
-        this.log('error', loggerName, { message, ...context })
+        if (!this.shouldLog('error')) return
+        this.log('error', loggerName, { ...context, message })
     }
 
     critical(loggerName: string, message: string, context?: Record<string, unknown>): void {
-        this.log('critical', loggerName, { message, ...context })
+        if (!this.shouldLog('critical')) return
+        this.log('critical', loggerName, { ...context, message })
     }
 }
 
 // Singleton instance
 export const mcpLogger = new McpLogger()
+onLogLevelChange((level) => {
+    mcpLogger.setLevel(level)
+})

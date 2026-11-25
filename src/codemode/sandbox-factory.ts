@@ -16,6 +16,13 @@ import { ConfigurationError } from '../types/errors.js'
 /** Available sandbox modes */
 export type SandboxMode = 'worker'
 
+/** Optional execution mode flags forwarded into worker VM sandbox context */
+export interface SandboxExecutionModeFlags {
+    dryRunMode?: boolean | undefined
+    useTestDbMode?: boolean | undefined
+    maxToolInputElements?: number | undefined
+}
+
 /** Common sandbox interface */
 export interface ISandbox {
     execute(
@@ -25,7 +32,8 @@ export interface ISandbox {
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
         readonlyMode?: boolean,
-        maxResultSize?: number
+        maxResultSize?: number,
+        modeFlags?: SandboxExecutionModeFlags
     ): Promise<SandboxResult>
 }
 
@@ -38,7 +46,8 @@ export interface ISandboxPool {
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
         readonlyMode?: boolean,
-        maxResultSize?: number
+        maxResultSize?: number,
+        modeFlags?: SandboxExecutionModeFlags
     ): Promise<SandboxResult>
     getActiveCount(): number
     dispose(): void

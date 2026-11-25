@@ -21,7 +21,7 @@ Code executes in a **sandboxed VM context** with:
 - **Hard timeouts** — configurable execution limit (default 30s)
 - **Full API access** — all tool groups available via `mj.*`
 
-**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`
+**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.git.*`, `mj.backup.*`, `mj.team.*`
 
 ---
 
@@ -41,15 +41,15 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 | Tool                   | Description                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------- |
-| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy. |
-| `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
+| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy, `auto_link: true` for deterministic same-session/shared-anchor linking, and returns `suggested_links` when `relationships` is omitted. |
+| `get_entry_by_id`      | Get a specific journal entry by ID with full details (`source: "team"` queries Team DB). |
 | `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance), cursor pagination, and `workspace_id`.          |
 | `get_entry_history`    | Get the revision history of a specific journal entry (capped at 10 revisions).     |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
 | `test_error_handling`  | Test tool for validating error handler responses.                                  |
 | `trigger_progress`     | Test tool to trigger an MCP progress notification sequence.                        |
 | `list_tags`            | List all available tags.                                                           |
-| `mark_anchors_stale`   | Mark explicit relationships between entries as stale or out-of-date.               |
+| `mark_anchors_stale`   | Update anchor staleness status on entry file/symbol anchors.                       |
 
 ---
 
@@ -86,7 +86,7 @@ Link entries and visualize knowledge graphs.
 | Tool                      | Description                                                      |
 | ------------------------- | ---------------------------------------------------------------- |
 | `link_entries`            | Create a relationship between two journal entries.               |
-| `visualize_relationships` | Generate a Mermaid diagram visualization of entry relationships. |
+| `visualize_relationships` | Generate a Mermaid/edges visualization of entry relationships (`include_content: false` default, `format`, `source: "team"`). |
 
 ---
 
@@ -109,13 +109,13 @@ Entry mutations, vector index management, tag maintenance, and audit log search.
 
 | Tool                   | Description                                                                                                                                                            |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update_configuration` | Dynamically update the running server configuration (e.g., briefing depth, token limits) without restarting.                                                           |
+| `update_configuration` | Dynamically update the running server configuration (`tool_filter`, briefing depth/toggles, and default workspace/project) without restarting. |
 | `register_project`     | Register a new project in the global registry. This is required before the agent can switch context to this repository.                                                |
 | `update_project`       | Update the details (path, number, or name) of an existing project in the registry.                                                                                     |
 | `delete_project`       | Remove a project from the global registry.                                                                                                                             |
 | `get_project`          | Get details of a specific registered project.                                                                                                                          |
 | `list_projects`        | List all registered projects.                                                                                                                                          |
-| `update_entry`         | Update an existing journal entry (content, type, tags, and 14 metadata fields including trustScore, impactScore, significance, workspace_id, issueNumber, prNumber, and workflow). Pass `expectedVersion` for optimistic locking. Pass `null` to clear a field. |
+| `update_entry`         | Update an existing journal entry (content, type, tags, and metadata fields including `trust_score`, `impact_score`, `significance_type`, `workspace_id`, `target_workspace_id`, `issue_number`, `pr_number`, and `workflow_run_id`). Pass `expected_version` for optimistic locking. Pass `null` to clear a field. |
 | `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                                                   |
 | `restore_entry`        | Restore a soft-deleted journal entry.                                                                                                                                  |
 | `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.                                   |
@@ -158,11 +158,11 @@ GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights
 
 ## git
 
-Commit history mining, release tracking, and commit analytics using `simple-git`.
+Commit history mining, release tracking, and commit analytics using vendored `lib-git-history`.
 
 | Tool                      | Description                                                                                                                               |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_commit_history`      | Fetch the commit history of the repository (with optional range or limit).                                                                 |
+| `get_commit_history`      | Fetch repository commit history (or pass `uncommitted: true` for working-tree status/diffstat).                                            |
 | `search_commits`          | Search commit messages or authors within the repository.                                                                                  |
 | `get_release_info`        | Retrieve information about a specific release tag, including commit count and timestamp.                                                   |
 | `get_unreleased_commits`  | Track commits that have been merged since the last release tag.                                                                            |
@@ -209,7 +209,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 | Tool                | Description                                                                                                                                               |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `team_update_entry` | Update a team entry (content, type, tags, and 14 metadata fields including trustScore, impactScore, significance, workspace_id, issueNumber, prNumber, and workflow). Pass `expectedVersion` for optimistic locking. Pass `null` to clear a field. |
+| `team_update_entry` | Update a team entry (content, type, tags, and metadata fields including `trust_score`, `impact_score`, `significance_type`, `workspace_id`, `issue_number`, `pr_number`, and `workflow_run_id`). Pass `expected_version` for optimistic locking. Pass `null` to clear a field. |
 | `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).                                                                                                 |
 | `team_restore_entry`| Restore a soft-deleted team entry. Requires TEAM_DB_PATH.                                                                                                 |
 | `team_merge_tags`   | Merge a source tag into a target tag in the team database.                                                                                                |
@@ -284,14 +284,15 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`). At runtime, agents can use the `update_configuration` tool to switch tools on-the-fly.
 
-| Filter               | Use Case                 |
-| -------------------- | ------------------------ |
-| `full`               | All tools (default)      |
-| `starter`            | Core + search + codemode |
-| `essential`          | Minimal footprint        |
-| `readonly`           | Disable all mutations    |
-| `-github`            | Exclude a group          |
-| `-github,-analytics` | Exclude multiple groups  |
+| Filter               | Use Case                         |
+| -------------------- | -------------------------------- |
+| `full`               | All tools (default)              |
+| `codemode`           | `mj_execute_code` + `update_configuration` |
+| `starter`            | Core + search + codemode         |
+| `essential`          | Minimal footprint                |
+| `readonly`           | Disable all mutations            |
+| `-github`            | Exclude a group                  |
+| `-github,-analytics` | Exclude multiple groups          |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

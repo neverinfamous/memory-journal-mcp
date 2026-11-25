@@ -1,37 +1,34 @@
 /**
- * Team IO Tools — 2 tools
+ * Team IO Tools — 3 tools
  *
- * Tools: team_export_markdown, team_import_markdown
+ * Tools: team_export_markdown, team_import_markdown, team_import_external
  *
  * Team equivalents of export_markdown and import_markdown that operate
  * on the team database and preserve the author field.
  */
 
-import * as fs from 'node:fs/promises'
-import { constants as fsConstants } from 'node:fs'
-import * as path from 'node:path'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { AggregateMcpError } from '../../../types/errors.js'
-import {
-    resolveAuthenticatedAuthor,
-    assertSafeDirectoryPath,
-    assertSafeFilePath,
-} from '../../../utils/security-utils.js'
-import { exportEntriesToMarkdown } from '../../../markdown/index.js'
-import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
-import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
+import { importMarkdownEntries, processImportBatch } from '../../../markdown/index.js'
+import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { batchFetchAuthors, triggerTeamNotifications } from './helpers.js'
+import { triggerTeamNotifications } from './helpers.js'
 import {
-    DATE_FORMAT_REGEX,
-    DATE_FORMAT_MESSAGE,
-    DATE_MIN_SENTINEL,
-    DATE_MAX_SENTINEL,
+    TEAM_IO_NOT_CONFIGURED,
+    TeamExportMarkdownSchema,
+    executeTeamExportMarkdown,
+    missingTeamIoProjectNumberError,
+    resolveTeamImportScope,
+    readAndConvertExternalMarkdownFiles,
+    resolveTeamImportContextAuthor,
+} from './io-scope-helpers.js'
+import {
+    coerceIntString,
     relaxedNumber,
+    StrictProjectNumberSchema,
     ENTRY_TYPES,
     SOURCE_FORMATS,
 } from '../schemas.js'
@@ -40,22 +37,12 @@ import {
 // Schemas
 // ============================================================================
 
-const TeamExportMarkdownSchema = z.object({
-    output_dir: z.string().min(1),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    tags: z.array(z.string()).optional(),
-    project_number: z.number(),
-    limit: z.number().max(500).optional().default(100),
-    workspace_id: z.string().optional(),
-})
-
 const TeamExportMarkdownSchemaMcp = z.object({
     output_dir: z.string().optional().describe('Target directory for .md files'),
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('Numeric project ID to filter entries by.'),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -73,13 +60,15 @@ const TeamExportMarkdownOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-const TeamImportMarkdownSchema = z.object({
-    source_dir: z.string().min(1),
-    dry_run: z.boolean().optional().default(false),
-    project_number: z.number(),
-    limit: z.number().max(500).optional().default(100),
-    workspace_id: z.string().optional(),
-})
+const TeamImportMarkdownSchema = z
+    .object({
+        source_dir: z.string().min(1).max(500),
+        dry_run: z.boolean().optional().default(false),
+        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 const TeamImportMarkdownSchemaMcp = z.object({
     source_dir: z.string().optional().describe('Directory containing .md files to import'),
@@ -88,7 +77,7 @@ const TeamImportMarkdownSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('Numeric project ID for workspace resolution.'),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -102,6 +91,8 @@ const TeamImportMarkdownOutputSchema = z
         created: z.number().optional(),
         updated: z.number().optional(),
         skipped: z.number().optional(),
+        relationshipsLinked: z.number().optional(),
+        vectorsIndexed: z.number().optional(),
         errors: z.array(z.object({ file: z.string(), error: z.string() })).optional(),
         dry_run: z.boolean().optional(),
     })
@@ -111,15 +102,17 @@ const TeamImportMarkdownOutputSchema = z
 // Team Import External Schemas
 // ============================================================================
 
-const TeamImportExternalSchema = z.object({
-    source_dir: z.string().min(1),
-    source_format: z.enum(SOURCE_FORMATS),
-    dry_run: z.boolean().optional().default(false),
-    project_number: z.number(),
-    limit: z.number().max(500).optional().default(100),
-    default_entry_type: z.enum(ENTRY_TYPES).optional(),
-    workspace_id: z.string().optional(),
-})
+const TeamImportExternalSchema = z
+    .object({
+        source_dir: z.string().min(1).max(500),
+        source_format: z.enum(SOURCE_FORMATS),
+        dry_run: z.boolean().optional().default(false),
+        project_number: StrictProjectNumberSchema.optional(),
+        limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
+        default_entry_type: z.enum(ENTRY_TYPES).optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 const TeamImportExternalSchemaMcp = z.object({
     source_dir: z.string().optional().describe('Directory containing files to import'),
@@ -129,7 +122,7 @@ const TeamImportExternalSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('Numeric project ID for workspace resolution.'),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -147,67 +140,147 @@ const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
 // Tool Definitions
 // ============================================================================
 
-export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb, progress } = context
+/* resolveTeamImportContextAuthor and executeTeamExportMarkdown live in ./io-scope-helpers.ts */
 
-    if (!teamDb) {
-        return [
-            {
-                name: 'team_export_markdown',
-                title: 'Team Export to Markdown',
-                description: 'Export team entries as frontmattered Markdown files',
-                group: 'team',
-                inputSchema: TeamExportMarkdownSchemaMcp,
-                outputSchema: TeamExportMarkdownOutputSchema,
-                annotations: {
-                    readOnlyHint: false,
-                    destructiveHint: false,
-                    idempotentHint: true,
-                    openWorldHint: true,
-                },
-                handler: () => ({
-                    success: false,
-                    error: 'Team collaboration is not configured. Set TEAM_DB_PATH to enable.',
-                }),
-            },
-            {
-                name: 'team_import_markdown',
-                title: 'Team Import from Markdown',
-                description: 'Import frontmattered Markdown files into the team journal',
-                group: 'team',
-                inputSchema: TeamImportMarkdownSchemaMcp,
-                outputSchema: TeamImportMarkdownOutputSchema,
-                annotations: {
-                    readOnlyHint: false,
-                    destructiveHint: false,
-                    idempotentHint: false,
-                    openWorldHint: true,
-                },
-                handler: () => ({
-                    success: false,
-                    error: 'Team collaboration is not configured. Set TEAM_DB_PATH to enable.',
-                }),
-            },
-            {
-                name: 'team_import_external',
-                title: 'Team Import from External Tools',
-                description: 'Import knowledge management exports into the team journal',
-                group: 'team',
-                inputSchema: TeamImportExternalSchemaMcp,
-                outputSchema: TeamImportExternalOutputSchema,
-                annotations: {
-                    readOnlyHint: false,
-                    destructiveHint: false,
-                    idempotentHint: false,
-                    openWorldHint: true,
-                },
-                handler: () => ({
-                    success: false,
-                    error: 'Team collaboration is not configured. Set TEAM_DB_PATH to enable.',
-                }),
-            },
-        ]
+async function executeTeamImportMarkdown(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): Promise<unknown> {
+    const input = TeamImportMarkdownSchema.parse(params)
+    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
+        input.source_dir,
+        input.workspace_id,
+        input.project_number,
+        context
+    )
+    if (projectNumber === undefined) {
+        return missingTeamIoProjectNumberError(input.workspace_id)
     }
+
+    const allowedRoots = context.config?.allowedIoRoots ?? []
+    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
+    if ('errorResponse' in authorCtx) {
+        return authorCtx.errorResponse
+    }
+    assertSafeDirectoryPath(input.source_dir, allowedRoots)
+    await sendProgress(context.progress, 0, 2, 'Reading markdown files...')
+    await sendProgress(context.progress, 1, 2, 'Importing team entries...')
+    const result = await importMarkdownEntries(
+        input.source_dir,
+        teamDb,
+        {
+            dry_run: input.dry_run,
+            limit: input.limit,
+            author: authorCtx.author,
+            isPersonal: false,
+            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
+            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
+            project_number: projectNumber,
+            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
+            ...(context.config !== undefined ? { config: context.config } : {}),
+        },
+        context.teamVectorManager,
+        allowedRoots
+    )
+
+    if (!result.success && result.errors.length > 0) {
+        const successCount = result.created + result.updated + result.skipped
+        const total = successCount + result.errors.length
+        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+        throw new AggregateMcpError(
+            message,
+            result.errors.map((e) => ({ message: e.error, file: e.file })),
+            { result }
+        )
+    }
+
+    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
+        triggerTeamNotifications(context)
+    }
+    await sendProgress(context.progress, 2, 2, 'Team import complete')
+    return result
+}
+
+async function executeTeamImportExternal(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): Promise<unknown> {
+    const input = TeamImportExternalSchema.parse(params)
+    const { wsId, projectNumber, lockedWsId } = resolveTeamImportScope(
+        input.source_dir,
+        input.workspace_id,
+        input.project_number,
+        context
+    )
+    if (projectNumber === undefined) {
+        return missingTeamIoProjectNumberError(input.workspace_id)
+    }
+
+    const authorCtx = resolveTeamImportContextAuthor(context, wsId)
+    if ('errorResponse' in authorCtx) {
+        return authorCtx.errorResponse
+    }
+
+    const allowedRoots = context.config?.allowedIoRoots ?? []
+    assertSafeDirectoryPath(input.source_dir, allowedRoots)
+    const progress = context.progress
+    await sendProgress(progress, 0, 3, 'Reading files...')
+
+    const { parsedFiles, errors, skipped: emptySkipped } = await readAndConvertExternalMarkdownFiles(
+        input.source_dir,
+        input.limit,
+        input.source_format,
+        input.default_entry_type,
+        allowedRoots,
+        progress
+    )
+
+    await sendProgress(progress, 2, 3, 'Importing entries...')
+    const result = await processImportBatch(
+        parsedFiles,
+        teamDb,
+        {
+            dry_run: input.dry_run,
+            limit: input.limit,
+            author: authorCtx.author,
+            isPersonal: false,
+            enforceStrictTeamOwnership: authorCtx.enforceStrictTeamOwnership,
+            allowAdminAuthorOverride: authorCtx.allowAdminAuthorOverride,
+            project_number: projectNumber,
+            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
+            ...(context.config !== undefined ? { config: context.config } : {}),
+        },
+        context.teamVectorManager
+    )
+    result.skipped += emptySkipped
+
+    if (errors.length > 0) {
+        result.success = false
+        result.errors.push(...errors)
+    }
+
+    if (!result.success && result.errors.length > 0) {
+        const successCount = result.created + result.updated + result.skipped
+        const total = successCount + result.errors.length
+        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+        throw new AggregateMcpError(
+            message,
+            result.errors.map((e) => ({ message: e.error, file: e.file })),
+            { result }
+        )
+    }
+
+    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
+        triggerTeamNotifications(context)
+    }
+    await sendProgress(progress, 3, 3, 'Team import complete')
+    return result
+}
+
+export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
+    const { teamDb } = context
 
     return [
         {
@@ -227,75 +300,9 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
+                    if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamExportMarkdownSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-
-                    // Determine allowed roots from configuration
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-
-                    // Intercept parameter hallucination for test runner
-                    const firstRoot = allowedRoots[0]
-                    if (input.output_dir === 'tmp_team_md' && firstRoot) {
-                        input.output_dir = path.join(firstRoot, 'tmp_team_md')
-                    }
-
-                    await sendProgress(progress, 0, 3, 'Fetching team entries...')
-
-                    const limit = input.limit ?? 100
-                    let entries
-                    if (input.start_date || input.end_date) {
-                        const startDate = input.start_date ?? DATE_MIN_SENTINEL
-                        const endDate = input.end_date ?? DATE_MAX_SENTINEL
-                        const result = teamDb.searchByDateRange(startDate, endDate, {
-                            tags: input.tags,
-                            limit,
-                            projectNumber: input.project_number,
-                            workspaceId: wsId,
-                        })
-                        entries = result.entries
-                    } else {
-                        const result = teamDb.searchEntries('', {
-                            tags: input.tags,
-                            limit,
-                            projectNumber: input.project_number,
-                            workspaceId: wsId,
-                        })
-                        entries = result.entries
-                    }
-
-                    await sendProgress(
-                        progress,
-                        1,
-                        3,
-                        `Exporting ${String(entries.length)} team entries...`
-                    )
-
-                    // Batch-fetch authors from team DB (author column is not on JournalEntry)
-                    const entryIds = entries.map((e) => e.id)
-                    const authorMap = batchFetchAuthors(teamDb, entryIds)
-
-                    // Map to ExportableEntry with resolved author
-                    const exportable: ExportableEntry[] = entries.map((e) => ({
-                        id: e.id,
-                        content: e.content,
-                        entryType: e.entryType,
-                        timestamp: e.timestamp,
-                        tags: e.tags,
-                        significance: e.significanceType ?? undefined,
-                        author: authorMap.get(e.id) ?? undefined,
-                    }))
-
-                    await sendProgress(progress, 2, 3, 'Writing markdown files...')
-
-                    const result = await exportEntriesToMarkdown(
-                        exportable,
-                        input.output_dir,
-                        teamDb,
-                        allowedRoots
-                    )
-
-                    await sendProgress(progress, 3, 3, 'Team export complete')
-                    return result
+                    return await executeTeamExportMarkdown(context, teamDb, input)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -319,43 +326,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = TeamImportMarkdownSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-
-                    // Determine allowed roots from configuration
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-
-                    // Intercept parameter hallucination for test runner
-                    const firstRoot = allowedRoots[0]
-                    if (input.source_dir === 'tmp_team_md' && firstRoot) {
-                        input.source_dir = path.join(firstRoot, 'tmp_team_md')
-                    }
-
-                    await sendProgress(progress, 0, 2, 'Reading markdown files...')
-
-                    await sendProgress(progress, 1, 2, 'Importing team entries...')
-
-                    const author = resolveAuthenticatedAuthor()
-                    const result = await importMarkdownEntries(
-                        input.source_dir,
-                        teamDb,
-                        {
-                            dry_run: input.dry_run,
-                            limit: input.limit,
-                            author,
-                            project_number: input.project_number,
-                            workspaceId: wsId,
-                        },
-                        context.teamVectorManager,
-                        allowedRoots
-                    )
-
-                    if (!input.dry_run) {
-                        triggerTeamNotifications(context)
-                    }
-
-                    await sendProgress(progress, 2, 2, 'Team import complete')
-                    return result
+                    if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
+                    return await executeTeamImportMarkdown(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -379,99 +351,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const input = TeamImportExternalSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-
-                    const allowedRoots = context.config?.allowedIoRoots ?? []
-
-                    await sendProgress(progress, 0, 3, 'Reading files...')
-
-                    assertSafeDirectoryPath(input.source_dir, allowedRoots)
-
-                    const mdFiles: string[] = []
-                    const dir = await fs.opendir(input.source_dir)
-                    for await (const dirent of dir) {
-                        if (dirent.isFile() && dirent.name.endsWith('.md')) {
-                            mdFiles.push(dirent.name)
-                            if (mdFiles.length >= input.limit) break
-                        }
-                    }
-
-                    await sendProgress(progress, 1, 3, 'Converting external formats...')
-
-                    const parsedFiles: ParsedFile[] = []
-                    const errors: { file: string; error: string }[] = []
-
-                    for (const filename of mdFiles) {
-                        let handle
-                        try {
-                            const filepath = path.join(input.source_dir, filename)
-                            assertSafeFilePath(filepath, allowedRoots)
-
-                            handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
-                            const stats = await handle.stat()
-                            if (stats.size > 5 * 1024 * 1024) {
-                                throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
-                            }
-
-                            const content = await handle.readFile('utf-8')
-                            const converted = convertFile(content, filename, input.source_format, input.default_entry_type)
-
-                            if (!converted.body.trim()) {
-                                continue
-                            }
-
-                            parsedFiles.push({
-                                filename,
-                                body: converted.body,
-                                metadata: converted.metadata,
-                            })
-                        } catch (err) {
-                            errors.push({
-                                file: filename,
-                                error: err instanceof Error ? err.message : String(err),
-                            })
-                        } finally {
-                            if (handle) {
-                                await handle.close()
-                            }
-                        }
-                    }
-
-                    await sendProgress(progress, 2, 3, 'Importing entries...')
-
-                    const author = resolveAuthenticatedAuthor()
-                    const result = await processImportBatch(parsedFiles, teamDb, {
-                        dry_run: input.dry_run,
-                        limit: input.limit,
-                        author,
-                        project_number: input.project_number,
-                        workspaceId: wsId,
-                    }, context.teamVectorManager)
-
-                    if (errors.length > 0) {
-                        result.success = false
-                        result.errors.push(...errors)
-                    }
-
-                    if (!result.success && result.errors.length > 0) {
-                        const successCount = result.created + result.updated + result.skipped
-                        const total = successCount + result.errors.length
-                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
-                        
-                        throw new AggregateMcpError(
-                            message,
-                            result.errors.map((e) => ({ message: e.error, file: e.file })),
-                            { result }
-                        )
-                    }
-
-                    if (!input.dry_run) {
-                        triggerTeamNotifications(context)
-                    }
-
-                    await sendProgress(progress, 3, 3, 'Team import complete')
-                    return result
+                    if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
+                    return await executeTeamImportExternal(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

@@ -33,6 +33,7 @@ instances:
     collect_disk_stats: false
     collect_volume_count: true
     collect_exit_codes: true
+    reported_hostname: memory-journal-host
     tags:
       - env:development
       - source:wsl2

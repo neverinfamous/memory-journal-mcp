@@ -7,6 +7,8 @@
  * 2. formatHandlerError() — enriches raw Error responses
  */
 
+import { ENTRY_TYPES } from '../../types/entities.js'
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -74,7 +76,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     },
     // Schema / types patterns
     {
-        pattern: /invalid input syntax for type|requires a.*column/i,
+        pattern: /invalid input syntax for type|requires a[^\r\n]{0,200}column/i,
         suggestion: 'The provided value is not valid for the assigned type.',
         code: 'VALIDATION_ERROR',
     },
@@ -96,7 +98,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
         code: 'VALIDATION_ERROR',
     },
     {
-        pattern: /sandbox.*not initialized/i,
+        pattern: /sandbox[^\r\n]{0,200}not initialized/i,
         suggestion: 'Internal sandbox error. Retry the operation.',
         code: 'INTERNAL_ERROR',
     },
@@ -113,22 +115,21 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
         code: 'VALIDATION_ERROR',
     },
     {
-        pattern: /import statement|dynamic import|require.*not allowed/i,
+        pattern: /import statement|dynamic import|require[^\r\n]{0,200}not allowed/i,
         suggestion:
             'Dynamic import() and require() statements are not permitted in Code Mode sandbox scripts. All API methods are available pre-loaded under the top-level "mj" global object.',
         code: 'VALIDATION_ERROR',
     },
-    // Zod enum validation patterns — return valid values for self-correction
+    // Zod enum validation patterns — return valid values for self-correction (Zod v3 & v4)
     {
-        pattern: /invalid enum value.*significance/i,
+        pattern: /(?:invalid enum value|invalid option:?\s*expected one of|invalid_value)[^\r\n]{0,200}significance/i,
         suggestion:
             'Valid significance_type values: milestone, breakthrough, decision, architecture, lesson_learned, blocker_resolved, release, security',
         code: 'VALIDATION_ERROR',
     },
     {
-        pattern: /invalid enum value.*entry.?type/i,
-        suggestion:
-            'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, plan_finalized, copilot_validation, other, personal_reflection',
+        pattern: /(?:invalid enum value|invalid option:?\s*expected one of|invalid_value)[^\r\n]{0,200}entry.?type/i,
+        suggestion: `Valid entry_type values: ${ENTRY_TYPES.join(', ')}`,
         code: 'VALIDATION_ERROR',
     },
 ]

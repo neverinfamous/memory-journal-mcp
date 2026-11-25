@@ -1,10 +1,45 @@
 import { z } from 'zod'
 
 export const safeCoerceNumber = z.preprocess((val) => {
-    if (val === undefined || val === null || val === '') return undefined
-    const num = Number(val)
-    return isNaN(num) ? undefined : num
+    if (val === undefined || val === null) return undefined
+    if (typeof val === 'number') return Number.isFinite(val) ? val : val
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)) return val
+        const parsed = Number(trimmed)
+        if (!Number.isFinite(parsed)) return val
+        if (!trimmed.includes('.') && !Number.isSafeInteger(parsed)) return val
+        return parsed
+    }
+    return val
 }, z.number().optional())
+
+const safeCoerceCanonicalDecimal = (val: unknown): unknown => {
+    if (val === undefined || val === null) return undefined
+    if (typeof val === 'number') return val
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trimmed)) return val
+        const parsed = Number(trimmed)
+        if (!Number.isFinite(parsed)) return val
+        if (!trimmed.includes('.') && !Number.isSafeInteger(parsed)) return val
+        return parsed
+    }
+    return val
+}
+
+export const safeCoercePositiveInt = z.preprocess(
+    safeCoerceCanonicalDecimal,
+    z.number().int().positive().optional()
+)
+export const safeCoerceNonNegativeNumber = z.preprocess(
+    safeCoerceCanonicalDecimal,
+    z.number().min(0).optional()
+)
+export const safeCoerceUnitInterval = z.preprocess(
+    safeCoerceCanonicalDecimal,
+    z.number().min(0).max(1).optional()
+)
 
 export const safeCoerceValidationStatus = z.preprocess((val) => {
     if (val === undefined || val === null || val === '') return undefined
@@ -22,8 +57,9 @@ export const safeCoerceValidationStatus = z.preprocess((val) => {
         if (['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'].includes(lower)) {
             return 'none'
         }
+        return val.trim()
     }
-    return 'none'
+    return val
 }, z.enum(['passed', 'failed', 'none']).optional())
 
 export const coreOptionsSchema = z.object({
@@ -31,22 +67,41 @@ export const coreOptionsSchema = z.object({
     dumpConfig: z.boolean().optional(),
     logLevel: z.string().optional(),
     maxToolInputElements: z.string().optional(),
-    agentHealing: z.boolean().optional()
+    agentHealing: z.boolean().optional(),
+    instructionLevel: z.string().optional()
 })
 
 export const databaseOptionsSchema = z.object({
     db: z.string().optional(),
     database: z.string().optional(),
+    testDb: z.string().optional(),
     teamDb: z.string().optional(),
     teamDatabase: z.string().optional(),
+    testTeamDb: z.string().optional(),
     additionalTeamDbs: z.string().optional(),
     teamDefaultRole: z.string().optional(),
     teamAdmin: z.string().optional()
 })
 
+export const safeCoerceDefaultProject = z.preprocess((val) => {
+    if (val === undefined || val === null) return undefined
+    if (typeof val === 'number') {
+        return Number.isSafeInteger(val) && val > 0 ? val : val
+    }
+    if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (!/^p?[1-9]\d*$/i.test(trimmed)) return val
+        const digits = trimmed.replace(/^p/i, '')
+        const parsed = Number(digits)
+        return Number.isSafeInteger(parsed) && String(parsed) === digits ? parsed : val
+    }
+    return val
+}, z.number().int().positive().optional())
+
 export const workspaceOptionsSchema = z.object({
-    defaultProject: safeCoerceNumber,
-    defaultWorkspaceId: z.string().optional()
+    defaultProject: safeCoerceDefaultProject,
+    defaultWorkspaceId: z.string().optional(),
+    workspace: z.string().optional()
 })
 
 export const vectorOptionsSchema = z.object({
@@ -92,20 +147,7 @@ export const codeModeOptionsSchema = z.object({
     toolFilter: z.string().optional()
 })
 
-export const schedulerOptionsSchema = z.object({
-    backupInterval: z.string().optional(),
-    keepBackups: z.string().optional(),
-    vacuumInterval: z.string().optional(),
-    rebuildIndexInterval: z.string().optional(),
-    digestInterval: z.string().optional(),
-    reportInterval: z.string().optional(),
-    reportWebhookUrl: z.string().optional(),
-    reportWebhookAuth: z.string().optional(),
-    reportContentType: z.string().optional()
-})
-
 export const pruningOptionsSchema = z.object({
-    autoPruneInterval: z.string().optional(),
     archiveOlderThanDays: z.string().optional(),
     pruneOlderThanDays: z.string().optional(),
     hardDeleteOlderThanDays: z.string().optional(),
@@ -130,6 +172,8 @@ export const briefingOptionsSchema = z.object({
     briefingWorkflows: z.string().optional(),
     briefingWorkflowStatus: z.boolean().optional(),
     briefingCopilot: z.boolean().optional(),
+    briefingGraph: z.boolean().optional(),
+    briefingInsights: z.boolean().optional(),
     workflowSummary: z.string().optional()
 })
 
@@ -152,7 +196,6 @@ export const serverOptionsSchema = coreOptionsSchema
     .extend(oauthOptionsSchema.shape)
     .extend(auditOptionsSchema.shape)
     .extend(codeModeOptionsSchema.shape)
-    .extend(schedulerOptionsSchema.shape)
     .extend(pruningOptionsSchema.shape)
     .extend(briefingOptionsSchema.shape)
     .extend(metricsOptionsSchema.shape)
@@ -182,16 +225,18 @@ export const adminVacuumOptionsSchema = coreOptionsSchema
 export const adminPruneOptionsSchema = pruningOptionsSchema
     .extend(coreOptionsSchema.shape)
     .extend(databaseOptionsSchema.shape)
+    .extend(workspaceOptionsSchema.shape)
     .extend(outputOptionsSchema.shape)
     .extend({
         // Specific overrides from prune command
-        archiveOlderThanDays: z.coerce.number().optional(),
-        pruneOlderThanDays: z.coerce.number().optional(),
-        hardDeleteOlderThanDays: z.coerce.number().optional(),
-        importanceThreshold: z.coerce.number().optional(),
-        pruneImportanceThreshold: z.coerce.number().optional(),
+        archiveOlderThanDays: safeCoerceNonNegativeNumber,
+        pruneOlderThanDays: safeCoerceNonNegativeNumber,
+        hardDeleteOlderThanDays: safeCoerceNonNegativeNumber,
+        importanceThreshold: safeCoerceUnitInterval,
+        pruneImportanceThreshold: safeCoerceUnitInterval,
         dryRun: z.boolean().optional(),
-        excludeTags: z.string().optional()
+        excludeTags: z.string().optional(),
+        allWorkspaces: z.boolean().optional(),
     })
 
 export const baseEntryOptionsSchema = z.object({
@@ -204,11 +249,14 @@ export const baseEntryOptionsSchema = z.object({
     summary: z.string().optional(),
     type: z.string().optional(),
     category: z.string().optional(),
+    significance: z.string().optional(),
+    significanceType: z.string().optional(),
+    significance_type: z.string().optional(),
     tags: z.string().optional(),
     tag: z.string().optional(),
-    project: safeCoerceNumber,
-    projectNumber: safeCoerceNumber,
-    project_number: safeCoerceNumber,
+    project: safeCoerceDefaultProject,
+    projectNumber: safeCoerceDefaultProject,
+    project_number: safeCoerceDefaultProject,
     trustScore: safeCoerceNumber,
     trust_score: safeCoerceNumber,
     confidence: safeCoerceNumber,
@@ -228,6 +276,8 @@ export const baseEntryOptionsSchema = z.object({
     autoContext: z.string().optional(),
     autoContextFile: z.string().optional(),
     metadata: z.string().optional(),
+    autoLink: z.boolean().optional(),
+    dryRunLinks: z.boolean().optional(),
     team: z.boolean().optional()
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
@@ -236,8 +286,10 @@ export type BaseEntryOptionsSchema = z.infer<typeof baseEntryOptionsSchema>
 export const createEntryOptionsSchema = baseEntryOptionsSchema
 
 export const updateEntryOptionsSchema = baseEntryOptionsSchema.extend({
-    id: z.coerce.number(),
-    expectedVersion: z.coerce.number()
+    id: safeCoercePositiveInt,
+    expectedVersion: safeCoercePositiveInt,
+    targetWorkspace: z.string().optional(),
+    target_workspace: z.string().optional(),
 })
 
 export const searchOptionsSchema = z.object({
@@ -246,45 +298,46 @@ export const searchOptionsSchema = z.object({
     keyword: z.string().optional(),
     mode: z.enum(['auto', 'fts', 'semantic', 'hybrid']).optional(),
     team: z.boolean().optional(),
-    limit: z.coerce.number().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+    limit: safeCoercePositiveInt
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioExportJsonOptionsSchema = z.object({
     dest: z.string().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioExportMarkdownOptionsSchema = z.object({
     dir: z.string().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioImportMarkdownOptionsSchema = z.object({
     dir: z.string().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioImportExternalOptionsSchema = z.object({
     dir: z.string().optional(),
-    format: z.enum(['notion', 'obsidian', 'logseq']).optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+    format: z.enum(['notion', 'obsidian', 'logseq']).optional(),
+    limit: safeCoercePositiveInt,
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const visualizeOptionsSchema = z.object({
     out: z.string().optional(),
     team: z.boolean().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const analyticsOptionsSchema = z.object({
     team: z.boolean().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const adminAuditSearchOptionsSchema = z.object({
-    limit: z.coerce.number().optional(),
+    limit: safeCoercePositiveInt,
     tool: z.string().optional(),
     user: z.string().optional(),
-    category: z.string().optional(),
+    category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
     status: z.enum(['success', 'error']).optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(auditOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(auditOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const adminRebuildIndexOptionsSchema = z.object({
     team: z.boolean().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 

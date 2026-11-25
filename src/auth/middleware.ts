@@ -11,7 +11,7 @@ import type { AuthInfo } from '@modelcontextprotocol/server'
 import type { TokenValidator } from './token-validator.js'
 import type { OAuthResourceServer } from './oauth-resource-server.js'
 import { TokenMissingError, InsufficientScopeError, isOAuthError } from './errors.js'
-import { hasScope as checkScope } from './scopes.js'
+import { hasAnyScope, hasScope as checkScope } from './scopes.js'
 import { getRequiredScope } from './scope-map.js'
 import { logger } from '../utils/logger.js'
 import { extractBearerToken } from './transport-agnostic.js'
@@ -67,8 +67,13 @@ export interface AuthMiddlewareConfig {
  * - Well-known paths are always public
  */
 function isPublicPath(path: string, publicPaths: string[]): boolean {
-    // Exact OAuth endpoints are public
-    if (path === '/.well-known/oauth-authorization-server' || path === '/.well-known/jwks.json') {
+    // Exact OAuth discovery & JWKS endpoints are public
+    if (
+        path === '/.well-known/oauth-authorization-server' ||
+        path === '/.well-known/oauth-protected-resource' ||
+        path.startsWith('/.well-known/oauth-protected-resource/') ||
+        path === '/.well-known/jwks.json'
+    ) {
         return true
     }
 
@@ -94,6 +99,100 @@ function isPublicPath(path: string, publicPaths: string[]): boolean {
 // Main Authentication Middleware
 // =============================================================================
 
+function sendMissingTokenResponse(res: Response, resourceServer: OAuthResourceServer): void {
+    const error = new TokenMissingError(resourceServer.getResourceUri())
+    logger.warning('No access token provided', {
+        module: 'AUTH',
+        operation: 'authenticate',
+    })
+    res.status(error.httpStatus)
+    res.setHeader('WWW-Authenticate', error.wwwAuthenticate ?? '')
+    res.json({
+        error: 'unauthorized',
+        error_description: error.message,
+    })
+}
+
+function sendInvalidTokenResponse(
+    res: Response,
+    resourceServer: OAuthResourceServer,
+    errorMessage: string | undefined
+): void {
+    logger.warning(`Token validation failed: ${errorMessage ?? 'Unknown error'}`, {
+        module: 'AUTH',
+        operation: 'authenticate',
+    })
+    res.status(401)
+    res.setHeader(
+        'WWW-Authenticate',
+        resourceServer.getWWWAuthenticateHeader('invalid_token', errorMessage)
+    )
+    res.json({
+        error: 'invalid_token',
+        error_description: errorMessage,
+    })
+}
+
+function attachValidatedClaims(authReq: AuthRequest, token: string, claims: TokenClaims): void {
+    // [INVARIANT] AuthInfo.expiresAt uses Unix epoch seconds matching JWT `exp` (M2).
+    const authInfo: AuthInfo = {
+        token,
+        clientId: claims.client_id || claims.sub,
+        scopes: claims.scopes,
+        expiresAt: claims.exp,
+    }
+    authReq.auth = authInfo
+    authReq.tokenClaims = claims
+    authReq.accessToken = token
+}
+
+async function handleAuthRequest(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    tokenValidator: TokenValidator,
+    resourceServer: OAuthResourceServer,
+    publicPaths: string[]
+): Promise<void> {
+    const authReq: AuthRequest = req
+    authReq.requestId = crypto.randomUUID()
+
+    if ((req.method === 'GET' || req.method === 'HEAD') && isPublicPath(req.path, publicPaths)) {
+        logger.debug(`Public path accessed: ${req.path}`, {
+            module: 'AUTH',
+            operation: 'public-path',
+        })
+        next()
+        return
+    }
+
+    const token = extractBearerToken(req.headers.authorization)
+    if (!token) {
+        sendMissingTokenResponse(res, resourceServer)
+        return
+    }
+
+    const result = await tokenValidator.validate(token)
+    if (!result.valid) {
+        sendInvalidTokenResponse(res, resourceServer, result.error)
+        return
+    }
+
+    const claims = result.claims
+    if (!claims) {
+        res.status(500).json({ error: 'internal_error' })
+        return
+    }
+
+    attachValidatedClaims(authReq, token, claims)
+    logger.debug(`Request authenticated: ${claims.sub}`, {
+        module: 'AUTH',
+        operation: 'authenticate',
+        entityId: claims.sub,
+    })
+    next()
+}
+
 /**
  * Create the main authentication middleware
  *
@@ -107,89 +206,8 @@ function isPublicPath(path: string, publicPaths: string[]): boolean {
 export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandler {
     const { tokenValidator, resourceServer, publicPaths = [] } = config
 
-    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        const authReq: AuthRequest = req
-
-        // Generate request ID for tracing
-        const requestId = crypto.randomUUID()
-        authReq.requestId = requestId
-
-        // Check if path is public
-        if (isPublicPath(req.path, publicPaths)) {
-            logger.info(`Public path accessed: ${req.path}`, {
-                module: 'AUTH',
-                operation: 'public-path',
-            })
-            next()
-            return
-        }
-
-        // Extract Bearer token
-        const token = extractBearerToken(req.headers.authorization)
-
-        if (!token) {
-            const error = new TokenMissingError(resourceServer.getResourceUri())
-
-            logger.warning('No access token provided', {
-                module: 'AUTH',
-                operation: 'authenticate',
-            })
-
-            res.status(error.httpStatus)
-            res.setHeader('WWW-Authenticate', error.wwwAuthenticate ?? '')
-            res.json({
-                error: 'unauthorized',
-                error_description: error.message,
-            })
-            return
-        }
-
-        // Validate token
-        const result = await tokenValidator.validate(token)
-
-        if (!result.valid) {
-            logger.warning(`Token validation failed: ${result.error ?? 'Unknown error'}`, {
-                module: 'AUTH',
-                operation: 'authenticate',
-            })
-
-            res.status(401)
-            res.setHeader(
-                'WWW-Authenticate',
-                resourceServer.getWWWAuthenticateHeader('invalid_token', result.error)
-            )
-            res.json({
-                error: 'invalid_token',
-                error_description: result.error,
-            })
-            return
-        }
-
-        // Attach claims to request (claims is guaranteed defined when valid is true)
-        const claims = result.claims
-        if (!claims) {
-            // Should not happen when valid is true, but satisfies TypeScript
-            res.status(500).json({ error: 'internal_error' })
-            return
-        }
-        const authInfo: AuthInfo = {
-            token: token,
-            clientId: claims.client_id || claims.sub,
-            scopes: claims.scopes,
-            expiresAt: claims.exp * 1000
-        }
-        authReq.auth = authInfo
-        authReq.tokenClaims = claims
-        authReq.accessToken = token
-
-        logger.info(`Request authenticated: ${claims.sub}`, {
-            module: 'AUTH',
-            operation: 'authenticate',
-            entityId: claims.sub,
-        })
-
-        next()
-    }
+    return (req: Request, res: Response, next: NextFunction): Promise<void> =>
+        handleAuthRequest(req, res, next, tokenValidator, resourceServer, publicPaths)
 }
 
 // =============================================================================
@@ -215,10 +233,7 @@ export function requireScope(scope: string): RequestHandler {
             return
         }
 
-        const scopeGranted =
-            authReq.auth.scopes.includes(scope) ||
-            authReq.auth.scopes.includes('admin') ||
-            authReq.auth.scopes.includes('full')
+        const scopeGranted = checkScope(authReq.auth.scopes, scope)
 
         if (!scopeGranted) {
             const error = new InsufficientScopeError(scope, authReq.auth.scopes)
@@ -260,15 +275,9 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
             return
         }
 
-        // Full or admin scope grants all
-        if (authReq.auth.scopes.includes('full') || authReq.auth.scopes.includes('admin')) {
-            next()
-            return
-        }
+        const grantedScopes = authReq.auth.scopes
 
-        const hasAnyScope = scopes.some((scope) => authReq.auth?.scopes.includes(scope))
-
-        if (!hasAnyScope) {
+        if (!hasAnyScope(grantedScopes, scopes)) {
             const error = new InsufficientScopeError(scopes, authReq.auth.scopes)
 
             logger.warning(`Insufficient scope: required one of [${scopes.join(', ')}]`, {
@@ -313,7 +322,7 @@ export function requireToolScope(toolName: string): RequestHandler {
         const hasAccess = checkScope(authReq.auth.scopes, requiredScope)
 
         if (!hasAccess) {
-            const error = new InsufficientScopeError(`Tool access: ${toolName}`, authReq.auth.scopes)
+            const error = new InsufficientScopeError(requiredScope, authReq.auth.scopes)
 
             logger.warning(`Insufficient scope for tool: ${toolName}`, {
                 module: 'AUTH',

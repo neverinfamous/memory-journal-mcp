@@ -2,6 +2,12 @@ import { logger } from '../../utils/logger.js'
 import { TRAFFIC_CACHE_TTL_MS } from './client.js'
 import type { GitHubClient } from './client.js'
 import type { RepoStats, TrafficData, TrafficReferrer, PopularPath } from '../../types/index.js'
+import {
+    isCachedPopularPaths,
+    isCachedRepoStats,
+    isCachedTrafficData,
+    isCachedTrafficReferrers,
+} from './cache-helpers.js'
 
 export class InsightsManager {
     constructor(private client: GitHubClient) {}
@@ -12,10 +18,8 @@ export class InsightsManager {
         }
 
         const cacheKey = `repostats:${owner}:${repo}`
-        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
-            | RepoStats
-            | undefined
-        if (cached) return cached
+        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (isCachedRepoStats(cached)) return cached
 
         try {
             const response = await this.client.octokit.repos.get({ owner, repo })
@@ -48,10 +52,8 @@ export class InsightsManager {
         }
 
         const cacheKey = `traffic:${owner}:${repo}`
-        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
-            | TrafficData
-            | undefined
-        if (cached) return cached
+        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (isCachedTrafficData(cached)) return cached
 
         try {
             const [clonesRes, viewsRes] = await Promise.all([
@@ -88,16 +90,14 @@ export class InsightsManager {
         }
     }
 
-    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[]> {
+    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[] | null> {
         if (!this.client.octokit) {
-            return []
+            return null
         }
 
         const cacheKey = `referrers:${owner}:${repo}`
-        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
-            | TrafficReferrer[]
-            | undefined
-        if (cached) return cached.slice(0, limit)
+        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (isCachedTrafficReferrers(cached)) return cached.slice(0, limit)
 
         try {
             const response = await this.client.octokit.rest.repos.getTopReferrers({ owner, repo })
@@ -116,20 +116,18 @@ export class InsightsManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { owner, repo },
             })
-            return []
+            return null
         }
     }
 
-    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[]> {
+    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[] | null> {
         if (!this.client.octokit) {
-            return []
+            return null
         }
 
         const cacheKey = `paths:${owner}:${repo}`
-        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
-            | PopularPath[]
-            | undefined
-        if (cached) return cached.slice(0, limit)
+        const cached = this.client.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (isCachedPopularPaths(cached)) return cached.slice(0, limit)
 
         try {
             const response = await this.client.octokit.rest.repos.getTopPaths({ owner, repo })
@@ -149,7 +147,7 @@ export class InsightsManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { owner, repo },
             })
-            return []
+            return null
         }
     }
 }

@@ -12,8 +12,97 @@
 
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
+import { posix } from 'node:path'
 import { parseYamlFrontmatter } from './yaml-parser.js'
-import { extractTags, formatToISODate } from './utils.js'
+import {
+    addBoundedTag,
+    extractTags,
+    formatToISODate,
+    isClosingCodeFence,
+    toBoundedTags,
+} from './utils.js'
+
+function applyLogseqPropertyLine(
+    line: string,
+    mjMeta: FrontmatterData,
+    mergedTags: Set<string>
+): boolean {
+    const propMatch = /^([ \t]*)([a-zA-Z0-9_-]+)::[ \t]+([^\s\r\n][^\r\n]*)$/.exec(line)
+    if (propMatch === null) return false
+    const [, , key, val] = propMatch
+    const k = key?.toLowerCase()
+    const v = val?.trim()
+    if (k === 'tags' && v !== undefined && v !== '') {
+        for (const rawTag of v.split(/[, ]+/)) {
+            const trimmed = rawTag.trim()
+            if (trimmed !== '') addBoundedTag(mergedTags, trimmed.replace(/^#/, ''))
+        }
+    } else if (k === 'date' && v !== undefined && v !== '') {
+        const formatted = formatToISODate(v)
+        if (formatted !== undefined) {
+            mjMeta.timestamp = formatted
+        }
+    }
+    return true
+}
+
+function transformLogseqLine(
+    rawLine: string,
+    mjMeta: FrontmatterData,
+    mergedTags: Set<string>
+): { line: string | null; hasTask: boolean; hasDoneTask: boolean } {
+    let line = rawLine
+    if (applyLogseqPropertyLine(line, mjMeta, mergedTags)) {
+        return { line: null, hasTask: false, hasDoneTask: false }
+    }
+
+    let hasTask = false
+    let hasDoneTask = false
+    if (/^\s*-\s+(?:TODO|LATER)\b/.test(line)) {
+        line = line.replace(/^(\s*-\s+)(?:TODO|LATER)\s+/, '$1[ ] ')
+        hasTask = true
+    } else if (/^\s*-\s+(?:DONE|NOW)\b/.test(line)) {
+        line = line.replace(/^(\s*-\s+)(?:DONE|NOW)\s+/, '$1[x] ')
+        hasDoneTask = true
+    }
+
+    for (const match of line.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)) {
+        if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
+    }
+
+    line = line.replace(/\[\[([^\][\r\n]{1,500})\]\]/g, (_match: string, inner: string) => {
+        const parts = inner.split('|')
+        return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
+    })
+
+    return { line: line.trim() === '-' ? null : line, hasTask, hasDoneTask }
+}
+
+function inferLogseqEntryMetadata(
+    filename: string,
+    defaultEntryType: string | undefined,
+    hasTasks: boolean,
+    hasDoneTasks: boolean,
+    mjMeta: FrontmatterData
+): void {
+    const posixFile = filename.replace(/\\/g, '/')
+    const baseFilename = posix.basename(posixFile)
+    const journalMatch = /\b(\d{4}_\d{2}_\d{2})\b/.exec(baseFilename)
+    if (journalMatch?.[1] && !mjMeta.timestamp) {
+        const formatted = formatToISODate(`${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`)
+        if (formatted !== undefined) {
+            mjMeta.timestamp = formatted
+        }
+    }
+    if (defaultEntryType) return
+    if (journalMatch || /(?:^|\/)journals\//i.test(posixFile)) {
+        mjMeta.entry_type = 'standup'
+    } else if (hasDoneTasks && !hasTasks) {
+        mjMeta.entry_type = 'feature_implementation'
+    } else if (hasTasks) {
+        mjMeta.entry_type = 'planning'
+    }
+}
 
 export function convertLogseq(
     content: string,
@@ -21,100 +110,51 @@ export function convertLogseq(
     defaultEntryType?: string
 ): ConvertedFile {
     const { metadata: yamlMeta, body } = parseYamlFrontmatter(content)
-    
     const mjMeta: FrontmatterData = {
         source: 'logseq',
         entry_type: defaultEntryType ?? 'other',
     }
-
     const mergedTags = new Set<string>()
-
-    // 1. Process Frontmatter Tags and Aliases
     extractTags(yamlMeta, mergedTags, 'alias')
 
-    // 2. Process Body Text
-    const lines = body.split('\n')
     const processedLines: string[] = []
-    
     let hasTasks = false
     let hasDoneTasks = false
 
-    for (const rawLine of lines) {
-        let line = rawLine ?? ''
-        
-        // Extract inline properties (key:: value)
-        const propMatch = /^(\s*)([a-zA-Z0-9_-]+)::\s*(.+)$/.exec(line)
-        if (propMatch !== null) {
-            const [, , key, val] = propMatch
-            const k = key?.toLowerCase()
-            const v = val?.trim()
-            if (k === 'tags' && v) {
-                const tags = v.split(/[, ]+/).map(s => s.trim())
-                for (const t of tags) if (t) mergedTags.add(t.replace(/^#/, ''))
-            } else if (k === 'date' && v) {
-                mjMeta.timestamp = formatToISODate(v)
+    const cleanBody = body.charCodeAt(0) === 0xfeff ? body.slice(1) : body
+    const normalizedBody = cleanBody.replace(/\r\n?/g, '\n')
+    let openFence: { marker: string; minLen: number } | undefined
+    for (const rawLine of normalizedBody.split('\n')) {
+        const line = rawLine ?? ''
+        const trimmedLine = line.trimStart()
+        if (openFence !== undefined) {
+            if (isClosingCodeFence(trimmedLine, openFence.marker, openFence.minLen)) {
+                openFence = undefined
             }
-            // Strip the property line from output
+            processedLines.push(line)
             continue
         }
-
-        // Handle task markers
-        if (/^\s*-\s+(TODO|LATER)\b/.exec(line)) {
-            line = line.replace(/\b(TODO|LATER)\s+/, '[ ] ')
-            hasTasks = true
-        } else if (/^\s*-\s+(DONE|NOW)\b/.exec(line)) {
-            line = line.replace(/\b(DONE|NOW)\s+/, '[x] ')
-            hasDoneTasks = true
-        }
-
-        // Extract inline tags
-        const inlineTagMatches = line.matchAll(/(^|\s)#([a-zA-Z0-9_-]+)\b/g)
-        for (const match of inlineTagMatches) {
-            if (match[2]) mergedTags.add(match[2].toLowerCase())
-        }
-
-        // Strip wikilinks/page refs
-        line = line.replace(/\[\[([^\]]+)\]\]/g, (_match: string, inner: string) => {
-            const parts = inner.split('|')
-            return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
-        })
-
-        // Un-indent basic blocks slightly to make it read more like a document than an outline,
-        // but preserve nesting relative to the parent.
-        // If it starts with "- ", we can optionally turn it into a standard paragraph or keep as bullet.
-        // For logseq, leaving as bullets often looks best, but we'll trim empty block prefixes.
-        if (line.trim() === '-') {
+        const fenceMatch = /^(?:(`{3,})[^`]*$|(~{3,}))/.exec(trimmedLine)
+        const marker = fenceMatch?.[1] ?? fenceMatch?.[2]
+        if (marker !== undefined) {
+            openFence = { marker: marker[0] ?? '`', minLen: marker.length }
+            processedLines.push(line)
             continue
         }
-
-        processedLines.push(line)
+        const outcome = transformLogseqLine(line, mjMeta, mergedTags)
+        if (outcome.hasTask) hasTasks = true
+        if (outcome.hasDoneTask) hasDoneTasks = true
+        if (outcome.line !== null) processedLines.push(outcome.line)
     }
-
-    const processedBody = processedLines.join('\n')
 
     if (mergedTags.size > 0) {
-        mjMeta.tags = Array.from(mergedTags)
+        mjMeta.tags = toBoundedTags(mergedTags)
     }
-
-    // 3. Heuristic Entry Type Inference
-    if (!defaultEntryType) {
-        // Logseq journal files are typically formatted as YYYY_MM_DD.md
-        const journalMatch = /\b(\d{4}_\d{2}_\d{2})\b/.exec(filename)
-        if (journalMatch || filename.includes('journals')) {
-            mjMeta.entry_type = 'standup'
-            if (journalMatch?.[1] && !mjMeta.timestamp) {
-                mjMeta.timestamp = `${journalMatch[1].replace(/_/g, '-')}T12:00:00Z`
-            }
-        } else if (hasDoneTasks && !hasTasks) {
-            mjMeta.entry_type = 'feature_implementation'
-        } else if (hasTasks) {
-            mjMeta.entry_type = 'planning'
-        }
-    }
+    inferLogseqEntryMetadata(filename, defaultEntryType, hasTasks, hasDoneTasks, mjMeta)
 
     return {
         filename,
         metadata: mjMeta,
-        body: processedBody.trim(),
+        body: processedLines.join('\n').trim(),
     }
 }

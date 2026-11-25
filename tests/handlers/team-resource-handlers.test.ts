@@ -37,8 +37,9 @@ describe('Team Resource Handlers', () => {
         const entry1 = teamDb.createEntry({
             content: 'Team resource test alpha',
             tags: ['res-team'],
+            projectNumber: 1,
         })
-        const entry2 = teamDb.createEntry({ content: 'Team resource test beta' })
+        const entry2 = teamDb.createEntry({ content: 'Team resource test beta', projectNumber: 1 })
 
         const flagContext = {
             flag_type: 'blocker',
@@ -51,8 +52,9 @@ describe('Team Resource Handlers', () => {
         }
         const entry3 = teamDb.createEntry({
             content: 'flag:blocker @neverinfamous: API is down',
-            entryType: 'flag',
+            entryType: 'technical_note',
             autoContext: JSON.stringify(flagContext),
+            projectNumber: 1,
         })
 
         // Set author on entries via raw SQL
@@ -87,8 +89,8 @@ describe('Team Resource Handlers', () => {
                 undefined,
                 undefined,
                 undefined,
-                undefined,
-                teamDb
+                teamDb,
+                { defaultProjectNumber: 1 } as never
             )
 
             const data = result.data as {
@@ -116,8 +118,8 @@ describe('Team Resource Handlers', () => {
                 undefined,
                 undefined,
                 undefined,
-                undefined,
-                teamDb
+                teamDb,
+                { defaultProjectNumber: 1 } as never
             )
 
             expect(result.annotations?.lastModified).toBeDefined()
@@ -145,7 +147,6 @@ describe('Team Resource Handlers', () => {
             const result = await readResource(
                 'memory://team/statistics',
                 personalDb,
-                undefined,
                 undefined,
                 undefined,
                 undefined,

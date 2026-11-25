@@ -386,6 +386,108 @@ describe('buildGitHubSection', () => {
     })
 
     // ========================================================================
+    // 0 / false suppression & API skip guards
+    // ========================================================================
+
+    it('skips getWorkflowRuns and marks ciSuppressed when workflowCount is 0 and workflowStatusBreakdown is false', async () => {
+        const github = createMockGitHub()
+        const config = defaultConfig({ workflowCount: 0, workflowStatusBreakdown: false })
+        const result = await buildGitHubSection(github as never, config as never)
+
+        expect(github.getWorkflowRuns).not.toHaveBeenCalled()
+        expect(result!.ciSuppressed).toBe(true)
+    })
+
+    it('skips getIssues and marks issuesSuppressed when issueCount is 0', async () => {
+        const github = createMockGitHub()
+        const config = defaultConfig({ issueCount: 0 })
+        const result = await buildGitHubSection(github as never, config as never)
+
+        expect(github.getIssues).not.toHaveBeenCalled()
+        expect(result!.issuesSuppressed).toBe(true)
+    })
+
+    it('skips getPullRequests and activePr Copilot fetch when prCount is 0 and prStatusBreakdown is false', async () => {
+        const github = createMockGitHub({
+            getLocalGitStatus: vi.fn().mockResolvedValue({
+                modified: 0,
+                untracked: 0,
+                isClean: true,
+                branch: 'feat/test',
+            }),
+        })
+        const config = defaultConfig({ prCount: 0, prStatusBreakdown: false })
+        const result = await buildGitHubSection(github as never, config as never)
+
+        expect(github.getPullRequests).not.toHaveBeenCalled()
+        expect(github.getCopilotReviewSummary).not.toHaveBeenCalled()
+        expect(result!.prsSuppressed).toBe(true)
+        expect(result!.activePr).toBeUndefined()
+    })
+
+    it('skips getCopilotReviewSummary and getWorkflowRuns on activePr when copilotReviews and workflows are disabled', async () => {
+        const github = createMockGitHub({
+            getLocalGitStatus: vi.fn().mockResolvedValue({
+                modified: 0,
+                untracked: 0,
+                isClean: true,
+                branch: 'feat/test',
+            }),
+            getPullRequests: vi.fn().mockResolvedValue([
+                {
+                    number: 77,
+                    title: 'Feat PR',
+                    url: 'https://github.com/o/r/pull/77',
+                    state: 'OPEN',
+                    headRef: 'feat/test',
+                },
+            ]),
+        })
+        const config = defaultConfig({
+            prCount: 5,
+            copilotReviews: false,
+            workflowCount: 0,
+            workflowStatusBreakdown: false,
+        })
+        const result = await buildGitHubSection(github as never, config as never)
+
+        expect(github.getCopilotReviewSummary).not.toHaveBeenCalled()
+        expect(github.getWorkflowRuns).not.toHaveBeenCalled()
+        expect(result!.activePr).toBeDefined()
+        expect(result!.activePr!.number).toBe(77)
+        expect(result!.activePr!.reviewSuppressed).toBe(true)
+        expect(result!.activePr!.ciSuppressed).toBe(true)
+    })
+
+    it('skips getRepoStats/getTrafficData and omits insights when insights is false', async () => {
+        const github = createMockGitHub()
+        const result = await buildGitHubSection(github as never, defaultConfig({ insights: false }) as never)
+
+        expect(github.getRepoStats).not.toHaveBeenCalled()
+        expect(github.getTrafficData).not.toHaveBeenCalled()
+        expect(result!.insights).toBeUndefined()
+    })
+
+    it('skips getMilestones when milestoneCount is 0', async () => {
+        const github = createMockGitHub()
+        const result = await buildGitHubSection(github as never, defaultConfig({ milestoneCount: 0 }) as never)
+
+        expect(github.getMilestones).not.toHaveBeenCalled()
+        expect(result!.milestones).toEqual([])
+    })
+
+    it('keeps the PRs row when only the issues fetch fails', async () => {
+        const github = createMockGitHub({
+            getIssues: vi.fn().mockRejectedValue(new Error('issues 502')),
+        })
+        const result = await buildGitHubSection(github as never, defaultConfig() as never)
+
+        expect(result!.openIssues).toBe(0)
+        expect(result!.openPRs).toBe(1)
+        expect(result!.openPrList?.[0]?.number).toBe(10)
+    })
+
+    // ========================================================================
     // Top-level error
     // ========================================================================
 

@@ -1,72 +1,78 @@
 import type { BriefingConfig } from '../../handlers/resources/shared.js'
+import type {
+    BriefingConfigurableKey,
+    ConfigCliEnvBaseline,
+} from '../../utils/config-manager-helpers.js'
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import type { AuditConfig } from '../../audit/index.js'
-import type { SchedulerOptions } from '../scheduler.js'
 
 export interface ServerOptions {
     transport: 'stdio' | 'http'
-    port?: number
-    host?: string
+    port?: number | undefined
+    host?: string | undefined
     dbPath: string
-    testDbPath?: string
-    teamDbPath?: string
-    testTeamDbPath?: string
-    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
-    teamAdmin?: string
-    toolFilter?: string
-    defaultProjectNumber?: number
-    defaultWorkspaceId?: string
-    autoRebuildIndex?: boolean
-    statelessHttp?: boolean
-    corsOrigins?: string[]
-    authToken?: string
-    enableHSTS?: boolean
-    scheduler?: SchedulerOptions
+    testDbPath?: string | undefined
+    teamDbPath?: string | undefined
+    testTeamDbPath?: string | undefined
+    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied' | undefined
+    teamAdmin?: string | undefined
+    toolFilter?: string | undefined
+    defaultProjectNumber?: number | undefined
+    defaultWorkspaceId?: string | undefined
+    autoRebuildIndex?: boolean | undefined
+    statelessHttp?: boolean | undefined
+    corsOrigins?: string[] | undefined
+    authToken?: string | undefined
+    enableHSTS?: boolean | undefined
 
     // OAuth 2.1 options
-    oauthEnabled?: boolean
-    oauthIssuer?: string
-    oauthAudience?: string
-    oauthJwksUri?: string
-    oauthClockTolerance?: number
-    allowPlaintextLoopbackOAuth?: boolean
-    trustProxy?: boolean
-    publicOrigin?: string
+    oauthEnabled?: boolean | undefined
+    oauthIssuer?: string | undefined
+    oauthAudience?: string | undefined
+    oauthJwksUri?: string | undefined
+    oauthClockTolerance?: number | undefined
+    allowPlaintextLoopbackOAuth?: boolean | undefined
+    trustProxy?: boolean | undefined
+    publicOrigin?: string | undefined
     // Briefing configuration
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig | undefined
+    // Briefing keys explicitly supplied via CLI flags or env vars (for hot-reload baseline preservation)
+    briefingOverrides?: Partial<Record<BriefingConfigurableKey, number | boolean>> | undefined
+    // Full CLI/env baseline overrides (distinct from config-file defaults) for ConfigManager hot-reload
+    cliEnvBaseline?: ConfigCliEnvBaseline | undefined
     // Project Registry
-    projectRegistry?: Record<string, ProjectRegistryEntry>
+    projectRegistry?: Record<string, ProjectRegistryEntry> | undefined
     // Additional team database mappings (label -> path)
-    additionalTeamDbs?: Record<string, string>
+    additionalTeamDbs?: Record<string, string> | undefined
 
     // Audit configuration
-    auditConfig?: AuditConfig
+    auditConfig?: AuditConfig | undefined
 
     // Allowlisted roots for file IO
-    allowedIoRoots?: string[]
+    allowedIoRoots?: string[] | undefined
     // Admin override for Code Mode
-    codemodeInternalFullAccess?: boolean
+    codemodeInternalFullAccess?: boolean | undefined
     // Auto-prune
-    autoPruneIntervalMinutes?: number
-    archiveOlderThanDays?: number
-    pruneOlderThanDays?: number
-    hardDeleteOlderThanDays?: number
-    pruneImportanceThreshold?: number
-    pruneDryRun?: boolean
-    pruneExcludeTags?: string[]
+    archiveOlderThanDays?: number | undefined
+    pruneOlderThanDays?: number | undefined
+    hardDeleteOlderThanDays?: number | undefined
+    pruneImportanceThreshold?: number | undefined
+    pruneDryRun?: boolean | undefined
+    pruneExcludeTags?: string[] | undefined
     // Embedding model
-    embeddingModel?: string
+    embeddingModel?: string | undefined
     // Metrics export
-    metricsExport?: 'prometheus'
-    metricsPort?: number
+    metricsExport?: 'prometheus' | undefined
+    metricsPort?: number | undefined
     // Metrics persistence
-    persistMetrics?: boolean
-    metricsPath?: string
-    configFilePath?: string
+    persistMetrics?: boolean | undefined
+    metricsPath?: string | undefined
+    configFilePath?: string | undefined
     // MCP tool input element cap (0 or Infinity disables; defaults to DEFAULT_MAX_TOOL_INPUT_ELEMENTS)
-    maxToolInputElements?: number
+    maxToolInputElements?: number | undefined
     // Autonomous MCP tool and parameter healing/interception (default: true; disabled via --no-agent-healing / MCP_AGENT_HEALING=false)
-    agentHealing?: boolean
+    agentHealing?: boolean | undefined
+    instructionLevel?: 'essential' | 'detailed' | 'full' | undefined
 }
 
 import type { McpServer } from '@modelcontextprotocol/server'
@@ -78,20 +84,18 @@ import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ConfigManager } from '../../utils/config-manager.js'
-import type { Scheduler } from '../scheduler.js'
 
 export interface ServerContext {
     db: IDatabaseAdapter;
-    testDb?: IDatabaseAdapter;
-    teamDb?: IDatabaseAdapter;
-    testTeamDb?: IDatabaseAdapter;
+    testDb?: IDatabaseAdapter | undefined;
+    teamDb?: IDatabaseAdapter | undefined;
+    testTeamDb?: IDatabaseAdapter | undefined;
     runtime: ServerRuntime;
     vectorManager: VectorSearchManager;
-    teamVectorManager?: VectorSearchManager;
+    teamVectorManager?: VectorSearchManager | undefined;
     github: GitHubIntegration;
     configManager: ConfigManager;
-    scheduler: Scheduler | null;
     allowedIoRoots: string[];
-    activeMetricsPath?: string;
-    skillCatalog?: SkillCatalog;
+    activeMetricsPath?: string | undefined;
+    skillCatalog?: SkillCatalog | undefined;
 }

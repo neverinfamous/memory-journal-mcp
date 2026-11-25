@@ -61,4 +61,15 @@ describe('sanitizeFtsQuery', () => {
         expect(sanitizeFtsQuery('();')).toBe('')
         expect(sanitizeFtsQuery('""')).toBe('')
     })
+
+    it('quotes compound dotted, slashed, or colon tokens as exact FTS phrases', () => {
+        expect(sanitizeFtsQuery('AGENTS.md')).toBe('"AGENTS md"')
+        expect(sanitizeFtsQuery('foo.ts')).toBe('"foo ts"')
+        expect(sanitizeFtsQuery('v1.2.3')).toBe('"v1 2 3"')
+        expect(sanitizeFtsQuery('@scope/pkg')).toBe('"scope pkg"')
+        expect(sanitizeFtsQuery('memory://agent-id')).toBe('"memory agent id"')
+        expect(sanitizeFtsQuery('AGENTS.md AND hooks.json')).toBe('"AGENTS md" AND "hooks json"')
+        expect(sanitizeFtsQuery('"AGENTS.md"')).toBe('"AGENTS md"')
+        expect(sanitizeFtsQuery('"@scope/pkg"')).toBe('"@scope pkg"'.replace('@', ''))
+    })
 })

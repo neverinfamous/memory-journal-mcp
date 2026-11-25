@@ -23,6 +23,7 @@ describe('utilities coverage', () => {
                 close: vi.fn().mockResolvedValue(undefined),
             }
             vi.spyOn(fs.promises, 'open').mockResolvedValue(fileMock as any)
+            vi.spyOn(fs.promises, 'stat').mockResolvedValue({ mtimeMs: 1234, size: 100 } as never)
 
             const dummyAllowedContext = {
                 briefingConfig: { allowedIoRoots: [process.cwd()] },
@@ -41,7 +42,7 @@ describe('utilities coverage', () => {
             // 3. Error handling (cache expired)
             time += 10 * 60 * 1000
             fileMock.readFile.mockRejectedValue('String error read')
-            await expect(rulesResource.handler('mem', dummyAllowedContext)).rejects.toThrow('String error read')
+            await expect(rulesResource.handler('mem', dummyAllowedContext)).rejects.toThrow('Could not read rules file')
         } finally {
             if (previousRulesFilePath === undefined) {
                 delete process.env['RULES_FILE_PATH']

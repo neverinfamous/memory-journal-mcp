@@ -8,6 +8,7 @@
 import { test, expect } from './test-fixture.js'
 import { Client } from '@modelcontextprotocol/client'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 import { getServerUrl } from './helpers.js'
 
@@ -80,16 +81,48 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(parsed.entry).toHaveProperty('validationStatus', 'passed')
     })
 
-    test('should execute mark_anchors_stale tool', async () => {
+    test('should execute mark_anchors_stale tool and report only rows actually updated', async () => {
+        const created = await client.callTool({
+            name: 'create_entry',
+            arguments: {
+                workspace_id: 'default',
+                project_number: 1,
+                content: 'Playwright e2e anchor entry',
+                trust_score: 0.8,
+                impact_score: 0.5,
+                validation_status: 'passed',
+                anchors: [{ anchor_path: 'package.json', anchor_type: 'file' }],
+            },
+        })
+        const createdParsed = getOutput(created) as any
+        expect(createdParsed).toHaveProperty('success', true)
+
+        const staleness = await client.callTool({
+            name: 'check_entry_staleness',
+            arguments: { entry_id: createdParsed.entry.id, workspace_id: 'default' },
+        })
+        const stalenessParsed = getOutput(staleness) as any
+        expect(stalenessParsed).toHaveProperty('success', true)
+        const anchorId = stalenessParsed.results[0].anchorId as number
+        expect(anchorId).toBeGreaterThan(0)
+
         const response = await client.callTool({
             name: 'mark_anchors_stale',
-            arguments: { updates: [{ id: 999999, status: 'stale' }] }, // It will execute but just update 0 rows in DB realistically, or maybe error depending on DB schema, but we just verify it executes without schema errors
+            arguments: {
+                workspace_id: 'default',
+                updates: [
+                    { id: anchorId, status: 'stale' },
+                    { id: 999999, status: 'stale' },
+                ],
+            },
         })
 
         expect(response.isError).toBeUndefined()
         const parsed = getOutput(response) as any
         expect(parsed).toHaveProperty('success', true)
+        // Only the real anchor is counted; the unknown id is reported instead of inflating the count.
         expect(parsed).toHaveProperty('updated_count', 1)
+        expect(parsed.not_found_ids).toEqual([999999])
     })
 
     test('should execute get_recent_entries and return entries array', async () => {
@@ -126,5 +159,53 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(parsed).toHaveProperty('success', true)
         expect(parsed.entry.entryType).toBe('other')
         expect(parsed.entry.tags).toContain('invalid-type')
+    })
+
+    test('every standard tool advertises outputSchema over tools/list while mj_execute_code omits it', async () => {
+        const listResponse = await client.listTools()
+        const canonicalSet = new Set(getAllToolNames())
+        const canonicalListed = listResponse.tools.filter((t) => canonicalSet.has(t.name))
+        expect(canonicalListed).toHaveLength(108)
+
+        const codeModeTool = listResponse.tools.find((t) => t.name === 'mj_execute_code')
+        expect(codeModeTool).toBeDefined()
+        expect(codeModeTool?.outputSchema).toBeUndefined()
+
+        const missingOutputSchema = listResponse.tools
+            .filter((t) => t.name !== 'mj_execute_code')
+            .filter((t) => typeof t.outputSchema !== 'object' || t.outputSchema === null)
+            .map((t) => t.name)
+        expect(missingOutputSchema).toEqual([])
+    })
+
+    test('every listed tool includes annotations and a non-empty title over tools/list', async () => {
+        const listResponse = await client.listTools()
+        const canonicalSet = new Set(getAllToolNames())
+        const canonicalListed = listResponse.tools.filter((t) => canonicalSet.has(t.name))
+        expect(canonicalListed).toHaveLength(108)
+
+        for (const tool of listResponse.tools) {
+            expect(
+                typeof tool.title === 'string' && tool.title.length > 0,
+                `${tool.name} missing non-empty title`
+            ).toBe(true)
+            expect(
+                typeof tool.annotations === 'object' && tool.annotations !== null,
+                `${tool.name} missing annotations`
+            ).toBe(true)
+            expect(typeof tool.annotations?.readOnlyHint).toBe('boolean')
+            expect(typeof tool.annotations?.openWorldHint).toBe('boolean')
+        }
+
+        for (const tool of canonicalListed) {
+            expect(
+                typeof tool.annotations?.destructiveHint,
+                `${tool.name} missing destructiveHint`
+            ).toBe('boolean')
+            expect(
+                typeof tool.annotations?.idempotentHint,
+                `${tool.name} missing idempotentHint`
+            ).toBe('boolean')
+        }
     })
 })

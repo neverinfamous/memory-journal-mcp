@@ -14,6 +14,14 @@ import {
 } from '../api-constants.js'
 import type { ToolDispatcher, GroupApiRecord } from './types.js'
 import { normalizeParams } from './param-normalizer.js'
+import { isRecord } from '../normalizers/shared-utils.js'
+import {
+    DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
+    exceedsMaxToolInputElements,
+    getValidatedToolInputMax,
+    markValidatedToolInput,
+} from '../../utils/tool-input-bounds.js'
+import { sanitizeErrorForLogging } from '../../utils/security-utils.js'
 
 /**
  * Convert tool name to camelCase method name.
@@ -49,6 +57,62 @@ export function toolNameToMethodName(toolName: string, groupName: string): strin
  * @param dispatcher - Optional SEC-1.1 dispatch gate; when provided, calls go
  *   through callTool() rather than tool.handler() for full middleware enforcement.
  */
+function invokeGroupToolMethod(
+    tool: ToolDefinition,
+    methodName: string,
+    dispatcher: ToolDispatcher | undefined
+): (...args: unknown[]) => Promise<unknown> {
+    return async (...args: unknown[]): Promise<unknown> => {
+        try {
+            let rpcValidatedMax: number | undefined
+            if (args.length > 0) {
+                rpcValidatedMax =
+                    args.length === 1 ? getValidatedToolInputMax(args[0]) : undefined
+                if (
+                    rpcValidatedMax === undefined &&
+                    exceedsMaxToolInputElements(args, DEFAULT_MAX_TOOL_INPUT_ELEMENTS)
+                ) {
+                    return {
+                        success: false,
+                        error: `Tool input exceeds maximum of ${String(DEFAULT_MAX_TOOL_INPUT_ELEMENTS)} elements.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: false,
+                    }
+                }
+            }
+            const normalizedParams = normalizeParams(methodName, args) ?? {}
+            if (rpcValidatedMax !== undefined && isRecord(normalizedParams)) {
+                markValidatedToolInput(normalizedParams, rpcValidatedMax)
+            }
+            if (dispatcher) {
+                return await dispatcher(tool.name, normalizedParams)
+            }
+            const cleanDirectParams = isRecord(normalizedParams)
+                ? ((): Record<string, unknown> => {
+                      const cloned = { ...normalizedParams }
+                      delete cloned['_alias_derived_workspace']
+                      return cloned
+                  })()
+                : normalizedParams
+            return await Promise.resolve(tool.handler(cleanDirectParams))
+        } catch (error) {
+            return {
+                success: false,
+                error: sanitizeErrorForLogging(
+                    error instanceof Error ? error.message : String(error)
+                ),
+                code:
+                    isRecord(error) && typeof error['code'] === 'string'
+                        ? error['code']
+                        : error instanceof Error
+                          ? error.name
+                          : undefined,
+            }
+        }
+    }
+}
+
 export function createGroupApi(
     groupName: string,
     tools: ToolDefinition[],
@@ -58,26 +122,7 @@ export function createGroupApi(
 
     for (const tool of tools) {
         const methodName = toolNameToMethodName(tool.name, groupName)
-
-        api[methodName] = async (...args: unknown[]): Promise<unknown> => {
-            try {
-                const normalizedParams = normalizeParams(methodName, args) ?? {}
-                // SEC-1.1: Route through dispatcher (callTool gate) when available.
-                // Dispatcher enforces scope checks, maintenance mode, and audit.
-                if (dispatcher) {
-                    return await dispatcher(tool.name, normalizedParams as Record<string, unknown>)
-                }
-                return await Promise.resolve(tool.handler(normalizedParams))
-            } catch (error) {
-                return {
-                    success: false,
-                    error: error instanceof Error ? error.message : String(error),
-                    code: typeof (error as Record<string, unknown>)['code'] === 'string'
-                        ? (error as Record<string, unknown>)['code']
-                        : (error as Error)?.name
-                }
-            }
-        }
+        api[methodName] = invokeGroupToolMethod(tool, methodName, dispatcher)
 
         // Attach original snake_case tool name for backward compatibility with tests and agents
         if (tool.name !== methodName) {
@@ -108,7 +153,7 @@ export function createGroupApi(
         return Promise.resolve({
             group: groupName,
             methods,
-            examples: GROUP_EXAMPLES[groupName] ?? [],
+            examples: [...(GROUP_EXAMPLES[groupName] ?? [])],
         })
     }
 

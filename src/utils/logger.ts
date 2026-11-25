@@ -6,7 +6,9 @@
  * Automatically sanitizes error fields to prevent token leakage.
  */
 
-import { sanitizeErrorForLogging } from './security-utils.js'
+import { sanitizeErrorForLogging, SENSITIVE_KEY_RE } from './security-utils.js'
+import { isCrossRealmDate, isCrossRealmError, tryResolveToJson } from './sanitize-value-helpers.js'
+import { createNullProtoRecord } from './type-guards.js'
 
 type LogLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical'
 
@@ -26,6 +28,44 @@ const LOG_LEVELS: Record<LogLevel, number> = {
     critical: 2,
 }
 
+function isLogLevel(val: string): val is LogLevel {
+    return Object.hasOwn(LOG_LEVELS, val)
+}
+
+function sanitizeLogValue(value: unknown, seen = new WeakSet(), depth = 0): unknown {
+    if (isCrossRealmError(value)) return sanitizeErrorForLogging(`${value.name}: ${value.message}`)
+    if (isCrossRealmDate(value)) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+    if (value instanceof URL) return sanitizeErrorForLogging(value.toString()).replace(/[\r\n]+/g, ' ')
+    if (typeof value === 'string') return sanitizeErrorForLogging(value).replace(/[\r\n]+/g, ' ')
+    if (typeof value === 'function') return '[Function]'
+    if (typeof value === 'bigint') return value.toString()
+    if (typeof value !== 'object' || value === null) return value
+    if (depth > 6) return '[Truncated]'
+    if (seen.has(value)) return '[Circular]'
+    seen.add(value)
+    try {
+        if (Array.isArray(value)) {
+            return value.map((item) => sanitizeLogValue(item, seen, depth + 1))
+        }
+        const jsonRes = tryResolveToJson(value)
+        if (jsonRes.resolved) {
+            return sanitizeLogValue(jsonRes.value, seen, depth + 1)
+        }
+        const out: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(value)) {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') continue
+            const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
+            out[safeKey] =
+                SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
+                    ? '[REDACTED]'
+                    : sanitizeLogValue(v, seen, depth + 1)
+        }
+        return out
+    } finally {
+        seen.delete(value)
+    }
+}
+
 class Logger {
     private minLevel: number
 
@@ -42,12 +82,16 @@ class Logger {
 
         // Sanitize all user-controlled inputs to prevent log injection (CodeQL js/log-injection).
         // Each .replace() must be applied inline — CodeQL cannot track sanitization through method calls.
-        const safeMessage = message.replace(/\n|\r/g, '')
+        const safeMessage = sanitizeErrorForLogging(message).replace(/\n|\r/g, '')
         const timestamp = new Date().toISOString()
         const levelUpper = level.toUpperCase().padEnd(8)
 
-        const mod = context?.module ? `[${context.module.replace(/\n|\r/g, '')}]` : ''
-        const op = context?.operation ? `[${context.operation.replace(/\n|\r/g, '')}]` : ''
+        const mod = context?.module
+            ? `[${sanitizeErrorForLogging(context.module).replace(/\n|\r/g, '')}]`
+            : ''
+        const op = context?.operation
+            ? `[${sanitizeErrorForLogging(context.operation).replace(/\n|\r/g, '')}]`
+            : ''
 
         let line = `[${timestamp}] [${levelUpper}] ${mod}${op} ${safeMessage}`
 
@@ -56,13 +100,36 @@ class Logger {
         delete extras['module']
         delete extras['operation']
 
-        // Sanitize error fields to prevent token leakage
-        if (extras['error'] != null && typeof extras['error'] === 'string') {
-            extras['error'] = sanitizeErrorForLogging(extras['error'])
+        // Sanitize error and string fields recursively to prevent token/secret leakage in nested log contexts
+        const sanitizedExtras = createNullProtoRecord()
+        const rootSeen = new WeakSet()
+        if (context !== undefined) rootSeen.add(context)
+        for (const [k, v] of Object.entries(extras)) {
+            if (
+                k === '__proto__' ||
+                k === 'constructor' ||
+                k === 'prototype' ||
+                k === 'toJSON' ||
+                typeof v === 'function'
+            ) {
+                continue
+            }
+            const safeKey = sanitizeErrorForLogging(k).replace(/[\r\n]+/g, ' ')
+            sanitizedExtras[safeKey] =
+                SENSITIVE_KEY_RE.test(k) && v !== undefined && v !== null && v !== ''
+                    ? '[REDACTED]'
+                    : sanitizeLogValue(v, rootSeen, 0)
         }
 
-        if (Object.keys(extras).length > 0) {
-            line += ` ${JSON.stringify(extras).replace(/\n|\r/g, '')}`
+        if (Object.keys(sanitizedExtras).length > 0) {
+            try {
+                const serialized = JSON.stringify(sanitizedExtras, (_k: string, val: unknown) =>
+                    typeof val === 'bigint' ? val.toString() : val
+                )
+                line += ` ${serialized.replace(/\n|\r/g, '')}`
+            } catch {
+                line += ' {"_serializationError":"unserializable log context"}'
+            }
         }
 
         // Always write to stderr (stdout is reserved for MCP protocol)
@@ -95,14 +162,26 @@ class Logger {
     }
 
     setLevel(level: LogLevel): void {
-        if (level in LOG_LEVELS) {
-            this.minLevel = LOG_LEVELS[level]
+        const raw = typeof level === 'string' ? level.trim().toLowerCase() : ''
+        const normalized = raw === 'warn' ? 'warning' : raw
+        if (isLogLevel(normalized)) {
+            this.minLevel = LOG_LEVELS[normalized]
+            for (const listener of logLevelListeners) listener(normalized)
         }
     }
 }
 
-// Get log level from environment (validated against known levels)
-const rawLevel = process.env['LOG_LEVEL'] ?? 'info'
-const envLevel: LogLevel = rawLevel in LOG_LEVELS ? (rawLevel as LogLevel) : 'info'
+type LogLevelListener = (level: LogLevel) => void
+const logLevelListeners: LogLevelListener[] = []
+
+/** Register a listener notified whenever `logger.setLevel` changes the active level. */
+export function onLogLevelChange(listener: LogLevelListener): void {
+    logLevelListeners.push(listener)
+}
+
+// Get log level from environment (validated against known levels; map 'warn' -> 'warning' for mcp-logger parity)
+const rawLevelInput = (process.env['LOG_LEVEL'] ?? 'info').trim().toLowerCase()
+const rawLevel = rawLevelInput === 'warn' ? 'warning' : rawLevelInput
+const envLevel: LogLevel = isLogLevel(rawLevel) ? rawLevel : 'info'
 
 export const logger = new Logger(envLevel)

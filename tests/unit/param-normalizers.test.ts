@@ -126,8 +126,9 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         ])
         if ('args' in vUnknown) {
             const arg = vUnknown.args[0] as Record<string, unknown>
-            expect(arg['tags']).toContain('my-tag-proj')
-            expect(arg['validation_status']).toBe('none')
+            expect(arg['project']).toBe('my-tag-proj')
+            expect(arg['tags']).toBeUndefined()
+            expect(arg['validation_status']).toBe('weird_status')
         }
     })
 
@@ -139,17 +140,17 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
 
         const ex2 = applyArgInterceptions('execute_code', [{ payload: { a: 1 } }])
         if ('args' in ex2) {
-            expect((ex2.args[0] as Record<string, unknown>)['code']).toBe('{"a":1}')
+            expect((ex2.args[0] as Record<string, unknown>)['code']).toBe('{"payload":{"a":1}}')
         }
 
         const ex3 = applyArgInterceptions('execute_code', [{ entry: { b: 2 } }])
         if ('args' in ex3) {
-            expect((ex3.args[0] as Record<string, unknown>)['code']).toBe('{"b":2}')
+            expect((ex3.args[0] as Record<string, unknown>)['code']).toBe('{"entry":{"b":2}}')
         }
 
         const ex4 = applyArgInterceptions('execute_code', [{ input: { c: 3 } }])
         if ('args' in ex4) {
-            expect((ex4.args[0] as Record<string, unknown>)['code']).toBe('{"c":3}')
+            expect((ex4.args[0] as Record<string, unknown>)['code']).toBe('{"input":{"c":3}}')
         }
 
         const ex5 = applyArgInterceptions('execute_code', [{ notes: 123 }])
@@ -310,7 +311,7 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         const delList = applyArgInterceptions('list_deleted_entries', [
             { keep: 10, project_number: 5, project_id: 5 },
         ])
-        if ('args' in delList) expect(delList.args[0]).toEqual({ limit: 10 })
+        if ('args' in delList) expect(delList.args[0]).toEqual({ limit: 10, project_number: 5 })
 
         expect('error' in applyArgInterceptions('get_statistics', [{ q: 'x' }])).toBe(true)
         const statOk = applyArgInterceptions('get_statistics', [{ timeframe: 'week' }])
@@ -378,7 +379,8 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         const delVer = applyArgInterceptions('delete_entry', [
             { path: 10, version: 2, project_number: 5 },
         ])
-        if ('args' in delVer) expect(delVer.args[0]).toEqual({ entry_id: 10, expected_version: 2 })
+        if ('args' in delVer)
+            expect(delVer.args[0]).toEqual({ entry_id: 10, expected_version: 2, project_number: 5 })
 
         const upd2 = applyArgInterceptions('update_entry', [15, { text: 'updated' }])
         if ('args' in upd2) expect(upd2.args[0]).toEqual({ entry_id: 15, content: 'updated' })
@@ -408,7 +410,9 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         if ('args' in bdArr) expect(bdArr.args[0]).toEqual({ entry_ids: [1, 2] })
         const bdMulti = applyArgInterceptions('batch_delete_entries', [4, 5])
         if ('args' in bdMulti) expect(bdMulti.args[0]).toEqual({ entry_ids: [4, 5] })
-        expect('error' in applyArgInterceptions('batch_delete_entries', [['1', '2']])).toBe(true)
+        const bdStrIds = applyArgInterceptions('batch_delete_entries', [['1', '2', '#3']])
+        if ('args' in bdStrIds) expect(bdStrIds.args[0]).toEqual({ entry_ids: [1, 2, 3] })
+        expect('error' in applyArgInterceptions('batch_delete_entries', [['abc']])).toBe(true)
         expect('error' in applyArgInterceptions('batch_delete_entries', [{ foo: 1 }])).toBe(true)
 
         // Link, merge_tags, audit, recent, list_tags, test, member, alias
@@ -464,11 +468,19 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
 
         const aliasQ = applyArgInterceptions('team_resolve_author', [{ q: 'bob' }])
         if ('args' in aliasQ) {
-            expect(aliasQ.args[0]).toEqual({
-                canonical_author: 'bob',
-                author: 'bob',
-                alias: 'bob',
-            })
+            expect(aliasQ.args[0]).toEqual({ author: 'bob' })
+        }
+    })
+
+    it('keeps an unknown project_name instead of dropping it', () => {
+        const res = applyArgInterceptions('create_entry', [{
+            content: 'note',
+            project_name: 'not-a-registered-project-name-xyz',
+        }])
+        expect('args' in res).toBe(true)
+        if ('args' in res && isRecord(res.args[0])) {
+            expect(res.args[0]['project_name']).toBe('not-a-registered-project-name-xyz')
+            expect(res.args[0]['project_number']).toBeUndefined()
         }
     })
 })
@@ -493,8 +505,8 @@ describe('src/codemode/api/param-normalizer.ts (convertKeysToSnakeCase & normali
         )
         expect(res1['entry_id']).toBe(10)
         expect(res1['entry_type']).toBe('retrospective')
-        expect(res1['role']).toBe('member')
-        expect(res1['significance_type']).toBeUndefined()
+        expect(res1['role']).toBe('contributor')
+        expect(res1['significance_type']).toBe('invalid_sig')
         expect(res1['entry_ids']).toEqual([1, 2])
         expect(res1['tags']).toEqual(['session-summary'])
         expect(res1['relationships']).toEqual([{ targetId: 5, relationType: 'relates_to' }])
@@ -515,9 +527,13 @@ describe('src/codemode/api/param-normalizer.ts (convertKeysToSnakeCase & normali
         expect(convertKeysToSnakeCase({ path: '/out' }, 'exportMarkdown')['output_dir']).toBe(
             '/out'
         )
+        expect(convertKeysToSnakeCase({ path: '/out' }, 'exportEntries')['output_dir']).toBeUndefined()
+        expect(convertKeysToSnakeCase({ path: '/out' }, 'exportEntries')['path']).toBe('/out')
         expect(convertKeysToSnakeCase({ source: 'obsidian' }, 'importExternal')['source_format']).toBe(
             'obsidian'
         )
+        expect(convertKeysToSnakeCase({ source: 'obsidian' }, 'importMarkdown')['source_format']).toBeUndefined()
+        expect(convertKeysToSnakeCase({ source: 'obsidian' }, 'importMarkdown')['source']).toBe('obsidian')
         expect(
             convertKeysToSnakeCase(
                 { name: 'Issue Title', message: 'Issue Body' },

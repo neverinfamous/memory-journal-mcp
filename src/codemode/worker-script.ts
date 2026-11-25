@@ -9,159 +9,290 @@
 import { parentPort } from 'node:worker_threads'
 import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
+
+// Capture host macrotask scheduler before prototype/global hardening runs.
+const hostSetImmediate = setImmediate
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
 import { transformAutoReturn } from './auto-return.js'
+import { validateSandboxCode } from './security.js'
+import { DEFAULT_SECURITY_CONFIG } from './types.js'
+import { readProjectRegistryPayload, setActiveProjectRegistry } from './normalizers/generic-field-aliases.js'
 import { buildApiProxy } from './worker-api-proxy.js'
 import { hardenOuterFunctionPrototypes, freezeInnerVmContext } from './worker/prototype-hardening.js'
 import { createSafeFsShim } from './worker/node-shims.js'
 import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shims.js'
+import { deepFreezeContextClone } from './worker/result-proxy-aliases.js'
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
-import { buildSandboxGlobals } from './worker/sandbox-globals.js'
+import { buildSandboxGlobals, type ExecutionLifecycleState } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
+import {
+    createIsolatedNestedRunner,
+    createScopedRpcCall,
+    type VmExecutionContextOptions,
+} from './worker/nested-exec-runner.js'
+import { createSandboxExecutor } from './worker/nested-exec-scope.js'
+import {
+    formatVmErrorResult,
+    isExecuteMessage,
+    resolveCompiledSandboxEntry,
+    resolveWorkerMetadata,
+    safeFormatSandboxError,
+    type ExecuteWorkerMessage,
+} from './worker/script-and-metadata-cache.js'
+import { hasUnbalancedClosingDelimiter, stripCommentsAndStrings } from './security-stripper.js'
 
-hardenOuterFunctionPrototypes()
+// [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
+const hardeningFailures = hardenOuterFunctionPrototypes()
+const hardeningError =
+    hardeningFailures.length > 0
+        ? `Code Mode worker prototype hardening failed: ${hardeningFailures.join(', ')}`
+        : null
 
-process.on('unhandledRejection', () => {
-    // Prevent asynchronous promise rejections inside user timers from crashing the worker thread
+let activeExecutionId: number | null = null
+let resultSent = false
+let activeAbortCleanup: ((reason: string) => void) | null = null
+
+function postExecutionFailure(reason: unknown): void {
+    if (activeExecutionId === null || resultSent) return
+    const id = activeExecutionId
+    resultSent = true
+    activeAbortCleanup?.('Sandbox execution aborted due to unhandled async error')
+    const formatted = safeFormatSandboxError(reason)
+    const result: SandboxResult = {
+        success: false,
+        error: formatted.message,
+        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+        ...(formatted.stack !== undefined ? { stack: formatted.stack } : {}),
+    }
+    // [H1] Mark async-error failures fatal so WorkerSandbox evicts any still-running background timers/microtasks.
+    try {
+        parentPort?.postMessage({ type: 'RESULT', id, result, fatal: true })
+    } catch {
+        // Worker is already shutting down or port is closed
+    }
+}
+
+process.on('unhandledRejection', (reason: unknown) => {
+    postExecutionFailure(reason)
 })
-process.on('uncaughtException', () => {
-    // Prevent synchronous throws inside user timers from crashing the worker thread
+process.on('uncaughtException', (err: unknown) => {
+    postExecutionFailure(err)
 })
 
-let rpcPort: MessagePort | null = null
-let rpcIdCounter = 0
-const pendingRpcRequests = new Map<
-    number,
-    { resolve: (value: unknown) => void; reject: (reason: Error) => void }
->()
+interface ExecutionRpcBridge {
+    sendRpcRequest: (payload: Omit<RpcRequest, 'id'>) => Promise<unknown>
+    rpcCall: (group: string, method: string, args: unknown[]) => Promise<unknown>
+    closeBridge: (reason: string) => void
+}
 
-function rpcCall(group: string, method: string, args: unknown[]): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-        if (!rpcPort) {
-            reject(new Error('RPC port not initialized'))
-            return
+function createExecutionRpcBridge(
+    port: MessagePort,
+    executionLifecycle?: ExecutionLifecycleState
+): ExecutionRpcBridge {
+    let closed = false
+    let rpcIdCounter = 0
+    const pendingRpcRequests = new Map<
+        number,
+        { resolve: (value: unknown) => void; reject: (reason: Error) => void }
+    >()
+
+    const rejectAll = (message: string): void => {
+        for (const pending of pendingRpcRequests.values()) {
+            pending.reject(new Error(message))
         }
-        const id = ++rpcIdCounter
-        pendingRpcRequests.set(id, { resolve, reject })
-        const request: RpcRequest = { id, group, method, args }
-        rpcPort.postMessage(request)
+        pendingRpcRequests.clear()
+    }
+
+    port.on('message', (response: RpcResponse) => {
+        const pending = pendingRpcRequests.get(response.id)
+        if (pending !== undefined) {
+            pendingRpcRequests.delete(response.id)
+            if (response.error !== undefined) pending.reject(new Error(response.error))
+            else pending.resolve(response.result)
+        }
     })
+
+    const sendRpcRequest = (payload: Omit<RpcRequest, 'id'>): Promise<unknown> =>
+        new Promise((resolve, reject) => {
+            if (closed || executionLifecycle?.ended === true) {
+                if (executionLifecycle !== undefined) {
+                    executionLifecycle.postCloseActivity = true
+                }
+                reject(new Error('Sandbox execution has already ended'))
+                return
+            }
+            const id = ++rpcIdCounter
+            pendingRpcRequests.set(id, { resolve, reject })
+            try {
+                port.postMessage({ id, ...payload })
+            } catch (err: unknown) {
+                pendingRpcRequests.delete(id)
+                reject(err instanceof Error ? err : new Error(String(err)))
+            }
+        })
+
+    return {
+        sendRpcRequest,
+        rpcCall: createScopedRpcCall(sendRpcRequest),
+        closeBridge: (reason: string): void => {
+            if (closed) return
+            closed = true
+            rejectAll(reason)
+            port.close()
+        },
+    }
+}
+
+function createVmExecutionContext(options: VmExecutionContextOptions): vm.Context {
+    const {
+        rpcFn, sendRpcRequest, methodList, schemaList, timeoutMs, maxResultSize, contextObj,
+        readonlyMode, dryRunMode, useTestDbMode, pinnedWorkspaceRaw, pinnedProjectRaw,
+        projectRegistryRaw, activeTimers, executionLifecycle,
+    } = options
+    const frozenContextObj =
+        contextObj !== undefined ? deepFreezeContextClone(contextObj) : undefined
+    const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, frozenContextObj, true)
+    Object.freeze(mjApi)
+
+    const safeFsShim = createSafeFsShim(frozenContextObj)
+    const executeCodeFnRef: { current?: (...args: unknown[]) => Promise<unknown> } = {}
+    const updateMemoryFnHolder: { current?: (...args: unknown[]) => unknown } = {}
+
+    const shimMj = createShimMjProxy({
+        mjApi,
+        safeFsShim,
+        executeCodeFnRef,
+        getUpdateMemoryFn: () => updateMemoryFnHolder.current ?? (() => undefined),
+    })
+
+    const updateMemoryFn = createUpdateMemoryFn(shimMj)
+    updateMemoryFnHolder.current = updateMemoryFn
+
+    const frozenContext = createContextProxy(frozenContextObj, true)
+    const vmContextRef: { current?: vm.Context } = {}
+    const runIsolatedNestedCode = createIsolatedNestedRunner(
+        options,
+        sendRpcRequest,
+        createVmExecutionContext
+    )
+
+    const executeCodeFn = createSandboxExecutor({
+        shimMj, vmContextRef, timeoutMs, maxResultSize, readonlyMode, dryRunMode, useTestDbMode,
+        pinnedWorkspaceRaw, pinnedProjectRaw, projectRegistryRaw, runIsolatedNestedCode, activeTimers,
+        ...(options.nestedDepth !== undefined ? { nestedDepth: options.nestedDepth } : {}),
+    })
+    executeCodeFnRef.current = executeCodeFn
+
+    const sandbox = buildSandboxGlobals({
+        mjApi,
+        shimMj,
+        safeFsShim,
+        frozenContext,
+        executeCodeFn,
+        updateMemoryFn,
+        activeTimers,
+        ...(executionLifecycle !== undefined ? { executionLifecycle } : {}),
+    })
+
+    const context = vm.createContext(sandbox, {
+        name: 'codemode-worker-sandbox',
+        codeGeneration: { strings: false, wasm: false },
+    })
+    vmContextRef.current = context
+    freezeInnerVmContext(context)
+    return context
+}
+
+function extractScopeContext(contextObj?: Record<string, unknown>): {
+    registryPayload: unknown
+    pinnedWorkspaceRaw: unknown
+    pinnedProjectRaw: unknown
+} {
+    const registryPayload = contextObj?.['__mj_project_registry']
+    const pinnedWorkspaceRaw = contextObj?.['__mj_workspace_id']
+    const pinnedProjectRaw = contextObj?.['__mj_project_number']
+    if (contextObj !== undefined) {
+        Reflect.deleteProperty(contextObj, '__mj_project_registry')
+        Reflect.deleteProperty(contextObj, '__mj_workspace_id')
+        Reflect.deleteProperty(contextObj, '__mj_project_number')
+    }
+    return { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw }
+}
+
+function makeZeroMetricError(error: string): SandboxResult {
+    return {
+        success: false,
+        error,
+        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+    }
+}
+
+function prepareTransformedSandboxCode(code: string): { transformed: string } | { error: string } {
+    const transformed = transformAutoReturn(code)
+    let strippedForBalance: string | undefined
+    if (transformed !== code) {
+        const postValidation = validateSandboxCode(transformed, {
+            ...DEFAULT_SECURITY_CONFIG,
+            maxCodeLength: DEFAULT_SECURITY_CONFIG.maxCodeLength + 32,
+        })
+        if (!postValidation.valid) {
+            return { error: postValidation.errors.join('; ') }
+        }
+        strippedForBalance = postValidation.strippedCode
+    }
+    if (hasUnbalancedClosingDelimiter(strippedForBalance ?? stripCommentsAndStrings(transformed))) {
+        return { error: 'Syntax error in Code Mode execution: unbalanced closing delimiter' }
+    }
+    return { transformed }
 }
 
 async function executeCode(
     code: string,
+    bridge: ExecutionRpcBridge,
     methodList: Record<string, string[]>,
     schemaList: Record<string, Record<string, string>> | undefined,
     timeoutMs: number,
     contextObj?: Record<string, unknown>,
-    readonlyMode?: boolean
+    readonlyMode?: boolean,
+    maxResultSize?: number,
+    dryRunMode?: boolean,
+    useTestDbMode?: boolean,
+    activeTimers = new Set<NodeJS.Timeout>(),
+    executionLifecycle?: ExecutionLifecycleState
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
-    const activeTimers = new Set<NodeJS.Timeout>()
+    if (hardeningError !== null) {
+        return makeZeroMetricError(hardeningError)
+    }
+    const { registryPayload, pinnedWorkspaceRaw, pinnedProjectRaw } = extractScopeContext(contextObj)
+    setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
 
+    const vmTimeoutMs = Math.max(1, Math.ceil(timeoutMs))
     try {
-        const mjApi = buildApiProxy(rpcCall, methodList, schemaList, readonlyMode, contextObj)
-
-        for (const key of Object.keys(mjApi)) {
-            const val = mjApi[key]
-            if (typeof val === 'object' && val !== null) Object.freeze(val)
-        }
-        Object.freeze(mjApi)
-
-        const safeFsShim = createSafeFsShim(contextObj)
-        const executeCodeFnRef: { current?: (arg: unknown) => Promise<unknown> } = {}
-        const updateMemoryFnHolder: { current?: (arg: unknown) => unknown } = {}
-
-        const shimMj = createShimMjProxy({
-            mjApi,
-            safeFsShim,
-            executeCodeFnRef,
-            getUpdateMemoryFn: () => updateMemoryFnHolder.current ?? (() => undefined),
-        })
-
-        const updateMemoryFn = createUpdateMemoryFn(shimMj)
-        updateMemoryFnHolder.current = updateMemoryFn
-
-        const frozenContext = createContextProxy(contextObj)
-        const vmContextRef: { current?: vm.Context } = {}
-
-        const invokeCreateEntry = (payload: unknown): unknown => {
-            const coreGroup = shimMj['core']
-            if ((typeof coreGroup === 'object' && coreGroup !== null) || typeof coreGroup === 'function') {
-                const fn = Reflect.get(coreGroup, 'createEntry') as unknown
-                if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
-            }
-            return undefined
-        }
-
-        const executeCodeFn = async (arg: unknown): Promise<unknown> => {
-            let codeToExec = ''
-            if (typeof arg === 'string') {
-                codeToExec = arg
-            } else if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-                const codeProp = Reflect.get(arg, 'code') as unknown
-                const scriptProp = Reflect.get(arg, 'script') as unknown
-                codeToExec = typeof codeProp === 'string' ? codeProp : typeof scriptProp === 'string' ? scriptProp : ''
-                if (
-                    codeToExec === '' &&
-                    (typeof Reflect.get(arg, 'content') === 'string' ||
-                        typeof Reflect.get(arg, 'text') === 'string' ||
-                        typeof Reflect.get(arg, 'description') === 'string' ||
-                        typeof Reflect.get(arg, 'title') === 'string')
-                ) {
-                    return invokeCreateEntry(arg)
-                }
-            }
-            if (codeToExec !== '') {
-                const trimmed = codeToExec.trim()
-                const isNaturalPrompt =
-                    /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(trimmed) &&
-                    !/\b(const|let|var|function|return|await|import|export)\b/.test(trimmed)
-                if (isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed)) {
-                    const firstLine = (trimmed.split('\n')[0] ?? '')
-                        .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
-                        .replace(/[:.]+$/, '')
-                        .trim()
-                    const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-                    return invokeCreateEntry({ title, content: trimmed, entry_type: 'technical_decision' })
-                }
-                if (vmContextRef.current !== undefined) {
-                    const transformed = transformAutoReturn(codeToExec)
-                    const wrapped = `(async () => {\n${transformed}\n})()`
-                    return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
-                }
-            }
-            return { success: true }
-        }
-        executeCodeFnRef.current = executeCodeFn
-
-        const sandbox = buildSandboxGlobals({
-            mjApi,
-            shimMj,
-            safeFsShim,
-            frozenContext,
-            executeCodeFn,
-            updateMemoryFn,
+        const context = createVmExecutionContext({
+            rpcFn: bridge.rpcCall,
+            sendRpcRequest: bridge.sendRpcRequest,
+            methodList,
+            schemaList,
+            timeoutMs: vmTimeoutMs,
+            ...(maxResultSize !== undefined ? { maxResultSize } : {}),
+            contextObj,
+            ...(readonlyMode !== undefined ? { readonlyMode } : {}),
+            ...(dryRunMode !== undefined ? { dryRunMode } : {}),
+            ...(useTestDbMode !== undefined ? { useTestDbMode } : {}),
+            pinnedWorkspaceRaw,
+            pinnedProjectRaw,
+            projectRegistryRaw: registryPayload,
             activeTimers,
+            ...(executionLifecycle !== undefined ? { executionLifecycle } : {}),
         })
-
-        const context = vm.createContext(sandbox, {
-            name: 'codemode-worker-sandbox',
-            codeGeneration: { strings: false, wasm: false },
-        })
-        vmContextRef.current = context
-
-        freezeInnerVmContext(context)
-
-        const transformed = transformAutoReturn(code)
-        const script = new vm.Script(`(async () => {\n${transformed}\n})()`, {
-            filename: 'codemode-execution.js',
-        })
-
-        const resultPromise = script.runInContext(context, { timeout: timeoutMs }) as Promise<unknown>
-        const result = await resultPromise
-
+        const rawCached = resolveCompiledSandboxEntry(code, prepareTransformedSandboxCode)
+        if (!rawCached.ok) {
+            return makeZeroMetricError(rawCached.error)
+        }
+        const rawExecution: unknown = rawCached.script.runInContext(context, { timeout: vmTimeoutMs })
+        const result: unknown = await Promise.resolve(rawExecution)
         const endTime = performance.now()
         const endCpu = process.cpuUsage(startCpu)
         const metrics: ExecutionMetrics = {
@@ -169,72 +300,133 @@ async function executeCode(
             cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
             memoryUsedMb: 0,
         }
-
         return { success: true, result, metrics }
     } catch (err) {
-        const endTime = performance.now()
-        const endCpu = process.cpuUsage(startCpu)
-        const error = err instanceof Error ? err : new Error(String(err))
-        const errString = String(err)
-        if (
-            errString.includes('missing ) after argument list') ||
-            errString.includes('is not a function') ||
-            errString.includes('Invalid or unexpected token') ||
-            errString.includes('Unexpected token') ||
-            errString.includes('Unexpected identifier') ||
-            errString.includes('Cannot use import statement')
-        ) {
-            error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.core.createEntry(...)'), not raw SQL statements or unquoted text.\n\n💡 Tip: When querying the journal, use Code Mode methods like 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.search.searchEntries({ query: "..." })'. When passing long multi-line strings or markdown with embedded quotes/backticks, pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
+        // [L2] Close lifecycle, timers, and RPC bridge BEFORE formatVmErrorResult invokes
+        // untrusted [Symbol.toPrimitive]/toString() hooks on thrown sandbox values.
+        runChildCleanups(executionLifecycle)
+        if (executionLifecycle !== undefined) {
+            executionLifecycle.ended = true
         }
-
-        return {
-            success: false,
-            error: error.message,
-            metrics: {
-                wallTimeMs: Math.round(endTime - startTime),
-                cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
-                memoryUsedMb: 0,
-            },
-        }
+        for (const handle of activeTimers) clearTimeout(handle)
+        activeTimers.clear()
+        bridge.closeBridge('Sandbox execution failed')
+        return formatVmErrorResult(err, startTime, startCpu)
     } finally {
-        for (const handle of activeTimers) {
-            clearTimeout(handle)
+        runChildCleanups(executionLifecycle)
+        if (executionLifecycle !== undefined) {
+            executionLifecycle.ended = true
         }
+        setActiveProjectRegistry(undefined)
+        for (const handle of activeTimers) clearTimeout(handle)
         activeTimers.clear()
     }
 }
 
-interface ExecuteWorkerMessage {
-    type: 'EXECUTE'; id: number; code: string; methodList: Record<string, string[]>;
-    schemaList?: Record<string, Record<string, string>>; timeoutMs?: number; maxResultSize?: number;
-    rpcPort: MessagePort; contextObj?: Record<string, unknown>; readonlyMode?: boolean;
+function runChildCleanups(lifecycle: ExecutionLifecycleState | undefined): void {
+    const cleanups = lifecycle?.childCleanups
+    if (cleanups === undefined || cleanups.size === 0) return
+    for (const fn of cleanups) {
+        try {
+            fn()
+        } catch {
+            // Best-effort cleanup of nested isolated child executions
+        }
+    }
+    cleanups.clear()
 }
 
-function isExecuteMessage(msg: unknown): msg is ExecuteWorkerMessage {
-    return msg !== null && msg !== undefined && typeof msg === 'object' && 'type' in msg && Reflect.get(msg, 'type') === 'EXECUTE'
+function teardownExecutionLifecycle(
+    executionLifecycle: ExecutionLifecycleState,
+    activeTimers: Set<NodeJS.Timeout>,
+    bridge: ExecutionRpcBridge,
+    reason: string
+): void {
+    executionLifecycle.ended = true
+    runChildCleanups(executionLifecycle)
+    for (const handle of activeTimers) clearTimeout(handle)
+    activeTimers.clear()
+    bridge.closeBridge(reason)
+}
+
+async function handleExecuteMessage(msg: ExecuteWorkerMessage): Promise<void> {
+    const {
+        id,
+        code,
+        timeoutMs,
+        maxResultSize,
+        rpcPort: newRpcPort,
+        contextObj,
+        readonlyMode,
+        dryRunMode,
+        useTestDbMode,
+    } = msg
+    const { methodList, schemaList } = resolveWorkerMetadata(msg)
+    const activeTimers = new Set<NodeJS.Timeout>()
+    const executionLifecycle: ExecutionLifecycleState = {
+        ended: false,
+        postCloseActivity: false,
+        childCleanups: new Set<() => void>(),
+    }
+    const bridge = createExecutionRpcBridge(newRpcPort, executionLifecycle)
+    activeExecutionId = id
+    resultSent = false
+    activeAbortCleanup = (reason: string): void => {
+        teardownExecutionLifecycle(executionLifecycle, activeTimers, bridge, reason)
+    }
+
+    try {
+        const result = await executeCode(
+            code,
+            bridge,
+            methodList,
+            schemaList,
+            timeoutMs ?? 30000,
+            contextObj,
+            readonlyMode,
+            maxResultSize,
+            dryRunMode,
+            useTestDbMode,
+            activeTimers,
+            executionLifecycle
+        )
+        // [M11] Close the RPC bridge strictly BEFORE serializeAndEnforceEgress invokes
+        // untrusted toJSON()/getters so egress hooks cannot dispatch live Host RPCs.
+        teardownExecutionLifecycle(executionLifecycle, activeTimers, bridge, 'Sandbox execution ended')
+        // Serialize and run toJSON()/getters BEFORE draining V8 microtasks via hostSetImmediate
+        // so post-execution callbacks cannot queue unawaited microtask spins or timers past the watchdog.
+        serializeAndEnforceEgress(result, maxResultSize)
+        if (!resultSent && activeExecutionId === id) {
+            await new Promise<void>((resolve) => {
+                hostSetImmediate(resolve)
+            })
+        }
+        if (!resultSent && activeExecutionId === id) {
+            parentPort?.postMessage({
+                type: 'RESULT',
+                id,
+                result,
+                ...(executionLifecycle.postCloseActivity ? { fatal: true } : {}),
+            })
+            resultSent = true
+        }
+    } catch (err: unknown) {
+        postExecutionFailure(err)
+    } finally {
+        teardownExecutionLifecycle(
+            executionLifecycle,
+            activeTimers,
+            bridge,
+            'Sandbox execution ended before the call completed'
+        )
+        if (activeExecutionId === id) {
+            activeExecutionId = null
+            activeAbortCleanup = null
+        }
+    }
 }
 
 parentPort?.on('message', (msg: unknown) => {
-    void (async () => {
-        if (!isExecuteMessage(msg)) return
-        const { id, code, methodList, schemaList, timeoutMs, maxResultSize, rpcPort: newRpcPort, contextObj, readonlyMode } = msg
-        rpcPort = newRpcPort
-        rpcIdCounter = 0
-        pendingRpcRequests.clear()
-
-        rpcPort?.on('message', (response: RpcResponse) => {
-            const pending = pendingRpcRequests.get(response.id)
-            if (pending !== undefined) {
-                pendingRpcRequests.delete(response.id)
-                if (response.error !== undefined) pending.reject(new Error(response.error))
-                else pending.resolve(response.result)
-            }
-        })
-
-        const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode)
-        serializeAndEnforceEgress(result, maxResultSize)
-        rpcPort?.close()
-        rpcPort = null
-        parentPort?.postMessage({ type: 'RESULT', id, result })
-    })()
+    if (!isExecuteMessage(msg)) return
+    void handleExecuteMessage(msg)
 })

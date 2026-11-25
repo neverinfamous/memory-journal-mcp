@@ -203,8 +203,7 @@ describe('Admin Batch Tool Handlers', () => {
             expect(result.error).toContain('Too big: expected array to have <=50 items')
         })
 
-        it('should successfully soft delete entries and report notFound', async () => {
-            // Seed
+        it('aborts a mixed batch before deleting when an id is missing', async () => {
             const createRes = (await callTool(
                 'batch_create_entries',
                 { entries: [{ workspace_id: 'default', content: 'Delete 1', project_number: 1 }, { workspace_id: 'default', content: 'Delete 2', project_number: 1 }] },
@@ -212,34 +211,44 @@ describe('Admin Batch Tool Handlers', () => {
                 vectorManager
             )) as any
 
-            let progressCalls = 0
-            const progress = {
-                server: { notification: async () => { progressCalls++ } },
-                progressToken: 'test-token'
-            }
-
             const entry_ids = [createRes.entries[0].id, createRes.entries[1].id, 99998]
 
             const result = (await callTool(
                 'batch_delete_entries',
                 { entry_ids },
                 db,
-                vectorManager,
-                undefined,
-                undefined,
-                progress
+                vectorManager
             )) as any
 
             expect(result.success).toBe(false)
-            expect(result.code).toBe('AGGREGATE_ERROR')
-            expect(result.error).toContain('Batch delete partially failed: 1 failed')
-            expect(result.aggregated_errors[0].message).toContain('Entry 99998 not found')
-            
+            expect(result.code).toBe('RESOURCE_NOT_FOUND')
+            expect(result.notFound).toEqual([99998])
+            expect(result.deleted).toBeUndefined()
+            expect(result.count).toBeUndefined()
+            expect(db.getEntryById(entry_ids[0])).not.toBeNull()
+            expect(db.getEntryById(entry_ids[1])).not.toBeNull()
+        })
+
+        it('soft deletes every id when the batch is fully resolved', async () => {
+            const createRes = (await callTool(
+                'batch_create_entries',
+                { entries: [{ workspace_id: 'default', content: 'Delete 1', project_number: 1 }, { workspace_id: 'default', content: 'Delete 2', project_number: 1 }] },
+                db,
+                vectorManager
+            )) as any
+
+            const entry_ids = [createRes.entries[0].id, createRes.entries[1].id]
+            const result = (await callTool(
+                'batch_delete_entries',
+                { entry_ids },
+                db,
+                vectorManager
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.deleted).toEqual(entry_ids)
             expect(db.getEntryById(entry_ids[0])).toBeNull()
             expect(db.getEntryById(entry_ids[1])).toBeNull()
-
-            // Vector manager should be called to remove from index
-            // expect(vectorManager.deleteEntry).toHaveBeenCalledTimes(2)
         })
     })
 })

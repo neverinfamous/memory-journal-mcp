@@ -6,8 +6,12 @@
  */
 
 import type { Database } from 'better-sqlite3'
+import { z } from 'zod'
 import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
-import { queryRow, queryRows } from './shared.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
+import { logger } from '../../../utils/logger.js'
+import { isRecord } from '../../../utils/type-guards.js'
+import { extractPreview } from '../../../handlers/resources/core/briefing/preview-helpers.js'
 
 // ============================================================================
 // Types
@@ -47,137 +51,273 @@ export interface DigestSnapshot {
     topImportanceEntries: TopImportanceEntry[]
 }
 
+/** Runtime schema for persisted digest snapshots read back from the database. */
+export const digestSnapshotSchema: z.ZodType<DigestSnapshot> = z.object({
+    computedAt: z.string(),
+    currentPeriodEntries: z.number(),
+    previousPeriodEntries: z.number(),
+    activityGrowthPercent: z.number().nullable(),
+    currentPeriodSignificant: z.number(),
+    historicalAvgSignificant: z.number(),
+    significanceMultiplier: z.number().nullable(),
+    staleProjects: z.array(
+        z.object({
+            projectNumber: z.number(),
+            lastEntryDate: z.string(),
+            daysSilent: z.number(),
+        })
+    ),
+    currentRelDensity: z.number(),
+    previousRelDensity: z.number(),
+    topImportanceEntries: z.array(
+        z.object({ id: z.number(), score: z.number(), preview: z.string() })
+    ),
+})
+
+/** Validate untrusted persisted data as a DigestSnapshot; returns null when it does not match. */
+export function parseDigestSnapshot(data: unknown): DigestSnapshot | null {
+    const result = digestSnapshotSchema.safeParse(data)
+    return result.success ? result.data : null
+}
+
 // ============================================================================
 // Digest Computation
 // ============================================================================
 
 /** Days after which a project is considered stale */
 const STALE_PROJECT_THRESHOLD_DAYS = 14
+/** Max SQL characters fetched for top-importance entry preview extraction */
+const PREVIEW_SQL_LENGTH = 500
 /** Max preview characters for top-importance entries */
-const PREVIEW_LENGTH = 80
+const PREVIEW_LENGTH = 200
 /** Number of top-importance entries to surface */
 const TOP_IMPORTANCE_COUNT = 3
 
-/**
- * Compute a full DigestSnapshot from the database.
- * All queries are synchronous (better-sqlite3) and individually lightweight.
- */
-export function computeDigest(db: Database, workspaceId = 'default'): DigestSnapshot {
-    const now = new Date().toISOString()
-    const workspaceFilter = workspaceId !== '*' ? ' AND workspace_id = ?' : ''
-    const workspaceFilterAlias = workspaceId !== '*' ? ' AND m.workspace_id = ?' : ''
-    const workspaceFilterE = workspaceId !== '*' ? ' AND e.workspace_id = ?' : ''
-    const workspaceParams: unknown[] = workspaceId !== '*' ? [workspaceId] : []
+interface DigestScope {
+    filter: string
+    filterAlias: string
+    filterE: string
+    params: unknown[]
+    isScoped: boolean
+}
 
-    // --- Activity trend (current vs previous month) ---
-    const activityRow = queryRow(
-        db,
-        `SELECT
-            COALESCE(SUM(CASE WHEN strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now') THEN 1 ELSE 0 END), 0) AS current_count,
-            COALESCE(SUM(CASE WHEN strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now', '-1 month') THEN 1 ELSE 0 END), 0) AS previous_count
-        FROM memory_journal
-        WHERE deleted_at IS NULL${workspaceFilter}`,
-        ...workspaceParams
-    )
-    const currentPeriodEntries = (activityRow?.['current_count'] as number) ?? 0
-    const previousPeriodEntries = (activityRow?.['previous_count'] as number) ?? 0
-    const activityGrowthPercent =
-        previousPeriodEntries > 0
-            ? Math.round(
-                  ((currentPeriodEntries - previousPeriodEntries) / previousPeriodEntries) * 100
-              )
-            : null
+function buildDigestScope(workspaceId: string): DigestScope {
+    const scopeId = effectiveWorkspace(workspaceId)
+    const isScoped = scopeId !== '*'
+    return {
+        filter: isScoped ? ' AND workspace_id = ?' : '',
+        filterAlias: isScoped ? ' AND m.workspace_id = ?' : '',
+        filterE: isScoped ? ' AND e.workspace_id = ?' : '',
+        params: isScoped ? [scopeId] : [],
+        isScoped,
+    }
+}
 
-    // --- Significance spike ---
-    const sigRow = queryRow(
-        db,
-        `SELECT
-            COALESCE(SUM(CASE
-                WHEN significance_type IS NOT NULL AND strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
-                THEN 1 ELSE 0 END), 0) AS current_significant,
-            COUNT(DISTINCT strftime('%Y-%m', timestamp)) AS total_periods,
+interface UtcMonthWindow {
+    curYm: string
+    prevYm: string
+    prevStartIso: string
+    nextStartIso: string
+}
+
+function getUtcMonthWindow(now = new Date()): UtcMonthWindow {
+    const y = now.getUTCFullYear()
+    const m = now.getUTCMonth()
+    const fmtYm = (dt: Date): string =>
+        `${String(dt.getUTCFullYear())}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    const curYm = `${String(y)}-${String(m + 1).padStart(2, '0')}`
+    const prevYm = fmtYm(new Date(Date.UTC(y, m - 1, 1)))
+    const nextYm = fmtYm(new Date(Date.UTC(y, m + 1, 1)))
+    return { curYm, prevYm, prevStartIso: `${prevYm}-01`, nextStartIso: `${nextYm}-01` }
+}
+
+interface ActivityCountsRow {
+    current_count: number
+    previous_count: number
+    current_significant: number
+    total_periods: number
+    total_significant: number
+}
+
+interface StaleProjectRow {
+    project_number: number
+    last_entry_date: string
+    days_silent: number
+}
+
+interface RelDensityRow {
+    current_rels: number
+    previous_rels: number
+}
+
+interface TopImportanceRow {
+    id: number
+    importance_score: number
+    preview: string
+}
+
+interface SnapshotRow {
+    id: number
+    created_at: string
+    data: unknown
+}
+
+/** Activity trend & significance spike in a single memory_journal scan (non-strftime SUBSTR). */
+function computeActivityAndSignificance(
+    db: Database,
+    s: DigestScope,
+    win: UtcMonthWindow
+): {
+    currentPeriodEntries: number
+    previousPeriodEntries: number
+    activityGrowthPercent: number | null
+    currentPeriodSignificant: number
+    historicalAvgSignificant: number
+    significanceMultiplier: number | null
+} {
+    const row = db
+        .prepare<unknown[], ActivityCountsRow>(
+            `SELECT
+            COALESCE(SUM(CASE WHEN SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_count,
+            COALESCE(SUM(CASE WHEN SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS previous_count,
+            COALESCE(SUM(CASE WHEN significance_type IS NOT NULL AND SUBSTR(timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_significant,
+            COUNT(DISTINCT SUBSTR(timestamp, 1, 7)) AS total_periods,
             COALESCE(SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END), 0) AS total_significant
         FROM memory_journal
-        WHERE deleted_at IS NULL${workspaceFilter}`,
-        ...workspaceParams
-    )
-    const currentPeriodSignificant = (sigRow?.['current_significant'] as number) ?? 0
-    const totalPeriods = (sigRow?.['total_periods'] as number) ?? 1
-    const totalSignificant = (sigRow?.['total_significant'] as number) ?? 0
+        WHERE deleted_at IS NULL${s.filter}`
+        )
+        .get(win.curYm, win.prevYm, win.curYm, ...s.params)
+    const currentPeriodEntries = row?.current_count ?? 0
+    const previousPeriodEntries = row?.previous_count ?? 0
+    const activityGrowthPercent =
+        previousPeriodEntries > 0
+            ? Math.round(((currentPeriodEntries - previousPeriodEntries) / previousPeriodEntries) * 100)
+            : null
+    const currentPeriodSignificant = row?.current_significant ?? 0
+    const totalPeriods = row?.total_periods ?? 1
+    const totalSignificant = row?.total_significant ?? 0
     const historicalAvgSignificant =
         totalPeriods > 0 ? Math.round((totalSignificant / totalPeriods) * 10) / 10 : 0
     const significanceMultiplier =
         historicalAvgSignificant > 0
             ? Math.round((currentPeriodSignificant / historicalAvgSignificant) * 10) / 10
             : null
+    return {
+        currentPeriodEntries,
+        previousPeriodEntries,
+        activityGrowthPercent,
+        currentPeriodSignificant,
+        historicalAvgSignificant,
+        significanceMultiplier,
+    }
+}
 
-    // --- Stale projects (no entries in last N days) ---
-    const staleRows = queryRows(
-        db,
-        `SELECT
+/** Projects with no entries in the last N days. */
+function computeStaleProjects(db: Database, s: DigestScope): StaleProject[] {
+    const staleRows = db
+        .prepare<unknown[], StaleProjectRow>(
+            `SELECT
             project_number,
             MAX(timestamp) AS last_entry_date,
             CAST(julianday('now') - julianday(MAX(timestamp)) AS INTEGER) AS days_silent
         FROM memory_journal
-        WHERE deleted_at IS NULL AND project_number IS NOT NULL${workspaceFilter}
+        WHERE deleted_at IS NULL AND project_number IS NOT NULL${s.filter}
         GROUP BY project_number
-        HAVING days_silent > ?`,
-        ...workspaceParams,
-        STALE_PROJECT_THRESHOLD_DAYS
-    )
-    const staleProjects: StaleProject[] = staleRows.map((r) => ({
-        projectNumber: r['project_number'] as number,
-        lastEntryDate: r['last_entry_date'] as string,
-        daysSilent: r['days_silent'] as number,
+        HAVING days_silent > ?
+        ORDER BY days_silent DESC, project_number ASC`
+        )
+        .all(...s.params, STALE_PROJECT_THRESHOLD_DAYS)
+    return staleRows.map((r) => ({
+        projectNumber: r.project_number,
+        lastEntryDate: r.last_entry_date,
+        daysSilent: r.days_silent,
     }))
+}
 
-    // --- Relationship density (current vs previous month) ---
-    const relDensityRow = queryRow(
-        db,
-        `SELECT
-            COALESCE((SELECT COUNT(*) FROM relationships r
-                JOIN memory_journal m ON r.from_entry_id = m.id
-                WHERE strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now')${workspaceFilterAlias}
-            ), 0) AS current_rels,
-            COALESCE((SELECT COUNT(*) FROM relationships r
-                JOIN memory_journal m ON r.from_entry_id = m.id
-                WHERE strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now', '-1 month')${workspaceFilterAlias}
-            ), 0) AS previous_rels`,
-        ...workspaceParams,
-        ...workspaceParams
-    )
-    const currentRels = (relDensityRow?.['current_rels'] as number) ?? 0
-    const previousRels = (relDensityRow?.['previous_rels'] as number) ?? 0
-    const currentRelDensity =
-        currentPeriodEntries > 0 ? Math.round((currentRels / currentPeriodEntries) * 100) / 100 : 0
-    const previousRelDensity =
-        previousPeriodEntries > 0
-            ? Math.round((previousRels / previousPeriodEntries) * 100) / 100
-            : 0
+/** Relationship density (current vs previous month) in a single date-bounded join scan. */
+function computeRelationshipDensity(
+    db: Database,
+    s: DigestScope,
+    win: UtcMonthWindow,
+    currentPeriodEntries: number,
+    previousPeriodEntries: number
+): { currentRelDensity: number; previousRelDensity: number } {
+    const relDensityRow = db
+        .prepare<unknown[], RelDensityRow>(
+            `SELECT
+            COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS current_rels,
+            COALESCE(SUM(CASE WHEN SUBSTR(m.timestamp, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS previous_rels
+        FROM memory_journal m
+        CROSS JOIN relationships r ON r.from_entry_id = m.id
+        CROSS JOIN memory_journal p ON p.id = r.to_entry_id
+        WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id
+          AND r.from_entry_id != r.to_entry_id
+          AND m.timestamp >= ? AND m.timestamp < ?${s.filterAlias}`
+        )
+        .get(win.curYm, win.prevYm, win.prevStartIso, win.nextStartIso, ...s.params)
+    const currentRels = relDensityRow?.current_rels ?? 0
+    const previousRels = relDensityRow?.previous_rels ?? 0
+    return {
+        currentRelDensity:
+            currentPeriodEntries > 0 ? Math.round((currentRels / currentPeriodEntries) * 100) / 100 : 0,
+        previousRelDensity:
+            previousPeriodEntries > 0 ? Math.round((previousRels / previousPeriodEntries) * 100) / 100 : 0,
+    }
+}
 
-    // --- Top importance entries ---
+/** Highest-importance entries (uses workspace-scoped CTE when scoped). */
+function computeTopImportance(db: Database, s: DigestScope): TopImportanceEntry[] {
     const importanceExpr = buildImportanceSqlExpression()
-    const importanceCte = buildImportanceCte()
-    const topRows = queryRows(
-        db,
-        `WITH ${importanceCte}
+    const importanceCte = buildImportanceCte(s.isScoped)
+    const topRows = db
+        .prepare<unknown[], TopImportanceRow>(
+            `WITH ${importanceCte}
         SELECT
             e.id,
             ${importanceExpr} AS importance_score,
-            SUBSTR(e.content, 1, ${String(PREVIEW_LENGTH)}) AS preview
+            SUBSTR(e.content, 1, ?) AS preview
         FROM memory_journal e
         LEFT JOIN rel_stats rs ON e.id = rs.entry_id
         LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
-        WHERE e.deleted_at IS NULL${workspaceFilterE}
-        ORDER BY importance_score DESC
-        LIMIT ${String(TOP_IMPORTANCE_COUNT)}`,
-        ...workspaceParams
-    )
-    const topImportanceEntries: TopImportanceEntry[] = topRows.map((r) => ({
-        id: r['id'] as number,
-        score: Math.round((r['importance_score'] as number) * 100) / 100,
-        preview: r['preview'] as string,
+        WHERE e.deleted_at IS NULL${s.filterE}
+        ORDER BY importance_score DESC, e.id DESC
+        LIMIT ?`
+        )
+        .all(...s.params, PREVIEW_SQL_LENGTH, ...s.params, TOP_IMPORTANCE_COUNT)
+    return topRows.map((r) => ({
+        id: r.id,
+        score: Math.round(r.importance_score * 100) / 100,
+        preview: extractPreview(r.preview, PREVIEW_LENGTH),
     }))
+}
+
+/**
+ * Compute a full DigestSnapshot from the database.
+ * All queries are synchronous (better-sqlite3) and individually lightweight.
+ */
+export function computeDigest(db: Database, workspaceId = 'default'): DigestSnapshot {
+    const nowDate = new Date()
+    const now = nowDate.toISOString()
+    const win = getUtcMonthWindow(nowDate)
+    const scope = buildDigestScope(workspaceId)
+
+    const {
+        currentPeriodEntries,
+        previousPeriodEntries,
+        activityGrowthPercent,
+        currentPeriodSignificant,
+        historicalAvgSignificant,
+        significanceMultiplier,
+    } = computeActivityAndSignificance(db, scope, win)
+    const staleProjects = computeStaleProjects(db, scope)
+    const { currentRelDensity, previousRelDensity } = computeRelationshipDensity(
+        db,
+        scope,
+        win,
+        currentPeriodEntries,
+        previousPeriodEntries
+    )
+    const topImportanceEntries = computeTopImportance(db, scope)
 
     return {
         computedAt: now,
@@ -199,17 +339,53 @@ export function computeDigest(db: Database, workspaceId = 'default'): DigestSnap
 // ============================================================================
 
 /**
+ * Encode the workspace into the snapshot_type key so one workspace's snapshots are never
+ * served to another. An omitted workspace keeps the plain legacy key. Explicit `default`
+ * is its own workspace and uses `${type}:default`.
+ */
+export function workspaceSnapshotType(type: string, workspaceId?: string): string {
+    const trimmed = workspaceId?.trim()
+    if (trimmed === undefined || trimmed === '') {
+        return type
+    }
+    return `${type}:${trimmed}`
+}
+
+/**
  * Save an analytics snapshot to the database.
  * Returns the inserted row ID.
  */
 export function saveAnalyticsSnapshot(
     db: Database,
     type: string,
-    data: Record<string, unknown>
+    data: object,
+    workspaceId?: string
 ): number {
     const stmt = db.prepare(`INSERT INTO analytics_snapshots (snapshot_type, data) VALUES (?, ?)`)
-    const result = stmt.run(type, JSON.stringify(data))
+    const result = stmt.run(workspaceSnapshotType(type, workspaceId), JSON.stringify(data))
     return Number(result.lastInsertRowid)
+}
+
+function parseSnapshotData(raw: unknown, id: unknown): Record<string, unknown> | null {
+    let parsed: unknown
+    try {
+        parsed = JSON.parse(String(raw))
+    } catch (error: unknown) {
+        logger.warning('Skipping corrupt analytics snapshot row', {
+            module: 'Digest',
+            snapshotId: id,
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return null
+    }
+    if (!isRecord(parsed)) {
+        logger.warning('Skipping non-object analytics snapshot row', {
+            module: 'Digest',
+            snapshotId: id,
+        })
+        return null
+    }
+    return parsed
 }
 
 /**
@@ -217,21 +393,24 @@ export function saveAnalyticsSnapshot(
  */
 export function getLatestAnalyticsSnapshot(
     db: Database,
-    type: string
+    type: string,
+    workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-    const row = queryRow(
-        db,
-        `SELECT id, created_at, data FROM analytics_snapshots
+    const row = db
+        .prepare<unknown[], SnapshotRow>(
+            `SELECT id, created_at, data FROM analytics_snapshots
          WHERE snapshot_type = ?
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        type
-    )
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1`
+        )
+        .get(workspaceSnapshotType(type, workspaceId))
     if (!row) return null
+    const data = parseSnapshotData(row.data, row.id)
+    if (data === null) return null
     return {
-        id: row['id'] as number,
-        createdAt: row['created_at'] as string,
-        data: JSON.parse(row['data'] as string) as Record<string, unknown>,
+        id: row.id,
+        createdAt: row.created_at,
+        data,
     }
 }
 
@@ -241,20 +420,26 @@ export function getLatestAnalyticsSnapshot(
 export function getAnalyticsSnapshots(
     db: Database,
     type: string,
-    limit = 10
+    limit = 10,
+    workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-    const rows = queryRows(
-        db,
-        `SELECT id, created_at, data FROM analytics_snapshots
+    const rows = db
+        .prepare<unknown[], SnapshotRow>(
+            `SELECT id, created_at, data FROM analytics_snapshots
          WHERE snapshot_type = ?
-         ORDER BY created_at DESC
-         LIMIT ?`,
-        type,
-        limit
-    )
-    return rows.map((r) => ({
-        id: r['id'] as number,
-        createdAt: r['created_at'] as string,
-        data: JSON.parse(r['data'] as string) as Record<string, unknown>,
-    }))
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?`
+        )
+        .all(workspaceSnapshotType(type, workspaceId), limit)
+    const snapshots: { id: number; createdAt: string; data: Record<string, unknown> }[] = []
+    for (const r of rows) {
+        const data = parseSnapshotData(r.data, r.id)
+        if (data === null) continue
+        snapshots.push({
+            id: r.id,
+            createdAt: r.created_at,
+            data,
+        })
+    }
+    return snapshots
 }

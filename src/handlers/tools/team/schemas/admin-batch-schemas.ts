@@ -3,6 +3,8 @@ import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     MAX_CONTENT_LENGTH,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     StrictProjectNumberSchema,
     MAX_BATCH_SIZE,
@@ -15,13 +17,62 @@ import {
     TeamCreateEntrySchema,
     TeamCreateEntrySchemaMcp,
 } from './core-search-schemas.js'
+import {
+    preprocessBatchCreateEntries,
+    preprocessBatchUpdates,
+    preprocessBatchDeleteIds,
+} from '../../admin/schemas/batch-preprocessors.js'
+
+export function hasNonProjectTeamUpdateFields(data: {
+    content?: unknown
+    entry_type?: unknown
+    tags?: unknown
+    significance_type?: unknown
+    project_owner?: unknown
+    issue_number?: unknown
+    issue_url?: unknown
+    pr_number?: unknown
+    pr_url?: unknown
+    pr_status?: unknown
+    workflow_run_id?: unknown
+    workflow_name?: unknown
+    workflow_status?: unknown
+    is_archived?: unknown
+    auto_context?: unknown
+    impact_score?: unknown
+    trust_score?: unknown
+    validation_status?: unknown
+    session_id?: unknown
+}): boolean {
+    return (
+        data.content !== undefined ||
+        data.entry_type !== undefined ||
+        data.tags !== undefined ||
+        data.significance_type !== undefined ||
+        data.project_owner !== undefined ||
+        data.issue_number !== undefined ||
+        data.issue_url !== undefined ||
+        data.pr_number !== undefined ||
+        data.pr_url !== undefined ||
+        data.pr_status !== undefined ||
+        data.workflow_run_id !== undefined ||
+        data.workflow_name !== undefined ||
+        data.workflow_status !== undefined ||
+        data.is_archived !== undefined ||
+        data.auto_context !== undefined ||
+        data.impact_score !== undefined ||
+        data.trust_score !== undefined ||
+        data.validation_status !== undefined ||
+        data.session_id !== undefined
+    )
+}
 
 /** team_update_entry — strict */
 export const TeamUpdateEntrySchema = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z
         .object({
-            entry_id: z.number(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
             content: z
                 .string()
                 .min(1)
@@ -44,28 +95,32 @@ export const TeamUpdateEntrySchema = z.preprocess(
                     }
                 ),
             entry_type: z.enum(ENTRY_TYPES).optional(),
-            tags: z.array(z.string()).optional(),
-            project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional(),
+            tags: z.array(z.string().max(100)).max(100).optional(),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().max(255).optional(),
             significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
-            project_owner: z.string().nullable().optional(),
-            issue_number: z.number().nullable().optional(),
-            issue_url: z.string().nullable().optional(),
-            pr_number: z.number().nullable().optional(),
-            pr_url: z.string().nullable().optional(),
+            project_owner: z.string().max(255).nullable().optional(),
+            issue_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
+            issue_url: z.string().max(1000).nullable().optional(),
+            pr_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
+            pr_url: z.string().max(1000).nullable().optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
-            workflow_run_id: z.number().nullable().optional(),
-            workflow_name: z.string().nullable().optional(),
+            workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
+            workflow_name: z.string().max(255).nullable().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
             is_archived: z.boolean().optional(),
-            expected_version: z.number().optional(),
-            auto_context: z.string().nullable().optional(),
-            impact_score: z.number().min(0).max(1).optional(),
-            trust_score: z.number().min(0).max(1).optional(),
+            expected_version: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            auto_context: z.string().max(100_000).nullable().optional(),
+            impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
+            trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
-            session_id: z.string().optional(),
+            session_id: z.string().max(255).nullable().optional(),
         })
         .strict()
+        .refine((data) => data.project_number !== undefined || hasNonProjectTeamUpdateFields(data), {
+            message:
+                'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).',
+        })
 )
 
 /** team_update_entry — relaxed */
@@ -132,10 +187,13 @@ export const TeamDeleteEntrySchema = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z
         .object({
-            entry_id: z.number(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
-            expected_version: z.number().optional().describe('REQUIRED for concurrency safety'),
+            workspace_id: z.string().max(255).optional(),
+            expected_version: z
+                .preprocess(coerceIntString, z.number().int().positive())
+                .optional()
+                .describe('REQUIRED for concurrency safety'),
         })
         .strict()
 )
@@ -167,9 +225,9 @@ export const TeamRestoreEntrySchema = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z
         .object({
-            entry_id: z.number(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -192,34 +250,19 @@ export const TeamRestoreEntrySchemaMcp = z.preprocess(
 )
 
 /** team_merge_tags — strict */
-export const TeamMergeTagsSchema = z.object({
-    source_tag: z.string().min(1),
-    target_tag: z.string().min(1),
-    workspace_id: z.string().optional(),
-})
+export const TeamMergeTagsSchema = z
+    .object({
+        source_tag: z.string().min(1),
+        target_tag: z.string().min(1),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 /** team_merge_tags — relaxed */
 export const TeamMergeTagsSchemaMcp = z.object({
     source_tag: z.string().optional(),
     target_tag: z.string().optional(),
-    workspace_id: z
-        .string()
-        .optional()
-        .describe(
-            'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-        ),
-})
-
-export const TeamBatchCreateEntriesSchema = z.object({
-    entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
-    auto_index: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema,
-    workspace_id: z.string().optional(),
-})
-
-export const TeamBatchCreateEntriesSchemaMcp = z.object({
-    entries: z.array(TeamCreateEntrySchemaMcp).optional(),
-    auto_index: z.boolean().optional().default(true),
     project_number: relaxedNumber().optional(),
     workspace_id: z
         .string()
@@ -229,52 +272,49 @@ export const TeamBatchCreateEntriesSchemaMcp = z.object({
         ),
 })
 
-function preprocessTeamBatchUpdates(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        let updatesArr = obj['updates']
-        if (updatesArr === undefined && Array.isArray(obj['items'])) {
-            updatesArr = obj['items']
-            obj['updates'] = updatesArr
-            Reflect.deleteProperty(obj, 'items')
-        }
-        if (updatesArr === undefined && Array.isArray(obj['entries'])) {
-            updatesArr = obj['entries']
-            obj['updates'] = updatesArr
-            Reflect.deleteProperty(obj, 'entries')
-        }
-        if (Array.isArray(updatesArr)) {
-            const newUpdates = updatesArr.map((u: unknown) => {
-                if (typeof u === 'object' && u !== null) {
-                    const uObj = { ...(u as Record<string, unknown>) }
-                    if ('id' in uObj && !('entry_id' in uObj)) {
-                        uObj['entry_id'] = uObj['id']
-                        delete uObj['id']
-                    }
-                    return uObj
-                }
-                return u
-            })
-            return { ...obj, updates: newUpdates }
-        }
-    }
-    return val
-}
+export const TeamBatchCreateEntriesSchema = z.preprocess(
+    preprocessBatchCreateEntries,
+    z
+        .object({
+            entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+            auto_index: z.boolean().optional().default(true),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().max(255).optional(),
+        })
+        .strict()
+)
+
+export const TeamBatchCreateEntriesSchemaMcp = z.preprocess(
+    preprocessBatchCreateEntries,
+    z
+        .object({
+            entries: z.array(TeamCreateEntrySchemaMcp).optional(),
+            auto_index: z.boolean().optional().default(true),
+            project_number: relaxedNumber().optional(),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
 
 export const TeamBatchUpdateEntriesSchema = z.preprocess(
-    preprocessTeamBatchUpdates,
+    (val: unknown) => preprocessBatchUpdates(val, false),
     z
         .object({
             updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: StrictProjectNumberSchema,
-            workspace_id: z.string().optional(),
+            project_number: StrictProjectNumberSchema.optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
 
 export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
-    preprocessTeamBatchUpdates,
+    (val: unknown) => preprocessBatchUpdates(val, false),
     z
         .object({
             updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
@@ -291,19 +331,19 @@ export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
 )
 
 export const TeamBatchDeleteEntriesSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    (val: unknown) => healAgentHallucinations(preprocessBatchDeleteIds(val)),
     z
         .object({
-            entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
+            entry_ids: z.array(z.number().int().positive()).min(1).max(MAX_BATCH_SIZE),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().optional(),
+            workspace_id: z.string().max(255).optional(),
             permanent: z.boolean().optional().default(false),
         })
         .strict()
 )
 
 export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    (val: unknown) => healAgentHallucinations(preprocessBatchDeleteIds(val)),
     z
         .object({
             entry_ids: z.array(relaxedNumber().optional()).optional(),
@@ -323,6 +363,9 @@ export const TeamUpdateOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entry: TeamEntryOutputSchema.optional(),
+        indexError: z.string().optional(),
+        vectorIndex: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -331,6 +374,7 @@ export const TeamDeleteOutputSchema = z
     .object({
         success: z.boolean().optional(),
         message: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -339,6 +383,8 @@ export const TeamRestoreOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entryId: z.number().optional(),
+        indexStatus: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -356,12 +402,18 @@ export const TeamMergeTagsOutputSchema = z
 export const TeamBatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend({
     entries: z.array(TeamEntryOutputSchema).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    relationshipWarnings: z.array(z.string()).optional(),
+    relationshipsLinked: z.number().optional(),
+    vectorsIndexed: z.number().optional(),
+    warning: z.string().optional(),
 })
 
 export const TeamBatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({
     updated: z.array(TeamEntryOutputSchema).optional(),
     notFound: z.array(z.number()).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    vectorsIndexed: z.number().optional(),
+    warning: z.string().optional(),
 })
 
 export const TeamBatchDeleteEntriesOutputSchema = BatchResultOutputSchema.extend({

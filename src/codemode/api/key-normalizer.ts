@@ -3,282 +3,343 @@
  */
 
 import {
+    isDbSourceSelector,
     isRecord,
     PARAM_ALIASES,
-    ENTRY_TYPE_ALIASES,
-    TAG_ALIASES,
-    healSessionSummaryContent,
-    healAutoContext,
 } from '../normalizers/shared-utils.js'
-
-const VALID_SIGNIFICANCE_TYPES = new Set([
-    'milestone', 'breakthrough', 'decision', 'architecture',
-    'lesson_learned', 'blocker_resolved', 'release', 'security',
-])
+import { hasMethodToken, methodTokens } from '../method-tokens.js'
+import { coerceNumericValue, postProcessNormalizedKeys } from './key-normalizer-postprocess.js'
 
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const GITHUB_METHOD_TOKENS = new Set(['github', 'issue', 'issues', 'pr', 'prs', 'milestone', 'milestones'])
+
+function healArchitectureAndDecisionType(
+    rawObj: Record<string, unknown>,
+    result: Record<string, unknown>
+): void {
+    if (!('entry_type' in result)) return
+    const rawEntryType =
+        rawObj['entry_type'] ?? rawObj['entryType'] ?? rawObj['type'] ?? rawObj['kind']
+    const etLower = typeof rawEntryType === 'string' ? rawEntryType.trim().toLowerCase() : ''
+    const isMutation =
+        'content' in result || 'title' in result || 'content' in rawObj || 'title' in rawObj
+    const hasExplicitSig =
+        result['significance_type'] !== undefined ||
+        rawObj['significance'] !== undefined ||
+        rawObj['significanceType'] !== undefined ||
+        rawObj['significance_type'] !== undefined
+    if (
+        etLower === 'architecture' ||
+        etLower === 'architecture_decision' ||
+        etLower === 'architecture-decision' ||
+        etLower === 'architectural_decision' ||
+        etLower === 'architectural-decision' ||
+        etLower === 'adr'
+    ) {
+        result['entry_type'] = 'project_decision'
+        if (isMutation && !hasExplicitSig) {
+            result['significance_type'] = 'architecture'
+        }
+    } else if (etLower === 'decision' && isMutation && !hasExplicitSig) {
+        result['significance_type'] = 'decision'
+    }
+}
 
 /**
  * Convert camelCase object keys to snake_case and apply context-aware alias mapping.
  */
 export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?: string): Record<string, unknown> {
-    if ('entry' in obj && isRecord(obj['entry'])) {
-        const nested = obj['entry']
-        const cloned = { ...obj }
-        delete cloned['entry']
-        for (const [k, v] of Object.entries(nested)) {
-            if (!(k in cloned) && v !== undefined) cloned[k] = v
+    const unwrapNestedRecord = (container: Record<string, unknown>, containerKey: 'entry' | 'filter'): Record<string, unknown> => {
+        const nested = container[containerKey]
+        if (!isRecord(nested)) return container
+        const cloned = { ...container }
+        Reflect.deleteProperty(cloned, containerKey)
+        const outerSnakeKeys = new Set<string>()
+        for (const [existingKey, existingVal] of Object.entries(cloned)) {
+            if (existingVal !== undefined) outerSnakeKeys.add(toSnakeCaseKey(existingKey))
         }
-        obj = cloned
+        for (const [k, v] of Object.entries(nested)) {
+            if (FORBIDDEN_KEYS.has(k) || v === undefined) continue
+            const snakeK = toSnakeCaseKey(k)
+            if (outerSnakeKeys.has(snakeK)) continue
+            if (k !== snakeK && Object.hasOwn(nested, snakeK) && nested[snakeK] !== undefined) continue
+            if (!Object.hasOwn(cloned, k) || cloned[k] === undefined) {
+                cloned[k] = v
+            }
+        }
+        return cloned
     }
+    if (isRecord(obj['entry'])) obj = unwrapNestedRecord(obj, 'entry')
+    if (isRecord(obj['filter'])) obj = unwrapNestedRecord(obj, 'filter')
 
     const methodLower = methodName?.toLowerCase()
+    const isLinkMethod = methodName !== undefined && hasMethodToken(methodName, 'link')
     const isGithubTool =
-        methodLower !== undefined &&
-        (methodLower.includes('github') ||
-            methodLower.includes('issue') ||
-            methodLower.includes('pr') ||
-            methodLower.includes('milestone'))
+        methodName !== undefined && methodTokens(methodName).some((token) => GITHUB_METHOD_TOKENS.has(token))
 
-    const result: Record<string, unknown> = {}
+    const ctx: KeyContext = { obj, result: {}, methodName, methodLower, isLinkMethod, isGithubTool }
+    const result = ctx.result
     for (const [key, value] of Object.entries(obj)) {
-        let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        if (FORBIDDEN_KEYS.has(key)) continue
+        let snakeKey = resolveBaseSnakeKey(key, ctx)
 
-        if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
-            snakeKey = 'entry_id'
-        } else if (methodLower?.includes('link')) {
-            if (
-                (snakeKey === 'source' || snakeKey === 'source_id' || snakeKey === 'from_id') &&
-                !('from_entry_id' in obj) &&
-                !('from_entry_id' in result)
-            ) {
-                snakeKey = 'from_entry_id'
-            } else if (
-                (snakeKey === 'target' ||
-                    snakeKey === 'target_id' ||
-                    snakeKey === 'to_id' ||
-                    snakeKey === 'dest') &&
-                !('to_entry_id' in obj) &&
-                !('to_entry_id' in result)
-            ) {
-                snakeKey = 'to_entry_id'
-            } else if (
-                (snakeKey === 'type' || snakeKey === 'rel') &&
-                !('relationship_type' in obj) &&
-                !('relationship_type' in result)
-            ) {
-                snakeKey = 'relationship_type'
-            } else if (
-                (snakeKey === 'notes' || snakeKey === 'message' || snakeKey === 'text') &&
-                !('description' in obj) &&
-                !('description' in result)
-            ) {
-                snakeKey = 'description'
-            }
-        } else if (snakeKey === 'type') {
-            if (methodLower?.includes('export')) {
-                snakeKey = 'format'
-            } else if (!('entry_type' in obj) && !('flag_type' in obj) && !('entry_type' in result) && !('flag_type' in result)) {
-                snakeKey = 'entry_type'
-            }
-        } else if (snakeKey === 'filename' && !('source_dir' in obj) && !('source_dir' in result)) {
-            if ('project_number' in obj || 'tags' in obj || 'dry_run' in obj) snakeKey = 'source_dir'
-        } else if (snakeKey === 'target_user' && !('author' in obj) && !('author' in result)) {
-            if ('role' in obj || 'role' in result) snakeKey = 'author'
-        }
+        snakeKey = resolveAliasedKey(snakeKey, value, ctx)
+        snakeKey = resolveContentLikeKey(snakeKey, ctx)
+        if (FORBIDDEN_KEYS.has(snakeKey)) continue
 
-        const alias = PARAM_ALIASES[snakeKey]
-        let useAlias = alias !== undefined && !(alias in obj) && !(alias in result)
-
-        if (useAlias && snakeKey === 'entry') {
-            if (isRecord(value)) {
-                useAlias = false
-            } else if (typeof value === 'string' && (!/^\d+$/.test(value.trim()) || (methodName !== undefined && /create|add|log|insert/i.test(methodName)))) {
-                useAlias = false
-                snakeKey = 'content'
-            }
-        } else if (useAlias && (snakeKey === 'title' || snakeKey === 'body') && isGithubTool) {
-            useAlias = false
-        } else if (useAlias && snakeKey === 'keep' && methodLower !== undefined && !methodLower.includes('backup')) {
-            useAlias = false
-        } else if (useAlias && snakeKey === 'mode' && methodLower !== undefined && !methodLower.includes('config')) {
-            useAlias = false
-        } else if (useAlias && snakeKey === 'source' && methodLower?.includes('import')) {
-            useAlias = false
-            snakeKey = 'source_format'
-        } else if (useAlias && snakeKey === 'path') {
-            if (methodLower?.includes('export')) {
-                useAlias = false
-                snakeKey = 'output_dir'
-            } else if (!methodLower?.includes('import')) {
-                useAlias = false
-            }
-        } else if (useAlias && (snakeKey === 'text' || snakeKey === 'body' || snakeKey === 'note' || snakeKey === 'title')) {
-            if (
-                methodLower !== undefined &&
-                !(isGithubTool || methodLower.includes('create') || methodLower.includes('update') || methodLower.includes('entry'))
-            ) {
-                useAlias = false
-            }
-        }
-
-        if (useAlias && typeof alias === 'string') snakeKey = alias
-
-        if (CONTENT_LIKE_KEYS.has(snakeKey)) {
-            if (isGithubTool) {
-                if (snakeKey === 'name') {
-                    if (!('title' in obj) && !('title' in result)) snakeKey = 'title'
-                } else if (snakeKey === 'description' && methodLower?.includes('milestone')) {
-                    snakeKey = 'description'
-                } else if (methodLower?.includes('close') && (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')) {
-                    if (!('comment' in obj) && !('comment' in result)) snakeKey = 'comment'
-                } else if (!('body' in obj) && !('body' in result) && snakeKey !== 'comment') {
-                    snakeKey = 'body'
-                }
-            } else if (
-                methodName !== undefined &&
-                (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry')) &&
-                !methodLower?.includes('link')
-            ) {
-                if (!('content' in obj) && !('content' in result)) {
-                    snakeKey = 'content'
-                } else if (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject') {
-                    snakeKey = 'title'
-                }
-            }
-        }
-
-        if (snakeKey === 'role' && typeof value === 'string' && value.toLowerCase() === 'contributor') {
-            result[snakeKey] = 'member'
+        if (key !== snakeKey && Object.hasOwn(obj, snakeKey) && obj[snakeKey] !== undefined) {
             continue
         }
-        if (snakeKey === 'significance_type' && typeof value === 'string' && !VALID_SIGNIFICANCE_TYPES.has(value.toLowerCase())) {
+        if (value === undefined && Object.hasOwn(result, snakeKey) && result[snakeKey] !== undefined) {
             continue
         }
-        if ((snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') && typeof value === 'string') {
-            const num = Number(value)
-            if (!Number.isNaN(num) && value.trim() !== '') {
-                result[snakeKey] = num
-                continue
-            }
-        }
-        if ((snakeKey.endsWith('_ids') || snakeKey === 'ids') && Array.isArray(value)) {
-            result[snakeKey] = value.map((v: unknown) => {
-                if (typeof v === 'string') {
-                    const num = Number(v)
-                    if (!Number.isNaN(num) && v.trim() !== '') return num
-                }
-                return v
-            })
+
+        const coerced = coerceNumericValue(snakeKey, value, methodLower)
+        if (coerced !== undefined) {
+            result[snakeKey] = coerced.value
             continue
-        }
-        if (snakeKey === 'entry_type' && typeof value === 'string') {
-            const mapped = ENTRY_TYPE_ALIASES[value.toLowerCase()]
-            if (mapped !== undefined) {
-                result[snakeKey] = mapped
-                continue
-            }
         }
 
         result[snakeKey] = value
     }
 
-    postProcessNormalizedKeys(result)
+    postProcessNormalizedKeys(result, methodLower)
+    healArchitectureAndDecisionType(obj, result)
     return result
 }
 
-function postProcessNormalizedKeys(result: Record<string, unknown>): void {
-    if ('tag' in result && !('tags' in result)) {
-        const tagVal = result['tag']
-        result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
-        delete result['tag']
-    }
+interface KeyContext {
+    obj: Record<string, unknown>
+    result: Record<string, unknown>
+    methodName: string | undefined
+    methodLower: string | undefined
+    isLinkMethod: boolean
+    isGithubTool: boolean
+}
 
-    if ('tags' in result && Array.isArray(result['tags'])) {
-        result['tags'] = result['tags'].map((tag: unknown) =>
-            typeof tag === 'string' ? (TAG_ALIASES[tag.trim().toLowerCase()] ?? tag) : tag
-        )
-    }
+function hasDefinedKey(record: Record<string, unknown>, key: string): boolean {
+    return Object.hasOwn(record, key) && record[key] !== undefined
+}
 
-    if ('relationships' in result && Array.isArray(result['relationships'])) {
-        result['relationships'] = result['relationships'].map((rel: unknown) => {
-            if (!isRecord(rel)) return rel
-            const healedRel: Record<string, unknown> = { ...rel }
-            if ('target_id' in rel) {
-                healedRel['targetId'] = rel['target_id']
-                delete healedRel['target_id']
-            }
-            if ('relation_type' in rel) {
-                healedRel['relationType'] = rel['relation_type']
-                delete healedRel['relation_type']
-            }
-            return healedRel
-        })
-    }
+const HAS_UPPER_RE = /[A-Z]/
+const UPPER_LETTER_RE = /[A-Z]/g
+const SNAKE_KEY_CACHE = new Map<string, string>()
+const MAX_SNAKE_KEY_CACHE = 512
 
-    if ('commits' in result && Array.isArray(result['commits'])) {
-        if (!('auto_context' in result) || typeof result['auto_context'] !== 'string') {
-            result['auto_context'] = JSON.stringify({ commits: result['commits'] })
+function toSnakeCaseKey(key: string): string {
+    if (!HAS_UPPER_RE.test(key)) return key
+    const cached = SNAKE_KEY_CACHE.get(key)
+    if (cached !== undefined) return cached
+    const converted = key.replace(UPPER_LETTER_RE, (letter) => `_${letter.toLowerCase()}`)
+    if (SNAKE_KEY_CACHE.size < MAX_SNAKE_KEY_CACHE) {
+        SNAKE_KEY_CACHE.set(key, converted)
+    }
+    return converted
+}
+
+function isExactMethod(methodLower: string | undefined, names: readonly string[]): boolean {
+    return methodLower !== undefined && names.includes(methodLower)
+}
+
+const EXPORT_MARKDOWN_METHODS = ['export_markdown', 'exportmarkdown', 'team_export_markdown', 'teamexportmarkdown']
+const IMPORT_EXTERNAL_METHODS = ['import_external', 'importexternal', 'team_import_external', 'teamimportexternal']
+const IMPORT_MARKDOWN_METHODS = ['import_markdown', 'importmarkdown', 'team_import_markdown', 'teamimportmarkdown']
+const MERGE_TAG_METHODS_LOWER = ['merge_tags', 'mergetags', 'team_merge_tags', 'teammergetags']
+
+/** camelCase → snake_case plus context-aware renames (id, link params, type, filename, target_user). */
+function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
+    const { obj, result, methodLower, isLinkMethod } = ctx
+    let snakeKey = toSnakeCaseKey(key)
+
+    if (snakeKey === 'id' && !hasDefinedKey(obj, 'entry_id') && !hasDefinedKey(obj, 'entryId')) {
+        snakeKey = 'entry_id'
+    } else if (isLinkMethod) {
+        if (
+            (snakeKey === 'source' || snakeKey === 'source_id' || snakeKey === 'from_id') &&
+            !hasDefinedKey(obj, 'from_entry_id') &&
+            !hasDefinedKey(result, 'from_entry_id')
+        ) {
+            snakeKey = 'from_entry_id'
+        } else if (
+            (snakeKey === 'target' ||
+                snakeKey === 'target_id' ||
+                snakeKey === 'to_id' ||
+                snakeKey === 'dest') &&
+            !hasDefinedKey(obj, 'to_entry_id') &&
+            !hasDefinedKey(result, 'to_entry_id')
+        ) {
+            snakeKey = 'to_entry_id'
+        } else if (
+            (snakeKey === 'type' || snakeKey === 'rel') &&
+            !hasDefinedKey(obj, 'relationship_type') &&
+            !hasDefinedKey(result, 'relationship_type')
+        ) {
+            snakeKey = 'relationship_type'
+        } else if (
+            (snakeKey === 'notes' || snakeKey === 'message' || snakeKey === 'text') &&
+            !hasDefinedKey(obj, 'description') &&
+            !hasDefinedKey(result, 'description')
+        ) {
+            snakeKey = 'description'
         }
-        delete result['commits']
-    }
-
-    if (typeof result['project_number'] === 'number') {
-        const pn = result['project_number']
-        for (const key of ['entries', 'updates', 'entry_ids']) {
-            if (Array.isArray(result[key])) {
-                for (const item of result[key]) {
-                    if (isRecord(item) && item['project_number'] === undefined) item['project_number'] = pn
-                }
-            }
+    } else if (snakeKey === 'type') {
+        if (
+            methodLower !== undefined &&
+            (methodLower === 'export' ||
+                methodLower === 'export_entries' ||
+                methodLower === 'exportentries' ||
+                methodLower === 'team_export_entries' ||
+                methodLower === 'teamexportentries')
+        ) {
+            snakeKey = 'format'
+        } else if (
+            !hasDefinedKey(obj, 'entry_type') &&
+            !hasDefinedKey(obj, 'flag_type') &&
+            !hasDefinedKey(result, 'entry_type') &&
+            !hasDefinedKey(result, 'flag_type')
+        ) {
+            snakeKey = 'entry_type'
         }
-    }
-
-    if ('content' in result && typeof result['content'] === 'string') {
-        const c = result['content']
-        if (/#+\s+Accomplished/i.test(c) && /#+\s+Unfinished \/ Blocked/i.test(c)) {
-            if (!('entry_type' in result)) result['entry_type'] = 'retrospective'
-            let tags = result['tags']
-            if (!Array.isArray(tags)) {
-                tags = tags !== undefined && tags !== null ? [tags] : []
-                result['tags'] = tags
-            }
-            if (Array.isArray(tags) && !tags.includes('session-summary')) tags.push('session-summary')
-        }
-    }
-
-    if (
-        'tags' in result &&
-        Array.isArray(result['tags']) &&
-        result['tags'].includes('session-summary') &&
-        'content' in result &&
-        typeof result['content'] === 'string'
+    } else if (
+        snakeKey === 'filename' &&
+        !hasDefinedKey(obj, 'source_dir') &&
+        !hasDefinedKey(result, 'source_dir') &&
+        (isExactMethod(methodLower, IMPORT_MARKDOWN_METHODS) ||
+            isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS))
     ) {
-        result['content'] = healSessionSummaryContent(result['content'], { normalizeSynonyms: false, usePeriodOnNone: true })
-    }
-
-    if (
-        'tags' in result &&
-        Array.isArray(result['tags']) &&
-        result['tags'].includes('commit-narrative') &&
-        !('auto_context' in result) &&
-        'content' in result &&
-        typeof result['content'] === 'string'
-    ) {
-        const match = /commit\s+([a-f0-9]{7,40})/i.exec(result['content'])
-        if (match?.[1] !== undefined) result['auto_context'] = JSON.stringify({ commits: [match[1]] })
-    }
-
-    healAutoContext(result)
-
-    if ('filter' in result && isRecord(result['filter'])) {
-        const filterObj = result['filter']
-        for (const [k, v] of Object.entries(filterObj)) {
-            let snakeK = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-            if (snakeK === 'id' && !('entry_id' in filterObj) && !('entryId' in filterObj)) snakeK = 'entry_id'
-            if (snakeK === 'project' || snakeK === 'project_id' || snakeK === 'proj') snakeK = 'project_number'
-            if (!(snakeK in result)) result[snakeK] = v
+        if (hasDefinedKey(obj, 'project_number') || hasDefinedKey(obj, 'tags') || hasDefinedKey(obj, 'dry_run')) {
+            snakeKey = 'source_dir'
         }
-        delete result['filter']
+    } else if (
+        snakeKey === 'target_user' &&
+        !hasDefinedKey(obj, 'author') &&
+        !hasDefinedKey(result, 'author')
+    ) {
+        if (hasDefinedKey(obj, 'role') || hasDefinedKey(result, 'role')) snakeKey = 'author'
     }
+    return snakeKey
+}
+
+function entryAliasReplacement(value: unknown, methodName: string | undefined): string | undefined {
+    if (isRecord(value)) return undefined
+    if (typeof value !== 'string') return undefined
+    const numeric = /^\d+$/.test(value.trim())
+    const contentMethod =
+        methodName !== undefined &&
+        (hasMethodToken(methodName, 'create') ||
+            hasMethodToken(methodName, 'add') ||
+            hasMethodToken(methodName, 'insert') ||
+            (hasMethodToken(methodName, 'log') && !hasMethodToken(methodName, 'audit')))
+    if (!numeric || contentMethod) return 'content'
+    return undefined
+}
+
+function pathAliasReplacement(methodLower: string | undefined): string | undefined {
+    if (isExactMethod(methodLower, EXPORT_MARKDOWN_METHODS)) return 'output_dir'
+    if (
+        isExactMethod(methodLower, IMPORT_MARKDOWN_METHODS) ||
+        isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS)
+    ) {
+        return 'keep'
+    }
+    return undefined
+}
+
+/** Applies PARAM_ALIASES unless a method/context-specific rule suppresses or redirects the alias. */
+function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): string {
+    const { obj, result, methodName, methodLower, isGithubTool } = ctx
+    const alias = PARAM_ALIASES[startKey]
+    if (alias === undefined || hasDefinedKey(obj, alias) || hasDefinedKey(result, alias)) return startKey
+
+    if (startKey === 'entry') {
+        if (isRecord(value)) return startKey
+        return entryAliasReplacement(value, methodName) ?? alias
+    }
+    if (startKey === 'user' && (methodLower === 'search_audit_log' || methodLower === 'searchauditlog')) {
+        return startKey
+    }
+    if ((startKey === 'title' || startKey === 'body') && isGithubTool) return startKey
+    if (
+        startKey === 'keep' &&
+        !(methodName !== undefined && hasMethodToken(methodName, 'cleanup') && hasMethodToken(methodName, 'backups'))
+    ) {
+        return startKey
+    }
+    if (startKey === 'source') {
+        if (isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS)) return 'source_format'
+        if (
+            isExactMethod(methodLower, MERGE_TAG_METHODS_LOWER) ||
+            (methodLower === undefined && !isDbSourceSelector(obj))
+        ) {
+            return alias
+        }
+        return startKey
+    }
+    if (startKey === 'path') {
+        const pathKey = pathAliasReplacement(methodLower)
+        if (pathKey === 'keep') return alias
+        if (pathKey !== undefined) return pathKey
+        return startKey
+    }
+    const isCreateEntry =
+        methodName !== undefined &&
+        hasMethodToken(methodName, 'create') &&
+        (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries'))
+    const isUpdateEntry =
+        methodName !== undefined &&
+        hasMethodToken(methodName, 'update') &&
+        (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries'))
+    if (startKey === 'title' && isUpdateEntry) {
+        return startKey
+    }
+    const contentKeys = startKey === 'text' || startKey === 'body' || startKey === 'note' || startKey === 'title'
+    if (contentKeys && methodName !== undefined && !(isGithubTool || isCreateEntry || isUpdateEntry)) {
+        return startKey
+    }
+    return alias
+}
+
+/** Redirects content-like keys (message/name/description/...) to the right field per tool family. */
+function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
+    const { obj, result, methodName, isGithubTool } = ctx
+    let snakeKey = startKey
+    if (CONTENT_LIKE_KEYS.has(snakeKey)) {
+        const isEntryOp =
+            methodName !== undefined &&
+            (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries')) &&
+            !hasMethodToken(methodName, 'link')
+        const isCreateEntry = isEntryOp && hasMethodToken(methodName, 'create')
+        const isUpdateEntry = isEntryOp && hasMethodToken(methodName, 'update')
+        if (isGithubTool) {
+            if (snakeKey === 'name') {
+                if (!hasDefinedKey(obj, 'title') && !hasDefinedKey(result, 'title')) snakeKey = 'title'
+            } else if (
+                snakeKey === 'description' &&
+                methodName !== undefined &&
+                (hasMethodToken(methodName, 'milestone') || hasMethodToken(methodName, 'milestones'))
+            ) {
+                snakeKey = 'description'
+            } else if (
+                methodName !== undefined &&
+                hasMethodToken(methodName, 'close') &&
+                (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')
+            ) {
+                if (!hasDefinedKey(obj, 'comment') && !hasDefinedKey(result, 'comment')) snakeKey = 'comment'
+            } else if (!hasDefinedKey(obj, 'body') && !hasDefinedKey(result, 'body') && snakeKey !== 'comment') {
+                snakeKey = 'body'
+            }
+        } else if (isUpdateEntry && (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject')) {
+            if (!hasDefinedKey(obj, 'title') && !hasDefinedKey(result, 'title')) snakeKey = 'title'
+        } else if (isCreateEntry || isUpdateEntry) {
+            // [H6] Only entry mutations redirect message/description/... into `content`; project,
+            // milestone, member, or config mutations keep their own `name`/`description` keys.
+            if (!hasDefinedKey(obj, 'content') && !hasDefinedKey(result, 'content')) {
+                snakeKey = 'content'
+            } else if (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject') {
+                snakeKey = 'title'
+            }
+        }
+    }
+    return snakeKey
 }

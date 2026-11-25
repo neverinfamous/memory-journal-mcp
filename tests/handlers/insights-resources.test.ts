@@ -7,10 +7,10 @@ import type { ResourceContext } from '../../src/handlers/resources/shared.js'
 
 describe('Insights Resources', () => {
     describe('memory://insights/digest', () => {
-        it('should return scheduler digest if available', () => {
+        it('should compute live digest when db.computeDigest returns a snapshot', () => {
             const context = {
-                scheduler: {
-                    getLatestDigest: vi.fn().mockReturnValue({ scheduled: true }),
+                db: {
+                    computeDigest: vi.fn().mockReturnValue({ computed: true }),
                 } as any,
             } as unknown as ResourceContext
             const result = digestInsightsResource.handler(
@@ -18,12 +18,12 @@ describe('Insights Resources', () => {
                 context
             ) as any
             expect(result.data.success).toBe(true)
-            expect((result.data as any).snapshot).toEqual({ scheduled: true })
+            expect((result.data as any).snapshot).toEqual({ computed: true })
+            expect((result.data as any).source).toBe('computed')
         })
 
-        it('should return db digest if scheduler not available but DB snapshot exists', () => {
+        it('should return persisted db digest when computeDigest is unavailable and DB snapshot exists', () => {
             const context = {
-                scheduler: {},
                 db: {
                     getLatestAnalyticsSnapshot: vi.fn().mockReturnValue({
                         data: { db_snapshot: true },
@@ -41,9 +41,8 @@ describe('Insights Resources', () => {
             expect(result.annotations?.lastModified).toBe('2026-04-11T12:00:00Z')
         })
 
-        it('should return no digest available if neither scheduler nor db has one', async () => {
+        it('should throw if neither live compute nor persisted snapshot has a digest', async () => {
             const context = {
-                scheduler: {},
                 db: {
                     getLatestAnalyticsSnapshot: vi.fn().mockReturnValue(null),
                 } as any,

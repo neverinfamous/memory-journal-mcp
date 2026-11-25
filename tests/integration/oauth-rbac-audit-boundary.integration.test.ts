@@ -126,7 +126,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
             ).rejects.toThrow(PermissionError)
 
             await expect(
-                readResource('memory://audit', proxiedDb, undefined, null, null, null, teamDb, undefined, runtime)
+                readResource('memory://audit', proxiedDb, undefined, null, null, teamDb, undefined, runtime)
             ).rejects.toThrow(PermissionError)
 
             expect(() => validateResourceSubscription('memory://audit', runtime)).toThrow(PermissionError)
@@ -152,7 +152,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
         })
 
         await runWithAuthContext(adminCtx, async () => {
-            const auditResource = await readResource('memory://audit', proxiedDb, undefined, null, null, null, teamDb, undefined, runtime)
+            const auditResource = await readResource('memory://audit', proxiedDb, undefined, null, null, teamDb, undefined, runtime)
             expect(typeof auditResource.data).toBe('string')
             const auditText = String(auditResource.data)
             expect(auditText).toContain('Access Denied: Insufficient scope')
@@ -201,7 +201,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
         })
 
         await runWithAuthContext(viewerCtx, async () => {
-            const viewerRead = await callTool('team_get_recent', { limit: 5 }, proxiedDb, undefined, undefined, config, undefined, teamDb)
+            const viewerRead = await callTool('team_get_recent', { limit: 5, workspace_id: 'ws-alpha' }, proxiedDb, undefined, undefined, config, undefined, teamDb)
             expect(isToolResponse(viewerRead) && viewerRead.error).toBeUndefined()
 
             const viewerWrite = await callTool(
@@ -288,7 +288,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
                 {
                     content: 'Isolated test database entry via use_test_db flag',
                     entry_type: 'technical_note',
-                    workspace_id: 'ws-alpha',
+                    workspace_id: 'ws-sandbox',
                     project_number: 999,
                     use_test_db: true,
                 },
@@ -303,7 +303,8 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
         })
 
         expect(primaryDb.getActiveEntryCount('ws-alpha')).toBe(primaryCountBefore)
-        expect(testDb.getActiveEntryCount('ws-alpha')).toBe(1)
+        expect(testDb.getActiveEntryCount('ws-sandbox')).toBe(1)
+        expect(testDb.getActiveEntryCount('ws-alpha')).toBe(0)
 
         requestContextStorage.run({ useTestDb: true }, () => {
             const alphaWf = proxiedDb.createEntry({
@@ -343,8 +344,8 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
                 workspaceId: 'ws-beta',
             })
 
-            proxiedDb.deleteEntry(alphaDel.id, false)
-            proxiedDb.deleteEntry(betaDel.id, false)
+            proxiedDb.deleteEntry(alphaDel.id, false, 'ws-alpha')
+            proxiedDb.deleteEntry(betaDel.id, false, 'ws-beta')
 
             expect(proxiedDb.getDeletedEntries({ workspaceId: 'ws-alpha' }).entries[0]?.id).toBe(alphaDel.id)
             expect(proxiedDb.getDeletedEntries({ workspaceId: 'ws-beta' }).entries[0]?.id).toBe(betaDel.id)
@@ -366,7 +367,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
                 inactiveThresholdDays: 1,
                 workspaceId: 'ws-alpha',
             })
-            expect(insightsAlpha.projects.map((p) => p['project_number'])).toEqual(expect.arrayContaining([77, 999]))
+            expect(insightsAlpha.projects.map((p) => p['project_number'])).toEqual([77])
             expect(insightsAlpha.inactiveProjects.map((p) => p.project_number)).toEqual([77])
 
             const insightsBeta = proxiedDb.getCrossProjectInsights({

@@ -167,41 +167,41 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
 
             // Add alias using alias keys ('from' -> 'alias', 'to' -> 'canonical_author')
             const addRes = (await findTool(tools, 'team_add_author_alias').handler({
-                from: 'chris-dev',
-                to: 'chris-main',
+                from: 'alex-dev',
+                to: 'alex-main',
             })) as { success: boolean }
             expect(addRes.success).toBe(true)
 
             // List aliases using search key ('q')
             const listRes = (await findTool(tools, 'team_list_author_aliases').handler({
-                q: 'chris-main',
+                q: 'alex-main',
             })) as { success: boolean; aliases: unknown[] }
             expect(listRes.success).toBe(true)
             expect(listRes.aliases.length).toBe(1)
 
             // Resolve author
             const resAuthor = (await findTool(tools, 'team_resolve_author').handler({
-                author: 'chris-dev',
+                author: 'alex-dev',
             })) as { canonical_author: string; is_aliased: boolean }
-            expect(resAuthor.canonical_author).toBe('chris-main')
+            expect(resAuthor.canonical_author).toBe('alex-main')
             expect(resAuthor.is_aliased).toBe(true)
 
             // Consolidate authors
-            teamDb.createEntry({ content: 'Team entry by alias', author: 'chris-dev' })
+            teamDb.createEntry({ content: 'Team entry by alias', author: 'alex-dev', projectNumber: 5 })
             const consRes = (await findTool(tools, 'team_consolidate_authors').handler({
-                target: 'chris-main',
+                target: 'alex-main',
             })) as { success: boolean; updated_count: number }
             expect(consRes.success).toBe(true)
             expect(consRes.updated_count).toBe(1)
 
             // Remove alias (found vs not found)
             const remRes = (await findTool(tools, 'team_remove_author_alias').handler({
-                name: 'chris-dev',
+                name: 'alex-dev',
             })) as { success: boolean }
             expect(remRes.success).toBe(true)
 
             const remMissing = (await findTool(tools, 'team_remove_author_alias').handler({
-                alias: 'chris-dev',
+                alias: 'alex-dev',
             })) as { error?: string }
             expect(remMissing.error).toBeDefined()
         })
@@ -259,9 +259,10 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             expect(impMdFiles.dry_run).toBe(true)
             expect(impMdFiles.updated).toBe(1)
 
-            // 3. Team export_markdown & team_import_markdown (including 'tmp_team_md' shortcut & date range)
+            // 3. Team export_markdown & team_import_markdown (real directory inside an allowed root, date range)
+            const teamMdDir = path.join(ioRoot, 'team-md')
             const teamExpRes = (await findTool(teamIoTools, 'team_export_markdown').handler({
-                output_dir: 'tmp_team_md',
+                output_dir: teamMdDir,
                 project_number: 5,
                 start_date: '2020-01-01',
             })) as { exported_count: number }
@@ -271,7 +272,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             process.env['TEAM_AUTHOR'] = 'alice'
             try {
                 const teamImpRes = (await findTool(teamIoTools, 'team_import_markdown').handler({
-                    source_dir: 'tmp_team_md',
+                    source_dir: teamMdDir,
                     project_number: 5,
                     dry_run: false,
                 })) as { updated: number }
@@ -314,7 +315,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
 
             // 1. create_entry with share_with_team and relationships
             const prevAuthor = process.env['TEAM_AUTHOR']
-            process.env['TEAM_AUTHOR'] = 'chris-tester'
+            process.env['TEAM_AUTHOR'] = 'alex-tester'
             let createdId: number
             try {
                 const createRes = (await findTool(coreTools, 'create_entry').handler({
@@ -341,6 +342,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             // 2. get_entry_by_id (with relationships & importance)
             const getRes = (await findTool(coreTools, 'get_entry_by_id').handler({
                 entry_id: createdId,
+                workspace_id: 'memory-journal-mcp',
                 include_relationships: true,
             })) as { success: boolean; importance: number }
             expect(getRes.success).toBe(true)
@@ -375,16 +377,20 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             // 5. delete_entry & restore_entry (using 'id' alias)
             const delOk = (await findTool(adminTools, 'delete_entry').handler({
                 entry_id: createdId,
+                workspace_id: 'memory-journal-mcp',
             })) as { success: boolean }
             expect(delOk.success).toBe(true)
 
             const restoreOk = (await findTool(adminTools, 'restore_entry').handler({
                 id: createdId,
+                workspace_id: 'memory-journal-mcp',
             })) as { success: boolean }
             expect(restoreOk.success).toBe(true)
 
             // 6. list_tags, test_simple, test_error_handling
-            const tagsRes = (await findTool(coreTools, 'list_tags').handler({})) as {
+            const tagsRes = (await findTool(coreTools, 'list_tags').handler({
+                workspace_id: 'memory-journal-mcp',
+            })) as {
                 success: boolean
                 count: number
             }

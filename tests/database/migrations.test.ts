@@ -19,11 +19,21 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(12) // 1 to 6, plus 8, 9, 10, 11, 12, 13
+        expect(applied.length).toBe(22) // 1 to 6, plus 8 through 19, 21, 22, 23, and 24 (7 and 20 are team-only)
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
-        expect(applied[11].version).toBe(13)
-        expect(applied[11].name).toBe('013-add-session-id')
+        expect(applied[12].version).toBe(14)
+        expect(applied[12].name).toBe('014-add-alias-workspace')
+        expect(applied[13].version).toBe(15)
+        expect(applied[13].name).toBe('015-alias-workspace-unique')
+        expect(applied[14].name).toBe('016-fts-soft-delete-triggers')
+        expect(applied[15].name).toBe('017-add-performance-indexes')
+        expect(applied[16].name).toBe('018-add-project-and-prune-duplicate-indexes')
+        expect(applied[17].name).toBe('019-normalize-legacy-commit-entries')
+        expect(applied[18].name).toBe('021-add-entity-lookup-and-prune-alias-index')
+        expect(applied[19].name).toBe('022-add-autocontext-index')
+        expect(applied[20].name).toBe('023-add-project-recent-index')
+        expect(applied[21].name).toBe('024-prune-legacy-journal-indexes')
 
         // Verify tables exist
         const tables = db
@@ -50,6 +60,7 @@ describe('Database Migration Framework', () => {
         expect(cols).toContain('version')
         expect(cols).toContain('workspace_id')
         expect(cols).not.toContain('author') // personal db should not have author
+        expect(cols).not.toContain('origin_personal_id') // team-only mirror back-reference
 
         db.close()
     })
@@ -66,14 +77,20 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(13)
+        expect(applied.length).toBe(24)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
+        expect(applied[19].name).toBe('020-add-team-origin-personal-id')
+        expect(applied[20].name).toBe('021-add-entity-lookup-and-prune-alias-index')
+        expect(applied[21].name).toBe('022-add-autocontext-index')
+        expect(applied[22].name).toBe('023-add-project-recent-index')
+        expect(applied[23].name).toBe('024-prune-legacy-journal-indexes')
 
         // Verify memory_journal has author column
         const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
         const cols = tableInfo.map((row) => row.name)
         expect(cols).toContain('author')
+        expect(cols).toContain('origin_personal_id')
 
         db.close()
     })
@@ -81,7 +98,7 @@ describe('Database Migration Framework', () => {
     it('Migration 009 creates version column idempotently', () => {
         const db = new DatabaseAdapter(':memory:')
         db.exec('CREATE TABLE memory_journal (id INTEGER PRIMARY KEY)')
-        
+
         // Run migration on empty DB
         Migration009AddEntryVersion.up(db)
         const columns = db.pragma('table_info(memory_journal)') as { name: string }[]
@@ -94,7 +111,7 @@ describe('Database Migration Framework', () => {
 
     it('Migration 010 creates author_aliases table idempotently', () => {
         const db = new DatabaseAdapter(':memory:')
-        
+
         // Run migration on empty DB
         Migration010AddAuthorAliases.up(db)
         const tables = db.pragma('table_list') as { name: string }[]
@@ -108,7 +125,7 @@ describe('Database Migration Framework', () => {
     it('Migration 011 creates workspace_id column idempotently', () => {
         const db = new DatabaseAdapter(':memory:')
         db.exec('CREATE TABLE memory_journal (id INTEGER PRIMARY KEY, timestamp TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT, is_archived INTEGER DEFAULT 0)')
-        
+
         // Run migration on empty DB
         Migration011AddWorkspaceId.up(db)
         const columns = db.pragma('table_info(memory_journal)') as { name: string }[]
@@ -121,7 +138,7 @@ describe('Database Migration Framework', () => {
         expect(() => Migration011AddWorkspaceId.up(db)).not.toThrow()
         const rows = db.prepare('SELECT workspace_id FROM memory_journal').all() as { workspace_id: string }[]
         expect(rows[0].workspace_id).toBe('custom')
-        
+
         db.close()
     })
 
@@ -159,12 +176,14 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(12)
+        expect(applied.length).toBe(22)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
         expect(applied[6].version).toBe(8) // applied in run
         expect(applied[11].version).toBe(13) // applied in run
+        expect(applied[12].version).toBe(14)
+        expect(applied[13].version).toBe(15)
 
         // Verify newer tables like entry_revisions exist now
         const tables = db
@@ -196,8 +215,35 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(12)
-        expect(count2).toBe(12)
+        expect(count1).toBe(22)
+        expect(count2).toBe(22)
+
+        db.close()
+    })
+
+    it('Migration 016 keeps FTS in sync across soft-delete, restore, and hard-delete', () => {
+        const db = new DatabaseAdapter(':memory:')
+        MigrationManager.runMigrations(db, false)
+        const insert = db.prepare(
+            "INSERT INTO memory_journal (entry_type, content) VALUES ('technical_note', ?)"
+        )
+        const id = Number(insert.run('zebra quokka').lastInsertRowid)
+        const matches = (): number =>
+            (db.prepare("SELECT COUNT(*) as c FROM fts_content WHERE fts_content MATCH 'quokka'").get() as {
+                c: number
+            }).c
+
+        expect(matches()).toBe(1)
+        db.prepare('UPDATE memory_journal SET deleted_at = ? WHERE id = ?').run('2026-01-01', id)
+        expect(matches()).toBe(0)
+        // Updating content of a soft-deleted row must not corrupt the index
+        db.prepare('UPDATE memory_journal SET content = ? WHERE id = ?').run('zebra quokka wombat', id)
+        db.prepare('UPDATE memory_journal SET deleted_at = NULL WHERE id = ?').run(id)
+        expect(matches()).toBe(1)
+        db.prepare('UPDATE memory_journal SET deleted_at = ? WHERE id = ?').run('2026-01-02', id)
+        expect(() => db.prepare('DELETE FROM memory_journal WHERE id = ?').run(id)).not.toThrow()
+        expect(() => db.exec("INSERT INTO fts_content(fts_content) VALUES('integrity-check')")).not.toThrow()
+        expect(matches()).toBe(0)
 
         db.close()
     })

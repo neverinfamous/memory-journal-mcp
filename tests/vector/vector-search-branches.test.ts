@@ -49,7 +49,7 @@ describe('VectorSearchManager — branch coverage', () => {
         Object.assign(manager, { initialized: true })
 
         const result = manager.getStats()
-        expect(result.itemCount).toBe(0)
+        expect(result.itemCount).toBeNull()
     })
 
     it('should auto-initialize when calling addEntry on uninitialized manager', async () => {

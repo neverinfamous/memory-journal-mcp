@@ -4,50 +4,277 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
-import { relaxedNumber } from '../schemas.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
+import { fenceUntrustedInline } from '../../resources/shared.js'
+import { coerceIntString, MAX_CONTENT_LENGTH, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
+import { unwrapFencedRemoteText } from './fencing-helpers.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
+import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
+import { resolveIssueEntryScope, scopeMismatchResponse } from './create-issue-tool.js'
+
+const CloseIssueHandlerInputSchema = z
+    .object({
+        issue_number: z.preprocess(coerceIntString, z.number().int().positive()),
+        resolution_notes: z.string().max(MAX_CONTENT_LENGTH).optional(),
+        comment: z.string().max(MAX_CONTENT_LENGTH).optional(),
+        move_to_done: z.boolean().optional().default(false),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema),
+        workspace_id: z.string().max(255).optional(),
+        owner: z.string().max(255).optional(),
+        repo: z.string().max(255).optional(),
+        tags: z.array(z.string().max(100)).max(50).optional(),
+    })
+    .strict()
+
+type CloseIssueInput = z.infer<typeof CloseIssueHandlerInputSchema>
+
+async function resolveKanbanMoveIfRequested(
+    context: ToolContext,
+    input: CloseIssueInput,
+    resolved: {
+        owner: string
+        repo: string
+        detectedOwner?: string | null
+        github: ToolContext['github']
+    },
+    issueNodeId: string | undefined,
+    resolvedProjectNumber?: number
+): Promise<KanbanMoveResult | undefined> {
+    if (!input.move_to_done) return undefined
+    if (!resolved.github || issueNodeId === undefined) {
+        return { moved: false, error: 'Kanban move did not run.' }
+    }
+    const projectNum =
+        resolvedProjectNumber ??
+        resolveProjectNumber(
+            context,
+            resolved.repo,
+            input.project_number,
+            resolved.owner,
+            resolved.detectedOwner
+        )
+    if (projectNum === undefined) {
+        return {
+            moved: false,
+            error: 'project_number required when move_to_done is true',
+        }
+    }
+    return moveIssueToDone(
+        resolved.github,
+        resolved.owner,
+        resolved.repo,
+        issueNodeId,
+        projectNum
+    )
+}
+
+interface ResolvedCloseIssueRepo {
+    owner: string
+    repo: string
+    detectedOwner?: string | null
+    github: NonNullable<ToolContext['github']>
+}
+
+async function dispatchCloseIssueOnGitHub(
+    db: ToolContext['db'],
+    resolved: ResolvedCloseIssueRepo,
+    entryId: number,
+    entryContent: string,
+    issueNumber: number,
+    comment: string | undefined,
+    workspaceId: string
+): Promise<{ url: string } | { errorResponse: Record<string, unknown> }> {
+    let result: Awaited<ReturnType<typeof resolved.github.closeIssue>>
+    try {
+        result = await resolved.github.closeIssue(
+            resolved.owner,
+            resolved.repo,
+            issueNumber,
+            comment
+        )
+    } catch (err) {
+        db.deleteEntry(entryId, false, workspaceId)
+        throw err
+    }
+    if (!result) {
+        db.updateEntry(entryId, {
+            content:
+                entryContent +
+                '\n\n[FAILED] GitHub mutation failed: Could not close issue. Check GITHUB_TOKEN permissions.',
+            workspaceId,
+        })
+        return {
+            errorResponse: {
+                success: false,
+                error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.',
+                code: 'API_ERROR',
+                category: 'api',
+                suggestion: 'Verify GitHub token has write access to issues.',
+                recoverable: true,
+            },
+        }
+    }
+    return { url: result.url }
+}
+
+async function finalizeClosedIssueEntry(
+    context: ToolContext,
+    input: CloseIssueInput,
+    resolved: ResolvedCloseIssueRepo,
+    issueDetails: { title: string; url: string; nodeId?: string },
+    safeIssueTitle: string,
+    entryId: number,
+    workspaceId: string,
+    projectNumber: number | undefined,
+    closedUrl: string
+): Promise<Record<string, unknown>> {
+    const { db } = context
+    const kanbanResult = await resolveKanbanMoveIfRequested(
+        context,
+        input,
+        resolved,
+        issueDetails.nodeId,
+        projectNumber
+    )
+    const finalContent =
+        `Closed GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n\n` +
+        `URL: ${issueDetails.url}\n` +
+        (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
+
+    const updatedEntry = db.updateEntry(entryId, {
+        content: finalContent,
+        issueUrl: issueDetails.url,
+        tags: input.tags ?? ['github', 'issue-closed', 'resolution'],
+        workspaceId,
+    })
+
+    const indexStatus = await autoIndexEntry(
+        context.vectorManager,
+        db,
+        updatedEntry ?? entryId,
+        workspaceId
+    )
+    const vectorWarning =
+        indexStatus === 'failed' ? 'Journal entry saved, but vector indexing failed.' : undefined
+
+    const kanbanFailed = input.move_to_done && kanbanResult?.moved !== true
+    const closedIssue = {
+        number: input.issue_number,
+        title: fenceUntrustedInline(issueDetails.title),
+        url: closedUrl,
+        previousState: 'OPEN' as const,
+        newState: 'CLOSED' as const,
+    }
+    const journalEntry = {
+        id: entryId,
+        linkedToIssue: input.issue_number,
+        significanceType: 'blocker_resolved' as const,
+    }
+    if (kanbanFailed) {
+        const kanbanMsg = kanbanResult?.error ?? 'Kanban move did not run.'
+        return {
+            success: false,
+            warning: vectorWarning !== undefined ? `${kanbanMsg}; ${vectorWarning}` : kanbanMsg,
+            issue: closedIssue,
+            journalEntry,
+            kanban: kanbanResult,
+            message: `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entryId)}, but the Kanban move did not run.`,
+        }
+    }
+    return {
+        success: true,
+        ...(vectorWarning !== undefined ? { warning: vectorWarning } : {}),
+        issue: closedIssue,
+        journalEntry,
+        kanban: kanbanResult,
+        message:
+            `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entryId)}` +
+            (kanbanResult?.moved === true ? ' and moved to Done' : ''),
+    }
+}
+
+async function executeCloseIssueMutation(
+    context: ToolContext,
+    input: CloseIssueInput,
+    resolved: ResolvedCloseIssueRepo,
+    issueDetails: { title: string; url: string; nodeId?: string }
+): Promise<Record<string, unknown>> {
+    const { db } = context
+    const safeIssueTitle = unwrapFencedRemoteText(issueDetails.title)
+    const entryContent =
+        `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n` +
+        (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
+
+    const entryScope = resolveIssueEntryScope(
+        context,
+        resolved.repo,
+        input.workspace_id,
+        input.project_number,
+        'close issues and write journal entries',
+        resolved.owner,
+        resolved.detectedOwner
+    )
+    if ('errorResponse' in entryScope) return entryScope.errorResponse
+    const { workspaceId, projectNumber } = entryScope
+    const entry = db.createEntry({
+        content: entryContent,
+        entryType: 'bug_fix',
+        tags: input.tags ?? ['github', 'issue-closed', 'resolution', 'pending'],
+        isPersonal: false,
+        significanceType: 'blocker_resolved',
+        issueNumber: input.issue_number,
+        projectNumber,
+        projectOwner: resolved.owner,
+        workspaceId,
+    })
+
+    const closedRes = await dispatchCloseIssueOnGitHub(
+        db,
+        resolved,
+        entry.id,
+        entryContent,
+        input.issue_number,
+        input.comment,
+        workspaceId
+    )
+    if ('errorResponse' in closedRes) return closedRes.errorResponse
+
+    return await finalizeClosedIssueEntry(
+        context,
+        input,
+        resolved,
+        issueDetails,
+        safeIssueTitle,
+        entry.id,
+        workspaceId,
+        projectNumber,
+        closedRes.url
+    )
+}
+
+const CloseGitHubIssueSchemaMcp = z.object({
+    issue_number: relaxedNumber().optional().describe('Issue number to close'),
+    resolution_notes: z.string().optional().describe('Notes about how the issue was resolved'),
+    comment: z.string().optional().describe('Comment to add to the issue before closing'),
+    move_to_done: z.boolean().optional().default(false).describe('Move the associated Kanban item to "Done" column'),
+    project_number: relaxedNumber().optional().describe('GitHub Project number (required if move_to_done is true, or uses DEFAULT_PROJECT_NUMBER)'),
+    workspace_id: z.string().optional().describe('Workspace identifier (defaults to current project)'),
+    owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+    repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+    tags: z.array(z.string()).optional().describe('Journal entry tags'),
+})
 
 export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
-    const { db } = context
     return {
         name: 'close_github_issue_with_entry',
         title: 'Close GitHub Issue with Resolution Entry',
         description:
             'Close a GitHub issue AND create a journal entry documenting the resolution.',
         group: 'github',
-        inputSchema: z.object({
-            issue_number: relaxedNumber().optional().describe('Issue number to close'),
-            resolution_notes: z
-                .string()
-                .optional()
-                .describe('Notes about how the issue was resolved'),
-            comment: z
-                .string()
-                .optional()
-                .describe('Comment to add to the issue before closing'),
-            move_to_done: z
-                .boolean()
-                .optional()
-                .default(false)
-                .describe('Move the associated Kanban item to "Done" column'),
-            project_number: relaxedNumber()
-                .optional()
-                .describe(
-                    'GitHub Project number (required if move_to_done is true, or uses DEFAULT_PROJECT_NUMBER)'
-                ),
-            owner: z
-                .string()
-                .optional()
-                .describe('Repository owner - LEAVE EMPTY to auto-detect'),
-            repo: z
-                .string()
-                .optional()
-                .describe('Repository name - LEAVE EMPTY to auto-detect'),
-            tags: z.array(z.string()).optional().describe('Journal entry tags'),
-        }),
+        inputSchema: CloseGitHubIssueSchemaMcp,
         outputSchema: CloseGitHubIssueWithEntryOutputSchema,
         annotations: {
             readOnlyHint: false,
@@ -57,18 +284,12 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
         },
         handler: async (params: unknown) => {
             try {
-                const input = z
-                    .object({
-                        issue_number: z.number(),
-                        resolution_notes: z.string().optional(),
-                        comment: z.string().optional(),
-                        move_to_done: z.boolean().optional().default(false),
-                        project_number: z.number().optional(),
-                        owner: z.string().optional(),
-                        repo: z.string().optional(),
-                        tags: z.array(z.string()).optional(),
-                    })
-                    .parse(params)
+                const input = CloseIssueHandlerInputSchema.parse(params)
+                if (input.workspace_id?.trim() === '*') {
+                    return scopeMismatchResponse(
+                        "workspace_id '*' is a read-only wildcard and cannot be used to close issues and create journal entries."
+                    )
+                }
 
                 const resolved = await resolveOwnerRepo(context, input)
                 if ('error' in resolved) return resolved.response
@@ -100,158 +321,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                     }
                 }
 
-                // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
-                const safeIssueTitle = issueDetails.title.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
-                const entryContent =
-                    `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n` +
-                    (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
-
-                const entry = db.createEntry({
-                    content: entryContent,
-                    entryType: 'bug_fix',
-                    tags: input.tags ?? ['github', 'issue-closed', 'resolution', 'pending'],
-                    isPersonal: false,
-                    significanceType: 'blocker_resolved',
-                    issueNumber: input.issue_number,
-                    projectOwner: resolved.owner,
-                })
-
-                // 2. Perform external mutation
-                const result = await resolved.github.closeIssue(
-                    resolved.owner,
-                    resolved.repo,
-                    input.issue_number,
-                    input.comment
-                )
-
-                if (!result) {
-                    db.updateEntry(entry.id, {
-                        content:
-                            entryContent +
-                            '\n\n[FAILED] GitHub mutation failed: Could not close issue. Check GITHUB_TOKEN permissions.',
-                    })
-                    return {
-                        success: false,
-                        error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.',
-                        code: 'API_ERROR',
-                        category: 'api',
-                        suggestion: 'Verify GitHub token has write access to issues.',
-                        recoverable: true,
-                    }
-                }
-
-                // 3. Optional Kanban mutation
-                let kanbanResult:
-                    | { moved: boolean; error?: string; projectNumber?: number }
-                    | undefined
-                if (input.move_to_done) {
-                    const projectNum = resolveProjectNumber(
-                        context,
-                        resolved.repo,
-                        input.project_number
-                    )
-                    if (projectNum === undefined) {
-                        kanbanResult = {
-                            moved: false,
-                            error: 'project_number required when move_to_done is true',
-                        }
-                    } else {
-                        try {
-                            const board = await resolved.github.getProjectKanban(
-                                resolved.owner,
-                                projectNum,
-                                resolved.repo
-                            )
-                            if (!board) {
-                                kanbanResult = {
-                                    moved: false,
-                                    error: `Project #${projectNum} not found`,
-                                    projectNumber: projectNum,
-                                }
-                            } else {
-                                const doneOption = board.statusOptions.find(
-                                    (opt) => opt.name.toLowerCase() === 'done'
-                                )
-                                if (!doneOption) {
-                                    kanbanResult = {
-                                        moved: false,
-                                        error: '"Done" status column not found on board',
-                                        projectNumber: projectNum,
-                                    }
-                                } else {
-                                    const addResult = await resolved.github.addProjectItem(
-                                        board.projectId,
-                                        issueDetails.nodeId
-                                    )
-                                    if (!addResult.success || !addResult.itemId) {
-                                        kanbanResult = {
-                                            moved: false,
-                                            error:
-                                                addResult.error ??
-                                                'Failed to resolve project item ID',
-                                            projectNumber: projectNum,
-                                        }
-                                    } else {
-                                        const moveResult =
-                                            await resolved.github.moveProjectItem(
-                                                board.projectId,
-                                                addResult.itemId,
-                                                board.statusFieldId,
-                                                doneOption.id
-                                            )
-                                        kanbanResult = {
-                                            moved: moveResult.success,
-                                            error: moveResult.error,
-                                            projectNumber: projectNum,
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            kanbanResult = {
-                                moved: false,
-                                error: err instanceof Error ? err.message : String(err),
-                                projectNumber: resolveProjectNumber(
-                                    context,
-                                    resolved.repo,
-                                    input.project_number
-                                ),
-                            }
-                        }
-                    }
-                }
-
-                // 4. Update journal entry with finalized state
-                const finalContent =
-                    `Closed GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n\n` +
-                    `URL: ${issueDetails.url}\n` +
-                    (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
-
-                db.updateEntry(entry.id, {
-                    content: finalContent,
-                    issueUrl: issueDetails.url,
-                    tags: input.tags ?? ['github', 'issue-closed', 'resolution'],
-                })
-
-                return {
-                    success: true,
-                    issue: {
-                        number: input.issue_number,
-                        title: issueDetails.title,
-                        url: result.url,
-                        previousState: 'OPEN',
-                        newState: 'CLOSED',
-                    },
-                    journalEntry: {
-                        id: entry.id,
-                        linkedToIssue: input.issue_number,
-                        significanceType: 'blocker_resolved',
-                    },
-                    kanban: kanbanResult,
-                    message:
-                        `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}` +
-                        (kanbanResult?.moved ? ' and moved to Done' : ''),
-                }
+                return await executeCloseIssueMutation(context, input, resolved, issueDetails)
             } catch (err) {
                 return formatHandlerError(err)
             }

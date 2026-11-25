@@ -1,16 +1,18 @@
 /**
- * Team Tool Group - 44 tools
+ * Team Tool Group - 39 tools
  *
  * Barrel re-export composing all team tool sub-modules.
  *
  * Tools:
  *   Core:          team_create_entry, team_get_entry_by_id, team_get_recent, team_list_tags
- *   Search:        team_search, team_search_by_date_range
- *   Admin:         team_update_entry, team_delete_entry, team_list_deleted_entries, team_merge_tags
+ *   Search:        team_search, team_search_by_date_range, team_list_deleted_entries
+ *   Admin:         team_update_entry, team_delete_entry, team_restore_entry,
+ *                  team_batch_create_entries, team_batch_update_entries, team_batch_delete_entries,
+ *                  team_merge_tags
  *   Analytics:     team_get_statistics, team_get_cross_project_insights, team_get_collaboration_matrix
  *   Relationships: team_link_entries, team_visualize_relationships
  *   Export:        team_export_entries
- *   IO:            team_export_markdown, team_import_markdown
+ *   IO:            team_export_markdown, team_import_markdown, team_import_external
  *   Backup:        team_backup, team_list_backups
  *   Vector:        team_semantic_search, team_get_vector_index_stats,
  *                  team_rebuild_vector_index, team_add_to_vector_index
@@ -39,7 +41,7 @@ import { getTeamMemberTools } from './member-tools.js'
 import { getTeamAliasTools } from './alias-tools.js'
 
 /**
- * Get all team tool definitions (43 tools).
+ * Get all team tool definitions (39 tools).
  */
 export function getTeamTools(context: ToolContext): ToolDefinition[] {
     const tools = [

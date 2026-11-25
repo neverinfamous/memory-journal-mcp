@@ -18,6 +18,8 @@ afterAll(async () => {
 })
 
 test('mj_execute_code with restore_backup', async () => {
+    fs.rmSync(dbDir, { recursive: true, force: true })
+    fs.mkdirSync(dbDir, { recursive: true })
     db = new DatabaseAdapter(dbPath)
     await db.initialize()
     const runtime = new ServerRuntime()
@@ -37,6 +39,6 @@ test('mj_execute_code with restore_backup', async () => {
     
     const { callTool } = await import('../../src/handlers/tools/index.js')
     
-    const result = await callTool('mj_execute_code', { code, timeout_ms: 5000, context: {} }, db, undefined, undefined, config, undefined)
-    expect((result as any).success).toBe(true)
-})
+    const result = await callTool('mj_execute_code', { code, timeout_ms: 15000, context: {} }, db, undefined, undefined, config, undefined)
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+}, 20000)

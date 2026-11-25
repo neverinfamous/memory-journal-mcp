@@ -8,7 +8,14 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
+import type { Client } from '@modelcontextprotocol/client'
+import {
+    createClient,
+    callToolAndParse,
+    callToolRaw,
+    expectSuccess,
+    expectHandlerError,
+} from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -254,6 +261,103 @@ test.describe('Boundary: Export', () => {
                 format: 'json',
             })
             expectSuccess(p)
+        } finally {
+            await client.close()
+        }
+    })
+})
+
+// =============================================================================
+// Content Length & Type Mismatch Boundaries (HTTP Transport)
+// =============================================================================
+
+async function assertStructuredTypeRejection(
+    client: Client,
+    toolName: string,
+    args: Record<string, unknown>
+): Promise<void> {
+    const response = await callToolRaw(client, toolName, args)
+    const text = response.content[0]?.text ?? ''
+    expect(text, `${toolName}: missing response text`).not.toBe('')
+    expect(text, `${toolName}: raw MCP -32602 leaked: ${text}`).not.toContain('-32602')
+    const parsed = JSON.parse(text) as Record<string, unknown>
+    expect(parsed.success, `${toolName}: expected success: false`).toBe(false)
+    expect(parsed.code, `${toolName}: expected VALIDATION_ERROR`).toBe('VALIDATION_ERROR')
+}
+
+test.describe('Boundary: Content Length & Type Mismatches', () => {
+    test('create_entry accepts 50,000-character content over HTTP and cleans up', async () => {
+        const client = await createClient()
+        let createdId: number | undefined
+        try {
+            const created = await callToolAndParse(client, 'create_entry', {
+                workspace_id: 'default',
+                project_number: 1,
+                content: 'A'.repeat(50_000),
+                entry_type: 'test_entry',
+            })
+            expectSuccess(created)
+            const entry = created.entry
+            if (typeof entry === 'object' && entry !== null && 'id' in entry && typeof entry.id === 'number') {
+                createdId = entry.id
+            }
+            expect(typeof createdId).toBe('number')
+
+            const fetched = await callToolAndParse(client, 'get_entry_by_id', {
+                project_number: 1,
+                entry_id: createdId,
+            })
+            expectSuccess(fetched)
+            const fetchedEntry = fetched.entry
+            const length =
+                typeof fetchedEntry === 'object' &&
+                fetchedEntry !== null &&
+                'content' in fetchedEntry &&
+                typeof fetchedEntry.content === 'string'
+                    ? fetchedEntry.content.length
+                    : -1
+            expect(length).toBe(50_000)
+        } finally {
+            if (createdId !== undefined) {
+                await callToolAndParse(client, 'delete_entry', {
+                    entry_id: createdId,
+                    permanent: true,
+                })
+            }
+            await client.close()
+        }
+    })
+
+    test('create_entry rejects 50,001- and 100,001-character content with structured VALIDATION_ERROR', async () => {
+        const client = await createClient()
+        try {
+            for (const length of [50_001, 100_001]) {
+                const payload = await callToolAndParse(client, 'create_entry', {
+                    workspace_id: 'default',
+                    project_number: 1,
+                    content: 'A'.repeat(length),
+                    entry_type: 'test_entry',
+                })
+                expectHandlerError(payload, /50000/)
+                expect(payload.code).toBe('VALIDATION_ERROR')
+            }
+        } finally {
+            await client.close()
+        }
+    })
+
+    test('type-mismatch inputs return structured VALIDATION_ERROR without -32602 leakage', async () => {
+        const client = await createClient()
+        try {
+            const invalidCalls: Array<[string, Record<string, unknown>]> = [
+                ['create_entry', { workspace_id: 'default', project_number: 1, content: true }],
+                ['create_entry', { workspace_id: 'default', project_number: 1, content: ['array'] }],
+                ['team_create_entry', { workspace_id: 'default', project_number: 1, content: 123 }],
+                ['team_search', { workspace_id: 'default', project_number: 1, query: 123 }],
+            ]
+            for (const [toolName, args] of invalidCalls) {
+                await assertStructuredTypeRejection(client, toolName, args)
+            }
         } finally {
             await client.close()
         }

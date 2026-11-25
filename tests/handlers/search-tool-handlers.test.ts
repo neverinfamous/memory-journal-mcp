@@ -147,7 +147,7 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.entries.length).toBe(result.count)
         })
 
-        it('should not deduplicate entries with same content from different databases', async () => {
+        it('should collapse legacy personal/team mirror pairs with identical content and annotate alsoInTeam', async () => {
             const result = (await callTool(
                 'search_entries',
                 { query: 'alpha', limit: 50, include_team: true },
@@ -157,13 +157,18 @@ describe('Search Tool Handlers - Coverage', () => {
                 undefined,
                 undefined,
                 teamDb
-            )) as { entries: { content: string }[]; count: number }
+            )) as {
+                entries: { content: string; source?: string; alsoInTeam?: number }[]
+                count: number
+            }
 
-            // 'Personal alpha entry' exists in both DBs — should NOT be deduped since sources differ
+            // M2: 'Personal alpha entry' mirrored in both DBs collapses to the personal hit annotated with alsoInTeam
             const alphaEntries = result.entries.filter((e) =>
                 e.content.includes('Personal alpha entry')
             )
-            expect(alphaEntries.length).toBe(2)
+            expect(alphaEntries.length).toBe(1)
+            expect(alphaEntries[0]?.source).toBe('personal')
+            expect(typeof alphaEntries[0]?.alsoInTeam).toBe('number')
         })
 
         it('should return validation error for empty search (no query, no filters)', async () => {

@@ -101,6 +101,25 @@ export class LatencyTracker {
         this.maxSamplesPerTool = maxSamplesPerTool
     }
 
+    private replaceInSortedWindow(sorted: number[], oldest: number, durationMs: number): boolean {
+        const removeIdx = binarySearchExact(sorted, oldest)
+        if (removeIdx === -1) return false
+        const rawInsertIdx = binarySearchInsertIndex(sorted, durationMs)
+        if (rawInsertIdx <= removeIdx) {
+            for (let i = removeIdx; i > rawInsertIdx; i--) {
+                sorted[i] = safeAt(sorted, i - 1)
+            }
+            sorted[rawInsertIdx] = durationMs
+        } else {
+            const targetIdx = rawInsertIdx - 1
+            for (let i = removeIdx; i < targetIdx; i++) {
+                sorted[i] = safeAt(sorted, i + 1)
+            }
+            sorted[targetIdx] = durationMs
+        }
+        return true
+    }
+
     /**
      * Record a latency sample for a tool.
      */
@@ -116,11 +135,8 @@ export class LatencyTracker {
             const oldest = entry.insertionOrder[entry.head]
             entry.insertionOrder[entry.head] = durationMs
             entry.head = (entry.head + 1) % this.maxSamplesPerTool
-            if (oldest !== undefined) {
-                const removeIdx = binarySearchExact(entry.sorted, oldest)
-                if (removeIdx !== -1) {
-                    entry.sorted.splice(removeIdx, 1)
-                }
+            if (oldest !== undefined && this.replaceInSortedWindow(entry.sorted, oldest, durationMs)) {
+                return
             }
         } else {
             entry.insertionOrder.push(durationMs)

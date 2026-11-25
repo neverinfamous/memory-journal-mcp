@@ -1,0 +1,389 @@
+/**
+ * Graph Pivot Queries
+ *
+ * Recency-scoped, token-cheap relationship-graph queries used by the briefing
+ * (`↔N` degree suffixes, active threads, 14-day unlinked rate, commit→entry refs)
+ * and the `memory://graph/{+repo}` neighborhood resource.
+ *
+ * [INVARIANT] Every query excludes soft-deleted endpoints and, when a concrete
+ * workspace is supplied (not '*'), requires BOTH endpoints to live in it.
+ */
+
+import type { Database } from 'better-sqlite3'
+import { effectiveWorkspace } from '../workspace-scope.js'
+
+export interface ActiveThreadRow {
+    entryId: number
+    entryType: string
+    content: string
+    recentLinks: number
+}
+
+export interface RecentLinkageStats {
+    recentEntries: number
+    unlinkedEntries: number
+}
+
+export interface NeighborhoodNode {
+    id: number
+    entryType: string
+    content: string
+    timestamp: string
+}
+
+export interface NeighborhoodEdge {
+    from: number
+    to: number
+    type: string
+}
+
+export interface RecentNeighborhood {
+    nodes: NeighborhoodNode[]
+    edges: NeighborhoodEdge[]
+    unlinkedIds: number[]
+    recentEntries: number
+}
+
+interface ScopeInfo {
+    scoped: boolean
+    id: string
+}
+
+function scopeOf(workspaceId: string | undefined): ScopeInfo {
+    const id = effectiveWorkspace(workspaceId)
+    return { scoped: id !== '*', id }
+}
+
+/** SQL predicate: entry alias `alias` has at least one live (in-scope) peer. */
+function linkedPredicate(alias: string, scoped: boolean): string {
+    const peerWs = scoped ? ' AND p.workspace_id = ?' : ''
+    return `(EXISTS (SELECT 1 FROM relationships r CROSS JOIN memory_journal p ON p.id = r.to_entry_id
+                     WHERE r.from_entry_id = ${alias}.id AND r.to_entry_id != r.from_entry_id
+                       AND p.deleted_at IS NULL${peerWs})
+          OR EXISTS (SELECT 1 FROM relationships r CROSS JOIN memory_journal p ON p.id = r.from_entry_id
+                     WHERE r.to_entry_id = ${alias}.id AND r.from_entry_id != r.to_entry_id
+                       AND p.deleted_at IS NULL${peerWs}))`
+}
+
+/**
+ * Count live, in-scope relationship endpoints for each requested entry id.
+ * Entries with no links map to 0 so callers can render an orphan marker.
+ */
+export function queryRelationshipDegrees(
+    db: Database,
+    entryIds: readonly number[],
+    workspaceId?: string
+): Map<number, number> {
+    const result = new Map<number, number>()
+    const ids = [...new Set(entryIds.filter((id) => Number.isInteger(id) && id > 0))]
+    if (ids.length === 0) return result
+    const { scoped, id: ws } = scopeOf(workspaceId)
+    const peerWs = scoped ? ' AND p.workspace_id = ?' : ''
+    const srcWs = scoped ? ' AND m.workspace_id = ?' : ''
+    const rows = db
+        .prepare<unknown[], { entry_id: number; degree: number }>(
+            `WITH ids(id) AS (SELECT CAST(value AS INTEGER) FROM json_each(?))
+             SELECT ids.id AS entry_id,
+                    (SELECT COUNT(*) FROM relationships r CROSS JOIN memory_journal p ON p.id = r.to_entry_id
+                      WHERE r.from_entry_id = ids.id AND r.to_entry_id != r.from_entry_id
+                        AND p.deleted_at IS NULL${peerWs})
+                  + (SELECT COUNT(*) FROM relationships r CROSS JOIN memory_journal p ON p.id = r.from_entry_id
+                      WHERE r.to_entry_id = ids.id AND r.from_entry_id != r.to_entry_id
+                        AND p.deleted_at IS NULL${peerWs}) AS degree
+             FROM ids
+             CROSS JOIN memory_journal m ON m.id = ids.id AND m.deleted_at IS NULL${srcWs}`
+        )
+        .all(...(scoped ? [JSON.stringify(ids), ws, ws, ws] : [JSON.stringify(ids)]))
+    for (const row of rows) result.set(row.entry_id, row.degree)
+    return result
+}
+
+/**
+ * Recency-weighted hubs of active work: scores entries by deduplicated `(hub, peer)` links
+ * created on/after `sinceIso` (scanning covering `idx_relationships_created_at`) with a 3-day
+ * hyperbolic half-life. Inbound links carry full weight; outbound links only count when the
+ * peer itself is recent and are soft-capped so one-shot consolidation/NREM rollups never drown
+ * out active multi-entry threads.
+ */
+function utcDateFloor(iso: string): string {
+    const ms = Date.parse(iso)
+    return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : iso.slice(0, 10)
+}
+
+export function queryActiveThreads(
+    db: Database,
+    sinceIso: string,
+    limit: number,
+    workspaceId?: string,
+    nowIso: string = new Date().toISOString()
+): ActiveThreadRow[] {
+    const { scoped, id: ws } = scopeOf(workspaceId)
+    const fromWs = scoped ? ' AND mf.workspace_id = ?' : ''
+    const toWs = scoped ? ' AND mt.workspace_id = ?' : ''
+    const sinceFloor = utcDateFloor(sinceIso)
+    const params: unknown[] = scoped
+        ? [sinceFloor, sinceIso, ws, ws, nowIso, nowIso, sinceFloor, sinceIso, limit]
+        : [sinceFloor, sinceIso, nowIso, nowIso, sinceFloor, sinceIso, limit]
+    const rows = db
+        .prepare<
+            unknown[],
+            { entry_id: number; entry_type: string; content: string; recent_links: number }
+        >(
+            `WITH recent_edges AS MATERIALIZED (
+                 SELECT r.from_entry_id, r.to_entry_id, r.created_at
+                 FROM relationships r
+                 WHERE r.created_at >= ? AND julianday(r.created_at) >= julianday(?)
+                   AND r.from_entry_id != r.to_entry_id
+             ),
+             scoped_edges AS MATERIALIZED (
+                 SELECT re.from_entry_id, re.to_entry_id, re.created_at, mt.timestamp AS to_ts
+                 FROM recent_edges re
+                 CROSS JOIN memory_journal mf ON mf.id = re.from_entry_id AND mf.deleted_at IS NULL${fromWs}
+                 CROSS JOIN memory_journal mt ON mt.id = re.to_entry_id AND mt.deleted_at IS NULL${toWs}
+             ),
+             hub_peers AS (
+                 SELECT to_entry_id AS hub, from_entry_id AS peer,
+                        MAX(1.0 / (1.0 + MAX(0.0, julianday(?) - julianday(created_at)) / 3.0)) AS weight,
+                        1 AS is_inbound
+                 FROM scoped_edges
+                 GROUP BY to_entry_id, from_entry_id
+                 UNION ALL
+                 SELECT from_entry_id AS hub, to_entry_id AS peer,
+                        MAX(0.5 / (1.0 + MAX(0.0, julianday(?) - julianday(created_at)) / 3.0)) AS weight,
+                        0 AS is_inbound
+                 FROM scoped_edges
+                 WHERE to_ts >= ? AND julianday(to_ts) >= julianday(?)
+                 GROUP BY from_entry_id, to_entry_id
+             ),
+             dedup_peers AS (
+                 SELECT hub, peer, MAX(weight) AS peer_weight, MAX(is_inbound) AS has_inbound
+                 FROM hub_peers
+                 GROUP BY hub, peer
+             )
+             SELECT dp.hub AS entry_id, m.entry_type AS entry_type, m.content AS content,
+                    COUNT(*) AS recent_links,
+                    SUM(CASE WHEN dp.has_inbound = 1 THEN dp.peer_weight ELSE 0.0 END)
+                      + MIN(1.5, SUM(CASE WHEN dp.has_inbound = 0 THEN dp.peer_weight ELSE 0.0 END)) AS activity_score
+             FROM dedup_peers dp
+             CROSS JOIN memory_journal m ON m.id = dp.hub
+             GROUP BY dp.hub
+             HAVING COUNT(*) >= 2
+             ORDER BY activity_score DESC, recent_links DESC, dp.hub DESC
+             LIMIT ?`
+        )
+        .all(...params)
+    return rows.map((r) => ({
+        entryId: r.entry_id,
+        entryType: r.entry_type,
+        content: r.content,
+        recentLinks: r.recent_links,
+    }))
+}
+
+/** Count entries created on/after `sinceIso` and how many of them have zero live links. */
+export function queryRecentLinkageStats(
+    db: Database,
+    sinceIso: string,
+    workspaceId?: string
+): RecentLinkageStats {
+    const { scoped, id: ws } = scopeOf(workspaceId)
+    const entryWs = scoped ? ' AND e.workspace_id = ?' : ''
+    const sinceFloor = utcDateFloor(sinceIso)
+    // Bind order: linkedPredicate peer workspace (x2), outer workspace, coarse floor, window start.
+    const params: unknown[] = scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso]
+    const row = db
+        .prepare<unknown[], { recent: number; unlinked: number }>(
+            `SELECT COUNT(*) AS recent,
+                    COALESCE(SUM(CASE WHEN ${linkedPredicate('e', scoped)} THEN 0 ELSE 1 END), 0) AS unlinked
+             FROM memory_journal e
+             WHERE e.deleted_at IS NULL${entryWs}
+               AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)`
+        )
+        .get(...params)
+    return { recentEntries: row?.recent ?? 0, unlinkedEntries: row?.unlinked ?? 0 }
+}
+
+/**
+ * Map commit SHAs (full or abbreviated, case-insensitive) to the earliest live entry whose
+ * `auto_context.commits` contains them. The earliest entry is normally the commit narrative,
+ * which is more specific than a later session summary listing the same SHA.
+ */
+export function queryEntryIdsByCommitShas(
+    db: Database,
+    shas: readonly string[],
+    workspaceId?: string
+): Map<string, number> {
+    const result = new Map<string, number>()
+    const wanted = [...new Set(shas.map((s) => s.trim().toLowerCase()).filter((s) => /^[0-9a-f]{7,40}$/.test(s)))]
+    if (wanted.length === 0) return result
+    const { scoped, id: ws } = scopeOf(workspaceId)
+    const entryWs = scoped ? ' AND workspace_id = ?' : ''
+    const params: unknown[] = scoped ? [ws, JSON.stringify(wanted)] : [JSON.stringify(wanted)]
+    const rows = db
+        .prepare<unknown[], { wanted: string; entry_id: number }>(
+            `WITH ctx AS MATERIALIZED (
+                 SELECT id, auto_context FROM memory_journal
+                 WHERE deleted_at IS NULL${entryWs}
+                   AND auto_context IS NOT NULL AND auto_context LIKE '%"commits"%'
+                   AND json_valid(auto_context) AND json_type(auto_context, '$.commits') = 'array'
+             )
+             SELECT s.value AS wanted, MIN(ctx.id) AS entry_id
+             FROM ctx, json_each(ctx.auto_context, '$.commits') j, json_each(?) s
+             WHERE j.type = 'text' AND length(trim(j.value)) >= 7
+               AND (
+                   substr(lower(trim(j.value)), 1, length(s.value)) = s.value
+                   OR (length(trim(j.value)) < length(s.value) AND substr(s.value, 1, length(trim(j.value))) = lower(trim(j.value)))
+               )
+             GROUP BY s.value`
+        )
+        .all(...params)
+    for (const row of rows) result.set(row.wanted, row.entry_id)
+    return result
+}
+
+function fetchEdgeEndpointNodes(
+    db: Database,
+    edges: readonly { from: number; to: number }[]
+): RecentNeighborhood['nodes'] {
+    const nodeIds = [...new Set(edges.flatMap((e) => [e.from, e.to]))]
+    if (nodeIds.length === 0) return []
+    const rows = db
+        .prepare<
+            unknown[],
+            { id: number; entry_type: string; content: string; timestamp: string }
+        >(
+            `SELECT id, entry_type, content, timestamp FROM memory_journal
+             WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
+             ORDER BY id DESC`
+        )
+        .all(JSON.stringify(nodeIds))
+    return rows.map((r) => ({
+        id: r.id,
+        entryType: r.entry_type,
+        content: r.content,
+        timestamp: r.timestamp,
+    }))
+}
+
+/**
+ * Compact recent neighborhood: edges touching an entry created on/after `sinceIso`
+ * (newest relationships first, capped at `edgeLimit`), their endpoint nodes, and
+ * recent entries with zero live links.
+ */
+export function queryRecentNeighborhood(
+    db: Database,
+    sinceIso: string,
+    edgeLimit: number,
+    workspaceId?: string
+): RecentNeighborhood {
+    const { scoped, id: ws } = scopeOf(workspaceId)
+    const recentWs = scoped ? ' AND workspace_id = ?' : ''
+    const endpointWs = scoped ? ' WHERE mf.workspace_id = ? AND mt.workspace_id = ?' : ''
+    const sinceFloor = utcDateFloor(sinceIso)
+    const edgeRows = db
+        .prepare<unknown[], { from_id: number; to_id: number; type: string }>(
+            `WITH recent AS MATERIALIZED (
+                 SELECT id FROM memory_journal
+                 WHERE deleted_at IS NULL${recentWs}
+                   AND timestamp >= ? AND julianday(timestamp) >= julianday(?)
+             ),
+             recent_rels AS (
+                 SELECT r.id, r.from_entry_id, r.to_entry_id, r.relationship_type
+                 FROM recent rec
+                 CROSS JOIN relationships r ON r.from_entry_id = rec.id
+                 WHERE r.from_entry_id != r.to_entry_id
+                 UNION
+                 SELECT r.id, r.from_entry_id, r.to_entry_id, r.relationship_type
+                 FROM recent rec
+                 CROSS JOIN relationships r ON r.to_entry_id = rec.id
+                 WHERE r.from_entry_id != r.to_entry_id
+             )
+             SELECT r.from_entry_id AS from_id, r.to_entry_id AS to_id, r.relationship_type AS type
+             FROM recent_rels r
+             CROSS JOIN memory_journal mf ON mf.id = r.from_entry_id AND mf.deleted_at IS NULL
+             CROSS JOIN memory_journal mt ON mt.id = r.to_entry_id AND mt.deleted_at IS NULL${endpointWs}
+             ORDER BY r.id DESC
+             LIMIT ?`
+        )
+        .all(...(scoped ? [ws, sinceFloor, sinceIso, ws, ws, edgeLimit] : [sinceFloor, sinceIso, edgeLimit]))
+    const edges = edgeRows.map((r) => ({ from: r.from_id, to: r.to_id, type: r.type }))
+    const nodes = fetchEdgeEndpointNodes(db, edges)
+    const entryWs = scoped ? ' AND e.workspace_id = ?' : ''
+    const windowRows = db
+        .prepare<unknown[], { id: number; is_linked: number }>(
+            `SELECT e.id AS id, ${linkedPredicate('e', scoped)} AS is_linked
+             FROM memory_journal e
+             WHERE e.deleted_at IS NULL${entryWs}
+               AND e.timestamp >= ? AND julianday(e.timestamp) >= julianday(?)
+             ORDER BY e.id DESC`
+        )
+        .all(...(scoped ? [ws, ws, ws, sinceFloor, sinceIso] : [sinceFloor, sinceIso]))
+    const unlinkedIds: number[] = []
+    for (const r of windowRows) {
+        if (r.is_linked === 0) unlinkedIds.push(r.id)
+    }
+    return { nodes, edges, unlinkedIds, recentEntries: windowRows.length }
+}
+
+/** ISO timestamp `days` days before now (UTC). */
+export function isoDaysAgo(days: number, now: number = Date.now()): string {
+    return new Date(now - Math.max(0, days) * 86_400_000).toISOString()
+}
+
+/**
+ * Live in-scope entries (created on/after `sinceIso`) sharing at least one anchor path with
+ * `entryId`, ranked by shared-anchor count then recency. Used for write-time link suggestions.
+ */
+export function queryEntriesSharingAnchors(
+    db: Database,
+    entryId: number,
+    sinceIso: string,
+    limit: number,
+    workspaceId?: string,
+    projectNumber?: number
+): { entryId: number; entryType: string; content: string; sharedAnchors: number }[] {
+    if (
+        projectNumber !== undefined &&
+        (!Number.isSafeInteger(projectNumber) || projectNumber <= 0)
+    ) {
+        return []
+    }
+    const { scoped, id: ws } = scopeOf(workspaceId)
+    const hasProj = projectNumber !== undefined
+    const entryWs = scoped ? ' AND m.workspace_id = ?' : ''
+    const mineWs = scoped ? ' AND me.workspace_id = ?' : ''
+    const mineProj = hasProj ? ' AND me.project_number = ?' : ''
+    const projClause = hasProj ? ' AND m.project_number = ?' : ''
+    const params: unknown[] = [
+        ...(scoped ? [ws] : []),
+        ...(hasProj ? [projectNumber] : []),
+        ...(scoped ? [ws] : []),
+        entryId,
+        sinceIso,
+        ...(hasProj ? [projectNumber] : []),
+        limit,
+    ]
+    const rows = db
+        .prepare<
+            unknown[],
+            { entry_id: number; entry_type: string; content: string; shared: number }
+        >(
+            `SELECT m.id AS entry_id, m.entry_type AS entry_type, m.content AS content,
+                    COUNT(DISTINCT other.anchor_path) AS shared
+             FROM entry_anchors mine
+             JOIN memory_journal me ON me.id = mine.entry_id AND me.deleted_at IS NULL${mineWs}${mineProj}
+             JOIN entry_anchors other ON other.anchor_path = mine.anchor_path AND other.entry_id != mine.entry_id
+             JOIN memory_journal m ON m.id = other.entry_id AND m.deleted_at IS NULL${entryWs}
+             WHERE mine.entry_id = ? AND julianday(m.timestamp) >= julianday(?)${projClause}
+             GROUP BY m.id
+             ORDER BY shared DESC, m.id DESC
+             LIMIT ?`
+        )
+        .all(...params)
+    return rows.map((r) => ({
+        entryId: r.entry_id,
+        entryType: r.entry_type,
+        content: r.content,
+        sharedAnchors: r.shared,
+    }))
+}

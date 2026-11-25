@@ -5,6 +5,8 @@
  * Follows MCP 2025-11-25 specification for notifications/progress.
  */
 
+import { getRequestContext } from './request-context.js'
+
 /**
  * Minimal interface for sending MCP notifications.
  * Uses structural typing to avoid importing the deprecated Server class.
@@ -49,9 +51,10 @@ export async function sendProgress(
     total?: number,
     message?: string
 ): Promise<void> {
+    const effectiveCtx = ctx ?? getRequestContext()?.progress
     // Early return if no context, no progressToken, or no server
-    if (ctx === undefined) return
-    if (ctx.progressToken === undefined) return
+    if (effectiveCtx === undefined) return
+    if (effectiveCtx.progressToken === undefined) return
 
     try {
         // Use the underlying Protocol's notification method
@@ -59,7 +62,7 @@ export async function sendProgress(
         const notification = {
             method: 'notifications/progress' as const,
             params: {
-                progressToken: ctx.progressToken,
+                progressToken: effectiveCtx.progressToken,
                 progress,
                 ...(total !== undefined && { total }),
                 ...(message !== undefined && message !== '' && { message }),
@@ -68,7 +71,7 @@ export async function sendProgress(
 
         // Access the notification sender through the server's protocol
         // The Server class exposes notification() which we need to call directly
-        await ctx.server.notification(notification)
+        await effectiveCtx.server.notification(notification)
     } catch {
         // Non-critical: progress notifications are best-effort
         // Don't let notification failures break the operation
@@ -88,12 +91,13 @@ export function createBatchProgressReporter(
     total: number,
     throttle = 10
 ): (current: number, message?: string) => Promise<void> {
+    const effectiveCtx = ctx ?? getRequestContext()?.progress
     let lastReported = 0
 
     return async (current: number, message?: string) => {
         // Report progress at throttle intervals or at completion
         if (current - lastReported >= throttle || current === total) {
-            await sendProgress(ctx, current, total, message)
+            await sendProgress(effectiveCtx, current, total, message)
             lastReported = current
         }
     }

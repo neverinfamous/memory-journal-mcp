@@ -12,8 +12,16 @@
 
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
+import { posix } from 'node:path'
 import { parseYamlFrontmatter } from './yaml-parser.js'
-import { extractTags, formatToISODate, getFirstString } from './utils.js'
+import {
+    addBoundedTag,
+    extractTags,
+    formatToISODate,
+    getFirstString,
+    toBoundedTags,
+    transformOutsideCodeFences,
+} from './utils.js'
 
 export function convertObsidian(
     content: string,
@@ -21,6 +29,7 @@ export function convertObsidian(
     defaultEntryType?: string
 ): ConvertedFile {
     const { metadata: yamlMeta, body } = parseYamlFrontmatter(content)
+    const baseFilename = posix.basename(filename.replace(/\\/g, '/'))
     
     const mjMeta: FrontmatterData = {
         source: 'obsidian',
@@ -35,40 +44,43 @@ export function convertObsidian(
     // Extract Timestamp (try common frontmatter keys, fallback to filename if daily note)
     const dateStr = getFirstString(yamlMeta, ['date', 'created', 'timestamp'])
     if (dateStr) {
-        mjMeta.timestamp = formatToISODate(dateStr)
-    } else {
+        const formatted = formatToISODate(dateStr)
+        if (formatted !== undefined) {
+            mjMeta.timestamp = formatted
+        }
+    }
+    if (mjMeta.timestamp === undefined) {
         // Check if filename looks like a daily note (YYYY-MM-DD)
-        const dateMatch = /\b(\d{4}-\d{2}-\d{2})\b/.exec(filename)
+        const dateMatch = /\b(\d{4}-\d{2}-\d{2})\b/.exec(baseFilename)
         if (dateMatch?.[1]) {
-            mjMeta.timestamp = `${dateMatch[1]}T12:00:00Z`
+            const formatted = formatToISODate(`${dateMatch[1]}T12:00:00Z`)
+            if (formatted !== undefined) {
+                mjMeta.timestamp = formatted
+            }
         }
     }
 
-    // 2. Process Body Text
-    let processedBody = body
-
-    // Extract inline tags (#tag format)
-    const inlineTagMatches = processedBody.matchAll(/(^|\s)#([a-zA-Z0-9_-]+)\b/g)
-    for (const match of inlineTagMatches) {
-        if (match[2]) mergedTags.add(match[2].toLowerCase())
-    }
-
-    // Convert embeds: ![[My Image.png]] -> > _Embedded: My Image.png_
-    processedBody = processedBody.replace(/!\[\[(.*?)\]\]/g, '> _Embedded: $1_')
-
-    // Strip wikilinks: [[Link target|Display text]] -> Display text
-    processedBody = processedBody.replace(/\[\[([^\]]+)\]\]/g, (_match: string, inner: string) => {
-        const parts = inner.split('|')
-        return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
+    // 2. Process Body Text (ignoring fenced code blocks so snippets/hashes are preserved)
+    const processedBody = transformOutsideCodeFences(body, (segment) => {
+        const inlineTagMatches = segment.matchAll(/(^|\s)#([a-zA-Z0-9_-]{1,128})\b/g)
+        for (const match of inlineTagMatches) {
+            if (match[2]) addBoundedTag(mergedTags, match[2].toLowerCase())
+        }
+        return segment
+            .replace(/!\[\[([^\][\r\n]{1,500})\]\]/g, '> _Embedded: $1_')
+            .replace(/\[\[([^\][\r\n]{1,500})\]\]/g, (_match: string, inner: string) => {
+                const parts = inner.split('|')
+                return (parts.length > 1 ? parts[1] : parts[0]) ?? ''
+            })
     })
 
     if (mergedTags.size > 0) {
-        mjMeta.tags = Array.from(mergedTags)
+        mjMeta.tags = toBoundedTags(mergedTags)
     }
 
     // 3. Heuristic Entry Type Inference
     if (!defaultEntryType) {
-        if (filename.includes('daily') || (/^\d{4}-\d{2}-\d{2}/.exec(filename))) {
+        if (filename.toLowerCase().includes('daily') || (/^\d{4}-\d{2}-\d{2}/.exec(baseFilename))) {
             mjMeta.entry_type = 'standup'
         } else if (mergedTags.has('decision') || mergedTags.has('adr')) {
             mjMeta.entry_type = 'project_decision'

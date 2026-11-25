@@ -24,7 +24,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
             env: {
                 TEAM_DB_PATH: undefined,
                 TEAM_AUTHOR: 'Alice',
-                MCP_AUTH_SCOPES: 'read,write,team',
+                MCP_AUTH_SCOPES: 'read,write,team,admin',
             },
         })
         client = await createClient(NO_TEAM_PORT, 'test-token')

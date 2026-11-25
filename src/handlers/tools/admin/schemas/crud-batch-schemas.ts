@@ -3,58 +3,46 @@ import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     EntryOutputSchema,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     MAX_BATCH_SIZE,
+    MAX_CONTENT_LENGTH,
     BatchResultOutputSchema,
+    StrictProjectNumberSchema,
     healAgentHallucinations,
-    safeString,
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
+import { isRecord } from '../../../../utils/type-guards.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from '../../core/index.js'
+import {
+    preprocessBatchCreateEntries,
+    preprocessBatchUpdates,
+    preprocessBatchDeleteIds,
+} from './batch-preprocessors.js'
+
+export { preprocessBatchCreateEntries, preprocessBatchUpdates, preprocessBatchDeleteIds }
 
 const WORKSPACE_DESC =
     'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
 
 function preprocessUpdateEntry(val: unknown): unknown {
     const healedVal = healAgentHallucinations(val)
-    if (typeof healedVal === 'object' && healedVal !== null) {
-        const obj = { ...(healedVal as Record<string, unknown>) }
+    if (isRecord(healedVal)) {
+        const obj: Record<string, unknown> = { ...healedVal }
         let modified = false
-        if ('id' in obj && !('entry_id' in obj)) {
+        if (obj['id'] !== undefined && obj['entry_id'] === undefined) {
             obj['entry_id'] = obj['id']
             delete obj['id']
             modified = true
         }
-        if ('text' in obj && !('content' in obj)) {
+        if (obj['text'] !== undefined && obj['content'] === undefined) {
             obj['content'] = obj['text']
             delete obj['text']
             modified = true
         }
-        if ('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj) {
-            const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name']
-            if (rawTitle !== undefined && rawTitle !== null) {
-                const titleStr = safeString(rawTitle).trim()
-                if (titleStr !== '') {
-                    const cleanTitle = titleStr.replace(/^#+\s*/, '')
-                    const currentContent = safeString(obj['content']).trim()
-                    if (
-                        !('content' in obj) ||
-                        obj['content'] === undefined ||
-                        obj['content'] === null ||
-                        currentContent === ''
-                    ) {
-                        obj['content'] = `# ${cleanTitle}`
-                    } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
-                        obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
-                    }
-                }
-            }
-            delete obj['title']
-            delete obj['heading']
-            delete obj['subject']
-            delete obj['name']
-            modified = true
-        }
+        // [AGENT-HINT] L7/H8: title/heading/subject/name are folded (or dropped on updates) by
+        // healAgentHallucinations → healTitleField; no duplicate handling here.
         return modified ? obj : healedVal
     }
     return healedVal
@@ -65,13 +53,15 @@ export const UpdateEntrySchema = z.preprocess(
     preprocessUpdateEntry,
     z
         .object({
-            entry_id: z.number(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
             content: z
                 .string()
+                .min(1)
+                .max(MAX_CONTENT_LENGTH)
                 .optional()
                 .refine(
                     (val) => {
-                        if (!val) return true
+                        if (val === undefined) return true
                         const trimmed = val.trim()
                         const startsWithSection =
                             /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(
@@ -87,32 +77,61 @@ export const UpdateEntrySchema = z.preprocess(
                 ),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             is_personal: z.boolean().optional(),
-            tags: z.array(z.string()).optional(),
+            tags: z.array(z.string().max(100)).max(100).optional(),
             significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
-            project_number: z.number().int().optional(),
-            project_owner: z.string().nullable().optional(),
-            issue_number: z.number().nullable().optional(),
-            issue_url: z.string().nullable().optional(),
-            pr_number: z.number().nullable().optional(),
-            pr_url: z.string().nullable().optional(),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
+            project_owner: z.string().max(255).nullable().optional(),
+            issue_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
+            issue_url: z.string().max(1000).nullable().optional(),
+            pr_number: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
+            pr_url: z.string().max(1000).nullable().optional(),
             pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
-            workflow_run_id: z.number().nullable().optional(),
-            workflow_name: z.string().nullable().optional(),
+            workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).nullable().optional(),
+            workflow_name: z.string().max(255).nullable().optional(),
             workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
             is_archived: z.boolean().optional(),
-            expected_version: z.number().optional(),
-            auto_context: z.string().nullable().optional(),
-            workspace_id: z.string().optional(),
+            expected_version: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            auto_context: z.string().max(100_000).nullable().optional(),
+            workspace_id: z.string().max(255).optional(),
             target_workspace_id: z
                 .string()
+                .max(255)
                 .optional()
                 .describe('Target workspace to move entry into (e.g. "mysql-mcp")'),
-            impact_score: z.number().min(0).max(1).optional(),
-            trust_score: z.number().min(0).max(1).optional(),
+            impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
+            trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
-            session_id: z.string().nullable().optional(),
+            session_id: z.string().max(255).nullable().optional(),
         })
         .strict()
+        .refine(
+            (data) =>
+                data.content !== undefined ||
+                data.entry_type !== undefined ||
+                data.is_personal !== undefined ||
+                data.tags !== undefined ||
+                data.project_number !== undefined ||
+                data.significance_type !== undefined ||
+                data.project_owner !== undefined ||
+                data.issue_number !== undefined ||
+                data.issue_url !== undefined ||
+                data.pr_number !== undefined ||
+                data.pr_url !== undefined ||
+                data.pr_status !== undefined ||
+                data.workflow_run_id !== undefined ||
+                data.workflow_name !== undefined ||
+                data.workflow_status !== undefined ||
+                data.is_archived !== undefined ||
+                data.auto_context !== undefined ||
+                data.target_workspace_id !== undefined ||
+                data.impact_score !== undefined ||
+                data.trust_score !== undefined ||
+                data.validation_status !== undefined ||
+                data.session_id !== undefined,
+            {
+                message: 'At least one mutable field must be provided for update_entry',
+            }
+        )
 )
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -134,7 +153,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
             is_personal: z.boolean().optional(),
             tags: z.array(z.string()).optional(),
             significance_type: z.string().nullable().optional(),
-            project_number: relaxedNumber().optional(),
+            project_number: relaxedNumber().nullable().optional(),
             project_owner: z.string().nullable().optional(),
             issue_number: relaxedNumber().nullable().optional(),
             issue_url: z.string().nullable().optional(),
@@ -166,53 +185,39 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe('Current validation status of the entry (passed, none, failed).'),
-            session_id: z.string().nullable().optional().describe('Agent session ID for thread isolation.'),
+            session_id: z.string().max(255).nullable().optional().describe('Agent session ID for thread isolation.'),
         })
         .strict()
 )
 
+function preprocessDeleteEntryId(val: unknown): unknown {
+    if (isRecord(val) && val['id'] !== undefined && val['entry_id'] === undefined) {
+        const obj: Record<string, unknown> = { ...val, entry_id: val['id'] }
+        delete obj['id']
+        return obj
+    }
+    return val
+}
+
 export const DeleteEntrySchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) }
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id']
-                delete obj['id']
-                return obj
-            }
-        }
-        return val
-    },
+    preprocessDeleteEntryId,
     z
         .object({
-            entry_id: z.number(),
+            entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
             permanent: z.boolean().optional().default(false),
-            project_number: z.number().int().optional(),
-            expected_version: z.number().optional().describe('REQUIRED for concurrency safety'),
-            workspace_id: z.string().optional(),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            expected_version: z
+                .preprocess(coerceIntString, z.number().int().positive())
+                .optional()
+                .describe('REQUIRED for concurrency safety'),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
 
 /** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
 export const DeleteEntrySchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) }
-            let modified = false
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id']
-                delete obj['id']
-                modified = true
-            }
-            if ('project_number' in obj) {
-                delete obj['project_number']
-                modified = true
-            }
-            return modified ? obj : val
-        }
-        return val
-    },
+    preprocessDeleteEntryId,
     z
         .object({
             entry_id: relaxedNumber()
@@ -232,36 +237,11 @@ export const DeleteEntrySchemaMcp = z.preprocess(
                 .describe(
                     'REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'
                 ),
-            project_number: relaxedNumber().optional().describe('Ignored. Provided for agent compatibility.'),
+            project_number: relaxedNumber().optional().describe('Project whose workspace owns the entry. Resolved with workspace_id.'),
             workspace_id: z.string().optional().describe(WORKSPACE_DESC),
         })
         .strict()
 )
-
-function preprocessBatchCreateEntries(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        if (Array.isArray(obj['entries'])) {
-            const rootProjectNum = obj['project_number']
-            const rootWorkspaceId = obj['workspace_id']
-            obj['entries'] = obj['entries'].map((e: unknown) => {
-                if (typeof e === 'object' && e !== null) {
-                    const eObj = { ...(e as Record<string, unknown>) }
-                    if (eObj['project_number'] === undefined && rootProjectNum !== undefined) {
-                        eObj['project_number'] = rootProjectNum
-                    }
-                    if (eObj['workspace_id'] === undefined && rootWorkspaceId !== undefined) {
-                        eObj['workspace_id'] = rootWorkspaceId
-                    }
-                    return eObj
-                }
-                return e
-            })
-            return obj
-        }
-    }
-    return val
-}
 
 export const BatchCreateEntriesSchema = z.preprocess(
     preprocessBatchCreateEntries,
@@ -269,8 +249,8 @@ export const BatchCreateEntriesSchema = z.preprocess(
         .object({
             entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: z.number().int().optional(),
-            workspace_id: z.string().optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -289,54 +269,14 @@ export const BatchCreateEntriesSchemaMcp = z.preprocess(
         .strict()
 )
 
-function preprocessBatchUpdates(val: unknown, propagateRootProject: boolean): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        let updatesArr = obj['updates']
-        if (updatesArr === undefined && Array.isArray(obj['items'])) {
-            updatesArr = obj['items']
-            obj['updates'] = updatesArr
-            delete obj['items']
-        }
-        if (updatesArr === undefined && Array.isArray(obj['entries'])) {
-            updatesArr = obj['entries']
-            obj['updates'] = updatesArr
-            delete obj['entries']
-        }
-        if (Array.isArray(updatesArr)) {
-            const rootProjectNum = obj['project_number']
-            const newUpdates = updatesArr.map((u: unknown) => {
-                if (typeof u === 'object' && u !== null) {
-                    const uObj = { ...(u as Record<string, unknown>) }
-                    if ('id' in uObj && !('entry_id' in uObj)) {
-                        uObj['entry_id'] = uObj['id']
-                        delete uObj['id']
-                    }
-                    if (
-                        propagateRootProject &&
-                        uObj['project_number'] === undefined &&
-                        rootProjectNum !== undefined
-                    ) {
-                        uObj['project_number'] = rootProjectNum
-                    }
-                    return uObj
-                }
-                return u
-            })
-            return { ...obj, updates: newUpdates }
-        }
-    }
-    return val
-}
-
 export const BatchUpdateEntriesSchema = z.preprocess(
     (val: unknown) => preprocessBatchUpdates(val, true),
     z
         .object({
             updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: z.number().int().optional(),
-            workspace_id: z.string().optional(),
+            project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -355,33 +295,14 @@ export const BatchUpdateEntriesSchemaMcp = z.preprocess(
         .strict()
 )
 
-function preprocessBatchDeleteIds(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        let modified = false
-        if ('ids' in obj && !('entry_ids' in obj)) {
-            obj['entry_ids'] = Array.isArray(obj['ids']) ? obj['ids'] : [obj['ids']]
-            delete obj['ids']
-            modified = true
-        }
-        if ('id' in obj && !('entry_ids' in obj)) {
-            obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']]
-            delete obj['id']
-            modified = true
-        }
-        return modified ? obj : val
-    }
-    return val
-}
-
 export const BatchDeleteEntriesSchema = z.preprocess(
     preprocessBatchDeleteIds,
     z
         .object({
-            entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
+            entry_ids: z.array(z.number().int().positive()).min(1).max(MAX_BATCH_SIZE),
             permanent: z.boolean().optional().default(false),
-            project_number: z.number().int().optional(),
-            workspace_id: z.string().optional(),
+            project_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+            workspace_id: z.string().max(255).optional(),
         })
         .strict()
 )
@@ -403,12 +324,15 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
 export const BatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend({
     entries: z.array(EntryOutputSchema).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    relationshipWarnings: z.array(z.string()).optional(),
+    warning: z.string().optional(),
 })
 
 export const BatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({
     updated: z.array(EntryOutputSchema).optional(),
     notFound: z.array(z.number()).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    warning: z.string().optional(),
 })
 
 export const BatchDeleteEntriesOutputSchema = BatchResultOutputSchema.extend({
@@ -423,6 +347,7 @@ export const UpdateEntryOutputSchema = z
         success: z.boolean().optional(),
         entry: EntryOutputSchema.optional(),
         indexStatus: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

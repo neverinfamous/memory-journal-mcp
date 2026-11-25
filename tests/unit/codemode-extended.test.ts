@@ -11,10 +11,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { z } from 'zod'
-import {
-    getZodTypeString,
-    generateTypescriptDeclarations,
-} from '../../src/codemode/type-generator.js'
+import { getZodTypeString } from '../../src/codemode/type-generator.js'
 import { applyGitInterceptions } from '../../src/codemode/api/git-api.js'
 import { wrapResult } from '../../src/codemode/worker-result-proxy.js'
 import { createJournalApi } from '../../src/codemode/api/journal-api.js'
@@ -27,7 +24,6 @@ import {
     BatchUpdateEntriesSchemaMcp,
     BatchDeleteEntriesSchemaMcp,
 } from '../../src/handlers/tools/admin/schemas.js'
-import type { ToolDefinition } from '../../src/types/index.js'
 
 describe('Code Mode Extended Coverage', () => {
     describe('TypeScript Declaration Generator (src/codemode/type-generator.ts)', () => {
@@ -81,10 +77,15 @@ describe('Code Mode Extended Coverage', () => {
 
             const batchUpdateParsed = BatchUpdateEntriesSchemaMcp.parse({
                 project_number: 5,
-                updates: [{ entry_id: 1, target_workspace_id: 'ws-b' }],
+                updates: [
+                    { entry_id: 1, target_workspace_id: 'ws-b' },
+                    { entry_id: 2, content: 'Same workspace update' },
+                ],
             })
-            expect(batchUpdateParsed.updates?.[0]?.project_number).toBe(5)
+            expect(batchUpdateParsed.project_number).toBe(5)
+            expect(batchUpdateParsed.updates?.[0]?.project_number).toBeUndefined()
             expect(batchUpdateParsed.updates?.[0]?.target_workspace_id).toBe('ws-b')
+            expect(batchUpdateParsed.updates?.[1]?.project_number).toBe(5)
 
             expect(
                 BatchDeleteEntriesSchemaMcp.safeParse({
@@ -92,31 +93,6 @@ describe('Code Mode Extended Coverage', () => {
                     project_number: 5,
                 }).success
             ).toBe(true)
-
-            const sampleTools: ToolDefinition[] = [
-                {
-                    name: 'create_entry',
-                    title: 'Create Entry',
-                    description: 'Create a journal entry',
-                    group: 'core',
-                    inputSchema: z.object({ content: z.string() }),
-                    handler: () => ({}),
-                },
-                {
-                    name: 'mj_execute_code',
-                    title: 'Execute Code',
-                    description: 'Skip codemode tools',
-                    group: 'codemode',
-                    inputSchema: z.object({ code: z.string() }),
-                    handler: () => ({}),
-                },
-            ]
-
-            const dts = generateTypescriptDeclarations(sampleTools)
-            expect(dts).toContain('declare namespace mj {')
-            expect(dts).toContain('namespace core {')
-            expect(dts).toContain('function createEntry(args?: { content: string }): Promise<unknown>;')
-            expect(dts).not.toContain('mj_execute_code')
         })
     })
 
@@ -159,12 +135,14 @@ describe('Code Mode Extended Coverage', () => {
                 error: 'Invalid input',
             }) as Record<string, unknown>
             expect(failed['error']).toBe('[VALIDATION_ERROR] Invalid input')
-            expect(failed['length']).toBe(0)
+            expect(() => failed['length']).toThrow()
             expect(failed['0']).toBeUndefined()
-            expect(failed['entries']).toEqual([])
+            expect(() => failed['entries']).toThrow('Invalid input')
+            expect(() => failed['items']).toThrow('Invalid input')
+            expect(() => failed['deleted']).toThrow('Invalid input')
             expect(typeof failed['map']).toBe('function')
-            expect((failed['map'] as () => unknown[])()).toEqual([])
-            expect([...(failed as unknown as Iterable<unknown>)]).toEqual([])
+            expect(() => (failed['map'] as () => unknown[])()).toThrow('Invalid input')
+            expect(() => [...(failed as unknown as Iterable<unknown>)]).toThrow('Invalid input')
 
             // 3. Array result proxy
             const arrProxy = wrapResult([{ id: 1 }, { id: 2 }]) as Record<string, unknown>

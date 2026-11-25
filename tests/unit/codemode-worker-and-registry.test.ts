@@ -160,10 +160,12 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
         it('should provide safe fs, path, and console shims', async () => {
             const fsShim = createSafeFsShim({ content: 'hello-from-context' })
             expect(fsShim.existsSync(undefined)).toBe(false)
-            expect(fsShim.existsSync('memory_journal.db')).toBe(true)
-            expect(fsShim.statSync('test.db').isFile()).toBe(true)
+            expect(fsShim.existsSync('memory_journal.db')).toBe(false)
+            expect(fsShim.existsSync('notes.txt')).toBe(false)
+            expect(fsShim.existsSync('')).toBe(false)
+            expect(fsShim.statSync('test.db').isFile()).toBe(false)
             expect(fsShim.statSync('test.db').isDirectory()).toBe(false)
-            expect(fsShim.lstatSync('test.db').isFile()).toBe(true)
+            expect(fsShim.lstatSync('test.db').isFile()).toBe(false)
             expect(fsShim.lstatSync('test.db').isDirectory()).toBe(false)
 
             let statCbCalled = false
@@ -181,20 +183,23 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             })
             expect(readCbData).toBe('hello-from-context')
 
-            expect(fsShim.writeFileSync()).toBeUndefined()
-            await expect(fsShim.writeFile()).resolves.toBeUndefined()
-            expect(fsShim.mkdirSync()).toBeUndefined()
-            expect(fsShim.unlinkSync()).toBeUndefined()
+            // [H7] Disabled mutation shims reject with VALIDATION_ERROR instead of silently no-op'ing.
+            expect(() => fsShim.writeFileSync()).toThrow(/VALIDATION_ERROR/)
+            await expect(fsShim.writeFile()).rejects.toThrow(/VALIDATION_ERROR/)
+            expect(() => fsShim.mkdirSync()).toThrow(/VALIDATION_ERROR/)
+            expect(() => fsShim.unlinkSync()).toThrow(/VALIDATION_ERROR/)
             expect(fsShim.readdirSync()).toEqual([])
 
             const pStat = await fsShim.promises.stat()
-            expect(pStat.isFile()).toBe(true)
+            expect(pStat.isFile()).toBe(false)
             expect(pStat.isDirectory()).toBe(false)
             await expect(fsShim.promises.readFile()).resolves.toBe('hello-from-context')
-            await expect(fsShim.promises.writeFile()).resolves.toBeUndefined()
+            await expect(fsShim.promises.writeFile()).rejects.toThrow(/VALIDATION_ERROR/)
 
             expect(pathShim.join('a', 'b', 'c.txt')).toBe('a/b/c.txt')
+            expect(pathShim.join('a\\b', '..', 'c.txt')).toBe('a/c.txt')
             expect(pathShim.resolve('/root', 'sub')).toBe('/root/sub')
+            expect(pathShim.basename('C:\\a\\b\\file.md', '.md')).toBe('file')
             expect(pathShim.basename('/a/b/file.md', '.md')).toBe('file')
             expect(pathShim.dirname('/a/b/file.md')).toBe('/a/b')
             expect(pathShim.dirname('file.md')).toBe('.')
@@ -240,11 +245,11 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 '["tag1","tag2"]',
                 'Custom Title'
             )
+            // Positional binding: the surplus 3rd bind has no placeholder and is ignored.
             expect(mockUpdate).toHaveBeenCalledWith({
                 entry_id: 42,
                 content: 'Updated body',
                 tags: ['tag1', 'tag2'],
-                title: 'Custom Title',
             })
 
             const updateInlineStmt = createPreparedStatementShim(
@@ -275,7 +280,7 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 content: 'Inserted body',
                 title: 'Inserted Title',
                 tags: ['ins-tag'],
-                entry_type: 'technical_decision',
+                entry_type: 'technical_note',
             })
 
             await (insertStmt['get'] as (...a: unknown[]) => Promise<unknown>)({
@@ -298,6 +303,16 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             await (deleteStmt['get'] as (...a: unknown[]) => Promise<unknown>)()
             expect(mockDelete).toHaveBeenCalledWith({ entry_id: 77 })
 
+            const deleteMissingId = createPreparedStatementShim(
+                'DELETE FROM memory_journal',
+                fakeShimMj
+            )
+            await expect((deleteMissingId['run'] as () => Promise<unknown>)()).resolves.toMatchObject({
+                success: false,
+                code: 'VALIDATION_ERROR',
+            })
+            expect(mockDelete).toHaveBeenCalledTimes(1)
+
             const selectByIdStmt = createPreparedStatementShim(
                 'SELECT * FROM memory_journal WHERE id = ?',
                 fakeShimMj
@@ -309,16 +324,21 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 'SELECT * FROM memory_journal LIMIT 10',
                 fakeShimMj
             )
-            await (selectAllStmt['all'] as () => Promise<unknown>)()
-            expect(mockList).toHaveBeenCalledWith({ limit: 50 })
+            await expect((selectAllStmt['all'] as () => Promise<unknown>)()).resolves.toMatchObject({
+                success: false,
+                code: 'VALIDATION_ERROR',
+            })
+            expect(mockList).not.toHaveBeenCalled()
 
             const pragmaStmt = createPreparedStatementShim(
                 'PRAGMA table_info(memory_journal)',
                 fakeShimMj
             )
             await expect((pragmaStmt['iterate'] as () => Promise<unknown>)()).resolves.toEqual({
-                success: true,
-                changes: 1,
+                success: false,
+                code: 'VALIDATION_ERROR',
+                error: 'Statement could not be mapped to a journal method',
+                _healing_note: 'The SQL statement was not executed.',
             })
             expect((pragmaStmt['bind'] as () => unknown)()).toBe(pragmaStmt)
             expect((pragmaStmt['columns'] as () => unknown[])()).toEqual([])
@@ -379,7 +399,7 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             expect(updRes.success).toBe(true)
 
             delete process.env['PROJECT_REGISTRY']
-            const listFn = createListProjectsFn({})
+            const listFn = createListProjectsFn()
             const listed = (await listFn()) as Record<string, unknown>[]
             expect(listed.length).toBe(1)
             expect(listed[0]?.['name']).toBe('alpha-renamed')
@@ -388,8 +408,9 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             const getProjectFn = createGetProjectFn(listFn)
             const foundByNum = (await getProjectFn(20)) as Record<string, unknown>
             expect(foundByNum['name']).toBe('alpha-renamed')
-            const foundByName = (await getProjectFn({ name: 'alpha' })) as Record<string, unknown>
+            const foundByName = (await getProjectFn({ name: 'alpha-renamed' })) as Record<string, unknown>
             expect(foundByName['project_number']).toBe(20)
+            await expect(getProjectFn({ name: 'alpha' })).rejects.toThrow(/Project not found/)
             await expect(getProjectFn('does-not-exist')).rejects.toThrow(/Project not found/)
 
             const deleteFn = createDeleteProjectFn()

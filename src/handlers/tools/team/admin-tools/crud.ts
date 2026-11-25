@@ -4,31 +4,379 @@
  * Tools: team_update_entry, team_delete_entry, team_restore_entry, team_merge_tags
  */
 
-import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
+import type { z } from 'zod'
+import type { JournalEntry, ToolDefinition, ToolContext } from '../../../../types/index.js'
+import { ValidationError } from '../../../../types/errors.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
-import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
-import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
-import { enforceOwnership } from '../rbac.js'
+import { logger } from '../../../../utils/logger.js'
+import { resolveWriteWorkspaceId } from '../../write-workspace.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from '../helpers.js'
 import {
+    checkSingleTeamOwnership,
+    checkSingleTeamOwnershipWithAuthor,
+    missingProjectNumberResponse,
+    type TeamDbInstance,
+} from './batch-delete-helpers.js'
+import {
+    canRealignOrphanedRegisteredProject,
+    resolveTeamMutationProjectNumber,
+} from './team-pk-scope-helpers.js'
+import { createTeamMergeTagsTool } from './merge-tags-tool.js'
+import {
+     hasNonProjectTeamUpdateFields,
     TeamUpdateEntrySchema,
     TeamUpdateEntrySchemaMcp,
     TeamDeleteEntrySchema,
     TeamDeleteEntrySchemaMcp,
     TeamRestoreEntrySchema,
     TeamRestoreEntrySchemaMcp,
-    TeamMergeTagsSchema,
-    TeamMergeTagsSchemaMcp,
     TeamUpdateOutputSchema,
     TeamDeleteOutputSchema,
     TeamRestoreOutputSchema,
-    TeamMergeTagsOutputSchema,
 } from '../schemas.js'
-import { coerceSignificanceAlias } from '../../schemas.js'
+
+type TeamUpdateInput = z.infer<typeof TeamUpdateEntrySchema>
+
+function teamUpdateProjectMismatchResponse(
+    context: ToolContext,
+    wsId: string,
+    targetPn: number | undefined,
+    existing: JournalEntry
+): Record<string, unknown> | undefined {
+    if (
+        targetPn === undefined ||
+        existing.projectNumber === null ||
+        existing.projectNumber === undefined ||
+        existing.projectNumber === targetPn ||
+        canRealignOrphanedRegisteredProject(context, wsId, targetPn, existing)
+    ) {
+        return undefined
+    }
+    return {
+        success: false,
+        error: `Team entry ${String(existing.id)} not found in project ${String(targetPn)}`,
+        code: 'RESOURCE_NOT_FOUND',
+        category: 'resource',
+        suggestion: 'Verify the team entry ID and project number',
+        recoverable: true,
+    }
+}
+
+function resolveTeamUpdateScope(
+    teamDb: TeamDbInstance,
+    context: ToolContext,
+    input: TeamUpdateInput
+):
+    | { wsId: string; projectNumber: number; existing: JournalEntry; author: string | null }
+    | { errorResponse: Record<string, unknown> } {
+    let wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const existing = teamDb.getEntryById(input.entry_id, wsId)
+    if (!existing) {
+        return {
+            errorResponse: {
+                success: false,
+                error: `Team entry ${String(input.entry_id)} not found`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                suggestion: 'Verify the team entry ID and try again',
+                recoverable: true,
+            },
+        }
+    }
+    const explicitMismatch = teamUpdateProjectMismatchResponse(
+        context,
+        wsId,
+        input.project_number,
+        existing
+    )
+    if (explicitMismatch !== undefined) return { errorResponse: explicitMismatch }
+
+    // [INVARIANT] Existing entries keep their stored workspace; never re-infer scope from content/tags or pass '*' to the write resolver.
+    wsId = resolveWriteWorkspaceId(
+        input.workspace_id ?? existing.workspaceId,
+        input.project_number,
+        context.config
+    )
+    const projectNumber = resolveTeamMutationProjectNumber(
+        context,
+        wsId,
+        input.project_number,
+        input.workspace_id,
+        existing.projectNumber
+    )
+    if (projectNumber === undefined || projectNumber === null) {
+        return { errorResponse: missingProjectNumberResponse() }
+    }
+    const resolvedMismatch = teamUpdateProjectMismatchResponse(
+        context,
+        wsId,
+        projectNumber,
+        existing
+    )
+    if (resolvedMismatch !== undefined) return { errorResponse: resolvedMismatch }
+
+    if (!hasNonProjectTeamUpdateFields(input) && existing.projectNumber === projectNumber) {
+        throw new ValidationError(
+            'At least one updatable field must be specified in team_update_entry (empty metadata-only updates are rejected).'
+        )
+    }
+    const { denied, author } = checkSingleTeamOwnershipWithAuthor(
+        teamDb,
+        context,
+        input.entry_id,
+        'modify',
+        wsId
+    )
+    if (denied !== null) return { errorResponse: denied }
+    return { wsId, projectNumber, existing, author }
+}
+
+async function executeTeamUpdateEntry(
+    teamDb: TeamDbInstance,
+    context: ToolContext,
+    params: unknown
+): Promise<Record<string, unknown>> {
+    const input = TeamUpdateEntrySchema.parse(params)
+    const scope = resolveTeamUpdateScope(teamDb, context, input)
+    if ('errorResponse' in scope) return scope.errorResponse
+    const { wsId, projectNumber, author } = scope
+
+    const updated = teamDb.updateEntry(input.entry_id, {
+        content: input.content,
+        entryType: input.entry_type,
+        tags: input.tags,
+        significanceType: input.significance_type,
+        projectNumber,
+        projectOwner: input.project_owner,
+        issueNumber: input.issue_number,
+        issueUrl: input.issue_url,
+        prNumber: input.pr_number,
+        prUrl: input.pr_url,
+        prStatus: input.pr_status,
+        workflowRunId: input.workflow_run_id,
+        workflowName: input.workflow_name,
+        workflowStatus: input.workflow_status,
+        isArchived: input.is_archived,
+        expectedVersion: input.expected_version,
+        autoContext: input.auto_context,
+        workspaceId: wsId,
+        impactScore: input.impact_score,
+        trustScore: input.trust_score,
+        validationStatus: input.validation_status,
+        sessionId: input.session_id,
+    })
+
+    if (!updated) {
+        return {
+            success: false,
+            error: `Team entry ${String(input.entry_id)} not found or not updated`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the team entry ID and workspace_id.',
+            recoverable: true,
+        }
+    }
+
+    let indexError: string | undefined
+    const needsVectorReindex =
+        input.content !== undefined || input.tags !== undefined || input.entry_type !== undefined
+    if (context.teamVectorManager !== undefined && needsVectorReindex) {
+        try {
+            await context.teamVectorManager.addEntry(updated)
+        } catch (indexErr) {
+            indexError = indexErr instanceof Error ? indexErr.message : String(indexErr)
+        }
+    }
+
+    triggerTeamNotifications(context)
+    return {
+        success: true,
+        entry: { ...updated, author },
+        ...(indexError !== undefined
+            ? {
+                  indexError,
+                  vectorIndex: 'failed',
+                  warning: `Team vector re-indexing failed: ${indexError}`,
+              }
+            : {}),
+    }
+}
+
+function cleanupDeletedTeamVector(
+    teamDb: TeamDbInstance,
+    entryId: number,
+    teamVectorManager?: ToolContext['teamVectorManager']
+): string | undefined {
+    if (typeof teamVectorManager?.markRemoved === 'function') {
+        teamVectorManager.markRemoved(entryId)
+    }
+    try {
+        teamDb.deleteVector(entryId)
+        return undefined
+    } catch (vecErr) {
+        const vecMessage = vecErr instanceof Error ? vecErr.message : String(vecErr)
+        logger.warning('Team delete vector cleanup failed', { entryId, error: vecMessage })
+        return `Vector index cleanup failed: ${vecMessage}`
+    }
+}
+
+function executeTeamDeleteEntry(
+    teamDb: TeamDbInstance,
+    context: ToolContext,
+    params: unknown
+): Record<string, unknown> {
+    const { entry_id, project_number, expected_version, workspace_id } =
+        TeamDeleteEntrySchema.parse(params)
+
+    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
+    const projectNumber = resolveTeamMutationProjectNumber(
+        context,
+        wsId,
+        project_number,
+        workspace_id,
+        existing?.projectNumber
+    )
+    if (projectNumber === undefined || projectNumber === null) {
+        return missingProjectNumberResponse()
+    }
+    wsId = resolveWriteWorkspaceId(
+        workspace_id ?? existing?.workspaceId,
+        projectNumber,
+        context.config
+    )
+
+    // Verify entry exists and belongs to project (if projectNumber is specified)
+    if (
+        !existing ||
+        (existing.projectNumber !== projectNumber &&
+            !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing))
+    ) {
+        return {
+            success: false,
+            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the team entry ID and project number, and try again',
+            recoverable: true,
+        }
+    }
+    if (expected_version !== undefined && existing.version !== expected_version) {
+        return {
+            success: false,
+            error: `Concurrency conflict: Expected version ${expected_version} but found ${existing.version}. Please get the latest entry before deleting.`,
+            code: 'CONCURRENCY_ERROR',
+            category: 'validation',
+            suggestion: 'Get the latest entry and use its version',
+            recoverable: true,
+        }
+    }
+
+    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'delete', wsId)
+    if (denied !== null) return denied
+
+    const deleted = teamDb.deleteEntry(entry_id, false, wsId)
+    if (!deleted.success) {
+        return {
+            success: false,
+            error: `Team entry ${String(entry_id)} not found`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            suggestion: 'Verify the entry id and workspace_id.',
+            recoverable: true,
+        }
+    }
+    const deleteWarning = cleanupDeletedTeamVector(teamDb, entry_id, context.teamVectorManager)
+    const warning = [deleted.warning, deleteWarning]
+        .filter((item): item is string => item !== undefined)
+        .join('; ')
+    triggerTeamNotifications(context)
+
+    return {
+        success: true,
+        message: `Team entry ${String(entry_id)} soft-deleted`,
+        ...(warning !== '' ? { warning } : {}),
+    }
+}
 
 // ============================================================================
 // Tool Definitions
 // ============================================================================
+
+async function executeTeamRestoreEntry(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    context: ToolContext,
+    params: unknown
+): Promise<unknown> {
+    const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
+
+    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
+    const projectNumber = resolveTeamMutationProjectNumber(
+        context,
+        wsId,
+        project_number,
+        workspace_id,
+        existing?.projectNumber
+    )
+    if (projectNumber === undefined || projectNumber === null) {
+        return missingProjectNumberResponse()
+    }
+    wsId = resolveWriteWorkspaceId(
+        workspace_id ?? existing?.workspaceId,
+        projectNumber,
+        context.config
+    )
+
+    // Verify entry exists and belongs to project (if projectNumber is specified)
+    if (
+        !existing ||
+        (existing.projectNumber !== projectNumber &&
+            !canRealignOrphanedRegisteredProject(context, wsId, projectNumber, existing))
+    ) {
+        return {
+            success: false,
+            entryId: entry_id,
+            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
+        }
+    }
+
+    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'restore', wsId)
+    if (denied !== null) return denied
+
+    const success = teamDb.restoreEntry(entry_id, wsId)
+    if (!success) {
+        return {
+            success: false,
+            entryId: entry_id,
+            error: `Team entry ${String(entry_id)} not found or not deleted`,
+        }
+    }
+
+    let indexStatus: string | undefined
+    let warning: string | undefined
+    if (context.teamVectorManager !== undefined) {
+        const restored = teamDb.getEntryById(entry_id, wsId)
+        if (restored !== null && restored !== undefined) {
+            try {
+                await context.teamVectorManager.addEntry(restored)
+                indexStatus = 'success'
+            } catch (vecErr) {
+                indexStatus = 'failed'
+                warning = `Team vector re-indexing failed: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+            }
+        }
+    }
+
+    triggerTeamNotifications(context)
+
+    return {
+        success: true,
+        entryId: entry_id,
+        ...(indexStatus !== undefined ? { indexStatus } : {}),
+        ...(warning !== undefined ? { warning } : {}),
+    }
+}
 
 export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
     const { teamDb } = context
@@ -46,105 +394,11 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            handler: async (params: unknown) => {
                 try {
-                    if (!teamDb) {
-                        return { ...TEAM_DB_ERROR_RESPONSE }
-                    }
-
-                    coerceSignificanceAlias(params)
-
-                    const input = TeamUpdateEntrySchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-
-                    // Verify entry exists
-                    const existing = teamDb.getEntryById(input.entry_id, wsId)
-                    if (!existing) {
-                        return {
-                            success: false,
-                            error: `Team entry ${String(input.entry_id)} not found`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the team entry ID and try again',
-                            recoverable: true,
-                        }
-                    }
-
-                    const projectNumber = input.project_number ?? existing.projectNumber
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
-                    }
-
-
-
-                    const author = fetchAuthor(teamDb, input.entry_id)
-
-                    const currentUser = resolveAuthenticatedAuthor()
-                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
-                    const callerRole =
-                        teamDb.isTeamRbacActive?.()
-                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
-                            : null
-
-                    if (author && !codemodeBypass) {
-                        try {
-                            enforceOwnership(currentUser, author, callerRole)
-                        } catch {
-                            return {
-                                success: false,
-                                error: `Permission Denied: Only the original author ("${author}") or a team admin can modify this team entry.`,
-                                code: 'PERMISSION_DENIED',
-                                category: 'auth',
-                                suggestion: 'You can only update entries that you authored.',
-                                recoverable: false,
-                            }
-                        }
-                    }
-
-                    const updated = teamDb.updateEntry(input.entry_id, {
-                        content: input.content,
-                        entryType: input.entry_type,
-                        tags: input.tags,
-                        significanceType: input.significance_type,
-                        projectNumber: projectNumber,
-                        projectOwner: input.project_owner,
-                        issueNumber: input.issue_number,
-                        issueUrl: input.issue_url,
-                        prNumber: input.pr_number,
-                        prUrl: input.pr_url,
-                        prStatus: input.pr_status,
-                        workflowRunId: input.workflow_run_id,
-                        workflowName: input.workflow_name,
-                        workflowStatus: input.workflow_status,
-                        isArchived: input.is_archived,
-                        expectedVersion: input.expected_version,
-                        autoContext: input.auto_context,
-                        workspaceId: wsId,
-                        impactScore: input.impact_score,
-                        trustScore: input.trust_score,
-                        validationStatus: input.validation_status,
-                        sessionId: input.session_id ?? undefined,
-                    })
-
-                    triggerTeamNotifications(context)
-
-                    return {
-                        success: true,
-                        entry: { ...updated, author },
-                    }
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    return await executeTeamUpdateEntry(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -158,92 +412,11 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamDeleteEntrySchemaMcp,
             outputSchema: TeamDeleteOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: true,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
+            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
-                    if (!teamDb) {
-                        return { ...TEAM_DB_ERROR_RESPONSE }
-                    }
-
-                    const { entry_id, project_number, expected_version, workspace_id } = TeamDeleteEntrySchema.parse(params)
-
-                    const projectNumber = project_number
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
-                    }
-
-                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
-
-                    // Verify entry exists and belongs to project (if projectNumber is specified)
-                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    if (existing?.projectNumber !== projectNumber) {
-                        return {
-                            success: false,
-                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
-                            recoverable: true,
-                        }
-                    }
-
-                    if (expected_version !== undefined && existing.version !== expected_version) {
-                        return {
-                            success: false,
-                            error: `Concurrency conflict: Expected version ${expected_version} but found ${existing.version}. Please get the latest entry before deleting.`,
-                            code: 'CONCURRENCY_ERROR',
-                            category: 'validation',
-                            suggestion: 'Get the latest entry and use its version',
-                            recoverable: true
-                        }
-                    }
-
-                    const author = fetchAuthor(teamDb, entry_id)
-
-                    const currentUser = resolveAuthenticatedAuthor()
-                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
-                    const callerRole =
-                        teamDb.isTeamRbacActive?.()
-                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
-                            : null
-
-                    if (author && !codemodeBypass) {
-                        try {
-                            enforceOwnership(currentUser, author, callerRole)
-                        } catch {
-                            return {
-                                success: false,
-                                error: `Permission Denied: Only the original author ("${author}") or a team admin can delete this team entry.`,
-                                code: 'PERMISSION_DENIED',
-                                category: 'auth',
-                                suggestion: 'You can only delete entries that you authored.',
-                                recoverable: false,
-                            }
-                        }
-                    }
-
-                    teamDb.deleteEntry(entry_id, false, wsId)
-                    teamDb.deleteVector(entry_id)
-
-                    triggerTeamNotifications(context)
-
-                    return {
-                        success: true,
-                        message: `Team entry ${String(entry_id)} soft-deleted`,
-                    }
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    return executeTeamDeleteEntry(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -256,109 +429,16 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamRestoreEntrySchemaMcp,
             outputSchema: TeamRestoreOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    
-                    const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
-                    
-                    const projectNumber = project_number
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
-                    }
-
-                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
-
-                    // Verify entry exists and belongs to project (if projectNumber is specified)
-                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    if (existing?.projectNumber !== projectNumber) {
-                        return {
-                            success: false,
-                            entryId: entry_id,
-                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
-                        }
-                    }
-                    
-                    const success = teamDb.restoreEntry(entry_id, wsId)
-                    if (!success) {
-                        return {
-                            success: false,
-                            entryId: entry_id,
-                            error: `Team entry ${String(entry_id)} not found or not deleted`,
-                        }
-                    }
-
-                    triggerTeamNotifications(context)
-
-                    return { success: true, entryId: entry_id }
+                    return await executeTeamRestoreEntry(teamDb, context, params)
                 } catch (err) {
                     return formatHandlerError(err)
                 }
             },
         },
-        {
-            name: 'team_merge_tags',
-            title: 'Merge Team Tags',
-            description:
-                'Merge a source tag into a target tag in the team database. All entries with the source tag will be re-tagged with the target tag. Only updates non-deleted entries. Requires TEAM_DB_PATH.',
-            group: 'team',
-            inputSchema: TeamMergeTagsSchemaMcp,
-            outputSchema: TeamMergeTagsOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            capabilities: {
-                requiresAdminScope: true,
-            },
-            handler: (params: unknown) => {
-                try {
-                    if (!teamDb) {
-                        return { ...TEAM_DB_ERROR_RESPONSE }
-                    }
-
-                    const { source_tag, target_tag } = TeamMergeTagsSchema.parse(params)
-
-                    if (source_tag === target_tag) {
-                        return {
-                            success: false,
-                            error: 'Source and target tags must be different',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide two different tag names',
-                            recoverable: true,
-                        }
-                    }
-
-                    const result = teamDb.mergeTags(source_tag, target_tag)
-
-                    triggerTeamNotifications(context)
-
-                    return {
-                        success: true,
-                        message: `Merged tag "${source_tag}" into "${target_tag}". Updated ${String(result.entriesUpdated)} entries.`,
-                        entriesUpdated: result.entriesUpdated,
-                        sourceDeleted: result.sourceDeleted,
-                    }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
+        createTeamMergeTagsTool(context),
     ]
 }

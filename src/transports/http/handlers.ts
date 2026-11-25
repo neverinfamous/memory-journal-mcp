@@ -8,7 +8,8 @@ import { timingSafeEqual, createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
-import { isValidScope } from '../../auth/scopes.js'
+import { isValidScope, hasScope, SCOPES } from '../../auth/scopes.js'
+import { getAuthContext } from '../../auth/auth-context.js'
 import { getClientIp } from './security.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { formatPrometheusMetrics } from '../../observability/index.js'
@@ -42,8 +43,16 @@ export function handlePrometheusMetrics(runtime: ServerRuntime): (req: Request, 
         }
 
         try {
-            const metricsText = formatPrometheusMetrics(runtime.metrics)
+            const authCtx = getAuthContext()
+            const grantedScopes =
+                authCtx?.authenticated === true
+                    ? (authCtx.claims?.scopes ?? authCtx.scopes)
+                    : []
+            const includeUserBreakdown = hasScope(grantedScopes, SCOPES.AUDIT)
+            const metricsText = formatPrometheusMetrics(runtime.metrics, { includeUserBreakdown })
             res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+            res.set('Cache-Control', 'no-store')
+            res.set('X-Content-Type-Options', 'nosniff')
             res.status(200).send(metricsText)
         } catch (error) {
             logger.error('Failed to format Prometheus metrics', { module: 'HTTP', error })
@@ -81,60 +90,95 @@ export function handleRootInfo(_req: Request, res: Response): void {
 // Bearer Token Auth Middleware
 // =============================================================================
 
+let cachedScopeEnv: string | undefined
+let cachedParsedScopes: string[] | undefined
+
+function resolveBearerDefaultScopes(): string[] {
+    const envScopes = process.env['MCP_AUTH_SCOPES']
+    if (cachedParsedScopes !== undefined && cachedScopeEnv === envScopes) {
+        return [...cachedParsedScopes]
+    }
+    const parsedScopes = envScopes
+        ? envScopes
+              .split(/[\s,]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+        : []
+    let defaultScopes = parsedScopes.length > 0 ? parsedScopes : ['read']
+    const invalidScopes = defaultScopes.filter((s) => !isValidScope(s))
+    if (invalidScopes.length > 0) {
+        logger.warning(
+            `Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`,
+            { module: 'HTTP' }
+        )
+        defaultScopes = ['read']
+    }
+    cachedScopeEnv = envScopes
+    cachedParsedScopes = [...defaultScopes]
+    return [...defaultScopes]
+}
+
+function isValidBearerTokenDigest(
+    authHeader: string | undefined,
+    expectedDigest: Buffer | null
+): boolean {
+    if (typeof authHeader !== 'string' || expectedDigest === null) return false
+    const spaceIdx = authHeader.indexOf(' ')
+    if (spaceIdx === -1) return false
+    if (authHeader.slice(0, spaceIdx).toLowerCase() !== 'bearer') return false
+    const providedDigest = createHash('sha256').update(authHeader.slice(spaceIdx + 1), 'utf8').digest()
+    return timingSafeEqual(expectedDigest, providedDigest)
+}
+
 /**
  * Create a bearer token authentication middleware.
- * Bypasses /health and /metrics endpoints. Uses timing-safe comparison.
+ * Bypasses only GET/HEAD /health. [INVARIANT] /metrics exposes per-tool/per-user telemetry and requires
+ * the bearer token like every other route (M6).
  */
 export function createAuthMiddleware(
     authToken: string
 ): (req: Request, res: Response, next: () => void) => void {
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
+    const expectedDigest =
+        authToken.trim() !== '' ? createHash('sha256').update(authToken, 'utf8').digest() : null
+    const MAX_IDENTITY_CACHE = 1024
+    const identityCache = new Map<string, string>()
 
     return (req: Request, res: Response, next: () => void): void => {
-        if (req.path === '/health' || req.path === '/metrics') {
+        if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/health') {
             next()
             return
         }
 
-        const header = req.headers.authorization
-        const expected = Buffer.from(`Bearer ${authToken}`)
-        const received = Buffer.from(header ?? '')
-        if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
+        if (!isValidBearerTokenDigest(req.headers.authorization, expectedDigest)) {
             res.status(401).json({ error: 'Unauthorized' })
             return
         }
 
-        const envScopes = process.env['MCP_AUTH_SCOPES']
-        let defaultScopes = envScopes ? envScopes.split(',').map((s) => s.trim()) : ['read']
-        const invalidScopes = defaultScopes.filter((s) => !isValidScope(s))
-        if (invalidScopes.length > 0) {
-            logger.warning(
-                `Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`,
-                { module: 'HTTP' }
-            )
-            defaultScopes = ['read']
-        }
+        const defaultScopes = resolveBearerDefaultScopes()
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.
-
-        // Derive identity from token securely.
-        // We cannot use a random nonce or mcp-session-id here because standard MCP SDK clients
-        // do not send mcp-session-id during initialization, which would cause the identity hash
-        // to change between initialization and subsequent requests, breaking stateful sessions.
-        // We bind the client IP to the hash to provide strict session isolation for shared tokens.
         const clientIp = getClientIp(req)
-        const hashInput = `${authToken}:${clientIp}`
+        let identity = identityCache.get(clientIp)
+        if (identity === undefined) {
+            const hashInput = `${authToken}:${clientIp}`
+            const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
+            identity = `bearer-${identityHash}`
+            if (identityCache.size >= MAX_IDENTITY_CACHE) {
+                const oldestKey = identityCache.keys().next().value
+                if (oldestKey !== undefined) identityCache.delete(oldestKey)
+            }
+            identityCache.set(clientIp, identity)
+        }
 
-        const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
-        const identity = `bearer-${identityHash}`
-
-        ;(req as unknown as { auth?: { sub?: string; subject?: string; scopes?: string[] } }).auth =
-            {
+        Object.assign(req, {
+            auth: {
                 sub: identity,
                 subject: identity,
                 scopes: defaultScopes,
-            }
+            },
+        })
         next()
     }
 }

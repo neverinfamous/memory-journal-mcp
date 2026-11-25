@@ -1,7 +1,13 @@
 name: Dockerfile Patch Drift Check
 
-# Verifies Dockerfile security invariants (npm/npx removal in stage 2) and upstream npm
-# registry versions for CVE overrides. Runs daily and on dependency changes.
+# Fails the job if Dockerfile no longer contains
+# "rm -rf /usr/local/lib/node_modules/npm", or if a package.json override
+# does not include the registry's latest version. Exact pins fail when
+# latest differs. Ranges fail when latest is outside the range.
+# npm:pkg@version checks the aliased package.
+# Schedule: 12:00 UTC daily. Also workflow_dispatch, and pull_request
+# when Dockerfile, package.json, pnpm-workspace.yaml, or pnpm-lock.yaml change
+# (no branches filter).
 
 on:
   schedule:
@@ -23,7 +29,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -32,7 +38,7 @@ jobs:
           version: 11.9.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24.x"
 
@@ -48,33 +54,77 @@ jobs:
 
       - name: Check package.json override drift
         run: |
-          echo "🔍 Checking package.json overrides for drift..."
-          echo ""
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process'
+          import { readFileSync } from 'node:fs'
 
-          # Extract overrides from package.json
-          OVERRIDES=$(node -e "
-            const pkg = require('./package.json');
-            const overrides = pkg.overrides || {};
-            for (const [name, version] of Object.entries(overrides)) {
-              console.log(name + '=' + version);
+          const pkg = JSON.parse(readFileSync('./package.json', 'utf8'))
+          const overrides = pkg.overrides ?? {}
+          let failed = false
+
+          function parts(version) {
+            const core = String(version).split('-')[0]
+            const nums = core.split('.').map((part) => Number.parseInt(part, 10))
+            return [0, 1, 2].map((index) => (Number.isFinite(nums[index]) ? nums[index] : 0))
+          }
+
+          function cmp(left, right) {
+            const a = parts(left)
+            const b = parts(right)
+            for (let index = 0; index < 3; index += 1) {
+              if (a[index] !== b[index]) return a[index] - b[index]
             }
-          ")
+            return 0
+          }
 
-          while IFS='=' read -r pkg version; do
-            [ -z "$pkg" ] && continue
+          function satisfies(latest, range) {
+            if (range.startsWith('>=')) return cmp(latest, range.slice(2)) >= 0
+            if (range.startsWith('^')) {
+              const base = range.slice(1)
+              const [major, minor, patch] = parts(base)
+              const upper = major > 0 ? [major + 1, 0, 0] : minor > 0 ? [0, minor + 1, 0] : [0, 0, patch + 1]
+              return cmp(latest, base) >= 0 && cmp(latest, upper.join('.')) < 0
+            }
+            if (range.startsWith('~')) {
+              const base = range.slice(1)
+              const [major, minor] = parts(base)
+              return cmp(latest, base) >= 0 && cmp(latest, `${major}.${minor + 1}.0`) < 0
+            }
+            return latest === range
+          }
 
-            LATEST=$(pnpm view "$pkg" version 2>/dev/null || echo "unknown")
+          for (const [name, value] of Object.entries(overrides)) {
+            let queryName = name
+            let version = value
+            if (typeof value === 'string' && value.startsWith('npm:')) {
+              const rest = value.slice(4)
+              const at = rest.lastIndexOf('@')
+              if (at > 0) {
+                queryName = rest.slice(0, at)
+                version = rest.slice(at + 1)
+              }
+            }
+            if (typeof version !== 'string' || version.length === 0) {
+              console.log(`⚠️  ${name}: override is not a version string`)
+              continue
+            }
+            let latest = 'unknown'
+            try {
+              latest = execFileSync('pnpm', ['view', queryName, 'version'], { encoding: 'utf8' }).trim()
+            } catch {
+              latest = 'unknown'
+            }
+            if (latest === 'unknown' || latest.length === 0) {
+              console.log(`⚠️  ${queryName}: not found in npm registry`)
+              continue
+            }
+            if (satisfies(latest, version)) {
+              console.log(`✅ CURRENT: ${queryName}@${version} — registry latest ${latest} is inside the override`)
+            } else {
+              console.log(`::error::${queryName} override ${version} does not include registry latest ${latest}`)
+              failed = true
+            }
+          }
 
-            if [ "$LATEST" = "$version" ]; then
-              echo "✅ CURRENT: $pkg@$version — matches latest registry version"
-            elif [ "$LATEST" = "unknown" ]; then
-              echo "⚠️  $pkg: not found in npm registry"
-            else
-              echo "ℹ️  REVIEW: $pkg — override=$version, registry latest=$LATEST"
-            fi
-          done <<< "$OVERRIDES"
-
-          echo ""
-          echo "ℹ️  Overrides are intentional CVE patches for transitive dependencies."
-          echo "   Remove an override only after confirming the parent dependency"
-          echo "   has adopted the fix and pnpm audit passes without it."
+          if (failed) process.exit(1)
+          NODE

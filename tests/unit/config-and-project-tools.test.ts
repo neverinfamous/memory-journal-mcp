@@ -7,6 +7,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { ConfigManager } from '../../src/utils/config-manager.js'
+import { RegistryConfigError } from '../../src/utils/registry-config-file.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../src/handlers/resources/shared.js'
 import {
     handleUpdateConfiguration,
@@ -16,6 +17,11 @@ import { getProjectTools } from '../../src/handlers/tools/admin/project-tools.js
 import { getLifecycleTools } from '../../src/handlers/tools/admin/lifecycle-tools.js'
 import { getMiscTools } from '../../src/handlers/tools/admin/misc-tools.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import {
+    getActiveSessionProject,
+    setActiveSessionProject,
+} from '../../src/utils/workspace-resolver.js'
+import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import type { ToolContext, ToolHandlerConfig } from '../../src/types/index.js'
 
 describe('ConfigManager & Configuration Tools', () => {
@@ -184,18 +190,82 @@ describe('ConfigManager & Configuration Tools', () => {
 
             const badJsonPath = path.join(tmpDir, 'bad.json')
             fs.writeFileSync(badJsonPath, '{ invalid json ', 'utf-8')
+            expect(
+                () =>
+                    new ConfigManager(
+                        {
+                            rawToolFilter: 'core',
+                            toolFilterConfig: null,
+                            briefingConfig: { ...DEFAULT_BRIEFING_CONFIG },
+                        },
+                        badJsonPath
+                    )
+            ).toThrow(RegistryConfigError)
+
+            const goodPath = path.join(tmpDir, 'good.json')
+            fs.writeFileSync(goodPath, '{}\n', 'utf-8')
             const mgr2 = new ConfigManager(
                 {
                     rawToolFilter: 'core',
                     toolFilterConfig: null,
                     briefingConfig: { ...DEFAULT_BRIEFING_CONFIG },
                 },
-                badJsonPath
+                goodPath
             )
-            mgr2.close()
+            fs.writeFileSync(goodPath, '{ invalid json ', 'utf-8')
             expect(() =>
                 (mgr2 as unknown as { reloadFromFile: () => void }).reloadFromFile()
             ).not.toThrow()
+            expect(mgr2.getConfig().rawToolFilter).toBe('core')
+            mgr2.close()
+        })
+
+        it('preserves startup CLI/env briefing overrides when unrelated config keys change and ignores >100 reload values', () => {
+            const cfgPath = path.join(tmpDir, 'briefing-reload.json')
+            fs.writeFileSync(
+                cfgPath,
+                JSON.stringify({ toolFilter: 'starter', briefingEntries: 4, briefingCommits: 5 }),
+                'utf-8'
+            )
+            const mgr = new ConfigManager(
+                {
+                    rawToolFilter: 'starter',
+                    toolFilterConfig: null,
+                    briefingConfig: {
+                        ...DEFAULT_BRIEFING_CONFIG,
+                        entryCount: 9,
+                        commitCount: 5,
+                    },
+                },
+                cfgPath,
+                { briefingOverrides: { entryCount: 9, commitCount: 5 } }
+            )
+            try {
+                // Edit only toolFilter in config.json; unchanged briefingEntries=4 must not clobber CLI/env entryCount=9
+                fs.writeFileSync(
+                    cfgPath,
+                    JSON.stringify({ toolFilter: 'full', briefingEntries: 4, briefingCommits: 5 }),
+                    'utf-8'
+                )
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().rawToolFilter).toBe('full')
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(9)
+                expect(mgr.getConfig().briefingConfig.commitCount).toBe(5)
+
+                // Out-of-range (>100) value on hot-reload is ignored
+                fs.writeFileSync(
+                    cfgPath,
+                    JSON.stringify({ toolFilter: 'full', briefingEntries: 500 }),
+                    'utf-8'
+                )
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(9)
+
+                // Removing briefingCommits from file reverts to CLI/env override (5), not default (3)
+                expect(mgr.getConfig().briefingConfig.commitCount).toBe(5)
+            } finally {
+                mgr.close()
+            }
         })
     })
 
@@ -215,13 +285,13 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(parsed.briefing_entries).toBe(7)
         })
 
-        it('should strip unparseable string project_number in preprocessor', () => {
-            const parsed = updateConfigurationSchema.parse({
-                project_number: 'invalid-num',
-                briefing_include_team: false,
-            })
-            expect(parsed.project_number).toBeUndefined()
-            expect(parsed.briefing_include_team).toBe(false)
+        it('should reject unparseable string project_number in preprocessor', () => {
+            expect(() =>
+                updateConfigurationSchema.parse({
+                    project_number: 'invalid-num',
+                    briefing_include_team: false,
+                })
+            ).toThrow()
         })
 
         it('should throw when Runtime or ConfigManager is not available', () => {
@@ -270,6 +340,143 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(mgr.getConfig().rawToolFilter).toBe('full')
             expect(mgr.getConfig().briefingConfig.entryCount).toBe(8)
             expect(mgr.getConfig().briefingConfig.copilotReviews).toBe(true)
+        })
+
+        it('should update briefing_commits, briefing_importance_threshold, briefing_graph and briefing_insights', async () => {
+            const mgr = new ConfigManager({
+                rawToolFilter: 'starter',
+                toolFilterConfig: null,
+                briefingConfig: { ...DEFAULT_BRIEFING_CONFIG },
+            })
+            const config: ToolHandlerConfig = { runtime: { configManager: mgr } as never }
+
+            const res = await handleUpdateConfiguration(
+                {
+                    briefing_commits: 0,
+                    briefing_importance_threshold: 0.6,
+                    briefing_graph: false,
+                    briefing_insights: false,
+                },
+                config
+            )
+            expect(res.updated).toEqual([
+                'briefing_commits',
+                'briefing_importance_threshold',
+                'briefing_graph',
+                'briefing_insights',
+            ])
+            const bc = mgr.getConfig().briefingConfig
+            expect(bc.commitCount).toBe(0)
+            expect(bc.briefingImportanceThreshold).toBe(0.6)
+            expect(bc.graphPivots).toBe(false)
+            expect(bc.insights).toBe(false)
+        })
+
+        it('should reject out-of-range briefing_importance_threshold', () => {
+            expect(() => updateConfigurationSchema.parse({ briefing_importance_threshold: 1.5 })).toThrow()
+        })
+
+        it('should roll back file provenance when persistToFile fails so unrelated reloads do not clobber in-memory updates', () => {
+            const cfgFile = path.join(tmpDir, 'provenance-rollback.json')
+            fs.writeFileSync(cfgFile, JSON.stringify({ briefingCommits: 8, briefingEntries: 4 }), 'utf8')
+            const mgr = new ConfigManager(
+                {
+                    rawToolFilter: 'starter',
+                    toolFilterConfig: null,
+                    briefingConfig: { ...DEFAULT_BRIEFING_CONFIG, commitCount: 8, entryCount: 4 },
+                },
+                cfgFile,
+                undefined,
+                { commitCount: 8 }
+            )
+            // Corrupt file temporarily so persistToFile fails
+            fs.writeFileSync(cfgFile, '{ invalid json', 'utf8')
+            const persistErr = mgr.updateConfig(
+                {
+                    briefingConfig: { ...mgr.getConfig().briefingConfig, commitCount: 2 },
+                },
+                true,
+                { mutatedFields: { briefingKeys: ['commitCount'] } }
+            )
+            expect(persistErr).toBeDefined()
+            expect(mgr.getConfig().briefingConfig.commitCount).toBe(2)
+
+            // Restore valid file with an unrelated change (briefingEntries: 6) while briefingCommits stays 8
+            fs.writeFileSync(cfgFile, JSON.stringify({ briefingCommits: 8, briefingEntries: 6 }), 'utf8')
+            ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+
+            // Unrelated change applies, while in-memory commitCount: 2 is preserved (not clobbered by stale 8)
+            expect(mgr.getConfig().briefingConfig.entryCount).toBe(6)
+            expect(mgr.getConfig().briefingConfig.commitCount).toBe(2)
+            mgr.close()
+        })
+
+        it('preserves in-memory briefing overrides for both absent and file-originated keys across unrelated config.json edits', () => {
+            const cfgFile = path.join(tmpDir, 'in-memory-overrides.json')
+            fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'starter', briefingEntries: 5 }), 'utf8')
+            const mgr = new ConfigManager(
+                {
+                    rawToolFilter: 'starter',
+                    toolFilterConfig: null,
+                    briefingConfig: { ...DEFAULT_BRIEFING_CONFIG, entryCount: 5 },
+                },
+                cfgFile
+            )
+            try {
+                // Apply in-memory overrides: entryCount (file-originated) and graphPivots (absent from file)
+                mgr.updateConfig(
+                    {
+                        briefingConfig: {
+                            ...mgr.getConfig().briefingConfig,
+                            entryCount: 9,
+                            graphPivots: false,
+                        },
+                    },
+                    false
+                )
+
+                // Edit unrelated key in config.json; briefingEntries remains 5 and briefingGraph stays absent
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 5 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+
+                expect(mgr.getConfig().rawToolFilter).toBe('full')
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(9)
+                expect(mgr.getConfig().briefingConfig.graphPivots).toBe(false)
+
+                // Explicit file change to briefingEntries itself still takes effect
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 7 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(7)
+
+                // Removing file-originated briefingEntries reverts it to default baseline (3), while absent-key graphPivots stays false
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full' }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(3)
+                expect(mgr.getConfig().briefingConfig.graphPivots).toBe(false)
+
+                // Persisting a change updates lastFileBriefingValues so reverting back to prior file value reloads
+                mgr.updateConfig(
+                    {
+                        briefingConfig: { ...mgr.getConfig().briefingConfig, entryCount: 12 },
+                    },
+                    true,
+                    { mutatedFields: { briefingKeys: ['entryCount'] } }
+                )
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 7 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(7)
+
+                // A transient invalid file edit preserves briefingKeysFromFile provenance so removing the key later reverts to baseline
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full', briefingEntries: 999 }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(7)
+
+                fs.writeFileSync(cfgFile, JSON.stringify({ toolFilter: 'full' }), 'utf8')
+                ;(mgr as unknown as { reloadFromFile: () => void }).reloadFromFile()
+                expect(mgr.getConfig().briefingConfig.entryCount).toBe(3)
+            } finally {
+                mgr.close()
+            }
         })
     })
 
@@ -387,6 +594,71 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(delMissing.success).toBe(false)
             expect(delMissing.error).toContain('Project not found')
         })
+
+        it('does not overwrite a truncated project registry', async () => {
+            const truncated = '{ "projectRegistry": { "kept": { "path": "C:/kept" } '
+            fs.writeFileSync(configPath, truncated, 'utf-8')
+            const tools = getProjectTools(context)
+            const registerTool = tools.find((t) => t.name === 'register_project')
+            if (registerTool === undefined) {
+                throw new Error('register_project tool missing')
+            }
+            const regRes = (await registerTool.handler({
+                name: 'test-proj',
+                absolute_path: path.join(tmpDir, 'test-proj'),
+                project_number: 10,
+            })) as { success: boolean; error?: string }
+            expect(regRes.success).toBe(false)
+            expect(regRes.error).toContain('invalid JSON')
+            expect(fs.readFileSync(configPath, 'utf-8')).toBe(truncated)
+        })
+
+        it('updates active session workspaceId and projectNumber when update_project renames or changes project_number', async () => {
+            const runtime = new ServerRuntime()
+            const runtimeContext: ToolContext = {
+                db,
+                config: {
+                    projectRegistry: {},
+                    runtime,
+                },
+            }
+            const tools = getProjectTools(runtimeContext)
+            const registerTool = tools.find((t) => t.name === 'register_project')!
+            const updateTool = tools.find((t) => t.name === 'update_project')!
+            const deleteTool = tools.find((t) => t.name === 'delete_project')!
+
+            await registerTool.handler({
+                name: 'session-proj',
+                absolute_path: path.join(tmpDir, 'session-proj'),
+                project_number: 10,
+            })
+            setActiveSessionProject('session-proj', 10, runtime)
+            expect(getActiveSessionProject(runtime)).toEqual({
+                workspaceId: 'session-proj',
+                projectNumber: 10,
+            })
+
+            await updateTool.handler({
+                name: 'session-proj',
+                project_number: 25,
+            })
+            expect(getActiveSessionProject(runtime)).toEqual({
+                workspaceId: 'session-proj',
+                projectNumber: 25,
+            })
+
+            await updateTool.handler({
+                name: 'session-proj',
+                new_name: 'session-proj-v2',
+            })
+            expect(getActiveSessionProject(runtime)).toEqual({
+                workspaceId: 'session-proj-v2',
+                projectNumber: 25,
+            })
+
+            await deleteTool.handler({ name: 'session-proj-v2' })
+            expect(getActiveSessionProject(runtime)).toEqual({})
+        })
     })
 
     describe('Lifecycle & Misc Admin Tools', () => {
@@ -420,16 +692,42 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(dryRes.success).toBe(true)
             expect(dryRes.dryRun).toBe(true)
 
-            const liveRes = (await pruneTool.handler({
+            const zeroCandidateRes = (await pruneTool.handler({
                 archive_older_than_days: 30,
                 prune_older_than_days: 90,
                 hard_delete_older_than_days: 30,
                 importance_threshold: 0.5,
                 dry_run: false,
-            })) as { success: boolean; dryRun: boolean }
+            })) as {
+                success: boolean
+                dryRun: boolean
+                archivedCount: number
+                backupFile?: string
+            }
 
-            expect(liveRes.success).toBe(true)
-            expect(liveRes.dryRun).toBe(false)
+            expect(zeroCandidateRes.success).toBe(true)
+            expect(zeroCandidateRes.dryRun).toBe(false)
+            expect(zeroCandidateRes.archivedCount).toBe(0)
+            expect(zeroCandidateRes.backupFile).toBeUndefined()
+
+            const oldEntry = db.createEntry({
+                content: 'Old candidate entry',
+                entryType: 'personal_reflection',
+                timestamp: new Date(Date.now() - 45 * 86_400_000).toISOString(),
+            })
+
+            const abortRes = (await pruneTool.handler({
+                archive_older_than_days: 30,
+                prune_older_than_days: 90,
+                hard_delete_older_than_days: 30,
+                importance_threshold: 0.5,
+                dry_run: false,
+            })) as { success: boolean; dryRun: boolean; error?: string }
+
+            expect(abortRes.success).toBe(false)
+            expect(abortRes.error).toContain('backup')
+            expect(abortRes.dryRun).toBe(false)
+            expect(db.getEntryById(oldEntry.id)?.isArchived).toBe(false)
         })
 
         it('should handle search_audit_log when auditLogger is disabled or enabled', async () => {
@@ -442,7 +740,7 @@ describe('ConfigManager & Configuration Tools', () => {
                 count: number
                 warning?: string
             }
-            expect(disabledRes.success).toBe(true)
+            expect(disabledRes.success).toBe(false)
             expect(disabledRes.count).toBe(0)
             expect(disabledRes.warning).toContain('disabled')
 

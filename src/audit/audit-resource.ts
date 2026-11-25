@@ -21,7 +21,367 @@ import type {
     ResourceResult,
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
+import { SENSITIVE_KEY_RE, sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { createNullProtoRecord, isRecord } from '../utils/type-guards.js'
+import {
+    isCrossRealmDate,
+    isCrossRealmError,
+    tryResolveToJson,
+} from '../utils/sanitize-value-helpers.js'
+import { sliceUntrustedInline } from '../handlers/resources/uri-and-fencing.js'
+import { ValidationError } from '../types/errors.js'
+import { parseCanonicalPositiveInt } from '../utils/safe-positive-int.js'
 import type { AuditLogger } from './audit-logger.js'
+import type { AuditEntry } from './types.js'
+import { extractAuditScopeFromUri, matchesAuditFilters } from './audit-query-helpers.js'
+
+function parseAuditResourceQueryScope(
+    uri: string,
+    runtime?: object | null
+): {
+    workspaceId?: string
+    projectNumber?: number
+} {
+    const scopeFilter = extractAuditScopeFromUri(uri, undefined, runtime)
+    let explicitZeroProject = false
+    try {
+        const parsed = new URL(uri)
+        const rawWs = parsed.searchParams.get('workspace_id')
+        if (rawWs !== null && rawWs.trim().length === 0) {
+            throw new ValidationError('Invalid workspace_id query parameter: must be non-empty.')
+        }
+        const rawProj = parsed.searchParams.get('project_number')
+        if (rawProj !== null) {
+            const trimmed = rawProj.trim()
+            if (trimmed === '0') {
+                explicitZeroProject = true
+            } else if (parseCanonicalPositiveInt(trimmed) === undefined) {
+                throw new ValidationError(
+                    `Invalid project_number query parameter '${rawProj}': expected canonical non-negative integer.`
+                )
+            }
+        }
+    } catch (err) {
+        if (err instanceof ValidationError) throw err
+    }
+    return {
+        ...(scopeFilter.workspaceId !== undefined ? { workspaceId: scopeFilter.workspaceId } : {}),
+        ...(explicitZeroProject
+            ? { projectNumber: 0 }
+            : scopeFilter.projectNumber !== undefined
+              ? { projectNumber: scopeFilter.projectNumber }
+              : {}),
+    }
+}
+
+async function fetchAuditEntries(
+    auditLogger: AuditLogger,
+    uri: string,
+    runtime?: object | null
+): Promise<AuditEntry[]> {
+    const scopeFilter = parseAuditResourceQueryScope(uri, runtime)
+    const hasScopeFilter =
+        scopeFilter.workspaceId !== undefined || scopeFilter.projectNumber !== undefined
+    if (!hasScopeFilter) {
+        return auditLogger.recent(50)
+    }
+    const searchFilter = {
+        ...(scopeFilter.workspaceId !== undefined
+            ? { workspace_id: scopeFilter.workspaceId }
+            : {}),
+        ...(scopeFilter.projectNumber !== undefined
+            ? { project_number: scopeFilter.projectNumber }
+            : {}),
+        limit: 50,
+    }
+    if (typeof auditLogger.search === 'function') {
+        // `search()` reads backwards (newest-first); reverse to match `recent()` chronological order.
+        const matched = await auditLogger.search(searchFilter)
+        return [...matched].reverse()
+    }
+    return (await auditLogger.recent(50)).filter((entry) =>
+        matchesAuditFilters(entry, searchFilter)
+    )
+}
+
+function computeSessionSummary(entries: AuditEntry[]): {
+    totalTokens: number
+    errorCount: number
+    totalDuration: number
+} {
+    let totalTokens = 0
+    let errorCount = 0
+    let totalDuration = 0
+    for (const e of entries) {
+        if (typeof e.tokenEstimate === 'number' && Number.isFinite(e.tokenEstimate)) {
+            totalTokens += e.tokenEstimate
+        }
+        if (typeof e.durationMs === 'number' && Number.isFinite(e.durationMs)) {
+            totalDuration += e.durationMs
+        }
+        if (!e.success) errorCount++
+    }
+    return { totalTokens, errorCount, totalDuration }
+}
+
+const CANONICAL_AUDIT_ID_RE =
+    /^(?:resource:|prompt:)?(?:memory:\/\/[A-Za-z0-9_./-]+|[A-Za-z0-9_.:@-]{1,128})$/
+const ISO_AUDIT_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/
+
+function sanitizeAuditCategory(raw: unknown): AuditEntry['category'] {
+    switch (raw) {
+        case 'read':
+        case 'write':
+        case 'admin':
+        case 'team':
+        case 'audit':
+            return raw
+        default:
+            return 'read'
+    }
+}
+
+function fenceNonCanonicalAuditId(value: unknown): string {
+    if (typeof value !== 'string') return ''
+    const clean = sanitizeErrorForLogging(value)
+    return CANONICAL_AUDIT_ID_RE.test(clean) && clean.length <= 256
+        ? clean
+        : sliceUntrustedInline(clean, 256, '...')
+}
+
+const MAX_AUDIT_EGRESS_ARRAY_ITEMS = 50
+const MAX_AUDIT_EGRESS_OBJECT_KEYS = 50
+const MAX_AUDIT_EGRESS_TOTAL_NODES = 250
+
+function sanitizeAuditMapNode(
+    value: Map<unknown, unknown>,
+    depth: number,
+    seen: WeakSet<object>,
+    budget: { count: number }
+): Record<string, unknown> {
+    const out = createNullProtoRecord()
+    let count = 0
+    for (const [mk, mv] of value.entries()) {
+        if (count++ >= MAX_AUDIT_EGRESS_OBJECT_KEYS || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) {
+            out['_truncatedKeys'] = Math.max(0, value.size - (count - 1))
+            break
+        }
+        const rawKey = String(mk)
+        if (rawKey === 'toJSON' || typeof mv === 'function') continue
+        const safeKey = fenceNonCanonicalAuditId(rawKey)
+        out[safeKey] =
+            SENSITIVE_KEY_RE.test(rawKey) || SENSITIVE_KEY_RE.test(safeKey)
+                ? '[REDACTED]'
+                : sanitizeAuditArgNode(mv, depth + 1, seen, budget)
+    }
+    return out
+}
+
+function sanitizeAuditArgNode(
+    value: unknown,
+    depth: number,
+    seen: WeakSet<object>,
+    budget: { count: number }
+): unknown {
+    if (typeof value === 'string') {
+        return sliceUntrustedInline(sanitizeErrorForLogging(value), 2048, '...')
+    }
+    if (typeof value === 'function') return '[Function]'
+    if (typeof value === 'bigint') return value.toString()
+    if (value === null || typeof value !== 'object') return value
+    if (seen.has(value)) return '[Circular]'
+    if (depth >= 6 || budget.count >= MAX_AUDIT_EGRESS_TOTAL_NODES) return '[Truncated]'
+    budget.count++
+
+    if (ArrayBuffer.isView(value)) return `[Binary: ${String(value.byteLength)} bytes]`
+    if (isCrossRealmDate(value)) {
+        return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+    }
+    if (value instanceof URL) {
+        return sliceUntrustedInline(sanitizeErrorForLogging(value.href), 2048, '...')
+    }
+    if (isCrossRealmError(value)) {
+        return sliceUntrustedInline(sanitizeErrorForLogging(`${value.name}: ${value.message}`), 2048, '...')
+    }
+
+    seen.add(value)
+    try {
+        if (value instanceof Set) {
+            return sanitizeAuditArgNode(Array.from(value.values()), depth, seen, budget)
+        }
+        if (value instanceof Map) {
+            return sanitizeAuditMapNode(value, depth, seen, budget)
+        }
+        if (Array.isArray(value)) {
+            const sliced = value.slice(0, MAX_AUDIT_EGRESS_ARRAY_ITEMS)
+            const out = sliced.map((item) => sanitizeAuditArgNode(item, depth + 1, seen, budget))
+            if (value.length > MAX_AUDIT_EGRESS_ARRAY_ITEMS) {
+                out.push(`...[+${String(value.length - MAX_AUDIT_EGRESS_ARRAY_ITEMS)} more]`)
+            }
+            return out
+        }
+        const jsonRes = tryResolveToJson(value)
+        if (jsonRes.resolved) {
+            return sanitizeAuditArgNode(jsonRes.value, depth + 1, seen, budget)
+        }
+        const entries = isRecord(value) ? Object.entries(value) : []
+        const out = createNullProtoRecord()
+        const limit = Math.min(entries.length, MAX_AUDIT_EGRESS_OBJECT_KEYS)
+        for (let i = 0; i < limit; i++) {
+            const pair = entries[i]
+            if (pair === undefined) continue
+            const [k, v] = pair
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k === 'toJSON' || typeof v === 'function') {
+                continue
+            }
+            const safeKey = fenceNonCanonicalAuditId(k)
+            out[safeKey] =
+                SENSITIVE_KEY_RE.test(k) || SENSITIVE_KEY_RE.test(safeKey)
+                    ? '[REDACTED]'
+                    : sanitizeAuditArgNode(v, depth + 1, seen, budget)
+        }
+        if (entries.length > MAX_AUDIT_EGRESS_OBJECT_KEYS) {
+            out['_truncatedKeys'] = entries.length - MAX_AUDIT_EGRESS_OBJECT_KEYS
+        }
+        return out
+    } finally {
+        seen.delete(value)
+    }
+}
+
+/** Fence untrusted non-canonical audit fields and scrub secret tokens before MCP egress. */
+export function sanitizeAuditEntryForEgress(e: AuditEntry): AuditEntry {
+    let cleanArgs: Record<string, unknown> | undefined
+    if (isRecord(e.args)) {
+        const sanitized = sanitizeAuditArgNode(e.args, 0, new WeakSet(), { count: 0 })
+        if (isRecord(sanitized)) {
+            cleanArgs = sanitized
+        } else {
+            const wrapped = createNullProtoRecord()
+            wrapped['value'] = sanitized
+            cleanArgs = wrapped
+        }
+    }
+    const rawSuccess: unknown = e.success
+    const safeTimestamp =
+        typeof e.timestamp === 'string'
+            ? ISO_AUDIT_TS_RE.test(e.timestamp)
+                ? e.timestamp
+                : fenceNonCanonicalAuditId(e.timestamp)
+            : ''
+    const base: AuditEntry = {
+        timestamp: safeTimestamp,
+        requestId: typeof e.requestId === 'string' ? fenceNonCanonicalAuditId(e.requestId) : '',
+        tool: typeof e.tool === 'string' ? fenceNonCanonicalAuditId(e.tool) : '',
+        category: sanitizeAuditCategory(e.category),
+        scope: typeof e.scope === 'string' ? fenceNonCanonicalAuditId(e.scope) : '',
+        user: typeof e.user === 'string' ? fenceNonCanonicalAuditId(e.user) : null,
+        scopes: Array.isArray(e.scopes)
+            ? e.scopes.filter((s): s is string => typeof s === 'string').map(fenceNonCanonicalAuditId)
+            : [],
+        durationMs:
+            typeof e.durationMs === 'number' && Number.isFinite(e.durationMs) ? e.durationMs : 0,
+        tokenEstimate:
+            typeof e.tokenEstimate === 'number' && Number.isFinite(e.tokenEstimate)
+                ? e.tokenEstimate
+                : 0,
+        success: rawSuccess === true,
+    }
+    if (typeof e.sessionId === 'string') base.sessionId = fenceNonCanonicalAuditId(e.sessionId)
+    if (typeof e.workspaceId === 'string') {
+        base.workspaceId = fenceNonCanonicalAuditId(e.workspaceId)
+    }
+    if (typeof e.projectNumber === 'number' && Number.isFinite(e.projectNumber)) {
+        base.projectNumber = e.projectNumber
+    }
+    if (typeof e.error === 'string') {
+        base.error = sliceUntrustedInline(sanitizeErrorForLogging(e.error), 2048, '...')
+    }
+    if (cleanArgs !== undefined) base.args = cleanArgs
+    return base
+}
+
+function formatAuditEntryYaml(e: AuditEntry, preSanitized = false): string {
+    const safe = preSanitized ? e : sanitizeAuditEntryForEgress(e)
+    const tsOut = ISO_AUDIT_TS_RE.test(safe.timestamp)
+        ? safe.timestamp
+        : JSON.stringify(safe.timestamp)
+    const scopeOut = /^[a-z]*$/.test(safe.scope) ? safe.scope : JSON.stringify(safe.scope)
+    const parts: string[] = [
+        `- timestamp: ${tsOut}`,
+        `  tool: ${JSON.stringify(safe.tool)}`,
+        `  scope: ${scopeOut}`,
+        `  category: ${safe.category}`,
+        `  duration_ms: ${String(safe.durationMs)}`,
+        `  success: ${String(safe.success)}`,
+    ]
+    if (safe.error) {
+        parts.push(`  error: ${JSON.stringify(safe.error)}`)
+    }
+    if (safe.workspaceId !== undefined) {
+        parts.push(`  workspace_id: ${JSON.stringify(safe.workspaceId)}`)
+    }
+    if (safe.projectNumber !== undefined) {
+        parts.push(`  project_number: ${String(safe.projectNumber)}`)
+    }
+    if (safe.tokenEstimate !== undefined) {
+        parts.push(`  token_estimate: ${String(safe.tokenEstimate)}`)
+    }
+    if (safe.args !== undefined) {
+        parts.push(`  args: ${JSON.stringify(safe.args)}`)
+    }
+    return parts.join('\n')
+}
+
+async function handleAuditResourceRead(
+    uri: string,
+    getLogger: () => AuditLogger | null,
+    runtime?: object | null
+): Promise<ResourceResult> {
+    const lastModified = new Date().toISOString()
+    const auditLogger = getLogger()
+
+    if (!auditLogger) {
+        return {
+            data:
+                'audit: not configured\n' +
+                'hint: Set AUDIT_LOG_PATH env var or --audit-log CLI flag to enable audit logging.',
+            annotations: { lastModified },
+        }
+    }
+
+    const entries = await fetchAuditEntries(auditLogger, uri, runtime)
+    if (entries.length === 0) {
+        const note =
+            typeof auditLogger.isStderrOnly === 'function' && auditLogger.isStderrOnly()
+                ? 'note: AUDIT_LOG_PATH=stderr is write-only; historical telemetry events are emitted to stderr rather than buffered on disk.'
+                : 'note: No write/admin operations have been audited yet.'
+        return {
+            data: `audit_log: ${auditLogger.config.logPath}\nentries: 0\n${note}`,
+            annotations: { lastModified },
+        }
+    }
+
+    const sanitizedEntries = entries.map(sanitizeAuditEntryForEgress)
+    const { totalTokens, errorCount, totalDuration } = computeSessionSummary(sanitizedEntries)
+    const formattedEntries = sanitizedEntries.map((entry) => formatAuditEntryYaml(entry, true)).join('\n')
+    const text =
+        `audit_log: ${auditLogger.config.logPath}\n` +
+        `entries_shown: ${String(entries.length)}\n` +
+        `as_of: ${lastModified}\n` +
+        `session_summary:\n` +
+        `  total_tokens: ${String(totalTokens)}\n` +
+        `  total_duration_ms: ${String(totalDuration)}\n` +
+        `  error_count: ${String(errorCount)}\n` +
+        `  dropped_count: ${String(auditLogger.droppedCount)}\n` +
+        `  redact_mode: ${String(auditLogger.config.redact)}\n\n` +
+        formattedEntries
+
+    return {
+        data: text,
+        annotations: { lastModified },
+    }
+}
 
 // ============================================================================
 // Resource Factory
@@ -51,81 +411,7 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
         capabilities: {
             requiresAuditScope: true,
         },
-        handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
-            const lastModified = new Date().toISOString()
-            const auditLogger = getLogger()
-
-            if (!auditLogger) {
-                return {
-                    data:
-                        'audit: not configured\n' +
-                        'hint: Set AUDIT_LOG_PATH env var or --audit-log CLI flag to enable audit logging.',
-                    annotations: { lastModified },
-                }
-            }
-
-            const entries = await auditLogger.recent(50)
-
-            if (entries.length === 0) {
-                return {
-                    data:
-                        `audit_log: ${auditLogger.config.logPath}\n` +
-                        'entries: 0\n' +
-                        'note: No write/admin operations have been audited yet.',
-                    annotations: { lastModified },
-                }
-            }
-
-            // Compute session summary
-            let totalTokens = 0
-            let errorCount = 0
-            let totalDuration = 0
-            for (const e of entries) {
-                totalTokens += e.tokenEstimate ?? 0
-                totalDuration += e.durationMs
-                if (!e.success) errorCount++
-            }
-
-            // Format each entry as readable YAML-style text
-            const formattedEntries = entries
-                .map((e) => {
-                    const parts: string[] = [
-                        `- timestamp: ${e.timestamp}`,
-                        `  tool: ${JSON.stringify(e.tool)}`,
-                        `  scope: ${e.scope}`,
-                        `  category: ${e.category}`,
-                        `  duration_ms: ${String(e.durationMs)}`,
-                        `  success: ${String(e.success)}`,
-                    ]
-                    if (e.error) {
-                        parts.push(`  error: ${JSON.stringify(e.error)}`)
-                    }
-                    if (e.tokenEstimate !== undefined) {
-                        parts.push(`  token_estimate: ${String(e.tokenEstimate)}`)
-                    }
-                    if (e.args !== undefined) {
-                        parts.push(`  args: ${JSON.stringify(e.args)}`)
-                    }
-                    return parts.join('\n')
-                })
-                .join('\n')
-
-            const text =
-                `audit_log: ${auditLogger.config.logPath}\n` +
-                `entries_shown: ${String(entries.length)}\n` +
-                `as_of: ${lastModified}\n` +
-                `session_summary:\n` +
-                `  total_tokens: ${String(totalTokens)}\n` +
-                `  total_duration_ms: ${String(totalDuration)}\n` +
-                `  error_count: ${String(errorCount)}\n` +
-                `  dropped_count: ${String(auditLogger.droppedCount)}\n` +
-                `  redact_mode: ${String(auditLogger.config.redact)}\n\n` +
-                formattedEntries
-
-            return {
-                data: text,
-                annotations: { lastModified },
-            }
-        },
+        handler: (uri: string, context: ResourceContext): Promise<ResourceResult> =>
+            handleAuditResourceRead(uri, getLogger, context.runtime),
     }
 }

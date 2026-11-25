@@ -5,58 +5,53 @@ import {
     type ToolAnnotations,
     type Icon,
 } from '@modelcontextprotocol/server'
-import { getEnabledGroups } from '../../../filtering/tool-filter.js'
 import { callTool } from '../../../handlers/tools/index.js'
-import { readResource, validateResourceSubscription } from '../../../handlers/resources/index.js'
-import {
-    generateStandardInstructions,
-    generateCodeModeInstructions,
-} from '../../../constants/server-instructions.js'
-import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
-import type { ToolGroup, ToolRegistration, ToolHandlerConfig } from '../../../types/index.js'
-import { type DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared.js'
+import { validateResourceSubscription } from '../../../handlers/resources/index.js'
+import type { BriefingConfig } from '../../../handlers/resources/shared.js'
+import type { ToolRegistration, ToolHandlerConfig } from '../../../types/index.js'
 import {
     registerResources,
     registerPrompts,
     type ResourceDefinition,
     type PromptDefinition,
 } from '../../registration.js'
+import { getSerializedPayloadJson } from '../../../observability/token-estimator.js'
 import { VERSION } from '../../../version.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
-import { logAgentIssue } from '../../../utils/issue-logger.js'
+import { logger } from '../../../utils/logger.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 import { attachListToolsInterceptor, type RequestHandlerMap } from './list-interceptor.js'
 import { attachCallToolInterceptor } from './call-interceptor.js'
+import {
+    MUTATING_TOOLS,
+    attachStdioCloseCleanup,
+    buildServerInstructions,
+    createResourceReadHandler,
+    formatToolFailure,
+    getCachedReadOnlyHints,
+    isStandardSchemaWithJson,
+    notifyMutationSubscribers,
+    relaxInputSchemaForMcp,
+    relaxOutputSchemaForMcp,
+    resolveActiveBriefingConfig,
+    syncLiveHandlerConfig,
+} from './register-tools-helpers.js'
 
-/**
- * Default maximum number of array elements and object properties allowed across a
- * single tool input payload before Zod validation runs.
- */
-export const DEFAULT_MAX_TOOL_INPUT_ELEMENTS = 25_000
+import {
+    DEFAULT_MAX_TOOL_INPUT_ELEMENTS,
+    markValidatedToolInput,
+    resolveEffectiveMaxToolInputElements,
+} from '../../../utils/tool-input-bounds.js'
 
-/**
- * Resolves the configured `maxToolInputElements` option into the value passed to `McpServer`.
- * - `undefined` -> `DEFAULT_MAX_TOOL_INPUT_ELEMENTS` (25,000)
- * - `0` or `Infinity` -> `Infinity` (disables the SDK's element limit check)
- * - positive number -> passed through as-is
- */
-export function resolveEffectiveMaxToolInputElements(configured: number | undefined): number {
-    if (configured === undefined) return DEFAULT_MAX_TOOL_INPUT_ELEMENTS
-    return configured === 0 || configured === Infinity ? Infinity : configured
+export { DEFAULT_MAX_TOOL_INPUT_ELEMENTS, resolveEffectiveMaxToolInputElements }
+
+function readOnlyHintOf(tool: { annotations?: { readOnlyHint?: boolean } }): boolean | undefined {
+    if (tool.annotations === undefined) {
+        return undefined
+    }
+    return tool.annotations.readOnlyHint
 }
-
-const MUTATING_TOOLS = new Set([
-    'create_entry',
-    'update_entry',
-    'delete_entry',
-    'restore_entry',
-    'batch_create_entries',
-    'batch_update_entries',
-    'batch_delete_entries',
-    'team_add_member',
-    'team_update_member_role',
-    'team_remove_member',
-])
 
 interface ModernToolConfig {
     title?: string
@@ -78,47 +73,28 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
 
     if (tool.inputSchema !== undefined) {
         const schema = tool.inputSchema
-        const fallbackInputSchema = schema as unknown as StandardSchemaWithJSON
-        if (
-            typeof schema === 'object' &&
-            schema !== null &&
-            'partial' in schema &&
-            typeof schema.partial === 'function'
-        ) {
-            try {
-                const relaxed = (
-                    schema as { partial: () => { passthrough?: () => StandardSchemaWithJSON } }
-                ).partial()
-                toolOptions.inputSchema =
-                    typeof relaxed.passthrough === 'function'
-                        ? relaxed.passthrough()
-                        : fallbackInputSchema
-            } catch {
+        const fallbackInputSchema = isStandardSchemaWithJson(schema) ? schema : undefined
+        try {
+            const candidate = relaxInputSchemaForMcp(schema)
+            if (isStandardSchemaWithJson(candidate)) {
+                toolOptions.inputSchema = candidate
+            } else if (fallbackInputSchema !== undefined) {
                 toolOptions.inputSchema = fallbackInputSchema
             }
-        } else {
-            toolOptions.inputSchema = fallbackInputSchema
+        } catch (error) {
+            logger.warning('Failed to relax input schema; using fallback schema', {
+                module: 'McpServer',
+                tool: tool.name,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            if (fallbackInputSchema !== undefined) toolOptions.inputSchema = fallbackInputSchema
         }
     }
 
     if (tool.outputSchema !== undefined) {
-        const outSchema = tool.outputSchema
-        const fallbackOutputSchema = outSchema as unknown as StandardSchemaWithJSON
-        if (
-            typeof outSchema === 'object' &&
-            outSchema !== null &&
-            'passthrough' in outSchema &&
-            typeof outSchema.passthrough === 'function'
-        ) {
-            try {
-                toolOptions.outputSchema = (
-                    outSchema as { passthrough: () => StandardSchemaWithJSON }
-                ).passthrough()
-            } catch {
-                toolOptions.outputSchema = fallbackOutputSchema
-            }
-        } else {
-            toolOptions.outputSchema = fallbackOutputSchema
+        const relaxedOutput = relaxOutputSchemaForMcp(tool.outputSchema, tool.name)
+        if (relaxedOutput !== undefined) {
+            toolOptions.outputSchema = relaxedOutput
         }
     }
 
@@ -126,6 +102,230 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
     if (tool.icons !== undefined) toolOptions.icons = [{ src: tool.icons.iconUrl }]
     toolRegistrationOptionsCache.set(tool, toolOptions)
     return toolOptions
+}
+
+function isRequestHandlerMap(value: unknown): value is RequestHandlerMap {
+    if (!(value instanceof Map)) return false
+    const entries: Iterable<[unknown, unknown]> = value.entries()
+    for (const [k, v] of entries) {
+        if (typeof k !== 'string' || typeof v !== 'function') return false
+    }
+    return true
+}
+
+function getRequestHandlers(rawServer: object): RequestHandlerMap | undefined {
+    if ('_requestHandlers' in rawServer && isRequestHandlerMap(rawServer._requestHandlers)) {
+        return rawServer._requestHandlers
+    }
+    return undefined
+}
+
+function extractProgressToken(extra: unknown): string | number | undefined {
+    if (!isRecord(extra)) return undefined
+    const mcpReq = extra['mcpReq']
+    if (!isRecord(mcpReq)) return undefined
+    const meta = mcpReq['_meta']
+    if (!isRecord(meta)) return undefined
+    const token = meta['progressToken']
+    return typeof token === 'string' || typeof token === 'number' ? token : undefined
+}
+
+function formatRegisteredToolResponse(
+    tool: ToolRegistration,
+    result: unknown,
+    hasOutputSchema: boolean
+): CallToolResult {
+    const isSuccess = isRecord(result) && result['success'] === true
+
+    if (isSuccess) {
+        // [INTENT] Any tool that declares `readOnlyHint: false` (merge, link,
+        // import, Code Mode, ...) notifies subscribers, not just a fixed list (L5).
+        const isMutation =
+            MUTATING_TOOLS.has(tool.name) ||
+            readOnlyHintOf(tool) === false ||
+            (tool.name.startsWith('team_') && readOnlyHintOf(tool) !== true)
+
+        if (isMutation) {
+            notifyMutationSubscribers(tool.name)
+        }
+    }
+
+    const textContent = typeof result === 'string' ? result : getSerializedPayloadJson(result)
+    const failed = isRecord(result) && result['success'] === false
+
+    if (hasOutputSchema) {
+        return {
+            content: [{ type: 'text' as const, text: textContent }],
+            structuredContent: result,
+            ...(failed ? { isError: true as const } : {}),
+        }
+    }
+
+    return {
+        content: [{ type: 'text' as const, text: textContent }],
+        ...(failed ? { isError: true as const } : {}),
+    }
+}
+
+interface SyncBriefingCache {
+    rawConfig?: unknown
+    allowedIoRoots?: string[]
+    resolvedBriefing?: unknown
+}
+
+async function executeRegisteredTool(
+    server: McpServer,
+    tool: ToolRegistration,
+    hasOutputSchema: boolean,
+    args: unknown,
+    extra: unknown,
+    context: ServerContext,
+    options: ServerOptions,
+    customToolHandlerConfig: ToolHandlerConfig,
+    syncCache: SyncBriefingCache
+): Promise<CallToolResult> {
+    const {
+        configManager,
+        db,
+        teamDb,
+        vectorManager,
+        teamVectorManager,
+        github,
+        allowedIoRoots,
+    } = context
+    try {
+        const progressToken = extractProgressToken(extra)
+        const progressContext =
+            progressToken !== undefined ? { server: server.server, progressToken } : undefined
+
+        const currentConfig = configManager.getConfig()
+        if (
+            syncCache.rawConfig !== currentConfig ||
+            syncCache.allowedIoRoots !== allowedIoRoots ||
+            customToolHandlerConfig.briefingConfig !== syncCache.resolvedBriefing
+        ) {
+            const nextBriefing = resolveActiveBriefingConfig(
+                currentConfig.briefingConfig,
+                allowedIoRoots
+            )
+            syncLiveHandlerConfig(customToolHandlerConfig, currentConfig, options, nextBriefing)
+            syncCache.rawConfig = currentConfig
+            syncCache.allowedIoRoots = allowedIoRoots
+            syncCache.resolvedBriefing = nextBriefing
+        }
+
+        const toolArgs = isRecord(args) ? args : {}
+        markValidatedToolInput(toolArgs, resolveEffectiveMaxToolInputElements(options.maxToolInputElements))
+
+        const result = await callTool(
+            tool.name,
+            toolArgs,
+            db,
+            vectorManager,
+            github,
+            customToolHandlerConfig,
+            progressContext,
+            teamDb ?? undefined,
+            teamVectorManager ?? undefined
+        )
+        return formatRegisteredToolResponse(tool, result, hasOutputSchema)
+    } catch (error) {
+        const errorResult = formatToolFailure(error, tool.name, args)
+        return {
+            content: [
+                {
+                    type: 'text' as const,
+                    text: getSerializedPayloadJson(errorResult),
+                },
+            ],
+            ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
+            isError: true,
+        }
+    }
+}
+
+function registerAllToolsOnServer(
+    server: McpServer,
+    context: ServerContext,
+    options: ServerOptions,
+    allTools: ToolRegistration[],
+    customToolHandlerConfig: ToolHandlerConfig
+): void {
+    const syncCache: SyncBriefingCache = {}
+    for (const tool of allTools) {
+        const toolOptions = buildToolRegistrationOptions(tool)
+        const hasOutputSchema = Boolean(tool.outputSchema)
+
+        server.registerTool<StandardSchemaWithJSON, StandardSchemaWithJSON>(
+            tool.name,
+            toolOptions,
+            (args: unknown, extra: unknown) =>
+                executeRegisteredTool(
+                    server,
+                    tool,
+                    hasOutputSchema,
+                    args,
+                    extra,
+                    context,
+                    options,
+                    customToolHandlerConfig,
+                    syncCache
+                )
+        )
+    }
+}
+
+function attachResourceAndSubscriptionHandlers(
+    server: McpServer,
+    context: ServerContext,
+    options: ServerOptions,
+    resources: ResourceDefinition[]
+): void {
+    const handleResourceRead = createResourceReadHandler(context, options)
+    registerResources(server, resources, handleResourceRead, context.runtime)
+
+    server.server.setRequestHandler('resources/subscribe', (request, extra) => {
+        const sessionId = (extra as { sessionId?: string } | undefined)?.sessionId
+        const transportSessionId =
+            sessionId !== undefined && sessionId !== '' ? sessionId : 'stdio'
+
+        const liveBriefing = resolveActiveBriefingConfig(
+            context.configManager.getConfig().briefingConfig,
+            context.allowedIoRoots,
+            context.runtime
+        )
+        validateResourceSubscription(
+            request.params.uri,
+            context.runtime,
+            context.teamDb ?? undefined,
+            liveBriefing
+        )
+
+        if (
+            (options.transport === 'http' || options.statelessHttp === true) &&
+            (sessionId === undefined || sessionId === '')
+        ) {
+            return {}
+        }
+
+        globalSubscriptionManager.registerServer(transportSessionId, server)
+        globalSubscriptionManager.subscribe(request.params.uri, transportSessionId)
+        return {}
+    })
+
+    server.server.setRequestHandler('resources/unsubscribe', (request, extra) => {
+        const sessionId = (extra as { sessionId?: string } | undefined)?.sessionId
+        if (
+            (options.transport === 'http' || options.statelessHttp === true) &&
+            (sessionId === undefined || sessionId === '')
+        ) {
+            return {}
+        }
+        const transportSessionId =
+            sessionId !== undefined && sessionId !== '' ? sessionId : 'stdio'
+        globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)
+        return {}
+    })
 }
 
 export function createServerInstance(
@@ -137,61 +337,20 @@ export function createServerInstance(
     allToolNames: Set<string>,
     customToolHandlerConfig: ToolHandlerConfig
 ): McpServer {
-    const {
-        configManager,
-        db,
-        teamDb,
-        vectorManager,
-        teamVectorManager,
-        github,
-        scheduler,
-        allowedIoRoots,
-        runtime,
-    } = context
-    const { defaultProjectNumber } = options
+    const { configManager, db, teamDb, allowedIoRoots, runtime } = context
+    configManager.seedMissingScopeDefaults({
+        ...(options.defaultProjectNumber !== undefined
+            ? { defaultProjectNumber: options.defaultProjectNumber }
+            : {}),
+        ...(options.defaultWorkspaceId !== undefined
+            ? { defaultWorkspaceId: options.defaultWorkspaceId }
+            : {}),
+        ...(options.projectRegistry !== undefined
+            ? { projectRegistry: options.projectRegistry }
+            : {}),
+    })
 
-    const getInstructions = (): string => {
-        const currentConfig = configManager.getConfig()
-        const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
-        const groups = currentConfig.toolFilterConfig
-            ? getEnabledGroups(currentConfig.toolFilterConfig.enabledTools)
-            : undefined
-
-        const isCodeModeOnly = enabledSet.size === 1 && enabledSet.has('mj_execute_code')
-        const mappedPrompts = prompts.map((p) => {
-            const prompt = p as { name: string; description?: string }
-            return {
-                name: prompt.name,
-                ...(prompt.description !== undefined ? { description: prompt.description } : {}),
-            }
-        })
-
-        if (isCodeModeOnly || currentConfig.toolFilterConfig?.raw === 'codemode') {
-            const finalGroups =
-                currentConfig.codemodeInternalFullAccess === true
-                    ? new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
-                    : groups
-            const finalEnabledTools =
-                currentConfig.codemodeInternalFullAccess === true ? allToolNames : enabledSet
-
-            return generateCodeModeInstructions(
-                finalEnabledTools,
-                mappedPrompts,
-                undefined,
-                finalGroups,
-                currentConfig.briefingConfig
-            )
-        }
-
-        return generateStandardInstructions(
-            enabledSet,
-            mappedPrompts,
-            undefined,
-            groups,
-            currentConfig.briefingConfig
-        )
-    }
-
+    const readOnlyHints = getCachedReadOnlyHints(allTools)
     const server = new McpServer(
         { name: 'memory-journal-mcp', version: VERSION },
         {
@@ -199,10 +358,13 @@ export function createServerInstance(
                 logging: {},
                 prompts: { listChanged: true },
                 tools: { listChanged: true },
-                resources: { subscribe: true, listChanged: true },
+                resources: {
+                    subscribe: options.statelessHttp !== true,
+                    listChanged: options.statelessHttp !== true,
+                },
                 experimental: { progress: {} },
             },
-            instructions: getInstructions(),
+            instructions: buildServerInstructions(context, options, prompts, allToolNames, readOnlyHints),
             maxToolInputElements: resolveEffectiveMaxToolInputElements(options.maxToolInputElements),
         }
     )
@@ -211,238 +373,20 @@ export function createServerInstance(
         context.skillCatalog.attach(server)
     }
 
-    for (const tool of allTools) {
-        const toolOptions = buildToolRegistrationOptions(tool)
-        const hasOutputSchema = Boolean(tool.outputSchema)
+    registerAllToolsOnServer(server, context, options, allTools, customToolHandlerConfig)
+    attachResourceAndSubscriptionHandlers(server, context, options, resources)
 
-        server.registerTool<StandardSchemaWithJSON, StandardSchemaWithJSON>(
-            tool.name,
-            toolOptions,
-            async (args: unknown, extra: unknown): Promise<CallToolResult> => {
-                try {
-                    const extraMeta = extra as
-                        | { mcpReq?: { _meta?: { progressToken?: string | number } } }
-                        | undefined
-                    const progressToken = extraMeta?.mcpReq?._meta?.progressToken
-                    const progressContext =
-                        progressToken !== undefined
-                            ? { server: server.server, progressToken }
-                            : undefined
-
-                    const currentConfig = configManager.getConfig()
-                    customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
-                    customToolHandlerConfig.briefingConfig = currentConfig.briefingConfig
-
-                    const toolArgs =
-                        typeof args === 'object' && args !== null
-                            ? (args as Record<string, unknown>)
-                            : {}
-
-                    const result = await callTool(
-                        tool.name,
-                        toolArgs,
-                        db,
-                        vectorManager,
-                        github,
-                        customToolHandlerConfig,
-                        progressContext,
-                        teamDb ?? undefined,
-                        teamVectorManager ?? undefined
-                    )
-
-                    const isSuccess =
-                        typeof result === 'object' &&
-                        result !== null &&
-                        (result as Record<string, unknown>)['success'] === true
-
-                    if (isSuccess) {
-                        const isMutation =
-                            MUTATING_TOOLS.has(tool.name) ||
-                            (tool.name.startsWith('team_') &&
-                                tool.annotations.readOnlyHint !== true)
-
-                        if (isMutation) {
-                            void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
-                            void globalSubscriptionManager.notifyResourceUpdated('memory://recent')
-                            void globalSubscriptionManager.notifyResourceUpdated(
-                                'memory://statistics'
-                            )
-
-                            if (tool.name.startsWith('team_')) {
-                                void globalSubscriptionManager.notifyResourceUpdated(
-                                    'memory://team/recent'
-                                )
-                                void globalSubscriptionManager.notifyResourceUpdated(
-                                    'memory://team/statistics'
-                                )
-                            }
-                        }
-                    }
-
-                    const textContent =
-                        typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-
-                    if (hasOutputSchema) {
-                        return {
-                            content: [{ type: 'text' as const, text: textContent }],
-                            structuredContent: result as Record<string, unknown>,
-                        }
-                    }
-
-                    return { content: [{ type: 'text' as const, text: textContent }] }
-                } catch (error) {
-                    let errorResult: Record<string, unknown>
-                    if (
-                        error instanceof Error &&
-                        'toResponse' in error &&
-                        typeof (error as { toResponse?: unknown }).toResponse === 'function'
-                    ) {
-                        errorResult = (
-                            error as { toResponse: () => Record<string, unknown> }
-                        ).toResponse()
-                    } else {
-                        const errorMessage = error instanceof Error ? error.message : String(error)
-                        errorResult = {
-                            success: false,
-                            error: errorMessage,
-                            code: 'INTERNAL_ERROR',
-                            category: 'internal',
-                            recoverable: false,
-                        }
-                    }
-
-                    logAgentIssue({
-                        source: 'MCP',
-                        action: tool.name,
-                        input: args,
-                        error: (errorResult['error'] as string) ?? 'Unknown error',
-                    })
-
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: JSON.stringify(errorResult, null, 2),
-                            },
-                        ],
-                        ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
-                        isError: true,
-                    }
-                }
-            }
-        )
-    }
-
-    const handleResourceRead = async (
-        uri: URL,
-        mimeType: string
-    ): Promise<{
-        contents: {
-            uri: string
-            mimeType: string
-            text: string
-            annotations?: Record<string, unknown>
-        }[]
-    }> => {
-        const currentConfig = configManager.getConfig()
-        const resolvedDefaultProj =
-            currentConfig.briefingConfig.defaultProjectNumber ?? defaultProjectNumber
-        const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
-            ...currentConfig.briefingConfig,
-            ...(resolvedDefaultProj !== undefined
-                ? { defaultProjectNumber: resolvedDefaultProj }
-                : {}),
-            ...(options.projectRegistry !== undefined
-                ? { projectRegistry: options.projectRegistry }
-                : {}),
+    const resolveLiveBriefingConfig = (): BriefingConfig =>
+        resolveActiveBriefingConfig(
+            configManager.getConfig().briefingConfig,
             allowedIoRoots,
-        }
+            runtime
+        )
+    registerPrompts(server, prompts, db, teamDb ?? undefined, runtime, context.github, resolveLiveBriefingConfig)
 
-        try {
-            const result = await readResource(
-                uri.href,
-                db,
-                vectorManager,
-                currentConfig.toolFilterConfig,
-                github,
-                scheduler,
-                teamDb ?? undefined,
-                activeBriefingConfig,
-                runtime
-            )
-
-            runtime.metrics.recordResourceRead(uri.href, false)
-
-            const dataStr =
-                typeof result.data === 'string'
-                    ? result.data
-                    : JSON.stringify(result.data, null, 2)
-            return {
-                contents: [
-                    {
-                        uri: uri.href,
-                        mimeType,
-                        text: dataStr,
-                        ...(result.annotations !== undefined
-                            ? { annotations: result.annotations }
-                            : {}),
-                    },
-                ],
-            }
-        } catch (error) {
-            runtime.metrics.recordResourceRead(uri.href, true)
-            throw error
-        }
-    }
-
-    registerResources(server, resources, handleResourceRead, runtime)
-
-    server.server.setRequestHandler('resources/subscribe', (request, extra) => {
-        const sessionId = (extra as { sessionId?: string } | undefined)?.sessionId
-        const transportSessionId =
-            sessionId !== undefined && sessionId !== '' ? sessionId : 'stdio'
-
-        validateResourceSubscription(request.params.uri, runtime)
-
-        globalSubscriptionManager.registerServer(transportSessionId, server)
-        globalSubscriptionManager.subscribe(request.params.uri, transportSessionId)
-        return {}
-    })
-
-    server.server.setRequestHandler('resources/unsubscribe', (request, extra) => {
-        const sessionId = (extra as { sessionId?: string } | undefined)?.sessionId
-        const transportSessionId =
-            sessionId !== undefined && sessionId !== '' ? sessionId : 'stdio'
-        globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)
-        return {}
-    })
-
-    const briefingConfig = configManager.getConfig().briefingConfig
-    registerPrompts(
-        server,
-        prompts,
-        db,
-        teamDb ?? undefined,
-        runtime,
-        context.github,
-        briefingConfig
-    )
-
-    const serverObj = server.server as unknown as {
-        _requestHandlers?: RequestHandlerMap
-    }
-    const requestHandlers = serverObj._requestHandlers
-
-    attachListToolsInterceptor(requestHandlers, configManager, allToolNames)
-    attachCallToolInterceptor(
-        requestHandlers,
-        context,
-        options,
-        prompts,
-        allTools,
-        allToolNames,
-        customToolHandlerConfig
-    )
-
+    const requestHandlers = getRequestHandlers(server.server)
+    attachListToolsInterceptor(requestHandlers, configManager, allToolNames, readOnlyHints)
+    attachCallToolInterceptor(requestHandlers, context, options, prompts, allTools, allToolNames, customToolHandlerConfig, readOnlyHints)
+    attachStdioCloseCleanup(server)
     return server
 }

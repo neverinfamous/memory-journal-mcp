@@ -144,7 +144,6 @@ describe('Cross-Subsystem Integration: MCP Protocol, Subscriptions & Data Lifecy
             teamVectorManager,
             github,
             configManager,
-            scheduler: null,
             allowedIoRoots: [tempDir],
         }
 

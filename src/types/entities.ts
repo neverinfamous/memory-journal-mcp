@@ -2,6 +2,8 @@
  * Memory Journal MCP Server - Database Entity Types
  */
 
+import { createNullProtoRecord } from '../utils/type-guards.js'
+
 /**
  * Entry types for journal entries
  */
@@ -229,6 +231,11 @@ export interface CreateEntryInput {
     validationStatus?: 'passed' | 'failed' | 'none' | undefined
     anchors?: { anchorPath: string; anchorType: string }[] | undefined
     sessionId?: string | undefined
+    /**
+     * Team mirrors only: personal entry ID this team row was shared from (migration 020).
+     * Ignored by databases without the `origin_personal_id` column.
+     */
+    originPersonalId?: number | undefined
 }
 
 /**
@@ -238,3 +245,16 @@ export interface CreateTeamEntryInput extends CreateEntryInput {
     author?: string | undefined
     workspaceId?: string | undefined
 }
+
+/**
+ * Common hallucinated tags -> canonical tags
+ */
+export const TAG_ALIASES: Record<string, string> = createNullProtoRecord<string>({
+    'session_summary': 'session-summary',
+    'team_session_summary': 'session-summary',
+    'team-session-summary': 'session-summary',
+    'team session summary': 'session-summary',
+    'commit_narrative': 'commit-narrative',
+    'bug_fix': 'bug-fix',
+    'feature_implementation': 'feature',
+})

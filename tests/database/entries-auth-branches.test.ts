@@ -373,14 +373,16 @@ describe('calculateImportance — branch coverage', () => {
         context = { db, tagsMgr: createTagsMgr() }
     })
 
-    it('should return 0 score for non-existent entry', () => {
+    it('should return null for a non-existent entry', () => {
         const result = calculateImportance(context, 999)
-        expect(result.score).toBe(0)
+        expect(result).toBeNull()
     })
 
     it('should compute importance for entry with significance and relationships', () => {
+        const now = new Date().toISOString()
         db.exec(`
-            INSERT INTO memory_journal (id, content, timestamp, significance_type) VALUES (1, 'test', '${new Date().toISOString()}', 'decision');
+            INSERT INTO memory_journal (id, content, timestamp, significance_type) VALUES (1, 'test', '${now}', 'decision');
+            INSERT INTO memory_journal (id, content, timestamp) VALUES (2, 'peer 2', '${now}'), (3, 'peer 3', '${now}');
             INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type) VALUES (1, 2, 'references'), (1, 3, 'caused');
         `)
         const result = calculateImportance(context, 1)

@@ -6,22 +6,19 @@ import {
 } from '../../src/handlers/resources/help.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { ResourceContext } from '../../src/handlers/resources/shared.js'
-import * as fs from 'fs'
 
 describe('Help Resource Handlers', () => {
     let db: DatabaseAdapter
 
     beforeAll(async () => {
-        const dbPath = './.test-output/vitest/test-help-resource.db'
-        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
-        db = new DatabaseAdapter(dbPath)
+        // Pre-warm lazy 108-tool module graph outside individual it() timeout budgets
+        await import('../../src/handlers/tools/index.js')
+        db = new DatabaseAdapter(':memory:')
         await db.initialize()
-    })
+    }, 60_000)
 
     afterAll(() => {
         db.close()
-        const dbPath = './.test-output/vitest/test-help-resource.db'
-        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
     })
 
     const getContext = (): ResourceContext => ({ db })
@@ -33,6 +30,8 @@ describe('Help Resource Handlers', () => {
 
         const result = (await rootHelp!.handler('memory://help', getContext())) as any
         expect(result.data.totalGroups).toBeGreaterThan(0)
+        expect(result.data.totalTools).toBe(108)
+        expect(result.data.staticTopics).toEqual(['gotchas', 'templates'])
         expect(result.data.groups.some((g: any) => g.name === 'core')).toBe(true)
         expect(result.data.groups.some((g: any) => g.name === 'search')).toBe(true)
     }, 30000)
@@ -143,6 +142,14 @@ describe('Help Resource Handlers', () => {
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
         const result = (await groupHelp!.handler('memory://help/io', getContext())) as any
+        expect(result.data.group).toBe('io')
+    })
+
+    it('should resolve export help alias to io group', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/export', getContext())) as any
         expect(result.data.group).toBe('io')
     })
 

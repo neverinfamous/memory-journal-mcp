@@ -8,7 +8,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
     parseTestHealth,
-    buildSystemContext,
+    buildBriefingSystemSummary,
+    parseGitCommitLines,
 } from '../../src/handlers/resources/core/briefing/system-section.js'
 
 
@@ -79,12 +80,12 @@ No badges here.
 })
 
 // ============================================================================
-// buildSystemContext
+// buildBriefingSystemSummary
 // ============================================================================
 
-describe('buildSystemContext', () => {
+describe('buildBriefingSystemSummary', () => {
     it('should return a complete SystemContext object', async () => {
-        const result = await buildSystemContext(undefined, undefined, undefined, 42)
+        const result = await buildBriefingSystemSummary(undefined, undefined, undefined, 42)
 
         expect(result).toHaveProperty('version')
         expect(typeof result.version).toBe('string')
@@ -108,7 +109,7 @@ describe('buildSystemContext', () => {
     })
 
     it('should include git history summary', async () => {
-        const result = await buildSystemContext(undefined, undefined, undefined, 42)
+        const result = await buildBriefingSystemSummary(undefined, undefined, undefined, 42)
 
         if (result.gitHistory !== null) {
             expect(result.gitHistory).toHaveProperty('commits')
@@ -117,9 +118,40 @@ describe('buildSystemContext', () => {
     })
 
     it('should format localTime as YYYY-MM-DD HH:MM TZ', async () => {
-        const result = await buildSystemContext(undefined, undefined, undefined, 42)
+        const result = await buildBriefingSystemSummary(undefined, undefined, undefined, 42)
 
         // Should match pattern like "2026-05-25 06:12 EDT" or "2026-05-25 06:12 UTC"
         expect(result.localTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \w+/)
+    })
+
+    it('returns gitHistory: null when commitCount is 0', async () => {
+        const result = await buildBriefingSystemSummary(
+            {
+                commitCount: 0,
+                entryCount: 3,
+                includeTeam: false,
+                issueCount: 0,
+                prCount: 0,
+                prStatusBreakdown: false,
+                workflowCount: 0,
+                workflowStatusBreakdown: false,
+                copilotReviews: false,
+            },
+            undefined,
+            undefined,
+            42
+        )
+
+        expect(result.gitHistory).toBeNull()
+    })
+
+    it('parseGitCommitLines caps commit subjects at 120 chars and preserves short hashes', () => {
+        const longSubject = `feat: ${'x'.repeat(200)}`
+        const summary = parseGitCommitLines(`abcdef12|${longSubject}|2026-11-22\n12345678|fix: small|2026-11-22`, 5)
+        expect(summary.commits).toHaveLength(2)
+        expect(summary.commits[0]?.hash).toBe('abcdef12')
+        expect(summary.commits[0]?.message.length).toBeLessThanOrEqual(180)
+        expect(summary.commits[0]?.message).not.toContain('x'.repeat(150))
+        expect(summary.commits[1]?.hash).toBe('12345678')
     })
 })

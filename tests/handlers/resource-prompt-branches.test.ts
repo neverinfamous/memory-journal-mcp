@@ -135,7 +135,10 @@ describe('Team resources — branch coverage', () => {
                     ]}),
                 getAuthorsForEntries: vi.fn().mockReturnValue(new Map([[1, 'alice']])),
             })
-            const context = createMockContext({ teamDb })
+            const context = createMockContext({
+                teamDb,
+                briefingConfig: { defaultProjectNumber: 1 } as never,
+            })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!
             const result = resource.handler('memory://team/recent', context as never) as Record<
                 string,
@@ -150,7 +153,10 @@ describe('Team resources — branch coverage', () => {
             const teamDb = createMockDb({
                 getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
             })
-            const context = createMockContext({ teamDb })
+            const context = createMockContext({
+                teamDb,
+                briefingConfig: { defaultProjectNumber: 1 } as never,
+            })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!
             const result = resource.handler('memory://team/recent', context as never) as Record<
                 string,

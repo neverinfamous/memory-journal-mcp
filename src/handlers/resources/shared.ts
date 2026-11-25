@@ -5,13 +5,33 @@
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+export {
+    safeDecodeUriSegment,
+    fenceUntrustedInline,
+    sliceUntrustedInline,
+    getBaseUri,
+} from './uri-and-fencing.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
-import { getGitHubIntegration } from '../../github/github-integration/index.js'
-import type { Scheduler } from '../../server/scheduler.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+import { injectTokenEstimate } from '../../observability/token-estimator.js'
+import { fenceNonCanonicalRefOrKey } from '../../utils/security-utils.js'
+import {
+    findCanonicalRegistryKey,
+    getActiveSessionProject,
+    loadProjectRegistryFromConfig,
+    resolveProjectNumberFromPath,
+} from '../../utils/workspace-resolver.js'
+import {
+    uniqueWorkspaceForProject,
+    workspaceForProject,
+} from '../../utils/write-scope.js'
+import {
+    resolveFallbackRegistryRepo,
+    resolveTargetRepoGithub,
+} from './github-repo-resolver.js'
 
 // ============================================================================
 // GitHub Resource Guard
@@ -47,40 +67,12 @@ export async function resolveGitHubRepo(
     const lastModified = new Date().toISOString()
 
     let activeGithub = github
+    let expectedOwner: string | undefined
     if (targetRepo) {
-        if (!/^[a-zA-Z0-9_.-]+(\/[a-zA-Z0-9_.-]+)?$/.test(targetRepo)) {
-            return {
-                data: { error: 'Invalid repository name format' },
-                annotations: { lastModified },
-            }
-        }
-        const registry = config?.projectRegistry
-
-        // Attempt to find exact match, then fallback to just the repo name if owner/repo format was used
-        let registryKey: string = targetRepo
-        if (registry && !Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
-            const parts = targetRepo.split('/')
-            const repoPart = parts[1]
-            if (
-                parts.length === 2 &&
-                repoPart &&
-                Object.prototype.hasOwnProperty.call(registry, repoPart)
-            ) {
-                registryKey = repoPart
-            }
-        }
-
-        if (registry && Object.prototype.hasOwnProperty.call(registry, registryKey)) {
-            const entry = registry[registryKey]
-            if (entry) {
-                activeGithub = getGitHubIntegration(entry.path, runtime)
-            }
-        } else {
-            return {
-                data: { error: `Repository not found in registry: ${targetRepo}` },
-                annotations: { lastModified },
-            }
-        }
+        const target = resolveTargetRepoGithub(config, targetRepo, runtime, lastModified)
+        if ('data' in target) return target
+        activeGithub = target.github
+        expectedOwner = target.expectedOwner
     }
 
     if (!activeGithub) {
@@ -102,37 +94,28 @@ export async function resolveGitHubRepo(
     const owner = repoInfo.owner
     const repo = repoInfo.repo
 
+    if (
+        expectedOwner !== undefined &&
+        owner !== null &&
+        owner !== '' &&
+        owner.toLowerCase() !== expectedOwner.toLowerCase()
+    ) {
+        return {
+            data: {
+                error: `Repository owner mismatch: expected '${expectedOwner}', got '${owner}'`,
+            },
+            annotations: { lastModified },
+        }
+    }
+
     if (!owner || !repo) {
         const registry = config?.projectRegistry
         const hasRegistry = registry && Object.keys(registry).length > 0
 
         // Fallback to the first VALID registered project if no targetRepo was specified
         if (!targetRepo && hasRegistry) {
-            let fallbackKeys = Object.keys(registry)
-            
-            if (config?.defaultProjectNumber !== undefined) {
-                const defaultKey = fallbackKeys.find(key => registry[key]?.project_number === config?.defaultProjectNumber)
-                if (defaultKey) {
-                    fallbackKeys = [defaultKey, ...fallbackKeys.filter(k => k !== defaultKey)]
-                }
-            }
-
-            for (const key of fallbackKeys) {
-                const project = registry[key]
-                if (project) {
-                    const fallbackGithub = getGitHubIntegration(project.path, runtime)
-                    const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
-                    if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {
-                        return {
-                            owner: fallbackRepoInfo.owner,
-                            repo: fallbackRepoInfo.repo,
-                            branch: fallbackRepoInfo.branch ?? null,
-                            lastModified,
-                            github: fallbackGithub,
-                        }
-                    }
-                }
-            }
+            const fallback = await resolveFallbackRegistryRepo(config, runtime, lastModified)
+            if (fallback) return fallback
         }
 
         return {
@@ -141,13 +124,69 @@ export async function resolveGitHubRepo(
                 hint: hasRegistry
                     ? 'Use a repository-specific URI suffix (e.g., memory://github/status/{repo}) for multi-project setups, or ensure the fallback project is a valid git repository.'
                     : 'Run the MCP server from a valid git repository or configure PROJECT_REGISTRY.',
-                ...(repoInfo.branch ? { branch: repoInfo.branch } : {}),
+                ...(repoInfo.branch
+                    ? { branch: fenceNonCanonicalRefOrKey(repoInfo.branch) }
+                    : {}),
             },
             annotations: { lastModified },
         }
     }
 
     return { owner, repo, branch: repoInfo.branch ?? null, lastModified, github: activeGithub }
+}
+
+/**
+ * [INVARIANT] Resource-scoped wrapper around `resolveGitHubRepo` (H21):
+ * when `targetRepo` is omitted in multi-project setups or when `defaultWorkspaceId: 'default'`
+ * has no registered path, resolve via `resourceWorkspace(context)` instead of leaking
+ * the server process CWD's `context.github`.
+ */
+export async function resolveScopedGitHubRepo(
+    context: ResourceContext,
+    targetRepo?: string
+): Promise<GitHubRepoResolved | ResourceResult> {
+    const lastModified = new Date().toISOString()
+    if (targetRepo !== undefined && targetRepo !== '') {
+        return resolveGitHubRepo(context.github, context.briefingConfig, targetRepo, context.runtime)
+    }
+    const ws = resourceWorkspace(context)
+    const reg = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const hasRegistry = reg !== undefined && Object.keys(reg).length > 0
+    const canonicalWs = ws !== 'default' ? findCanonicalRegistryKey(ws, reg) : undefined
+    const defaultHasPath = reg?.['default']?.path !== undefined && reg['default'].path.trim() !== ''
+    const effectiveTarget =
+        canonicalWs ?? (ws === 'default' && defaultHasPath ? 'default' : undefined)
+
+    if (effectiveTarget !== undefined) {
+        const entryPath = reg?.[effectiveTarget]?.path
+        if (entryPath !== undefined && entryPath.trim() !== '') {
+            return resolveGitHubRepo(
+                context.github,
+                context.briefingConfig,
+                effectiveTarget,
+                context.runtime
+            )
+        }
+        return {
+            data: {
+                error: 'GitHub integration not available',
+                hint: `Workspace '${effectiveTarget}' does not have a registered repository path.`,
+            },
+            annotations: { lastModified },
+        }
+    }
+    const configuredDefault =
+        context.briefingConfig?.defaultWorkspaceId?.trim().toLowerCase() === 'default'
+    if (hasRegistry || configuredDefault || (ws !== 'default' && ws !== '*')) {
+        return {
+            data: {
+                error: 'GitHub integration not available',
+                hint: `Workspace '${ws}' does not have a registered repository path.`,
+            },
+            annotations: { lastModified },
+        }
+    }
+    return resolveGitHubRepo(context.github, context.briefingConfig, undefined, context.runtime)
 }
 
 /**
@@ -169,40 +208,54 @@ export interface BriefingConfig {
     /** Number of recent journal entries to include (default: 3) */
     entryCount: number
     /** Number of recent session summaries to display (default: 1) */
-    summaryCount?: number
+    summaryCount?: number | undefined
     /** Include team DB entries in briefing preview (default: false) */
     includeTeam: boolean
-    /** Number of open issues to list with titles; 0 = count only (default: 0) */
+    /** Number of open issues to list with titles; 0 = hide (default: 0) */
     issueCount: number
-    /** Number of PRs to list with titles; 0 = count only (default: 0) */
+    /** Number of PRs to list with titles; 0 = hide unless prStatusBreakdown is true (default: 0) */
     prCount: number
     /** Show PR status breakdown (open/merged/closed) instead of simple count (default: false) */
     prStatusBreakdown: boolean
     /** Number of milestones to list in briefing; 0 = hide (default: 3) */
-    milestoneCount?: number
-    /** Path to the user's rules file (e.g., .gemini/GEMINI.md) for awareness in briefing */
-    rulesFilePath?: string
-    /** Path to the user's skills directory for awareness in briefing */
-    skillsDirPath?: string
-    /** Number of recent workflow runs to list; 0 = latest-only status (default: 0) */
+    milestoneCount?: number | undefined
+    /** Path to the user's rules file (served via memory://rules) */
+    rulesFilePath?: string | undefined
+    /** Path to the user's skills directory (served via memory://skills) */
+    skillsDirPath?: string | undefined
+    /** Number of recent workflow runs to list; 0 = hide unless workflowStatusBreakdown is true (default: 0) */
     workflowCount: number
     /** Show workflow run status breakdown (passing/failing/pending) (default: false) */
     workflowStatusBreakdown: boolean
     /** Aggregate Copilot review state across recent PRs in briefing (default: false) */
     copilotReviews: boolean
     /** Workflow summary string for the memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY) */
-    workflowSummary?: string
+    workflowSummary?: string | undefined
     /** Default GitHub Project number for Kanban resources and issue tools (env: DEFAULT_PROJECT_NUMBER) */
-    defaultProjectNumber?: number
+    defaultProjectNumber?: number | undefined
     /** Default workspace ID for isolating journal entries */
-    defaultWorkspaceId?: string
+    defaultWorkspaceId?: string | undefined
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
-    projectRegistry?: Record<string, ProjectRegistryEntry>
+    projectRegistry?: Record<string, ProjectRegistryEntry> | undefined
 
     /** Allowlisted directory roots for strict filesystem jailing of agent read access */
-    allowedIoRoots?: string[]
+    allowedIoRoots?: string[] | undefined
     /** Minimum significance score for entries to be included in the briefing (default: 0.3) */
-    briefingImportanceThreshold?: number
+    briefingImportanceThreshold?: number | undefined
+    /**
+     * Graph & git pivots in the briefing (default: true): per-entry link degree (`↔N` / `⚪`),
+     * commit→entry refs (`→#id`), recency-scoped active threads and 14-day unlinked rate.
+     * Disable with `--no-briefing-graph`, `BRIEFING_GRAPH=false`, or config `briefingGraph: false`.
+     */
+    graphPivots?: boolean | undefined
+    /**
+     * Insights row (default: true): GitHub repo stats/traffic and the analytics digest.
+     * `false` hides the row AND skips its GitHub API calls and digest query
+     * (`--no-briefing-insights`, `BRIEFING_INSIGHTS=false`, config `briefingInsights: false`).
+     */
+    insights?: boolean | undefined
+    /** Server instruction verbosity level forwarded to `memory://instructions`. */
+    instructionLevel?: 'essential' | 'detailed' | 'full' | undefined
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
@@ -219,21 +272,123 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
     workflowStatusBreakdown: false,
     copilotReviews: false,
     briefingImportanceThreshold: 0.3,
+    graphPivots: true,
+    insights: true,
 }
 
 /**
- * Resource context for handlers that need extended access
+ * Resolve the workspace a resource/prompt read should scope to.
+ * Priority: configured non-`default` workspace > configured project number (unless the
+ * configured workspace is `default`) > session workspace > session project > registered cwd
+ * > `default`.
+ * [INVARIANT] A configured `defaultWorkspaceId: 'default'` must not short-circuit session
+ * context (H1); session is consulted before cwd.
  */
+export function resourceWorkspace(context: {
+    briefingConfig?: Partial<BriefingConfig> | undefined
+    runtime?: ServerRuntime | object | null | undefined
+}): string {
+    const cfg = context.briefingConfig
+    const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const canonicalize = (raw: string): string =>
+        findCanonicalRegistryKey(raw, registry) ?? raw
+    const rawCfgId = cfg?.defaultWorkspaceId?.trim()
+    const configuredDefault = rawCfgId?.toLowerCase() === 'default'
+    if (
+        rawCfgId !== undefined &&
+        rawCfgId.length > 0 &&
+        rawCfgId !== '*' &&
+        !configuredDefault
+    ) {
+        return canonicalize(rawCfgId)
+    }
+    // [INTENT] A configured `default` is never rewritten from the configured project or cwd,
+    // but an active session still wins over it.
+    const sessionCtx = getActiveSessionProject(context.runtime)
+    const uniqueFor = (projNum: number | undefined): string | undefined =>
+        projNum !== undefined && registry !== undefined
+            ? uniqueWorkspaceForProject(projNum, registry)
+            : undefined
+
+    const byConfiguredProject = configuredDefault ? undefined : uniqueFor(cfg?.defaultProjectNumber)
+    if (byConfiguredProject !== undefined) return byConfiguredProject
+    const rawSessionWs = sessionCtx.workspaceId?.trim()
+    if (rawSessionWs !== undefined && rawSessionWs.length > 0 && rawSessionWs !== '*') {
+        return canonicalize(rawSessionWs)
+    }
+    const bySessionProject = uniqueFor(sessionCtx.projectNumber)
+    if (bySessionProject !== undefined) return bySessionProject
+    if (
+        !configuredDefault &&
+        registry !== undefined &&
+        process.env['NODE_ENV'] !== 'test' &&
+        process.env['VITEST'] !== 'true'
+    ) {
+        const byCwd = uniqueFor(resolveProjectNumberFromPath(process.cwd(), registry))
+        if (byCwd !== undefined) return byCwd
+    }
+    return 'default'
+}
+
+/**
+ * Resolve the positive `project_number` active for `wsId` so team and analytics
+ * resources sharing a workspace key stay isolated by project.
+ */
+export function resourceProjectNumber(
+    context: {
+        briefingConfig?: Partial<BriefingConfig> | undefined
+        runtime?: ServerRuntime | object | null | undefined
+    },
+    wsId: string
+): number | undefined {
+    const cfg = context.briefingConfig
+    const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const canonical =
+        registry !== undefined ? (findCanonicalRegistryKey(wsId, registry) ?? wsId) : wsId
+    const registryProject = registry?.[canonical]?.project_number
+    if (registryProject !== undefined) return registryProject
+
+    const sessionCtx = getActiveSessionProject(context.runtime)
+    const sessionWs = sessionCtx.workspaceId?.trim()
+    const canonicalSessionWs =
+        sessionWs !== undefined && sessionWs !== '' && sessionWs !== '*'
+            ? registry !== undefined
+                ? (findCanonicalRegistryKey(sessionWs, registry) ?? sessionWs)
+                : sessionWs
+            : undefined
+
+    const matchesOwner = (projNum: number): boolean => {
+        try {
+            const owner = workspaceForProject(projNum, registry)
+            return owner === undefined || owner.toLowerCase() === canonical.toLowerCase()
+        } catch {
+            return false
+        }
+    }
+
+    if (
+        sessionCtx.projectNumber !== undefined &&
+        (canonicalSessionWs === undefined ||
+            canonicalSessionWs.toLowerCase() === canonical.toLowerCase()) &&
+        matchesOwner(sessionCtx.projectNumber)
+    ) {
+        return sessionCtx.projectNumber
+    }
+    if (cfg?.defaultProjectNumber !== undefined && matchesOwner(cfg.defaultProjectNumber)) {
+        return cfg.defaultProjectNumber
+    }
+    return undefined
+}
+
 export interface ResourceContext {
     db: IDatabaseAdapter
-    teamDb?: IDatabaseAdapter
-    vectorManager?: VectorSearchManager
-    filterConfig?: ToolFilterConfig | null
-    github?: GitHubIntegration | null
-    scheduler?: Scheduler | null
-    briefingConfig?: BriefingConfig
-    runtime?: ServerRuntime
-    resourceCount?: number
+    teamDb?: IDatabaseAdapter | undefined
+    vectorManager?: VectorSearchManager | undefined
+    filterConfig?: ToolFilterConfig | null | undefined
+    github?: GitHubIntegration | null | undefined
+    briefingConfig?: BriefingConfig | undefined
+    runtime?: ServerRuntime | undefined
+    resourceCount?: number | undefined
 }
 
 /**
@@ -242,8 +397,8 @@ export interface ResourceContext {
 export interface ResourceResult {
     data: unknown
     annotations?: {
-        lastModified?: string // ISO 8601 timestamp
-    }
+        lastModified?: string | undefined // ISO 8601 timestamp
+    } | undefined
 }
 
 /**
@@ -278,4 +433,12 @@ export interface InternalResourceDef {
 export function milestoneCompletionPct(openIssues: number, closedIssues: number): number {
     const total = openIssues + closedIssues
     return total > 0 ? Math.round((closedIssues / total) * 100) : 0
+}
+
+/**
+ * Attach `_meta.tokenEstimate` to a JSON resource payload via `injectTokenEstimate`, populating
+ * `serializedPayloadCache` in one pass so `createResourceReadHandler` avoids a second stringify.
+ */
+export function withResourceTokenMeta(payload: object): unknown {
+    return injectTokenEstimate(payload)
 }

@@ -28,6 +28,7 @@ export interface IssueDetails extends GitHubIssue {
  * GitHub PR details (extended)
  */
 export interface PullRequestDetails extends GitHubPullRequest {
+    nodeId?: string
     body: string | null
     draft: boolean
     headBranch: string
@@ -51,6 +52,7 @@ export interface LocalGitStatus {
     untracked: number
     isClean: boolean
     resolvedIssues?: number[]
+    error?: string
 }
 
 /** Snapshot of rate limit state from response headers */

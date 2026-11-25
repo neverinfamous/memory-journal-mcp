@@ -126,10 +126,9 @@ describe('DatabaseAdapter', () => {
     // ========================================================================
 
     describe('calculateImportance', () => {
-        it('should return 0 for nonexistent entry', () => {
+        it('should return null for nonexistent entry', () => {
             const result = db.calculateImportance(99999)
-            expect(result.score).toBe(0)
-            expect(result.breakdown.significance).toBe(0)
+            expect(result).toBeNull()
         })
 
         it('should include recency component for fresh entries', () => {
@@ -240,7 +239,7 @@ describe('DatabaseAdapter', () => {
             const entry = db.createEntry({ content: 'To soft delete' })
             const result = db.deleteEntry(entry.id)
 
-            expect(result).toBe(true)
+            expect(result.success).toBe(true)
             expect(db.getEntryById(entry.id)).toBeNull()
             expect(db.getEntryByIdIncludeDeleted(entry.id)).not.toBeNull()
         })
@@ -249,12 +248,12 @@ describe('DatabaseAdapter', () => {
             const entry = db.createEntry({ content: 'To permanently delete' })
             const result = db.deleteEntry(entry.id, true)
 
-            expect(result).toBe(true)
+            expect(result.success).toBe(true)
             expect(db.getEntryByIdIncludeDeleted(entry.id)).toBeNull()
         })
 
         it('should return false for nonexistent entry', () => {
-            expect(db.deleteEntry(99999)).toBe(false)
+            expect(db.deleteEntry(99999).success).toBe(false)
         })
 
         it('should permanently delete a soft-deleted entry', () => {
@@ -262,7 +261,7 @@ describe('DatabaseAdapter', () => {
             db.deleteEntry(entry.id) // soft delete
             const result = db.deleteEntry(entry.id, true) // permanent delete
 
-            expect(result).toBe(true)
+            expect(result.success).toBe(true)
             expect(db.getEntryByIdIncludeDeleted(entry.id)).toBeNull()
         })
     })
@@ -711,7 +710,7 @@ describe('DatabaseAdapter', () => {
     // ========================================================================
 
     describe('backup edge cases', () => {
-        it('should return empty array when backups directory does not exist', () => {
+        it('should return empty array when backups directory does not exist', async () => {
             const fs = require('node:fs')
             const isolatedDir = './test-server/test-isolation-dir'
             if (!fs.existsSync(isolatedDir)) {
@@ -720,7 +719,7 @@ describe('DatabaseAdapter', () => {
 
             // Use a fresh adapter in a unique directory so its 'backups' dir doesn't exist
             const tempDb = new DatabaseAdapter(`${isolatedDir}/test-no-backups.db`)
-            tempDb.initialize()
+            await tempDb.initialize()
 
             const backups = tempDb.listBackups()
             expect(backups).toEqual([])

@@ -1,15 +1,21 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { isRecord } from '../../../utils/type-guards.js'
+import { healSortByField, healIncludeArchivedField } from '../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     EntryOutputSchema,
     RelationshipOutputSchema,
     ImportanceBreakdownSchema,
+    MAX_CONTENT_LENGTH,
+    coerceFiniteNumberString,
+    coerceIntString,
     relaxedNumber,
     healAgentHallucinations,
     StrictProjectNumberSchema,
     preprocessRelationshipItem,
+    relationshipTypeEnumError,
 } from '../schemas.js'
 
 // ============================================================================
@@ -25,56 +31,60 @@ export const CreateEntrySchema = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-        content: z.string().min(1),
-        tags: z.array(z.string()).optional(),
+        content: z.string().min(1).max(MAX_CONTENT_LENGTH),
+        tags: z.array(z.string().max(100)).max(100).optional(),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-        workspace_id: z.string().min(1, 'workspace_id (repository name) is required'),
-        project_number: z.number().int().optional(),
-        project_owner: z.string().optional(),
-        issue_number: z.number().optional(),
-        issue_url: z.string().optional(),
-        pr_number: z.number().optional(),
-        pr_url: z.string().optional(),
+        workspace_id: z.string().min(1, 'workspace_id (repository name) is required').max(255).optional(),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        project_owner: z.string().max(255).optional(),
+        issue_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+        issue_url: z.string().max(1000).optional(),
+        pr_number: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+        pr_url: z.string().max(1000).optional(),
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-        workflow_run_id: z.number().optional(),
-        workflow_name: z.string().optional(),
-        workflow_status: z.string().optional(),
-        impact_score: z.number().min(0).max(1).optional(),
-        trust_score: z.number().min(0).max(1).optional(),
+        workflow_run_id: z.preprocess(coerceIntString, z.number().int().positive()).optional(),
+        workflow_name: z.string().max(255).optional(),
+        workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
+        impact_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
+        trust_score: z.preprocess(coerceFiniteNumberString, z.number().min(0).max(1)).optional(),
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),
         anchors: z.array(z.object({
-            anchor_path: z.string(),
-            anchor_type: z.string(),
+            anchor_path: z.string().max(500),
+            anchor_type: z.string().max(64),
             status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional().default('pending'),
-        })).optional(),
+        }).strict()).max(100).optional(),
         share_with_team: z.boolean().optional().default(false),
-        auto_context: z.string().optional(),
-        session_id: z.string().optional(),
+        auto_link: z.boolean().optional(),
+        auto_context: z.string().max(100_000).optional(),
+        session_id: z.string().max(255).optional(),
         relationships: z.array(
             z.preprocess(
                 preprocessRelationshipItem,
                 z.object({
-                    targetId: z.number(),
+                    targetId: z.number().int().positive(),
                     relationType: z
-                        .enum([
-                            'evolves_from',
-                            'references',
-                            'implements',
-                            'clarifies',
-                            'response_to',
-                            'blocked_by',
-                            'resolved',
-                            'resolves',
-                            'caused',
-                            'relates_to',
-                            'depends_on',
-                        ])
+                        .enum(
+                            [
+                                'evolves_from',
+                                'references',
+                                'implements',
+                                'clarifies',
+                                'response_to',
+                                'blocked_by',
+                                'resolved',
+                                'resolves',
+                                'caused',
+                                'relates_to',
+                                'depends_on',
+                            ],
+                            { error: relationshipTypeEnumError }
+                        )
                         .optional()
                         .default('references'),
-                })
+                }).strict()
             )
-        ).optional(),
+        ).max(100).optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content ?? '';
@@ -96,8 +106,8 @@ export const CreateEntrySchema = z.preprocess(
         }
         if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
             try {
-                const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
-                const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
+                const ac: unknown = JSON.parse(data.auto_context || '{}');
+                const commits = isRecord(ac) ? ac['commits'] : undefined;
                 if (!Array.isArray(commits) || commits.length === 0) {
                     ctx.addIssue({
                         code: "custom",
@@ -143,7 +153,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
         ),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.string().optional(),
-        workspace_id: z.string().min(1, 'workspace_id is required').describe('REQUIRED. The repository name (e.g. adamic). Do not use numeric project IDs or "workspace" as the key.'),
+        workspace_id: z.string().min(1, 'workspace_id is required').describe('REQUIRED. Repository workspace name (e.g. "my-repo"). Do not use numeric project IDs or "workspace" as the key.'),
         project_number: relaxedNumber().optional().describe(
             'Numeric project ID (e.g., 1, 14). This is now optional; workspace_id is preferred.'
         ),
@@ -163,8 +173,14 @@ export const CreateEntrySchemaMcp = z.preprocess(
             anchor_path: z.string(),
             anchor_type: z.string(),
             status: z.string().optional().default('pending'),
-        })).optional().describe('Files or lines of code that this entry is fundamentally anchored to. If the anchor becomes stale/invalid, the entry importance score drops.'),
+        })).optional().describe('Files or symbols linked to this entry (`[{ anchor_path: "src/foo.ts", anchor_type: "file" }]`). Stale/invalid anchors reduce entry importance.'),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
+        auto_link: z
+            .boolean()
+            .optional()
+            .describe(
+                'When true and relationships is omitted, automatically links up to 2 high-confidence same-session or shared-anchor entries (parity with CLI --auto-link).'
+            ),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
         session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
         relationships: z.array(
@@ -175,7 +191,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
                     relationType: z.string().optional().default('references'),
                 })
             )
-        ).optional().describe('Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'),
+        ).optional().describe('Optional array of `{ targetId, relationType }` links to previous entries. Canonical types: "evolves_from", "references", "implements", "clarifies", "response_to", "blocked_by", "resolved", "caused"'),
     }).strict()
 )
 
@@ -186,22 +202,70 @@ export const CreateEntryOutputSchema = z
         entry: EntryOutputSchema.optional(),
         sharedWithTeam: z.boolean().optional(),
         author: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
+        relationshipWarnings: z.array(z.string()).optional(),
+        suggested_links: z
+            .array(
+                z.object({
+                    targetId: z.number().describe('Existing entry id to link to'),
+                    relationType: z.string().describe('Suggested canonical relationship type'),
+                    reason: z
+                        .enum(['same-session', 'shared-anchor', 'semantic'])
+                        .describe('Why this target was suggested'),
+                    preview: z.string().describe('Short fenced preview of the target entry'),
+                })
+            )
+            .optional()
+            .describe(
+                'Present only when the entry was created without relationships: candidate link targets (same session, shared file anchors, semantic neighbors). Link with mj.relationships.linkEntries / link_entries to keep the entry out of the auto-prune orphan funnel.'
+            ),
     })
     .extend(ErrorFieldsMixin.shape)
 
-export const GetEntryByIdSchema = z.object({
-    entry_id: z.number().int(),
-    include_relationships: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+function preprocessGetEntryById(val: unknown): unknown {
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
+    let modified = false
+    if (typeof obj['source'] === 'string') {
+        const normalizedSource = obj['source'].trim().toLowerCase()
+        if (normalizedSource !== obj['source']) {
+            obj['source'] = normalizedSource
+            modified = true
+        }
+    }
+    if (obj['entry_id'] === undefined && typeof obj['uri'] === 'string') {
+        const match = /^memory:\/\/(?:entries|entry)\/([1-9]\d*)$/i.exec(obj['uri'].trim())
+        if (match?.[1] !== undefined) {
+            const parsed = Number(match[1])
+            if (Number.isSafeInteger(parsed) && String(parsed) === match[1]) {
+                obj['entry_id'] = parsed
+                delete obj['uri']
+                return obj
+            }
+        }
+    }
+    return modified ? obj : val
+}
+
+export const GetEntryByIdSchema = z.preprocess(
+    preprocessGetEntryById,
+    z.object({
+        entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
+        include_relationships: z.boolean().optional().default(true),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+        source: z.enum(['personal', 'team']).optional(),
+    }).strict()
+)
 
 export const GetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('The numeric ID of the entry to retrieve'),
     include_relationships: z.boolean().optional().default(true).describe('If true, includes all linked relationships (causal, related) in the response'),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key. [ANTI-HALLUCINATION] If an entry returns RESOURCE_NOT_FOUND, it might belong to another workspace. Set workspace_id: "*" to search globally.'),
+    source: z.string().optional().describe("Store to read from: 'personal' (default) or 'team' (delegates to team_get_entry_by_id with Team RBAC)"),
+    uri: z.string().optional(),
 })
 
 export const EntryByIdOutputSchema = z
@@ -215,48 +279,96 @@ export const EntryByIdOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-export const GetRecentEntriesSchema = z.object({
-    limit: z.number().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-    is_personal: z.boolean().optional(),
-    sort_by: z
-        .enum(['timestamp', 'importance'])
-        .optional()
-        .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
-    cursor: z.string().optional(),
-    offset: z.number().int().min(0).optional().default(0),
-    include_archived: z.boolean().optional().default(false),
-})
+function preprocessSortByOnly(val: unknown): unknown {
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
+    let modified = false
+    if (healSortByField(obj)) modified = true
+    if (healIncludeArchivedField(obj)) modified = true
+    if (typeof obj['cursor'] === 'string') {
+        const trimmed = obj['cursor'].trim()
+        if (/^(?:0|[1-9]\d*)$/.test(trimmed)) {
+            const parsed = Number(trimmed)
+            if (Number.isSafeInteger(parsed) && String(parsed) === trimmed) {
+                const existingOffset = obj['offset']
+                const offsetStr =
+                    typeof existingOffset === 'string' || typeof existingOffset === 'number'
+                        ? String(existingOffset).trim()
+                        : undefined
+                if (existingOffset === undefined) {
+                    obj['offset'] = parsed
+                    Reflect.deleteProperty(obj, 'cursor')
+                    modified = true
+                } else if (offsetStr === trimmed) {
+                    Reflect.deleteProperty(obj, 'cursor')
+                    modified = true
+                }
+            }
+        }
+    }
+    return modified ? obj : val
+}
 
-export const GetRecentEntriesSchemaMcp = z.object({
-    limit: relaxedNumber()
-        .optional()
-        .default(10)
-        .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),
-    project_number: relaxedNumber().optional(),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-    is_personal: z.boolean().optional(),
-    sort_by: z
-        .string()
-        .optional()
-        .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
-    cursor: z.string().optional(),
-    offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
-    include_archived: z.boolean().optional().default(false),
-})
+export const GetRecentEntriesSchema = z.preprocess(
+    preprocessSortByOnly,
+    z.object({
+        limit: z.preprocess(coerceIntString, z.number().int().min(1).max(MAX_SEARCH_LIMIT)).optional().default(10),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+        is_personal: z.boolean().optional(),
+        sort_by: z
+            .enum(['timestamp', 'importance'])
+            .optional()
+            .default('timestamp')
+            .describe('Sort results by timestamp (default) or importance score'),
+        cursor: z.string().max(500).optional(),
+        offset: z.preprocess(coerceIntString, z.number().int().min(0)).optional().default(0),
+        include_archived: z.boolean().optional().default(false),
+    })
+        .strict()
+        .superRefine((data, ctx) => {
+            if (data.cursor !== undefined && /^(?:0|[1-9]\d*)$/.test(data.cursor.trim())) {
+                ctx.addIssue({
+                    code: 'custom',
+                    message: 'Conflicting cursor and offset values specified',
+                    path: ['cursor'],
+                })
+            }
+        })
+)
+
+export const GetRecentEntriesSchemaMcp = z.preprocess(
+    preprocessSortByOnly,
+    z.object({
+        limit: relaxedNumber()
+            .optional()
+            .default(10)
+            .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),
+        project_number: relaxedNumber().optional(),
+        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+        is_personal: z.boolean().optional(),
+        sort_by: z
+            .string()
+            .optional()
+            .default('timestamp')
+            .describe('Sort results by timestamp (default) or importance score'),
+        cursor: z.string().max(500).optional(),
+        offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
+        include_archived: z.boolean().optional().default(false),
+    })
+)
 
 // ============================================================================
 // History Schemas
 // ============================================================================
 
-export const GetEntryHistorySchema = z.object({
-    entry_id: z.number().int(),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const GetEntryHistorySchema = z
+    .object({
+        entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 export const GetEntryHistorySchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('The numeric ID of the entry'),
@@ -298,9 +410,33 @@ export const TagsListOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-export const TestSimpleSchema = z.object({
-    message: z.string().optional().default('Hello'),
+export const GetRecentEntriesOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entries: z.array(EntryOutputSchema).optional(),
+        count: z.number().optional(),
+        next_cursor: z.string().optional(),
+        hasMore: z.boolean().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const ListTagsSchema = z
+    .object({
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
+
+export const ListTagsSchemaMcp = z.object({
+    project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional(),
 })
+
+export const TestSimpleSchema = z
+    .object({
+        message: z.string().optional().default('Hello'),
+    })
+    .strict()
 
 export const TestSimpleOutputSchema = z
     .object({

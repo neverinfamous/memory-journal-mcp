@@ -1,13 +1,54 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { isRecord } from '../../../utils/type-guards.js'
 import {
     ENTRY_TYPES,
     SOURCE_FORMATS,
-    DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    isValidCalendarDate,
     EntryOutputSchema,
+    coerceIntString,
     relaxedNumber,
+    StrictProjectNumberSchema,
 } from '../schemas.js'
+
+const DIR_ALIAS_KEYS = ['path', 'filepath', 'target_dir', 'dir'] as const
+
+function preprocessExportEntries(val: unknown): unknown {
+    if (!isRecord(val)) return val
+    if (val['type'] !== undefined && val['format'] === undefined) {
+        const obj: Record<string, unknown> = { ...val, format: val['type'] }
+        delete obj['type']
+        return obj
+    }
+    return val
+}
+
+function preprocessDirAlias(
+    val: unknown,
+    dirKey: 'output_dir' | 'source_dir',
+    remapSourceFormat = false
+): unknown {
+    if (!isRecord(val)) return val
+    const obj: Record<string, unknown> = { ...val }
+    let modified = false
+    if (obj[dirKey] === undefined) {
+        for (const key of DIR_ALIAS_KEYS) {
+            if (obj[key] !== undefined) {
+                obj[dirKey] = obj[key]
+                Reflect.deleteProperty(obj, key)
+                modified = true
+                break
+            }
+        }
+    }
+    if (remapSourceFormat && obj['source'] !== undefined && obj['source_format'] === undefined) {
+        obj['source_format'] = obj['source']
+        delete obj['source']
+        modified = true
+    }
+    return modified ? obj : val
+}
 
 // ============================================================================
 // Export Entries Schemas
@@ -15,56 +56,27 @@ import {
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const ExportEntriesSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if ('type' in obj && !('format' in obj)) {
-                obj['format'] = obj['type'];
-                delete obj['type'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    preprocessExportEntries,
     z.object({
 
     format: z.enum(['json', 'markdown']).optional().default('json'),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
-    tags: z.array(z.string()).optional(),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    entry_types: z.array(z.enum(ENTRY_TYPES)).max(50).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
     limit: z
-        .number()
-        .max(5000)
+        .preprocess(coerceIntString, z.number().int().min(1).max(5000))
         .optional()
         .default(100)
         .describe('Maximum entries to export (default: 100)'),
-    project_number: z.number().int().optional(),
-    workspace_id: z.string().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().max(255).optional(),
     }).strict()
 )
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 export const ExportEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if ('type' in obj && !('format' in obj)) {
-                obj['format'] = obj['type'];
-                delete obj['type'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    preprocessExportEntries,
     z.object({
 
     format: z.string().optional().default('json').describe('Export format (json or markdown). Anti-Hallucination Hint: Do NOT use type, use format.'),
@@ -72,7 +84,7 @@ export const ExportEntriesSchemaMcp = z.preprocess(
     end_date: z.string().optional(),
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
-    limit: relaxedNumber().optional()
+    limit: relaxedNumber()
         .optional()
         .default(100)
         .describe('Maximum entries to export (default: 100)'),
@@ -102,61 +114,23 @@ export const ExportEntriesOutputSchema = z
 
 /** Strict schema — handler validation */
 export const ExportMarkdownSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (!('output_dir' in obj)) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
-                        obj['output_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'output_dir'),
     z.object({
 
-    output_dir: z.string().min(1),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
-    tags: z.array(z.string()).optional(),
-    limit: z.number().max(500).optional().default(100),
-    project_number: z.number().int().optional(),
-    workspace_id: z.string().optional(),
+    output_dir: z.string().min(1).max(500),
+    start_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().refine(isValidCalendarDate, DATE_FORMAT_MESSAGE).optional(),
+    entry_types: z.array(z.enum(ENTRY_TYPES)).max(50).optional(),
+    tags: z.array(z.string().max(100)).max(100).optional(),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().max(255).optional(),
     }).strict()
 )
 
 /** Relaxed schema — MCP registration */
 export const ExportMarkdownSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (!('output_dir' in obj)) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
-                        obj['output_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'output_dir'),
     z.object({
 
     output_dir: z.string().optional().describe('Target directory for .md files. Anti-Hallucination Hint: Do NOT use path or filepath, use output_dir.'),
@@ -164,7 +138,7 @@ export const ExportMarkdownSchemaMcp = z.preprocess(
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     entry_types: z.array(z.string()).optional().describe('Filter by entry types'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
-    limit: relaxedNumber().optional()
+    limit: relaxedNumber()
         .optional()
         .default(100)
         .describe('Max entries to export (default: 100, max: 500)'),
@@ -189,58 +163,20 @@ export const ExportMarkdownOutputSchema = z
 
 /** Strict schema — handler validation */
 export const ImportMarkdownSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (!('source_dir' in obj)) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir'),
     z.object({
 
-    source_dir: z.string().min(1),
+    source_dir: z.string().min(1).max(500),
     dry_run: z.boolean().optional().default(false),
-    limit: z.number().max(500).optional().default(100),
-    project_number: z.number().int().optional(),
-    workspace_id: z.string().optional(),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().max(255).optional(),
     }).strict()
 )
 
 /** Relaxed schema — MCP registration */
 export const ImportMarkdownSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (!('source_dir' in obj)) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir'),
     z.object({
 
     source_dir: z.string().optional().describe('Directory containing .md files to import. Anti-Hallucination Hint: Do NOT use path or filepath, use source_dir.'),
@@ -249,7 +185,7 @@ export const ImportMarkdownSchemaMcp = z.preprocess(
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    limit: relaxedNumber().optional()
+    limit: relaxedNumber()
         .optional()
         .default(100)
         .describe('Max files to process (default: 100, max: 500)'),
@@ -284,70 +220,22 @@ export const ImportMarkdownOutputSchema = z
 
 /** Strict schema — handler validation */
 export const ImportExternalSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (!('source_dir' in obj)) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-            if ('source' in obj && !('source_format' in obj)) {
-                obj['source_format'] = obj['source'];
-                delete obj['source'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir', true),
     z.object({
 
-    source_dir: z.string().min(1),
+    source_dir: z.string().min(1).max(500),
     source_format: z.enum(SOURCE_FORMATS),
     dry_run: z.boolean().optional().default(false),
-    limit: z.number().max(500).optional().default(100),
+    limit: z.preprocess(coerceIntString, z.number().int().min(1).max(500)).optional().default(100),
     default_entry_type: z.enum(ENTRY_TYPES).optional(),
-    project_number: z.number().int().optional(),
-    workspace_id: z.string().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().max(255).optional(),
     }).strict()
 )
 
 /** Relaxed schema — MCP registration */
 export const ImportExternalSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-
-            if (!('source_dir' in obj)) {
-                for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
-                    if (key in obj) {
-                        obj['source_dir'] = obj[key];
-                        Reflect.deleteProperty(obj, key);
-                        modified = true;
-                        break;
-                    }
-                }
-            }
-            if ('source' in obj && !('source_format' in obj)) {
-                obj['source_format'] = obj['source'];
-                delete obj['source'];
-                modified = true;
-            }
-
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => preprocessDirAlias(val, 'source_dir', true),
     z.object({
 
     source_dir: z.string().optional().describe('Directory containing files to import. Anti-Hallucination Hint: Do NOT use path or filepath, use source_dir.'),
@@ -357,7 +245,7 @@ export const ImportExternalSchemaMcp = z.preprocess(
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    limit: relaxedNumber().optional()
+    limit: relaxedNumber()
         .optional()
         .default(100)
         .describe('Max files to process (default: 100, max: 500)'),

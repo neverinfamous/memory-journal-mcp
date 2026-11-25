@@ -13,15 +13,30 @@
 
 import { test, expect } from './test-fixture.js'
 import { createClient, callToolRaw } from './helpers.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 test.describe.configure({ mode: 'serial' })
+
+let sharedClient: Client | undefined
+
+test.beforeAll(async () => {
+    sharedClient = await createClient()
+})
+
+test.afterAll(async () => {
+    if (sharedClient) {
+        await sharedClient.close()
+        sharedClient = undefined
+    }
+})
 
 /**
  * Send {} to a tool and assert we get a structured handler error,
  * not a raw MCP error frame.
  */
 async function assertZodHandlerError(toolName: string) {
-    const client = await createClient()
+    const client = sharedClient ?? (await createClient())
+    const shouldClose = sharedClient === undefined
     try {
         const response = await callToolRaw(client, toolName, {})
 
@@ -62,7 +77,9 @@ async function assertZodHandlerError(toolName: string) {
             )
         }
     } finally {
-        await client.close()
+        if (shouldClose) {
+            await client.close()
+        }
     }
 }
 

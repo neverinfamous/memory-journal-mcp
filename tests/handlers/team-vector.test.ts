@@ -28,6 +28,7 @@ const callTool = (
         github,
         config ??
             ({
+                defaultProjectNumber: 1,
                 runtime: {
                     maintenanceManager: {
                         withActiveJob: (fn: any) => fn(),

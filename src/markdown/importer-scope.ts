@@ -1,0 +1,396 @@
+/**
+ * memory-journal-mcp — Markdown Importer Scope Helpers
+ *
+ * Isolates workspace/project validation and pairing rules for markdown imports.
+ */
+
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
+import type { EntryType, JournalEntry, SignificanceType } from '../types/index.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
+import { ValidationError } from '../types/errors.js'
+import { logger } from '../utils/logger.js'
+import {
+    MAX_CONTENT_LENGTH,
+    normalizeSignificanceValue,
+} from '../handlers/tools/schemas/constants-and-primitives.js'
+import {
+    findCanonicalRegistryKey,
+} from '../utils/workspace-resolver.js'
+import { resolveProjectContextWithRegistry } from '../utils/workspace-resolver-pure.js'
+import { effectiveWorkspace } from '../database/workspace-scope.js'
+import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
+import type { ImportOptions, ImportResult, ParsedFile } from './importer.js'
+
+export interface ImportedVectorItem {
+    entryId: number
+    filename: string
+    workspaceId: string | undefined
+    entry?: JournalEntry
+}
+
+/**
+ * [INVARIANT] An explicit caller workspace — including the real `default` workspace — locks
+ * ownership checks. Only `*` and blanks are unscoped.
+ */
+function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
+    if (workspaceId === undefined) return undefined
+    const trimmed = workspaceId.trim()
+    if (trimmed === '' || trimmed === '*') return undefined
+    return trimmed
+}
+
+function sameRegistryWorkspace(
+    left: string,
+    right: string,
+    registry: Parameters<typeof findCanonicalRegistryKey>[1]
+): boolean {
+    const leftKey = findCanonicalRegistryKey(left, registry)
+    const rightKey = findCanonicalRegistryKey(right, registry)
+    if (leftKey !== undefined && rightKey !== undefined) {
+        return leftKey.toLowerCase() === rightKey.toLowerCase()
+    }
+    return left === right
+}
+
+function assertExplicitImportScopeMatchesRegistry(
+    explicitWs: string,
+    rawProjectNumber: number,
+    effectiveRegistry: NonNullable<ReturnType<typeof activeProjectRegistry>>
+): void {
+    const owner = Object.entries(effectiveRegistry).find(
+        ([, entry]) => entry.project_number === rawProjectNumber
+    )?.[0]
+    if (owner !== undefined && !sameRegistryWorkspace(explicitWs, owner, effectiveRegistry)) {
+        throw new ValidationError(
+            `project_number ${String(rawProjectNumber)} belongs to workspace '${owner}', not '${explicitWs}'.`
+        )
+    }
+    const canonicalExplicit = findCanonicalRegistryKey(explicitWs, effectiveRegistry)
+    const registeredProject =
+        canonicalExplicit !== undefined ? effectiveRegistry[canonicalExplicit]?.project_number : undefined
+    if (registeredProject !== undefined && registeredProject !== rawProjectNumber) {
+        throw new ValidationError(
+            `project_number ${String(rawProjectNumber)} does not match registered project ${String(registeredProject)} for workspace '${explicitWs}'.`
+        )
+    }
+    pairStoredScope(explicitWs, rawProjectNumber, effectiveRegistry)
+}
+
+export function resolveImportedFileContext(
+    file: ParsedFile,
+    options: ImportOptions
+): { effectiveWsId: string | undefined; effectiveProjNum: number | undefined } {
+    const { metadata } = file
+    const rawWorkspaceId = options.workspaceId ?? metadata.workspace_id
+    if (rawWorkspaceId?.trim() === '*' || metadata.workspace_id?.trim() === '*') {
+        throw new ValidationError("Workspace '*' cannot be used for import writes")
+    }
+
+    const fileProject = metadata.project_number
+    if (
+        (options.project_number !== undefined &&
+            (!Number.isSafeInteger(options.project_number) || options.project_number <= 0)) ||
+        (fileProject !== undefined &&
+            (typeof fileProject !== 'number' || !Number.isSafeInteger(fileProject) || fileProject <= 0))
+    ) {
+        throw new ValidationError('project_number must be a positive integer')
+    }
+
+    const effectiveRegistry = activeProjectRegistry(options.config?.projectRegistry)
+    const lockedWorkspace = concreteCallerWorkspace(options.workspaceId)
+    const fileWorkspace = concreteCallerWorkspace(metadata.workspace_id)
+    if (
+        lockedWorkspace !== undefined &&
+        fileWorkspace !== undefined &&
+        !sameRegistryWorkspace(lockedWorkspace, fileWorkspace, effectiveRegistry)
+    ) {
+        throw new ValidationError(
+            `Frontmatter workspace_id '${fileWorkspace}' conflicts with target workspace '${lockedWorkspace}'.`
+        )
+    }
+    if (
+        options.project_number !== undefined &&
+        fileProject !== undefined &&
+        options.project_number !== fileProject
+    ) {
+        throw new ValidationError(
+            `Frontmatter project_number ${String(fileProject)} conflicts with target project_number ${String(options.project_number)}.`
+        )
+    }
+
+    const explicitWs = lockedWorkspace ?? fileWorkspace
+    const rawProjectNumber = options.project_number ?? fileProject
+    if (explicitWs !== undefined && rawProjectNumber !== undefined && effectiveRegistry !== undefined) {
+        assertExplicitImportScopeMatchesRegistry(explicitWs, rawProjectNumber, effectiveRegistry)
+    }
+
+    const effectiveInputWs =
+        concreteCallerWorkspace(options.workspaceId) ?? concreteCallerWorkspace(metadata.workspace_id)
+    const resolutionInput = {
+        ...(effectiveInputWs !== undefined ? { workspace_id: effectiveInputWs } : {}),
+        ...(rawProjectNumber !== undefined ? { project_number: rawProjectNumber } : {}),
+    }
+    const resolved = resolveProjectContextWithRegistry(
+        resolutionInput,
+        options.config,
+        effectiveRegistry
+    )
+    const paired = pairStoredScope(resolved.workspaceId, resolved.projectNumber, effectiveRegistry)
+    const effectiveWsId = (paired.workspaceId ?? resolved.workspaceId).trim()
+    if (effectiveWsId === '*') {
+        throw new ValidationError(
+            "Wildcard workspace_id '*' cannot be used when importing entries. Specify a concrete workspace_id."
+        )
+    }
+    return {
+        effectiveWsId,
+        effectiveProjNum: paired.projectNumber ?? undefined,
+    }
+}
+
+import {
+    assertImportAuthorOwnership,
+    createImportBatchAuthorCache,
+    resolveCanonicalImportAuthor,
+    resolveCanonicalImportAuthorCached,
+    type ImportBatchAuthorCache,
+} from './importer-author.js'
+
+export {
+    assertImportAuthorOwnership,
+    createImportBatchAuthorCache,
+    resolveCanonicalImportAuthor,
+    resolveCanonicalImportAuthorCached,
+    type ImportBatchAuthorCache,
+}
+
+/** Fetch all referenced entries by ID once and apply workspace visibility matching crud-read. */
+export function prefetchImportedEntriesById(
+    db: IDatabaseAdapter,
+    parsedFiles: readonly ParsedFile[]
+): ReadonlyMap<number, NonNullable<ReturnType<IDatabaseAdapter['getEntryById']>>> | undefined {
+    if (typeof db.getEntriesByIds !== 'function') return undefined
+    const ids = parsedFiles.flatMap((f) =>
+        f.metadata.mj_id !== undefined ? [f.metadata.mj_id] : []
+    )
+    return ids.length > 0 ? db.getEntriesByIds(ids, '*') : new Map()
+}
+
+/** Read and parse markdown files with bounded 16-way concurrency, preserving sorted file order. */
+export async function readMarkdownFilesParallel<T>(
+    filenames: readonly string[],
+    reader: (filename: string) => Promise<{ parsed?: T; skipped?: boolean }>,
+    beforeChunk?: (chunkIndex: number) => void,
+    afterChunk?: (chunkIndex: number) => void
+): Promise<{
+    parsedFiles: T[]
+    skipped: number
+    errors: { file: string; error: string }[]
+}> {
+    const parsedFiles: T[] = []
+    let skipped = 0
+    const errors: { file: string; error: string }[] = []
+    const CONCURRENCY = 16
+    const readChunkAt = async (index: number): Promise<void> => {
+        if (index >= filenames.length) return
+        beforeChunk?.(index)
+        const chunk = filenames.slice(index, index + CONCURRENCY)
+        const outcomes = await Promise.all(
+            chunk.map(async (filename) => {
+                try {
+                    return { filename, outcome: await reader(filename) }
+                } catch (err) {
+                    return {
+                        filename,
+                        error: err instanceof Error ? err.message : String(err),
+                    }
+                }
+            })
+        )
+        afterChunk?.(index)
+        for (const item of outcomes) {
+            if ('error' in item && item.error !== undefined) {
+                errors.push({ file: item.filename, error: item.error })
+            } else if (item.outcome?.skipped) {
+                skipped++
+            } else if (item.outcome?.parsed !== undefined) {
+                parsedFiles.push(item.outcome.parsed)
+            }
+        }
+        return readChunkAt(index + CONCURRENCY)
+    }
+    await readChunkAt(0)
+    return { parsedFiles, skipped, errors }
+}
+
+/** Resolve an entry either from an ID-prefetched map (enforcing workspace scope) or via single DB lookup. */
+export function resolvePrefetchedEntry(
+    entryId: number,
+    workspaceId: string | undefined,
+    db: IDatabaseAdapter,
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>
+): ReturnType<IDatabaseAdapter['getEntryById']> {
+    if (prefetchedById === undefined) {
+        return db.getEntryById(entryId, workspaceId)
+    }
+    const hit = prefetchedById.get(entryId)
+    if (!hit) return null
+    const scopeId = effectiveWorkspace(workspaceId)
+    return scopeId === '*' || (hit.workspaceId ?? 'default') === scopeId ? hit : null
+}
+
+/** Index imported entries in vectorManager, batching via `addEntries` with per-file error fallback. */
+export async function indexImportedEntries(
+    db: IDatabaseAdapter,
+    vectorManager: VectorSearchManager,
+    vectorQueue: readonly ImportedVectorItem[],
+    result: Pick<ImportResult, 'vectorsIndexed' | 'errors' | 'success'>
+): Promise<void> {
+    if (vectorQueue.length === 0) return
+    const missingIds: number[] = []
+    for (const item of vectorQueue) {
+        if (item.entry === undefined) {
+            missingIds.push(item.entryId)
+        }
+    }
+    const prefetched =
+        missingIds.length > 0 && typeof db.getEntriesByIds === 'function'
+            ? db.getEntriesByIds(missingIds, '*')
+            : undefined
+    const resolvedEntries = vectorQueue.map((item) => ({
+        item,
+        entry: item.entry ?? resolvePrefetchedEntry(item.entryId, item.workspaceId, db, prefetched),
+    }))
+
+    const indexable = resolvedEntries.flatMap((r) => (r.entry ? [r.entry] : []))
+    if (indexable.length > 1 && typeof vectorManager.addEntries === 'function') {
+        try {
+            await vectorManager.addEntries(indexable)
+            result.vectorsIndexed += indexable.length
+            return
+        } catch (err) {
+            logger.debug('Batch vector indexing failed during import; falling back per entry', {
+                module: 'MarkdownImporter',
+                error: err instanceof Error ? err.message : String(err),
+            })
+        }
+    }
+
+    let hasVectorErrors = false
+    await resolvedEntries.reduce<Promise<void>>(
+        (chain, { item, entry }) =>
+            chain.then(async () => {
+                if (!entry) return
+                try {
+                    await vectorManager.addEntry(entry)
+                    result.vectorsIndexed++
+                } catch (err) {
+                    hasVectorErrors = true
+                    result.errors.push({
+                        file: item.filename,
+                        error: err instanceof Error ? err.message : String(err),
+                    })
+                }
+            }),
+        Promise.resolve()
+    )
+    if (hasVectorErrors) {
+        result.success = false
+    }
+}
+
+const ENTRY_TYPE_MAP = new Map<string, EntryType>(ENTRY_TYPES.map((t) => [t, t]))
+const SIGNIFICANCE_TYPE_MAP = new Map<string, NonNullable<SignificanceType>>(
+    SIGNIFICANCE_TYPES.map((t) => [t, t])
+)
+
+function toEntryType(value: string | undefined): EntryType | undefined {
+    if (value === undefined) return undefined
+    const matched = ENTRY_TYPE_MAP.get(value)
+    if (matched === undefined) {
+        throw new ValidationError(
+            `Invalid entry type: ${value}. Must be one of: ${ENTRY_TYPES.join(', ')}`
+        )
+    }
+    return matched
+}
+
+function toSignificanceType(value: string | undefined): SignificanceType | undefined {
+    if (value === undefined) return undefined
+    const normalized = normalizeSignificanceValue(value)
+    if (normalized === undefined) return undefined
+    const matched = SIGNIFICANCE_TYPE_MAP.get(normalized)
+    if (matched === undefined) {
+        throw new ValidationError(
+            `Invalid significance type: ${value}. Must be one of: ${SIGNIFICANCE_TYPES.join(', ')}`
+        )
+    }
+    return matched
+}
+
+function validateImportTimestamp(timestamp: string | undefined): void {
+    if (timestamp === undefined) return
+    const trimmed = timestamp.trim()
+    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|[Tt ])/.exec(trimmed)
+    if (ymdMatch !== null) {
+        const y = Number(ymdMatch[1])
+        const m = Number(ymdMatch[2])
+        const d = Number(ymdMatch[3])
+        const probe = new Date(Date.UTC(y, m - 1, d))
+        if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) {
+            throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected a valid ISO 8601 date or timestamp.`)
+        }
+    }
+    const candidate = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00.000Z` : trimmed
+    if (Number.isNaN(new Date(candidate).getTime())) {
+        throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`)
+    }
+}
+
+/** Validate body, scope, types, timestamp, and author ownership for an imported markdown file. */
+export function validateImportedFileEntry(
+    file: ParsedFile,
+    db: IDatabaseAdapter,
+    options: ImportOptions,
+    prefetchedById?: ReturnType<typeof prefetchImportedEntriesById>,
+    batchAuthorCache?: ImportBatchAuthorCache
+): {
+    effectiveWsId: string | undefined
+    effectiveProjNum: number | undefined
+    rawEntryType: EntryType | undefined
+    significanceType: SignificanceType | undefined
+    existing: ReturnType<IDatabaseAdapter['getEntryById']>
+} {
+    const { metadata } = file
+    if (file.body.trim().length === 0) {
+        throw new ValidationError('Imported markdown entry body cannot be empty')
+    }
+    if (file.body.length > MAX_CONTENT_LENGTH) {
+        throw new ValidationError(
+            `Imported markdown entry body exceeds maximum length of ${String(MAX_CONTENT_LENGTH)} characters`
+        )
+    }
+    const { effectiveWsId, effectiveProjNum } = resolveImportedFileContext(file, options)
+    if (effectiveWsId?.trim() === '*') {
+        throw new ValidationError(
+            "Wildcard workspace_id '*' cannot be used when importing entries. Specify a concrete workspace_id."
+        )
+    }
+    const rawEntryType = toEntryType(metadata.entry_type)
+    const significanceType = toSignificanceType(metadata.significance)
+    validateImportTimestamp(metadata.timestamp)
+    const existing =
+        metadata.mj_id !== undefined
+            ? resolvePrefetchedEntry(metadata.mj_id, effectiveWsId ?? options.workspaceId, db, prefetchedById)
+            : null
+    if (existing && metadata.mj_id !== undefined) {
+        if (effectiveProjNum !== undefined && (existing.projectNumber ?? null) !== effectiveProjNum) {
+            throw new ValidationError(
+                `Entry ${String(metadata.mj_id)} belongs to project #${String(existing.projectNumber ?? 'none')}, not project #${String(effectiveProjNum)}.`
+            )
+        }
+        assertImportAuthorOwnership(db, metadata.mj_id, options.author, effectiveWsId, options, batchAuthorCache)
+    }
+    return { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing }
+}

@@ -124,7 +124,7 @@ dmypy.json
 *.swo
 *~
 
-# Synced consumer skills (installed by npx neverinfamous-agent-skills)
+# Local agent runtime scratch/telemetry (never tracked)
 .agents/
 
 # OS files
@@ -188,6 +188,3 @@ logs/
 
 # Dependencies
 node_modules/
-
-# Adamic Workflows Copies
-.agents/

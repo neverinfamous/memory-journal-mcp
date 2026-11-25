@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import { logger } from '../../utils/logger.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import type { IDatabaseAdapter } from '../core/interfaces.js'
 import type { BackupManager } from './backup.js'
@@ -9,33 +10,84 @@ export class HealthOperations {
         private backupMgr: BackupManager
     ) {}
 
-    getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {
-        // Safe query execution through the connection interface
-        const dbPath = this.connection.getDbPath()
-
+    private readDbFileSizeBytes(dbPath: string): number {
+        if (dbPath === ':memory:') return 0
         let sizeBytes = 0
         try {
-            const stats = fs.statSync(dbPath)
-            sizeBytes = stats.size
-        } catch {
+            sizeBytes = fs.statSync(dbPath).size
+            try {
+                sizeBytes += fs.statSync(`${dbPath}-wal`).size
+            } catch (walError: unknown) {
+                const code =
+                    typeof walError === 'object' && walError !== null && 'code' in walError
+                        ? walError.code
+                        : undefined
+                if (code !== 'ENOENT') {
+                    logger.debug('Database WAL file size unavailable', {
+                        module: 'HealthOperations',
+                        error: walError instanceof Error ? walError.message : String(walError),
+                    })
+                }
+            }
+        } catch (error) {
             // File may not exist on disk yet
+            logger.debug('Database file size unavailable', {
+                module: 'HealthOperations',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
+        return sizeBytes
+    }
 
+    private readHealthCounts(): {
+        entryCount: number
+        deletedEntryCount: number
+        relationshipCount: number
+        tagCount: number
+    } {
         // Combined health counts in a single query (batch instead of 4 serial queries)
-        const countsResult = this.connection.exec(`
+        const countSql = `
             SELECT
                 (SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL) AS entry_count,
                 (SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NOT NULL) AS deleted_count,
                 (SELECT COUNT(*) FROM relationships) AS rel_count,
                 (SELECT COUNT(*) FROM tags) AS tag_count
-        `)
+        `
+        const nativeDb = this.connection.getNativeDb?.()
+        if (nativeDb !== undefined) {
+            const row = nativeDb
+                .prepare<
+                    unknown[],
+                    {
+                        entry_count?: number
+                        deleted_count?: number
+                        rel_count?: number
+                        tag_count?: number
+                    }
+                >(countSql)
+                .get()
+            return {
+                entryCount: row?.entry_count ?? 0,
+                deletedEntryCount: row?.deleted_count ?? 0,
+                relationshipCount: row?.rel_count ?? 0,
+                tagCount: row?.tag_count ?? 0,
+            }
+        }
+        const toCount = (val: unknown): number =>
+            typeof val === 'number' ? val : typeof val === 'bigint' ? Number(val) : 0
+        const row = this.connection.exec(countSql)[0]?.values[0]
+        return {
+            entryCount: toCount(row?.[0]),
+            deletedEntryCount: toCount(row?.[1]),
+            relationshipCount: toCount(row?.[2]),
+            tagCount: toCount(row?.[3]),
+        }
+    }
 
-        const row = countsResult[0]?.values[0]
-        const entryCount = (row?.[0] as number) ?? 0
-        const deletedEntryCount = (row?.[1] as number) ?? 0
-        const relationshipCount = (row?.[2] as number) ?? 0
-        const tagCount = (row?.[3] as number) ?? 0
-
+    getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {
+        const dbPath = this.connection.getDbPath()
+        const sizeBytes = this.readDbFileSizeBytes(dbPath)
+        const { entryCount, deletedEntryCount, relationshipCount, tagCount } = this.readHealthCounts()
         const backups = this.backupMgr.listBackups()
         const lastBackup = backups[0] ?? null
 

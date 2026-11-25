@@ -11,74 +11,60 @@ import type {
     ProjectRegistryEntry,
 } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
-import { wrapWithMetrics } from '../../observability/index.js'
-import { requestContextStorage } from '../../utils/request-context.js'
+import { invalidateSerializedPayload, wrapWithMetrics } from '../../observability/index.js'
+import { requestContextStorage, getRequestContext } from '../../utils/request-context.js'
 import { applyArgInterceptions as applyCodeModeArgInterceptions } from '../../codemode/param-normalizer.js'
+import {
+    setFallbackProjectRegistryLoader,
+    setScopedProjectRegistryReader,
+} from '../../codemode/normalizers/generic-field-aliases.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import { isRecord } from '../../utils/type-guards.js'
 
-/**
- * Common argument alias map for MCP tool invocations.
- */
-export const ARG_ALIASES: Readonly<Record<string, string>> = {
-    user: 'target_user',
-    severity: 'flag_type',
-    msg: 'message',
-    sort: 'sort_by',
-    sortBy: 'sort_by',
-    orderBy: 'sort_by',
-    order_by: 'sort_by',
-    validation: 'validation_status',
-    validationStatus: 'validation_status',
-    confidence: 'trust_score',
-    trust: 'trust_score',
-    trustScore: 'trust_score',
-    impact: 'impact_score',
-    impactScore: 'impact_score',
-    item_type: 'type',
-    category: 'type',
-    search: 'query',
+setFallbackProjectRegistryLoader(loadProjectRegistryFromConfig)
+setScopedProjectRegistryReader(() => {
+    const reqCtx = getRequestContext()
+    return reqCtx?.hasProjectRegistry === true
+        ? { bound: true, registry: reqCtx.projectRegistry }
+        : undefined
+})
+
+function stripMarkerArray(items: unknown[]): unknown[] {
+    let changed = false
+    const next = items.map((item) => {
+        const cleaned = stripInternalNormalizerMarkers(item)
+        if (cleaned !== item) changed = true
+        return cleaned
+    })
+    return changed ? next : items
 }
 
-/**
- * Keys that should be coerced to boolean when passed as string/number literals.
- */
-export const BOOLEAN_COERCIONS: readonly string[] = [
-    'is_personal',
-    'isPersonal',
-    'include_content',
-    'includeContent',
-    'case_insensitive',
-    'caseInsensitive',
-    'is_regex',
-    'isRegex',
-    'match_per_line',
-    'matchPerLine',
-    'move_to_done',
-    'use_test_db',
-]
-
-/**
- * Keys that should be coerced to number when passed as numeric string literals.
- */
-export const NUMBER_COERCIONS: readonly string[] = [
-    'entry_id',
-    'entryId',
-    'id',
-    'from_entry_id',
-    'fromEntryId',
-    'to_entry_id',
-    'toEntryId',
-    'project_number',
-    'projectNumber',
-    'issue_number',
-    'issueNumber',
-    'pr_number',
-    'prNumber',
-    'milestone_number',
-    'milestoneNumber',
-    'offset',
-    'limit',
-    'expected_version',
-]
+function stripInternalNormalizerMarkers(val: unknown): unknown {
+    if (Array.isArray(val)) return stripMarkerArray(val)
+    if (!isRecord(val)) return val
+    const record = val
+    const hasMarker = '_alias_derived_workspace' in record
+    const rawEntries = Array.isArray(record['entries']) ? (record['entries'] as unknown[]) : undefined
+    const cleanedEntries = rawEntries !== undefined ? stripMarkerArray(rawEntries) : undefined
+    const rawUpdates = Array.isArray(record['updates']) ? (record['updates'] as unknown[]) : undefined
+    const cleanedUpdates = rawUpdates !== undefined ? stripMarkerArray(rawUpdates) : undefined
+    if (
+        !hasMarker &&
+        cleanedEntries === rawEntries &&
+        cleanedUpdates === rawUpdates
+    ) {
+        return val
+    }
+    const obj = { ...record }
+    if (hasMarker) delete obj['_alias_derived_workspace']
+    if (cleanedEntries !== rawEntries && cleanedEntries !== undefined) {
+        obj['entries'] = cleanedEntries
+    }
+    if (cleanedUpdates !== rawUpdates && cleanedUpdates !== undefined) {
+        obj['updates'] = cleanedUpdates
+    }
+    return obj
+}
 
 /**
  * Apply argument interceptions and hallucination healing for MCP tool calls.
@@ -87,7 +73,9 @@ export function applyArgInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
-    return applyCodeModeArgInterceptions(methodName, args)
+    const res = applyCodeModeArgInterceptions(methodName, args)
+    if ('error' in res) return res
+    return { args: res.args.map(stripInternalNormalizerMarkers) }
 }
 
 const projectNumberToNameCache = new WeakMap<
@@ -95,10 +83,9 @@ const projectNumberToNameCache = new WeakMap<
     Map<number, string>
 >()
 
-function getProjectNameByNumber(
-    registry: Record<string, ProjectRegistryEntry>,
-    projectNumber: number
-): string | undefined {
+function getReverseProjectMap(
+    registry: Record<string, ProjectRegistryEntry>
+): Map<number, string> {
     let reverseMap = projectNumberToNameCache.get(registry)
     if (reverseMap === undefined) {
         reverseMap = new Map<number, string>()
@@ -109,7 +96,60 @@ function getProjectNameByNumber(
         }
         projectNumberToNameCache.set(registry, reverseMap)
     }
-    return reverseMap.get(projectNumber)
+    return reverseMap
+}
+
+const projectNamesInjected = new WeakSet()
+
+function injectProjectNamesRecursive(
+    obj: unknown,
+    reverseMap: ReadonlyMap<number, string>,
+    depth: number,
+    seen: WeakSet<object>
+): boolean {
+    if (depth > 10 || obj === undefined || obj === null || typeof obj !== 'object') {
+        return false
+    }
+    if (seen.has(obj)) return false
+    seen.add(obj)
+
+    let mutated = false
+    if (Array.isArray(obj)) {
+        for (const item of obj as unknown[]) {
+            if (typeof item === 'object' && item !== null) {
+                if (injectProjectNamesRecursive(item, reverseMap, depth + 1, seen)) {
+                    mutated = true
+                }
+            }
+        }
+        return mutated
+    }
+
+    if (!isRecord(obj)) return false
+    const record = obj
+    const pNum =
+        typeof record['projectNumber'] === 'number'
+            ? record['projectNumber']
+            : typeof record['project_number'] === 'number'
+              ? record['project_number']
+              : undefined
+
+    if (pNum !== undefined && typeof record['projectName'] === 'undefined') {
+        const projectName = reverseMap.get(pNum)
+        if (projectName !== undefined) {
+            record['projectName'] = projectName
+            mutated = true
+        }
+    }
+    for (const key of Object.keys(record)) {
+        const child = record[key]
+        if (typeof child === 'object' && child !== null) {
+            if (injectProjectNamesRecursive(child, reverseMap, depth + 1, seen)) {
+                mutated = true
+            }
+        }
+    }
+    return mutated
 }
 
 /**
@@ -119,110 +159,97 @@ export function injectProjectNames(
     obj: unknown,
     registry?: Record<string, ProjectRegistryEntry>,
     depth = 0,
-    seen = new WeakSet()
+    seen?: WeakSet<object>
 ): void {
-    if (
-        depth > 10 ||
-        obj === undefined ||
-        obj === null ||
-        typeof obj !== 'object' ||
-        registry === undefined
-    ) {
+    if (registry === undefined || obj === undefined || obj === null || typeof obj !== 'object') {
         return
     }
-    if (seen.has(obj)) return
-    seen.add(obj)
-
-    if (Array.isArray(obj)) {
-        obj.forEach((item) => injectProjectNames(item, registry, depth + 1, seen))
+    if (depth === 0 && projectNamesInjected.has(obj)) {
         return
     }
-
-    const record = obj as Record<string, unknown>
-    const pNum =
-        typeof record['projectNumber'] === 'number'
-            ? record['projectNumber']
-            : typeof record['project_number'] === 'number'
-              ? record['project_number']
-              : undefined
-
-    if (pNum !== undefined && typeof record['projectName'] === 'undefined') {
-        const projectName = getProjectNameByNumber(registry, pNum)
-        if (projectName !== undefined) {
-            record['projectName'] = projectName
+    const reverseMap = getReverseProjectMap(registry)
+    if (reverseMap.size > 0) {
+        const mutated = injectProjectNamesRecursive(obj, reverseMap, depth, seen ?? new WeakSet())
+        if (mutated) {
+            invalidateSerializedPayload(obj)
         }
     }
-    for (const key of Object.keys(record)) {
-        if (typeof record[key] === 'object' && record[key] !== null) {
-            injectProjectNames(record[key], registry, depth + 1, seen)
-        }
+    if (depth === 0) {
+        projectNamesInjected.add(obj)
     }
+}
+
+interface ToolGroupIconMetadata {
+    iconUrl: string
+    title: string
+    description: string
+}
+
+const TOOL_GROUP_ICON_METADATA: Record<string, ToolGroupIconMetadata> = {
+    core: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/notebook.svg',
+        title: 'Journal Core',
+        description: 'Core journal operations',
+    },
+    search: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/magnify.svg',
+        title: 'Search',
+        description: 'Entry search operations',
+    },
+    analytics: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/chart-bar.svg',
+        title: 'Analytics',
+        description: 'Journal analytics',
+    },
+    relationships: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/graph-outline.svg',
+        title: 'Relationships',
+        description: 'Entry relationship management',
+    },
+    io: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/swap-horizontal.svg',
+        title: 'IO',
+        description: 'Import/export operations',
+    },
+    admin: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cog.svg',
+        title: 'Admin',
+        description: 'Administrative operations',
+    },
+    github: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/github.svg',
+        title: 'GitHub',
+        description: 'GitHub integration',
+    },
+    backup: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/backup-restore.svg',
+        title: 'Backup',
+        description: 'Backup and restore',
+    },
+    team: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-group.svg',
+        title: 'Team',
+        description: 'Team collaboration',
+    },
+    codemode: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/code-braces.svg',
+        title: 'Code Mode',
+        description: 'Sandboxed code execution',
+    },
+    git: {
+        iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/source-branch.svg',
+        title: 'Git History',
+        description: 'Git history operations',
+    },
 }
 
 /**
  * Map a tool group identifier to its Material Design icon metadata.
  */
-export function getToolIcon(
-    group: string
-): { iconUrl: string; title: string; description: string } | undefined {
-    const iconMap: Record<string, { iconUrl: string; title: string; description: string }> = {
-        core: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/notebook.svg',
-            title: 'Journal Core',
-            description: 'Core journal operations',
-        },
-        search: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/magnify.svg',
-            title: 'Search',
-            description: 'Entry search operations',
-        },
-        analytics: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/chart-bar.svg',
-            title: 'Analytics',
-            description: 'Journal analytics',
-        },
-        relationships: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/graph-outline.svg',
-            title: 'Relationships',
-            description: 'Entry relationship management',
-        },
-        io: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/swap-horizontal.svg',
-            title: 'IO',
-            description: 'Import/export operations',
-        },
-        admin: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cog.svg',
-            title: 'Admin',
-            description: 'Administrative operations',
-        },
-        github: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/github.svg',
-            title: 'GitHub',
-            description: 'GitHub integration',
-        },
-        backup: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/backup-restore.svg',
-            title: 'Backup',
-            description: 'Backup and restore',
-        },
-        team: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-group.svg',
-            title: 'Team',
-            description: 'Team collaboration',
-        },
-        codemode: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/code-braces.svg',
-            title: 'Code Mode',
-            description: 'Sandboxed code execution',
-        },
-        git: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/source-branch.svg',
-            title: 'Git History',
-            description: 'Git history operations',
-        },
-    }
-    return iconMap[group]
+export function getToolIcon(group: string): ToolGroupIconMetadata | undefined {
+    return Object.hasOwn(TOOL_GROUP_ICON_METADATA, group)
+        ? TOOL_GROUP_ICON_METADATA[group]
+        : undefined
 }
 
 /**
@@ -232,36 +259,123 @@ export function wrapToolHandlerWithInterceptors(
     toolName: string,
     handler: (params: unknown) => unknown,
     config?: ToolHandlerConfig
-): (args: Record<string, unknown>) => Promise<unknown> {
+): (params: unknown) => Promise<unknown> {
+    const innerHandler = (args: unknown): Promise<unknown> =>
+        Promise.resolve(handler(args)).then((res) => {
+            injectProjectNames(res, config?.projectRegistry)
+            return res
+        })
     const metricsInstance = config?.runtime?.metrics
     const metricsWrapped =
         metricsInstance !== undefined
             ? wrapWithMetrics(
                   toolName,
-                  (args: Record<string, unknown>) => Promise.resolve(handler(args)),
+                  (args: Record<string, unknown>) => innerHandler(args),
                   metricsInstance
               )
-            : (args: Record<string, unknown>) => Promise.resolve(handler(args))
+            : innerHandler
 
     const interceptor =
         config?.runtime !== undefined && config.runtime !== null
             ? config.runtime.auditInterceptor
             : null
 
-    const baseHandler =
+    const runIntercepted = (args: Record<string, unknown>): Promise<unknown> =>
         interceptor !== null && interceptor !== undefined
-            ? (args: Record<string, unknown>): Promise<unknown> =>
-                  interceptor.around(toolName, args, () => metricsWrapped(args))
-            : metricsWrapped
+            ? interceptor.around(toolName, args, () => metricsWrapped(args))
+            : metricsWrapped(args)
 
-    return (args: Record<string, unknown>): Promise<unknown> => {
-        if (args['use_test_db'] === true) {
-            const cleanArgs = { ...args }
-            delete cleanArgs['use_test_db']
-            return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
+    return async (params: unknown): Promise<unknown> => {
+        const hasScopedRegistry = config?.projectRegistry !== undefined
+        if (!isRecord(params)) {
+            if (hasScopedRegistry) {
+                const existing = getRequestContext()
+                return await requestContextStorage.run(
+                    {
+                        ...existing,
+                        hasProjectRegistry: true,
+                        projectRegistry: config.projectRegistry,
+                    },
+                    () => innerHandler(params)
+                )
+            }
+            return await innerHandler(params)
         }
-        return baseHandler(args)
+        let cleanArgs = params
+        let useTest = false
+        if ('use_test_db' in params) {
+            cleanArgs = { ...params }
+            useTest = cleanArgs['use_test_db'] === true
+            delete cleanArgs['use_test_db']
+        }
+        if (useTest || hasScopedRegistry) {
+            const existing = getRequestContext()
+            return await requestContextStorage.run(
+                {
+                    ...existing,
+                    ...(useTest ? { useTestDb: true } : {}),
+                    ...(hasScopedRegistry
+                        ? { hasProjectRegistry: true, projectRegistry: config.projectRegistry }
+                        : {}),
+                },
+                () => runIntercepted(cleanArgs)
+            )
+        }
+        return await runIntercepted(cleanArgs)
     }
+}
+
+const USE_TEST_DB_EXTEND_SHAPE = { use_test_db: z.boolean().optional() }
+const EXTENDED_TEST_DB_SCHEMA_CACHE = new WeakMap<object, z.ZodType>()
+
+function extendSchemaWithUseTestDb(rawSchema: z.ZodType): z.ZodType
+function extendSchemaWithUseTestDb(rawSchema: unknown): unknown
+function extendSchemaWithUseTestDb(rawSchema: unknown): unknown {
+    if (typeof rawSchema !== 'object' || rawSchema === null) return rawSchema
+    const cached = EXTENDED_TEST_DB_SCHEMA_CACHE.get(rawSchema)
+    if (cached !== undefined) return cached
+    let extended = rawSchema
+    if (rawSchema instanceof z.ZodObject) {
+        extended = rawSchema.extend(USE_TEST_DB_EXTEND_SHAPE)
+    } else if (
+        rawSchema instanceof z.ZodPipe &&
+        rawSchema.out instanceof z.ZodObject &&
+        rawSchema.in instanceof z.ZodType
+    ) {
+        extended = z.pipe(rawSchema.in, rawSchema.out.extend(USE_TEST_DB_EXTEND_SHAPE))
+    } else if (rawSchema instanceof z.ZodPipe && rawSchema.in instanceof z.ZodObject) {
+        const extendedIn: z.ZodType = rawSchema.in.extend(USE_TEST_DB_EXTEND_SHAPE)
+        const origOut = rawSchema.out
+        const preserveTestDbOut = z.unknown().transform((val: unknown, ctx) => {
+            const hasTestDb = isRecord(val) && Object.hasOwn(val, 'use_test_db')
+            const testDbVal: unknown = hasTestDb ? val['use_test_db'] : undefined
+            const parsed = z.safeParse(origOut, val)
+            if (!parsed.success) {
+                for (const issue of parsed.error.issues) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: issue.path,
+                        message: issue.message,
+                    })
+                }
+                return z.NEVER
+            }
+            if (
+                hasTestDb &&
+                testDbVal !== undefined &&
+                isRecord(parsed.data) &&
+                !Object.hasOwn(parsed.data, 'use_test_db')
+            ) {
+                return { ...parsed.data, use_test_db: testDbVal }
+            }
+            return parsed.data
+        })
+        extended = z.pipe(extendedIn, preserveTestDbOut)
+    }
+    if (extended !== rawSchema && extended instanceof z.ZodType) {
+        EXTENDED_TEST_DB_SCHEMA_CACHE.set(rawSchema, extended)
+    }
+    return extended
 }
 
 /**
@@ -272,18 +386,28 @@ export function instrumentToolDefinitions(
     config?: ToolHandlerConfig
 ): ToolDefinition[] {
     return rawDefs.map((t) => {
-        let schema = t.inputSchema
-        if (schema instanceof z.ZodObject) {
-            schema = schema.extend({ use_test_db: z.boolean().optional() })
-        }
+        const schema = extendSchemaWithUseTestDb(t.inputSchema)
         const finalHandler = wrapToolHandlerWithInterceptors(t.name, t.handler, config)
         return {
             ...t,
             inputSchema: schema,
-            handler: finalHandler as (params: unknown) => unknown,
+            handler: finalHandler,
         }
     })
 }
+
+const CODEMODE_FLAT_PREFIXES = [
+    'mj_core_',
+    'mj_admin_',
+    'mj_search_',
+    'mj_analytics_',
+    'mj_relationships_',
+    'mj_io_',
+    'mj_github_',
+    'mj_git_',
+    'mj_backup_',
+    'mj_team_',
+]
 
 /**
  * Throw descriptive ResourceNotFoundError with Code Mode guidance when an unknown tool is called.
@@ -295,35 +419,33 @@ export function throwToolNotFoundError(name: string): never {
             `${name}. Code Mode cannot directly call read_resource as an MCP tool. Use mj_execute_code or query tools directly.`
         )
     }
-    if (
-        [
-            'create_entry',
-            'createEntry',
-            'insert_entry',
-            'insertEntry',
-            'add_entry',
-            'addEntry',
-            'search_entries',
-            'searchEntries',
-            'get_recent_entries',
-            'getRecentEntries',
-            'list_projects',
-            'listProjects',
-            'get_project',
-            'getProject',
-        ].includes(name)
-    ) {
+    const CORE_CODEMODE_HINTS: Record<string, string> = {
+        create_entry: 'mj.core.createEntry',
+        createEntry: 'mj.core.createEntry',
+        insert_entry: 'mj.core.createEntry',
+        insertEntry: 'mj.core.createEntry',
+        add_entry: 'mj.core.createEntry',
+        addEntry: 'mj.core.createEntry',
+        search_entries: 'mj.search.searchEntries',
+        searchEntries: 'mj.search.searchEntries',
+        get_recent_entries: 'mj.core.getRecentEntries',
+        getRecentEntries: 'mj.core.getRecentEntries',
+        list_projects: 'mj.admin.listProjects',
+        listProjects: 'mj.admin.listProjects',
+        get_project: 'mj.admin.getProject',
+        getProject: 'mj.admin.getProject',
+    }
+    const hintMethod = Object.hasOwn(CORE_CODEMODE_HINTS, name) ? CORE_CODEMODE_HINTS[name] : undefined
+    if (hintMethod !== undefined) {
         throw new ResourceNotFoundError(
             'Tool',
-            `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await mj.core.${name}(...)).`
+            `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await ${hintMethod}(...)).`
         )
     }
     if (
         name.includes('.') ||
         name.startsWith('mj.') ||
-        name.startsWith('mj_core_') ||
-        name.startsWith('mj_admin_') ||
-        name.startsWith('mj_search_')
+        CODEMODE_FLAT_PREFIXES.some((prefix) => name.startsWith(prefix))
     ) {
         throw new ResourceNotFoundError(
             'Tool',

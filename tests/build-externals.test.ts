@@ -16,19 +16,38 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 describe('Build externals consistency', () => {
-    it('every tsup external must be in dependencies or optionalDependencies', () => {
-        const tsupConfig = readFileSync(resolve(__dirname, '../tsup.config.ts'), 'utf-8')
+    it('every tsup external must be in dependencies or optionalDependencies and multi-config builds must not race clean dist', async () => {
+        const mod = (await import('../tsup.config.js')) as {
+            default:
+                | {
+                      entry?: Record<string, string>
+                      external?: string[]
+                      clean?: boolean
+                      splitting?: boolean
+                  }[]
+                | {
+                      entry?: Record<string, string>
+                      external?: string[]
+                      clean?: boolean
+                      splitting?: boolean
+                  }
+        }
+        const configs = Array.isArray(mod.default) ? mod.default : [mod.default]
+        expect(configs.length).toBeGreaterThanOrEqual(2)
 
-        // Extract the external array from the config file
-        const externalMatch = tsupConfig.match(/external:\s*\[([\s\S]*?)\]/)
-        expect(externalMatch, 'Could not find external array in tsup.config.ts').not.toBeNull()
-
-        const externals = externalMatch![1]
-            .split(',')
-            .map((s) => s.trim().replace(/['"]/g, ''))
-            .filter(Boolean)
-
+        const mainConfig = configs.find((c) => c.entry && 'index' in c.entry)
+        expect(mainConfig).toBeDefined()
+        const externals = mainConfig?.external ?? []
         expect(externals.length).toBeGreaterThan(0)
+
+        const workerConfig = configs.find((c) => c.entry && 'worker-script' in c.entry)
+        expect(workerConfig).toBeDefined()
+        expect(workerConfig?.splitting).toBe(false)
+        expect(workerConfig?.external).toEqual([])
+
+        for (const cfg of configs) {
+            expect(cfg.clean).toBe(false)
+        }
 
         const pkgJson = JSON.parse(
             readFileSync(resolve(__dirname, '../package.json'), 'utf-8')
@@ -42,7 +61,8 @@ describe('Build externals consistency', () => {
             ...Object.keys(pkgJson.optionalDependencies ?? {}),
         ])
 
-        const missing = externals.filter((ext) => !prodDeps.has(ext))
+        const allExternals = configs.flatMap((c) => c.external ?? [])
+        const missing = allExternals.filter((ext) => !prodDeps.has(ext))
         expect(
             missing,
             `These packages are externalized in tsup.config.ts but missing from ` +

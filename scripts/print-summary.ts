@@ -1,14 +1,16 @@
 import { DatabaseAdapter } from '../src/database/sqlite-adapter/index.js'
 import { getPrompt } from '../src/handlers/prompts/index.js'
 import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 
 async function main(): Promise<void> {
-    const dbPath = './.mcp-journal.db'
+    const dbPath = path.join(os.tmpdir(), `mj-print-summary-${String(process.pid)}-${String(Date.now())}.db`)
     // Open the actual database
     const db = new DatabaseAdapter(dbPath)
-    await db.initialize()
 
     try {
+        await db.initialize()
         const result = await getPrompt('session-summary', {}, db)
         console.log(result.messages[0]?.content.text ?? '')
     } finally {
@@ -19,4 +21,7 @@ async function main(): Promise<void> {
     }
 }
 
-main().catch(console.error)
+main().catch((error: unknown) => {
+    console.error(error)
+    process.exit(1)
+})

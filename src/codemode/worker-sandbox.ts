@@ -7,18 +7,17 @@
  */
 
 import { Worker, MessageChannel, type ResourceLimits } from 'node:worker_threads'
-import * as crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import * as path from 'node:path'
 import {
     DEFAULT_SANDBOX_OPTIONS,
-    DEFAULT_POOL_OPTIONS,
     type SandboxOptions,
-    type PoolOptions,
     type SandboxResult,
     type RpcRequest,
-    type RpcResponse,
 } from './types.js'
+import { getAllowedMethodMetadata, handleRpcRequest } from './worker-rpc-handler.js'
+import { parseByteSizeValue } from './shared-context-parsers.js'
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 
 // =============================================================================
 // Worker Script Path Resolution
@@ -28,10 +27,17 @@ import {
  * Resolve the worker script path relative to this module.
  * The worker-script.ts compiles to worker-script.js in the dist/ directory.
  */
+export function isSourceCodemodeDir(currentDir: string): boolean {
+    const parts = currentDir.split(/[/\\]/).filter((part) => part.length > 0)
+    const parent = parts[parts.length - 2]
+    const base = parts[parts.length - 1]
+    return parent === 'src' && base === 'codemode'
+}
+
 function getWorkerScriptPath(): string {
     const currentDir = path.dirname(fileURLToPath(import.meta.url))
     // If we're executing directly from src/ (e.g. during vitest runs), point to the built dist/ version
-    if (currentDir.endsWith('src\\codemode') || currentDir.endsWith('src/codemode')) {
+    if (isSourceCodemodeDir(currentDir)) {
         return path.resolve(process.cwd(), 'dist/worker-script.js')
     }
     return path.join(currentDir, 'worker-script.js')
@@ -41,10 +47,40 @@ function getWorkerScriptPath(): string {
 // Worker Sandbox
 // =============================================================================
 
-/**
- * Worker-thread sandbox for secure code execution.
- * Maintains a persistent worker thread internally.
- */
+function resolveEffectiveMaxResultSize(override?: number): number {
+    let maxResultSize = override
+    if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {
+        const envVal = process.env['CODE_MODE_MAX_RESULT_SIZE']
+        maxResultSize = envVal ? (parseByteSizeValue(envVal, 'b') ?? 100 * 1024) : 100 * 1024
+    }
+    if (Number.isNaN(maxResultSize) || maxResultSize <= 0) return 100 * 1024
+    return maxResultSize > 50 * 1024 * 1024 ? 50 * 1024 * 1024 : maxResultSize
+}
+
+interface WorkerDispatchParams {
+    code: string
+    methodList: Record<string, string[]>
+    methodListKey: string
+    schemas: Record<string, Record<string, string>> | undefined
+    effectiveTimeout: number
+    maxResultSize: number
+    workerPort: MessagePort
+    hostPort: MessagePort
+    timeoutHandle: NodeJS.Timeout
+    contextObj: Record<string, unknown> | undefined
+    readonlyMode: boolean | undefined
+    dryRunMode: boolean | undefined
+    useTestDbMode: boolean | undefined
+    startTime: number
+    resolve: (result: SandboxResult) => void
+}
+
+function sanitizeFailedSandboxResult(result: SandboxResult): void {
+    if (result.success) return
+    if (typeof result.error === 'string') result.error = sanitizeErrorForLogging(result.error)
+    if (typeof result.stack === 'string') result.stack = sanitizeErrorForLogging(result.stack)
+}
+
 export class WorkerSandbox {
     private readonly options: Required<SandboxOptions>
     private worker: Worker | null = null
@@ -59,6 +95,15 @@ export class WorkerSandbox {
         startRss: number
     } | null = null
     private executionId = 0
+    private lastSentMethodListKey: string | null = null
+    private lastSentSchemas: Record<string, Record<string, string>> | undefined
+    private hasSentSchemas = false
+
+    private resetSentMetadata(): void {
+        this.lastSentMethodListKey = null
+        this.lastSentSchemas = undefined
+        this.hasSentSchemas = false
+    }
 
     public get isDisposed(): boolean {
         return this.worker === null && !this.isBusy
@@ -70,44 +115,75 @@ export class WorkerSandbox {
     }
 
     private initWorker(): void {
+        this.resetSentMetadata()
         const resourceLimits: ResourceLimits = {
             maxOldGenerationSizeMb: this.options.memoryLimitMb,
             maxYoungGenerationSizeMb: Math.max(8, Math.floor(this.options.memoryLimitMb / 8)),
         }
 
-        this.worker = new Worker(getWorkerScriptPath(), {
+        const spawnedWorker = new Worker(getWorkerScriptPath(), {
             workerData: {}, // Initialized without specific execution data
+            env: {},
             resourceLimits,
         })
+        this.worker = spawnedWorker
+        spawnedWorker.unref()
 
-        this.worker.on('message', (msg: { type: string; id: number; result: SandboxResult }) => {
-            if (msg.type === 'RESULT' && this.currentExecution) {
-                clearTimeout(this.currentExecution.timeoutHandle)
-                this.currentExecution.hostPort.close()
+        spawnedWorker.on(
+            'message',
+            (msg: { type: string; id: number; result: SandboxResult; fatal?: boolean }) => {
+                if (this.worker !== spawnedWorker) return
+                // [INVARIANT] Ignore stale RESULT messages from a previous (timed-out) execution.
+                if (msg.type === 'RESULT' && this.currentExecution && msg.id === this.executionId) {
+                    clearTimeout(this.currentExecution.timeoutHandle)
+                    this.currentExecution.hostPort.close()
 
-                const endTime = performance.now()
-                const endRss = process.memoryUsage.rss()
-                const result = msg.result
+                    const endTime = performance.now()
+                    const endRss = process.memoryUsage.rss()
+                    const result = msg.result
+                    sanitizeFailedSandboxResult(result)
 
-                result.metrics = {
-                    wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
-                    cpuTimeMs: result.metrics.cpuTimeMs,
-                    memoryUsedMb: Math.max(0, Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024)),
+                    result.metrics = {
+                        wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
+                        cpuTimeMs: result.metrics.cpuTimeMs,
+                        memoryUsedMb: Math.max(
+                            0,
+                            Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024)
+                        ),
+                    }
+
+                    const resolve = this.currentExecution.resolve
+                    this.currentExecution = null
+                    this.isBusy = false
+                    this.lastUsedAt = Date.now()
+                    if (msg.fatal === true) {
+                        // [H1] Evict and terminate tainted worker when unhandled async rejection/exception fired.
+                        this.worker = null
+                        this.resetSentMetadata()
+                        spawnedWorker.terminate().catch((err: unknown) => {
+                            const detail = sanitizeErrorForLogging(
+                                err instanceof Error ? err.message : String(err)
+                            )
+                            process.stderr.write(`Code mode worker terminate failed: ${detail}\n`)
+                        })
+                    } else {
+                        this.worker.unref()
+                    }
+                    resolve(result)
                 }
-
-                const resolve = this.currentExecution.resolve
-                this.currentExecution = null
-                this.isBusy = false
-                this.lastUsedAt = Date.now()
-                resolve(result)
             }
+        )
+
+        spawnedWorker.on('error', (err: Error) => {
+            if (this.worker !== spawnedWorker) return
+            this.handleWorkerDeath(
+                sanitizeErrorForLogging(err.message),
+                err.stack !== undefined ? sanitizeErrorForLogging(err.stack) : undefined
+            )
         })
 
-        this.worker.on('error', (err: Error) => {
-            this.handleWorkerDeath(err.message, err.stack)
-        })
-
-        this.worker.on('exit', (exitCode) => {
+        spawnedWorker.on('exit', (exitCode) => {
+            if (this.worker !== spawnedWorker) return
             if (exitCode !== 0 || this.currentExecution !== null) {
                 this.handleWorkerDeath(
                     `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById) or unbounded loops without keyset/offset pagination. For project counts and aggregates, use 'mj.analytics.getStatistics({ projectBreakdown: true })' or 'mj.admin.listProjects()' instead of iterating entries. Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
@@ -134,8 +210,8 @@ export class WorkerSandbox {
 
             resolve({
                 success: false,
-                error: errorMsg,
-                ...(stack !== undefined ? { stack } : {}),
+                error: sanitizeErrorForLogging(errorMsg),
+                ...(stack !== undefined ? { stack: sanitizeErrorForLogging(stack) } : {}),
                 metrics: {
                     wallTimeMs: Math.round(endTime - startTime),
                     cpuTimeMs: 0,
@@ -144,19 +220,133 @@ export class WorkerSandbox {
             })
         }
         this.worker = null
+        this.resetSentMetadata()
     }
 
     dispose(): void {
         this.isBusy = false
+        this.resetSentMetadata()
         if (this.currentExecution) {
-            clearTimeout(this.currentExecution.timeoutHandle)
-            this.currentExecution.hostPort.close()
+            const exec = this.currentExecution
             this.currentExecution = null
+            clearTimeout(exec.timeoutHandle)
+            exec.hostPort.close()
+            exec.resolve({
+                success: false,
+                error: 'Worker sandbox disposed',
+                metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+            })
         }
         if (this.worker) {
-            this.worker.terminate().catch(() => undefined)
+            const worker = this.worker
             this.worker = null
+            worker.terminate().catch((err: unknown) => {
+                const detail = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
+                process.stderr.write(`Code mode worker terminate failed: ${detail}\n`)
+            })
         }
+    }
+
+    private terminateTimedOutExecution(timedOutId: number): void {
+        const worker = this.worker
+        // [INVARIANT] Detach the dying worker immediately so a queued RESULT/exit from the timed-out
+        // execution cannot clear isBusy and expose a terminating worker to the next pooled execute().
+        this.worker = null
+        this.resetSentMetadata()
+        if (this.currentExecution !== null && this.executionId === timedOutId) {
+            this.handleWorkerDeath('Code execution timed out')
+        }
+        if (worker === null) return
+        worker.terminate().catch((err: unknown) => {
+            const detail = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
+            process.stderr.write(`Code mode worker terminate failed: ${detail}\n`)
+        })
+    }
+
+    private dispatchWorkerMessage(params: WorkerDispatchParams): void {
+        // [H7] A DataCloneError (non-cloneable context/bindings) must release ports, timer and isBusy.
+        try {
+            if (this.worker === null) throw new Error('Code mode worker is not available')
+            const sendMethodList = params.methodListKey !== this.lastSentMethodListKey
+            const sendSchemas = !this.hasSentSchemas || params.schemas !== this.lastSentSchemas
+            const payload: {
+                type: 'EXECUTE'
+                id: number
+                code: string
+                timeoutMs: number
+                maxResultSize: number
+                rpcPort: MessagePort
+                contextObj: Record<string, unknown> | undefined
+                readonlyMode: boolean | undefined
+                dryRunMode?: boolean | undefined
+                useTestDbMode?: boolean | undefined
+                methodList?: Record<string, string[]> | undefined
+                schemaList?: Record<string, Record<string, string>> | undefined
+            } = {
+                type: 'EXECUTE',
+                id: this.executionId,
+                code: params.code,
+                timeoutMs: params.effectiveTimeout,
+                maxResultSize: params.maxResultSize,
+                rpcPort: params.workerPort,
+                contextObj: params.contextObj,
+                readonlyMode: params.readonlyMode,
+                ...(params.dryRunMode !== undefined ? { dryRunMode: params.dryRunMode } : {}),
+                ...(params.useTestDbMode !== undefined ? { useTestDbMode: params.useTestDbMode } : {}),
+                ...(sendMethodList ? { methodList: params.methodList } : {}),
+                ...(sendSchemas && params.schemas !== undefined
+                    ? { schemaList: params.schemas }
+                    : {}),
+            }
+            if (sendSchemas && params.schemas === undefined && this.lastSentSchemas !== undefined) {
+                payload.schemaList = undefined
+            }
+            this.worker.postMessage(payload, [params.workerPort])
+            if (sendMethodList) this.lastSentMethodListKey = params.methodListKey
+            if (sendSchemas) {
+                this.lastSentSchemas = params.schemas
+                this.hasSentSchemas = true
+            }
+        } catch (err: unknown) {
+            clearTimeout(params.timeoutHandle)
+            params.hostPort.close()
+            params.workerPort.close()
+            this.worker?.unref()
+            this.currentExecution = null
+            this.isBusy = false
+            const detail = err instanceof Error ? err.message : String(err)
+            params.resolve({
+                success: false,
+                error: `Code Mode could not dispatch the execution (${detail}). Ensure \`context\` contains only JSON-serializable values.`,
+                metrics: {
+                    wallTimeMs: Math.round(performance.now() - params.startTime),
+                    cpuTimeMs: 0,
+                    memoryUsedMb: 0,
+                },
+            })
+        }
+    }
+
+    private attachHostRpcHandler(
+        hostPort: MessageChannel['port1'],
+        apiBindings: Record<string, unknown>,
+        methodSets: ReturnType<typeof getAllowedMethodMetadata>['methodSets'],
+        maxToolInputElements?: number
+    ): void {
+        hostPort.on('message', (msg: RpcRequest) => {
+            void handleRpcRequest(msg, apiBindings, hostPort, methodSets, maxToolInputElements).catch(
+                (err: unknown) => {
+                    try {
+                        hostPort.postMessage({
+                            id: typeof msg?.id === 'number' ? msg.id : 0,
+                            error: err instanceof Error ? err.message : String(err),
+                        })
+                    } catch {
+                        // Port already closed
+                    }
+                }
+            )
+        })
     }
 
     /**
@@ -169,261 +359,74 @@ export class WorkerSandbox {
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
         readonlyMode?: boolean,
-        maxResultSizeOverride?: number
+        maxResultSizeOverride?: number,
+        modeFlags?: {
+            dryRunMode?: boolean | undefined
+            useTestDbMode?: boolean | undefined
+            maxToolInputElements?: number | undefined
+        }
     ): Promise<SandboxResult> {
-        let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
-        if (effectiveTimeout > 30000) effectiveTimeout = 30000
+        if (this.isBusy || this.currentExecution !== null) {
+            return {
+                success: false,
+                error: 'WorkerSandbox is already executing a task',
+                metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+            }
+        }
 
+        const rawTimeout = timeoutMs ?? this.options.timeoutMs
+        const effectiveTimeout =
+            Number.isFinite(rawTimeout) && rawTimeout > 0
+                ? Math.min(Math.max(1, Math.ceil(rawTimeout)), 30000)
+                : Math.min(Math.max(1, Math.ceil(this.options.timeoutMs)), 30000)
         if (!this.worker) this.initWorker()
-
         this.isBusy = true
         this.executionId++
-
         const startTime = performance.now()
         const startRss = process.memoryUsage.rss()
 
-        return new Promise<SandboxResult>((resolve) => {
-            const methodList: Record<string, string[]> = {}
-            const topLevel: string[] = []
+        return await new Promise<SandboxResult>((resolve) => {
+            let timeoutHandle: NodeJS.Timeout | undefined
+            let hostPort: MessageChannel['port1'] | undefined
+            let workerPort: MessageChannel['port2'] | undefined
+            try {
+                const { methodList, methodListKey, methodSets } =
+                    getAllowedMethodMetadata(apiBindings)
+                const ch = new MessageChannel()
+                hostPort = ch.port1
+                workerPort = ch.port2
+                const timedOutId = this.executionId
+                timeoutHandle = setTimeout(() => {
+                    this.terminateTimedOutExecution(timedOutId)
+                }, effectiveTimeout)
+                timeoutHandle.unref()
 
-        for (const [key, value] of Object.entries(apiBindings)) {
-                if (typeof value === 'function') {
-                    topLevel.push(key)
-                } else if (typeof value === 'object' && value !== null) {
-                    const methods: string[] = []
-                    for (const [methodName, methodValue] of Object.entries(value)) {
-                        if (typeof methodValue === 'function') {
-                            methods.push(methodName)
-                        }
-                    }
-                    if (methods.length > 0) methodList[key] = methods
-                }
+                this.currentExecution = { resolve, hostPort, startTime, startRss, timeoutHandle }
+                this.attachHostRpcHandler(hostPort, apiBindings, methodSets, modeFlags?.maxToolInputElements)
+                this.worker?.ref()
+
+                this.dispatchWorkerMessage({
+                    code, methodList, methodListKey, schemas, effectiveTimeout,
+                    maxResultSize: resolveEffectiveMaxResultSize(maxResultSizeOverride),
+                    workerPort, hostPort, timeoutHandle, contextObj, readonlyMode,
+                    dryRunMode: modeFlags?.dryRunMode, useTestDbMode: modeFlags?.useTestDbMode,
+                    startTime, resolve,
+                })
+            } catch (setupError) {
+                if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+                hostPort?.close()
+                workerPort?.close()
+                this.worker?.unref()
+                this.isBusy = false
+                this.currentExecution = null
+                resolve({
+                    success: false,
+                    error: setupError instanceof Error ? setupError.message : String(setupError),
+                    metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+                })
             }
-
-            if (topLevel.length > 0) methodList['_topLevel'] = topLevel
-
-            const { port1: hostPort, port2: workerPort } = new MessageChannel()
-
-            this.currentExecution = {
-                resolve,
-                hostPort,
-                startTime,
-                startRss,
-                timeoutHandle: setTimeout(() => {
-                    this.worker?.terminate().catch(() => undefined)
-                }, effectiveTimeout + 1000),
-            }
-
-            hostPort.on('message', (msg: RpcRequest) => {
-                void handleRpcRequest(msg, apiBindings, hostPort, methodList)
-            })
-
-            let maxResultSize = maxResultSizeOverride
-            if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {
-                const envVal = process.env['CODE_MODE_MAX_RESULT_SIZE']
-                maxResultSize = envVal ? parseInt(envVal, 10) : 100 * 1024
-            }
-
-            if (Number.isNaN(maxResultSize) || maxResultSize <= 0) {
-                maxResultSize = 100 * 1024
-            } else if (maxResultSize > 50 * 1024 * 1024) {
-                maxResultSize = 50 * 1024 * 1024 // Cap at 50MB
-            }
-
-            this.worker?.postMessage(
-                {
-                    type: 'EXECUTE',
-                    id: this.executionId,
-                    code,
-                    methodList,
-                    schemaList: schemas,
-                    timeoutMs: effectiveTimeout,
-                    maxResultSize,
-                    rpcPort: workerPort,
-                    contextObj,
-                    readonlyMode,
-                },
-                [workerPort]
-            )
         })
     }
 }
 
-// =============================================================================
-// RPC Handler (Main Thread)
-// =============================================================================
-
-async function handleRpcRequest(
-    req: RpcRequest,
-    apiBindings: Record<string, unknown>,
-    hostPort: MessagePort,
-    methodList: Record<string, string[]>
-): Promise<void> {
-    if (typeof req !== 'object' || req === null || typeof req.id !== 'number') {
-        return
-    }
-    const response: RpcResponse = { id: req.id }
-
-    try {
-        if (typeof req.group !== 'string' || typeof req.method !== 'string') {
-            response.error = 'Malformed RPC request: group and method must be strings'
-            hostPort.postMessage(response)
-            return
-        }
-
-        const allowedMethods = Object.hasOwn(methodList, req.group)
-            ? methodList[req.group]
-            : undefined
-        if (!allowedMethods?.includes(req.method)) {
-            response.error = `Unauthorized method invocation: ${req.group}.${req.method}`
-            hostPort.postMessage(response)
-            return
-        }
-
-        const safeArgs = Array.isArray(req.args) ? req.args : []
-        let target: unknown
-        if (req.group === '_topLevel') {
-            target = Object.hasOwn(apiBindings, req.method) ? apiBindings[req.method] : undefined
-        } else if (Object.hasOwn(apiBindings, req.group)) {
-            const groupApi = apiBindings[req.group]
-            if (groupApi !== undefined && groupApi !== null && typeof groupApi === 'object') {
-                target = Object.hasOwn(groupApi, req.method)
-                    ? (Reflect.get(groupApi, req.method) as unknown)
-                    : undefined
-            }
-        }
-
-        if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
-        } else {
-            response.error = `Unknown method: ${req.group}.${req.method}`
-        }
-    } catch (err) {
-        response.error = err instanceof Error ? err.message : String(err)
-    }
-
-    hostPort.postMessage(response)
-}
-
-// =============================================================================
-// Worker Sandbox Pool
-// =============================================================================
-
-/** Lifecycle sweep interval in milliseconds */
-const LIFECYCLE_INTERVAL_MS = 15_000
-
-/**
- * Pool of persistent worker-thread sandboxes with pre-warming
- * and lifecycle management (age recycling, idle eviction, re-warming).
- */
-export class WorkerSandboxPool {
-    private readonly options: Required<PoolOptions>
-    private readonly sandboxOptions: SandboxOptions
-    private pool: WorkerSandbox[] = []
-    private lifecycleTimer: ReturnType<typeof setInterval> | null = null
-
-    constructor(sandboxOptions?: SandboxOptions, poolOptions?: PoolOptions) {
-        this.sandboxOptions = sandboxOptions ?? {}
-        this.options = { ...DEFAULT_POOL_OPTIONS, ...poolOptions }
-        if (this.options.minInstances > this.options.maxInstances) {
-            this.options.minInstances = this.options.maxInstances
-        }
-        this.warmPool()
-        this.lifecycleTimer = setInterval(() => this.lifecycleSweep(), LIFECYCLE_INTERVAL_MS)
-        this.lifecycleTimer.unref()
-    }
-
-    /**
-     * Eagerly create workers up to `minInstances`.
-     */
-    private warmPool(): void {
-        while (this.pool.length < this.options.minInstances) {
-            this.pool.push(new WorkerSandbox(this.sandboxOptions))
-        }
-    }
-
-    /**
-     * Periodic lifecycle sweep:
-     * 1. Remove already-disposed workers
-     * 2. Recycle workers that exceed maxWorkerAgeMs
-     * 3. Evict idle workers (oldest first) above minInstances
-     * 4. Re-warm pool to minInstances
-     */
-    private lifecycleSweep(): void {
-        const now = Date.now()
-
-        // 1. Remove disposed workers
-        this.pool = this.pool.filter((w) => !w.isDisposed)
-
-        // 2. Recycle aged workers (non-busy, exceeded max age)
-        for (let i = this.pool.length - 1; i >= 0; i--) {
-            const worker = this.pool[i]
-            if (worker && !worker.isBusy && now - worker.createdAt > this.options.maxWorkerAgeMs) {
-                worker.dispose()
-                this.pool.splice(i, 1)
-            }
-        }
-
-        // 3. Evict idle workers above minInstances (oldest idle first)
-        const idleCandidates = this.pool
-            .map((w, idx) => ({ worker: w, idx }))
-            .filter(({ worker }) => !worker.isBusy && now - worker.lastUsedAt > this.options.idleTimeoutMs)
-            .sort((a, b) => a.worker.lastUsedAt - b.worker.lastUsedAt)
-
-        for (const { worker } of idleCandidates) {
-            if (this.pool.length <= this.options.minInstances) break
-            worker.dispose()
-            const poolIdx = this.pool.indexOf(worker)
-            if (poolIdx !== -1) this.pool.splice(poolIdx, 1)
-        }
-
-        // 4. Re-warm to minInstances
-        this.warmPool()
-    }
-
-    async execute(
-        code: string,
-        apiBindings: Record<string, unknown>,
-        schemas?: Record<string, Record<string, string>>,
-        timeoutMs?: number,
-        contextObj?: Record<string, unknown>,
-        readonlyMode?: boolean,
-        maxResultSizeOverride?: number
-    ): Promise<SandboxResult> {
-        let availableSandbox = this.pool.find((s) => !s.isBusy)
-
-        if (!availableSandbox) {
-            if (this.pool.length < this.options.maxInstances) {
-                availableSandbox = new WorkerSandbox(this.sandboxOptions)
-                this.pool.push(availableSandbox)
-            } else {
-                return {
-                    success: false,
-                    error: `Sandbox pool exhausted (max ${String(this.options.maxInstances)} concurrent executions)`,
-                    metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
-                }
-            }
-        }
-
-        return await availableSandbox.execute(
-            code, apiBindings, schemas, timeoutMs, contextObj, readonlyMode, maxResultSizeOverride
-        )
-    }
-
-    getActiveCount(): number {
-        return this.pool.filter((s) => s.isBusy).length
-    }
-
-    dispose(): void {
-        if (this.lifecycleTimer !== null) {
-            clearInterval(this.lifecycleTimer)
-            this.lifecycleTimer = null
-        }
-        for (const worker of this.pool) {
-            worker.dispose()
-        }
-        this.pool = []
-    }
-
-    readonly poolId = crypto.randomUUID()
-}
+export { WorkerSandboxPool } from './worker-sandbox-pool.js'

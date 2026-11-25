@@ -4,7 +4,7 @@
  * Tests for remaining uncovered lines in:
  * - handlers/resources/index.ts: getBaseUri non-memory URL, template match + ResourceResult
  * - handlers/resources/templates.ts: invalid params for template resources
- * - handlers/resources/core.ts: CI status branches, scheduler section
+ * - handlers/resources/core.ts: CI status branches
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'

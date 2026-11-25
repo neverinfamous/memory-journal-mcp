@@ -81,14 +81,25 @@ const {
     mockSigintHandlers: [] as Function[],
 }))
 
-vi.mock('../../src/auth/scope-map.js', () => ({
-    getRequiredScope: vi.fn().mockImplementation((toolName: string) => {
-        // Return a default scope for fake test tools
-        if (toolName.startsWith('fake_')) return 'core'
-        // Fallback or throw if we wanted to enforce it here
-        return 'core'
-    }),
-}))
+vi.mock('../../src/auth/scope-map.js', async (importOriginal: any) => {
+    const actual = await importOriginal()
+    return {
+        ...actual,
+        TEAM_PROMPT_NAMES: new Set(['team-session-summary', 'create-team-entry', 'update-team-entry']),
+        ADMIN_PROMPT_NAMES: new Set([
+            'project-setup',
+            'optimize-journal',
+            'cms-rem-supervisor',
+            'project_setup',
+            'optimize_journal',
+            'cms_rem_supervisor',
+        ]),
+        getRequiredScope: vi.fn().mockImplementation((toolName: string) => {
+            if (toolName.startsWith('fake_')) return 'core'
+            return 'core'
+        }),
+    }
+})
 
 // ============================================================================
 // Module mocks
@@ -143,7 +154,7 @@ vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
             getRelationships: vi.fn().mockReturnValue([]),
             linkEntries: vi.fn().mockReturnValue({ id: 1, relationshipType: 'references' }),
             updateEntry: vi.fn().mockReturnValue(null),
-            deleteEntry: vi.fn().mockReturnValue(true),
+            deleteEntry: vi.fn().mockReturnValue({ success: true }),
             listTags: mockListTags,
             mergeTags: vi.fn().mockReturnValue({ sourceDeleted: true, entriesUpdated: 0 }),
             applyTeamSchema: vi.fn(),
@@ -259,7 +270,9 @@ vi.mock('express', function () {
             if (cb) cb()
             return {
                 on: vi.fn(),
-                close: vi.fn(),
+                close: vi.fn((cb?: (err?: Error) => void) => {
+                    cb?.()
+                }),
             }
         }),
     }
@@ -640,9 +653,8 @@ describe('McpServer', function () {
 
             const result = await handler({ workspace_id: 'default', project_number: 1, content: 'Will fail' }, { _meta: {} })
 
-            // With deterministic error handling, errors are caught by the handler
-            // and returned as structured JSON (not as MCP isError)
-            expect(result.isError).toBeUndefined()
+            // Tool results with success: false are returned as structured JSON and flagged isError.
+            expect(result.isError).toBe(true)
             expect(result.content[0]!.type).toBe('text')
 
             const text = result.content[0]!.text
@@ -667,7 +679,11 @@ describe('McpServer', function () {
             ])
 
             const spyCall = vi.spyOn(toolsModule, 'callTool').mockResolvedValueOnce({
-                invalidField: 10n,
+                invalidField: {
+                    toJSON(): never {
+                        throw new TypeError('Unserializable payload')
+                    },
+                },
             })
             await createServer({ transport: 'stdio', dbPath: './.test-output/vitest/test-server.db' })
 
@@ -690,7 +706,7 @@ describe('McpServer', function () {
                 error: string
             }
             expect(parsed.success).toBe(false)
-            expect(parsed.error).toContain('BigInt')
+            expect(parsed.error).toContain('Unserializable payload')
 
             spyTools.mockRestore()
             spyCall.mockRestore()
@@ -830,10 +846,11 @@ describe('McpServer', function () {
 
             expect(mockSigintHandlers.length).toBeGreaterThan(0)
 
-            // Execute the last registered SIGINT handler
+            // Shutdown flushes the audit log before closing the database.
             const handler = mockSigintHandlers[mockSigintHandlers.length - 1]
             if (handler) {
                 handler()
+                await new Promise((resolve) => setTimeout(resolve, 50))
                 expect(mockDbClose).toHaveBeenCalled()
             }
         })
@@ -1218,65 +1235,6 @@ describe('McpServer', function () {
     })
 
     // ========================================================================
-    // Scheduler
-    // ========================================================================
-
-    describe('createServer - scheduler', function () {
-        it('should warn and not start scheduler on stdio transport', async function () {
-            await createServer({
-                transport: 'stdio',
-                dbPath: './.test-output/vitest/test-server.db',
-                scheduler: {
-                    backupIntervalMinutes: 60,
-                    vacuumIntervalMinutes: 120,
-                    rebuildIndexIntervalMinutes: 180,
-                    keepBackups: 5,
-                    digestIntervalMinutes: 0,
-                },
-            })
-
-            // Scheduler should NOT be started for stdio
-            // (no way to directly check but the code path is covered)
-            expect(mockDbInitialize).toHaveBeenCalled()
-        })
-
-        it('should start scheduler on HTTP transport', async function () {
-            await createServer({
-                transport: 'http',
-                allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './.test-output/vitest/test-server.db',
-                statelessHttp: true,
-                scheduler: {
-                    backupIntervalMinutes: 60,
-                    vacuumIntervalMinutes: 0,
-                    rebuildIndexIntervalMinutes: 0,
-                    keepBackups: 5,
-                    digestIntervalMinutes: 0,
-                },
-            })
-
-            expect(mockDbInitialize).toHaveBeenCalled()
-        })
-
-        it('should not create scheduler when all intervals are 0', async function () {
-            await createServer({
-                transport: 'http',
-                allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './.test-output/vitest/test-server.db',
-                scheduler: {
-                    backupIntervalMinutes: 0,
-                    vacuumIntervalMinutes: 0,
-                    rebuildIndexIntervalMinutes: 0,
-                    keepBackups: 5,
-                    digestIntervalMinutes: 0,
-                },
-            })
-
-            expect(mockDbInitialize).toHaveBeenCalled()
-        })
-    })
-
-    // ========================================================================
     // Tool handler with outputSchema
     // ========================================================================
 
@@ -1339,29 +1297,56 @@ describe('McpServer', function () {
 
     describe('createServer - env tool filter', function () {
         it('should use MEMORY_JOURNAL_MCP_TOOL_FILTER env var when no explicit filter', async function () {
-            process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] = 'core'
+            const requestHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
+            const serverWithHandlers = mockServer as {
+                setRequestHandler: typeof mockServer.setRequestHandler
+                _requestHandlers?: typeof requestHandlers
+            }
+            const seedToolsList = (): void => {
+                requestHandlers.set('tools/list', () =>
+                    Promise.resolve({
+                        tools: mockRegisterTool.mock.calls.map((c: unknown[]) => ({
+                            name: String(c[0]),
+                        })),
+                    })
+                )
+            }
+            serverWithHandlers._requestHandlers = requestHandlers
+            try {
+                mockRegisterTool.mockClear()
+                seedToolsList()
+                process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] = 'core'
 
-            await createServer({
-                transport: 'stdio',
-                dbPath: './.test-output/vitest/test-server.db',
-            })
+                await createServer({
+                    transport: 'stdio',
+                    dbPath: './.test-output/vitest/test-server.db',
+                })
 
-            // Tools should be filtered from env
-            expect(mockRegisterTool).toHaveBeenCalled()
-            const toolCount = mockRegisterTool.mock.calls.length
+                expect(mockRegisterTool).toHaveBeenCalled()
+                const envListHandler = requestHandlers.get('tools/list')
+                const envListed = (await envListHandler?.({}, {})) as { tools: { name: string }[] }
+                const toolCount = envListed.tools.length
 
-            delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+                delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+                mockRegisterTool.mockClear()
+                seedToolsList()
 
-            // Reset only the specific mock call counts we care about
-            mockRegisterTool.mockClear()
-            await createServer({
-                transport: 'stdio',
-                dbPath: './.test-output/vitest/test-server.db',
-            })
+                await createServer({
+                    transport: 'stdio',
+                    dbPath: './.test-output/vitest/test-server.db',
+                })
 
-            const unfilteredCount = mockRegisterTool.mock.calls.length
-            // Env-filtered should have fewer tools than unfiltered
-            expect(toolCount).toBeLessThan(unfilteredCount)
+                const unfilteredListHandler = requestHandlers.get('tools/list')
+                const unfilteredListed = (await unfilteredListHandler?.({}, {})) as {
+                    tools: { name: string }[]
+                }
+                const unfilteredCount = unfilteredListed.tools.length
+                expect(toolCount).toBeGreaterThan(0)
+                expect(toolCount).toBeLessThan(unfilteredCount)
+            } finally {
+                delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+                delete serverWithHandlers._requestHandlers
+            }
         })
     })
 
@@ -1387,7 +1372,7 @@ describe('McpServer', function () {
             // Success path — callTool dispatches to the group handler which calls db.createEntry
             mockCreateEntry.mockReturnValueOnce({ id: 99, content: 'passed' })
             const successResult = await handler(
-                { content: 'test', entry_type: 'personal_reflection' },
+                { content: 'test', entry_type: 'personal_reflection', workspace_id: 'default', project_number: 1 },
                 {}
             )
             expect(successResult.isError).toBeUndefined()

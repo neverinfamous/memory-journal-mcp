@@ -1,23 +1,47 @@
-import fs from 'fs';
-import path from 'path';
+import { readFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 
-const ssot = fs.readFileSync('C:/Users/chris/.gemini/antigravity/brain/669d9f8a-c14c-4dde-8806-f4acba74b6da/scratch/ssot-mapping.md', 'utf8');
-const toolMapPath = 'C:/Users/chris/Desktop/memory-journal-mcp/test-server/scripts/tool-map.json';
-const toolMapData = JSON.parse(fs.readFileSync(toolMapPath, 'utf8'));
+const scriptDir = dirname(fileURLToPath(import.meta.url))
+const projectDir = join(scriptDir, '..', '..')
+const referencePath = join(projectDir, 'test-server', 'tool-reference.md')
+const toolMapPath = join(scriptDir, 'tool-map.json')
 
-const regex = /`([^`]+)`/g;
-const ssotTools = [];
-let match;
-while ((match = regex.exec(ssot)) !== null) {
-  const t = match[1];
-  if (t !== 'test-server/scripts/tool-map.json' && t !== 'src/filtering/tool-constants.ts') {
-    ssotTools.push(t);
-  }
+const reference = readFileSync(referencePath, 'utf8')
+const toolMapData = JSON.parse(readFileSync(toolMapPath, 'utf8'))
+
+const ssotTools = []
+let inToolTable = false
+for (const line of reference.split('\n')) {
+    if (line.startsWith('| Tool')) {
+        inToolTable = true
+        continue
+    }
+    if (!inToolTable) {
+        continue
+    }
+    if (line.startsWith('| ---')) {
+        continue
+    }
+    const match = line.match(/^\| `([a-z0-9_-]+)`\s*\|/)
+    if (match?.[1] !== undefined) {
+        ssotTools.push(match[1])
+        continue
+    }
+    inToolTable = false
 }
 
-const mapTools = Object.keys(toolMapData.toolMap);
-const missingInMap = ssotTools.filter(t => !mapTools.includes(t));
-const missingInSSoT = mapTools.filter(t => !ssotTools.includes(t));
+const mapTools = Object.keys(toolMapData.toolMap)
+const missingInMap = ssotTools.filter((tool) => !mapTools.includes(tool))
+const missingInSSoT = mapTools.filter((tool) => !ssotTools.includes(tool))
 
-console.log('Missing in map:', missingInMap);
-console.log('Missing in SSoT:', missingInSSoT);
+console.log(`SSoT tools: ${ssotTools.length}`)
+console.log(`Map tools: ${mapTools.length}`)
+console.log('Missing in map:', missingInMap)
+console.log('Missing in SSoT:', missingInSSoT)
+
+if (missingInMap.length > 0 || missingInSSoT.length > 0) {
+    process.exit(1)
+}
+
+console.log('Tool map matches the tool reference.')

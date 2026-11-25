@@ -7,8 +7,10 @@
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { getEnabledGroups } from '../filtering/tool-filter.js'
+import { getEnabledGroups, isToolGroup } from '../filtering/tool-filter.js'
 import { TOOL_GROUPS } from '../filtering/tool-constants.js'
+import { sliceUntrustedInline } from '../handlers/resources/uri-and-fencing.js'
+import { extractPreview } from '../handlers/resources/core/briefing/preview-helpers.js'
 
 import { CORE_INSTRUCTIONS, CODE_MODE_INSTRUCTIONS } from './instructions/base.js';
 import { CORE_HELP } from './instructions/core.js';
@@ -24,14 +26,6 @@ import { BACKUP_HELP } from './instructions/backup.js';
 import { GOTCHAS_HELP } from './instructions/gotchas.js';
 import { TEMPLATES_HELP } from './instructions/templates.js';
 import { TEAM_HELP } from './instructions/team.js';
-/**
- * Resource definition for instruction generation
- */
-export interface ResourceDefinition {
-    uri: string
-    name: string
-    description?: string
-}
 
 /**
  * Prompt definition for instruction generation
@@ -58,20 +52,34 @@ export interface LatestEntrySnapshot {
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team", "codemode", "templates"];
+const HELP_GROUP_KEYS: readonly ToolGroup[] = [
+    'core',
+    'search',
+    'analytics',
+    'relationships',
+    'io',
+    'admin',
+    'github',
+    'git',
+    'backup',
+    'team',
+    'codemode',
+]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
  */
 function buildHelpPointers(groups: Set<ToolGroup>): string {
-    const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => {
-        return groups.has(k as ToolGroup)
-    })
+    const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => groups.has(k))
     if (enabledHelpGroups.length === 0) {
-        return '\n\nRead `memory://help/gotchas` for gotchas and critical usage patterns.'
+        return (
+            '\n\nRead `memory://help/gotchas` for gotchas and critical usage patterns.\n' +
+            'Read `memory://help/templates` for required entry content templates.'
+        )
     }
     return '\n\n## Available Help\n\n' +
         'Read `memory://help/gotchas` for gotchas and critical usage patterns.\n' +
+        'Read `memory://help/templates` for required entry content templates.\n' +
         'Read `memory://help/{group}` for: ' + enabledHelpGroups.join(', ') + '.'
 }
 
@@ -81,8 +89,9 @@ function buildHelpPointers(groups: Set<ToolGroup>): string {
 function buildActiveGroupsSummary(enabledTools: Set<string>): string {
     const activeGroups: { group: ToolGroup; tools: string[] }[] = []
 
-    for (const [group, allTools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
-        const enabledInGroup = allTools.filter((tool) => enabledTools.has(tool))
+    for (const group of Object.keys(TOOL_GROUPS)) {
+        if (!isToolGroup(group)) continue
+        const enabledInGroup = TOOL_GROUPS[group].filter((tool) => enabledTools.has(tool))
         if (enabledInGroup.length > 0) {
             activeGroups.push({ group, tools: enabledInGroup })
         }
@@ -90,7 +99,8 @@ function buildActiveGroupsSummary(enabledTools: Set<string>): string {
 
     if (activeGroups.length === 0) return ''
 
-    let summary = `\n\n## Active Tools (${String(enabledTools.size)})\n`
+    const activeCount = activeGroups.reduce((sum, g) => sum + g.tools.length, 0)
+    let summary = `\n\n## Active Tools (${String(activeCount)})\n`
     for (const { group, tools } of activeGroups) {
         summary += `**${group}**: ${tools.map((t) => `\`${t}\``).join(', ')}\n`
     }
@@ -112,13 +122,16 @@ function buildActiveGroupsSummary(enabledTools: Set<string>): string {
  * @param enabledGroups - Optional pre-computed enabled groups; derived from enabledTools if omitted
  * @param config - Server configuration for context
  */
+export type InstructionLevel = 'essential' | 'detailed' | 'full'
+
 export function generateStandardInstructions(
     enabledTools: Set<string>,
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     enabledGroups?: Set<ToolGroup>,
-    config?: { defaultWorkspaceId?: string }
+    config?: { defaultWorkspaceId?: string | undefined; instructionLevel?: InstructionLevel | undefined }
 ): string {
+    const level = config?.instructionLevel ?? 'detailed'
     // Derive enabled groups from enabled tools if not provided (backward compat)
     const groups = enabledGroups ?? getEnabledGroups(enabledTools)
 
@@ -126,31 +139,38 @@ export function generateStandardInstructions(
     let instructions = CORE_INSTRUCTIONS
 
     if (config?.defaultWorkspaceId) {
-        instructions += `\n\n### Multi-Tenancy\n**Active Workspace:** \`${config.defaultWorkspaceId}\`\nAll entries and searches are isolated to this workspace by default. Include \`workspace_id\` parameter in tool calls if you need to override this. When creating entries, \`workspace_id\` is automatically resolved from \`project_number\` or registry mappings if omitted.`
+        instructions += `\n\n### Multi-Tenancy\n**Active Workspace:** \`${config.defaultWorkspaceId}\`\nAll entries and searches are isolated to this workspace by default. Prefer passing explicit \`workspace_id\` and \`project_number\` on writes (and \`workspace_id\` on reads/searches to override the active workspace). When omitted, \`workspace_id\` resolves from \`project_number\`, \`projectRegistry\`, or the active workspace.`
     }
 
     // Code Mode snippet — only when codemode group is enabled
-    if (groups.has('codemode')) {
+    if (level !== 'essential' && groups.has('codemode')) {
         instructions += CODE_MODE_INSTRUCTIONS
     }
 
     // Add latest entry snapshot for immediate context (compact format)
-    if (latestEntry) {
-        const preview = latestEntry.content.slice(0, 120)
-        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
+    if (level !== 'essential' && latestEntry) {
+        const fencedPreview = sliceUntrustedInline(extractPreview(latestEntry.content, 120), 121)
+        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${fencedPreview}\n`
     }
 
     // Always include help pointers, active groups summary, and prompts
     instructions += buildHelpPointers(groups)
-    instructions += buildActiveGroupsSummary(enabledTools)
+    if (level !== 'essential') {
+        instructions += buildActiveGroupsSummary(enabledTools)
+    }
 
     // Add prompts section
-    if (prompts.length > 0) {
+    if (level !== 'essential' && prompts.length > 0) {
         instructions += `\n## Prompts (${String(prompts.length)})\n`
         instructions += 'Pre-built templates and guided workflows:\n'
         for (const prompt of prompts) {
             instructions += `- \`${prompt.name}\` - ${prompt.description ?? ''}\n`
         }
+    }
+
+    if (level === 'full') {
+        const gotchas = HELP_CONTENT.get('gotchas')
+        if (gotchas !== undefined) instructions += `\n\n${gotchas}`
     }
 
     return instructions
@@ -164,17 +184,21 @@ export function generateCodeModeInstructions(
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     enabledGroups?: Set<ToolGroup>,
-    config?: { defaultWorkspaceId?: string }
+    config?: { defaultWorkspaceId?: string | undefined; instructionLevel?: InstructionLevel | undefined }
 ): string {
-    const standard = generateStandardInstructions(enabledTools, prompts, latestEntry, enabledGroups, config)
-    return standard + '\n\n' + HELP_CONTENT.get('codemode')
+    const resolvedGroups = enabledGroups ?? getEnabledGroups(enabledTools)
+    const standard = generateStandardInstructions(
+        enabledTools,
+        prompts,
+        latestEntry,
+        resolvedGroups,
+        config
+    )
+    if (config?.instructionLevel === 'essential') {
+        return standard
+    }
+    return standard + '\n\n' + (HELP_CONTENT.get('codemode') ?? '')
 }
-
-/**
- * Static instructions for backward compatibility.
- * @deprecated Use generateStandardInstructions() instead for dynamic content
- */
-export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
 
 /**
  * Help content keyed by group name.

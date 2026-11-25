@@ -9,7 +9,8 @@
   "briefingWorkflows": 0,
   "briefingWorkflowStatus": false,
   "briefingCopilot": false,
-  "instructionLevel": "standard",
+  "instructionLevel": "detailed",
   "codemodeInternalFullAccess": false,
-  "teamDefaultRole": "admin"
+  "teamDefaultRole": "admin",
+  "defaultProjectNumber": 1
 }

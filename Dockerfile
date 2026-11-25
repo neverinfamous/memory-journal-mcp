@@ -2,10 +2,10 @@
 # Multi-stage build for optimized production image
 #
 # Security Notes:
-# - Last Docker Scout scan: 2026-11-02 on node:26.2.0-alpine (Alpine 3.23), 0 critical / 1 high / 2 medium.
-#   All three are Alpine OS packages with NO upstream fix available yet (accepted until fixed;
+# - Last Docker Scout scan: 2026-11-17 on node:26.13.1-alpine3.23, 0 critical / 1 high / 2 medium.
+#   All three are Alpine OS packages with no fixed package yet (accepted until fixed;
 #   re-check with `docker scout cves` on each base image or Alpine package update):
-#     - git 2.52.0-r0      HIGH   CVE-2025-66413  (runtime image; only matters when git runs against untrusted repos)
+#     - git 2.52.1-r0      HIGH   CVE-2025-66413  (Git for Windows NTLM; Alpine marks it unfixed. The November 2026 Git CVEs are fixed in 2.52.1.)
 #     - busybox 1.37.0-r30 MEDIUM CVE-2025-60876
 #     - nghttp2 1.69.0-r0  MEDIUM CVE-2026-58055
 #   CI gates already ignore unfixed findings (Scout `only-fixed: true`, Trivy `ignore-unfixed: true`).
@@ -15,14 +15,16 @@
 #   builder stage (pinned to pnpm@11.9.0 to match pnpm-lock.yaml / pnpm-workspace.yaml).
 # - Dependency pins live in pnpm-workspace.yaml `overrides` (mirrored in package.json) and .pnpmfile.cjs;
 #   .pnpmfile.cjs MUST be copied into every install stage or `--frozen-lockfile` fails the pnpmfile checksum.
-# - pnpm audit is clean as of this scan; there are no `npm pack` patched packages in this Dockerfile.
-FROM node:26.2.0-alpine AS builder
+# - Production `pnpm install --prod` has no npm advisory findings. The dev tree still has
+#   picomatch 4.0.7 (GHSA-fc5q-39xc-vjpf); no patched release exists, and it is not in the runtime image.
+#   There are no `npm pack` patched packages in this Dockerfile.
+FROM node:26.13.1-alpine3.23 AS builder
 
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
 # Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, libcrypto3 CVE-2026-45447, expat 2.10.0-r0 for CVE-2026-115506/118370/117610/113351)
-RUN apk add --no-cache python3 make g++ gettext git sqlite-dev && \
+RUN apk add --no-cache python3 make g++ gettext 'git>=2.52.1-r0' sqlite-dev && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main 'expat>=2.10.0-r0' 'libexpat>=2.10.0-r0' curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache
 
@@ -48,9 +50,15 @@ COPY src/ ./src/
 RUN pnpm run build
 
 # Compile sqlite-vec native extension from source for Alpine (musl libc)
-# We use v0.1.9 to match the package.json version
-RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.9.tar.gz | tar -xz && \
-    cd sqlite-vec-0.1.9 && \
+# Pinned by commit SHA and verified by SHA-256 tarball checksum
+ARG SQLITE_VEC_COMMIT=e9f598abfa0c06b328d8fe5da9c3760cce74be10
+ARG SQLITE_VEC_SHA256=ee2eb0be751c02286d5a6c6c113dd9e754f0ac29973b01aba35a2d736e35ed3b
+RUN curl -fsSL --proto '=https' --tlsv1.2 "https://github.com/asg017/sqlite-vec/archive/${SQLITE_VEC_COMMIT}.tar.gz" -o sqlite-vec.tar.gz && \
+    echo "${SQLITE_VEC_SHA256}  sqlite-vec.tar.gz" | sha256sum -c - && \
+    mkdir -p sqlite-vec-src && \
+    tar -xz --strip-components=1 -C sqlite-vec-src -f sqlite-vec.tar.gz && \
+    rm -f sqlite-vec.tar.gz && \
+    cd sqlite-vec-src && \
     sed -i 's/typedef u_int8_t uint8_t;//g' sqlite-vec.c && \
     sed -i 's/typedef u_int16_t uint16_t;//g' sqlite-vec.c && \
     sed -i 's/typedef u_int32_t uint32_t;//g' sqlite-vec.c && \
@@ -58,7 +66,7 @@ RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.9.tar.gz
     make loadable && \
     cp dist/vec0.so /app/vec0.so && \
     cd .. && \
-    rm -rf sqlite-vec-0.1.9
+    rm -rf sqlite-vec-src
 
 # Install production-only dependencies in a separate directory for clean copy
 RUN mkdir /app/prod_modules && \
@@ -76,7 +84,7 @@ RUN rm -rf /app/prod_modules/node_modules/onnxruntime-web \
            /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/win32
 
 # Production stage
-FROM node:26.2.0-alpine
+FROM node:26.13.1-alpine3.23
 
 WORKDIR /app
 
@@ -85,7 +93,7 @@ WORKDIR /app
 # Explicit expat/libexpat >=2.10.0-r0 upgrade for CVE-2026-24515, CVE-2026-25210, CVE-2026-115506, CVE-2026-118370, CVE-2026-117610, CVE-2026-113351
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
 # Explicit libcrypto3/libssl3 upgrade for CVE-2026-45447 (HIGH)
-RUN apk add --no-cache git ca-certificates && \
+RUN apk add --no-cache 'git>=2.52.1-r0' ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main 'expat>=2.10.0-r0' 'libexpat>=2.10.0-r0' curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
@@ -98,13 +106,13 @@ COPY skills ./skills
 COPY package*.json ./
 COPY LICENSE ./
 
-# Create data directory for SQLite database with proper permissions
-RUN mkdir -p /app/data && chmod 700 /app/data
+# Create writable data and logs directories while leaving /app read-only to appuser
+RUN mkdir -p /app/data /app/logs && chmod 700 /app/data /app/logs
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup && \
-    chown -R appuser:appgroup /app
+    chown -R appuser:appgroup /app/data /app/logs
 
 # Set environment variables
 ENV NODE_ENV=production

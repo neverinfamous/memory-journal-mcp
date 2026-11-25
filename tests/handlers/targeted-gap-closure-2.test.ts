@@ -9,11 +9,11 @@
  * - team/backup-tools.ts: both tools without teamDb
  * - team/export-tools.ts: without teamDb
  * - team/admin-tools.ts: without teamDb
- * - auth/auth-context.ts: runWithAuthContext, getAuthContext, isAuthenticated, getAuthenticatedScopes
+ * - auth/auth-context.ts: runWithAuthContext, getAuthContext
  * - utils/resource-annotations.ts: withPriority, withAutoRead, withSessionInit
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
@@ -66,13 +66,7 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     }
 })
 
-import {
-    runWithAuthContext,
-    getAuthContext,
-    withAuthContext,
-    isAuthenticated,
-    getAuthenticatedScopes,
-} from '../../src/auth/auth-context.js'
+import { runWithAuthContext, getAuthContext } from '../../src/auth/auth-context.js'
 import {
     withPriority,
     withAutoRead,
@@ -305,6 +299,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team vector tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_semantic_search should return error', async () => {
             const result = (await callTool(
                 'team_semantic_search',
@@ -358,6 +355,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team backup tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_backup should return error', async () => {
             const result = (await callTool(
                 'team_backup',
@@ -388,6 +388,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team export tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_export_entries should return error', async () => {
             const result = (await callTool(
                 'team_export_entries',
@@ -409,6 +412,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
     // ========================================================================
 
     describe('team admin tools without teamDb', () => {
+        beforeEach(() => {
+            process.env['TEAM_AUTHOR'] = 'test-author'
+        })
         it('team_update_entry should return error', async () => {
             const result = (await callTool(
                 'team_update_entry',
@@ -481,57 +487,6 @@ describe('Auth Context', () => {
 
         expect(result?.authenticated).toBe(true)
         expect(result?.claims?.sub).toBe('test-user')
-    })
-
-    it('withAuthContext should be an alias for runWithAuthContext', () => {
-        const mockContext = {
-            authenticated: true as const,
-            claims: { sub: 'alias-test', scopes: ['read'], exp: 0, iat: 0 },
-            scopes: ['read'],
-            token: 'test-token',
-        }
-
-        const result = withAuthContext(mockContext, () => getAuthContext())
-        expect(result?.claims?.sub).toBe('alias-test')
-    })
-
-    it('isAuthenticated should return false outside context', () => {
-        expect(isAuthenticated()).toBe(false)
-    })
-
-    it('isAuthenticated should return true within auth context', () => {
-        const result = runWithAuthContext(
-            {
-                authenticated: true,
-                claims: { sub: 'user', scopes: [], exp: 0, iat: 0 },
-                scopes: [],
-            },
-            () => isAuthenticated()
-        )
-        expect(result).toBe(true)
-    })
-
-    it('getAuthenticatedScopes should return empty array outside context', () => {
-        expect(getAuthenticatedScopes()).toEqual([])
-    })
-
-    it('getAuthenticatedScopes should return scopes within auth context', () => {
-        const result = runWithAuthContext(
-            {
-                authenticated: true,
-                claims: { sub: 'user', scopes: ['read', 'write'], exp: 0, iat: 0 },
-                scopes: ['read', 'write'],
-            },
-            () => getAuthenticatedScopes()
-        )
-        expect(result).toEqual(['read', 'write'])
-    })
-
-    it('getAuthenticatedScopes should return empty for unauthenticated context', () => {
-        const result = runWithAuthContext({ authenticated: false, scopes: [] }, () =>
-            getAuthenticatedScopes()
-        )
-        expect(result).toEqual([])
     })
 })
 

@@ -35,7 +35,7 @@ export interface GitHubPullRequest {
     title: string
     url: string
     state: 'OPEN' | 'CLOSED' | 'MERGED'
-    headRef?: string
+    headRef?: string | undefined
 }
 
 /**
@@ -176,7 +176,7 @@ export interface PopularPath {
 export interface ProjectV2StatusOption {
     id: string
     name: string
-    color?: string
+    color?: string | undefined
 }
 
 /**
@@ -188,9 +188,9 @@ export interface ProjectV2Item {
     url: string
     type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE'
     status: string | null
-    number?: number
-    labels?: string[]
-    assignees?: string[]
+    number?: number | undefined
+    labels?: string[] | undefined
+    assignees?: string[] | undefined
     createdAt: string
     updatedAt: string
 }
@@ -215,5 +215,5 @@ export interface KanbanBoard {
     statusOptions: ProjectV2StatusOption[]
     columns: KanbanColumn[]
     totalItems: number
-    truncated?: boolean
+    truncated?: boolean | undefined
 }

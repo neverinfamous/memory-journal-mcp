@@ -12,6 +12,8 @@ export {
     estimateTokens,
     estimatePayloadTokens,
     injectTokenEstimate,
+    getSerializedPayloadJson,
+    invalidateSerializedPayload,
     detectContentType,
 } from './token-estimator.js'
 

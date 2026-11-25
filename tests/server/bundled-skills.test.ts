@@ -76,6 +76,7 @@ describe('Bundled SEP-2640 Skills over MCP', () => {
         expect(file.verified).toBe(true)
         expect(file.uri).toBe('skill://memory-journal-mcp/SKILL.md')
         expect(file.body).toContain('# Memory Journal MCP Guidelines')
+        expect(file.body).not.toMatch(/[A-Za-z]:\\Users\\|\/Users\/|\/home\/|\/mnt\/[a-z]\/Users\//i)
 
         const resources = await client.listResources()
         expect(resources.resources.map((r) => r.uri)).toContain(

@@ -1,137 +1,62 @@
-import { z } from 'zod'
-import {
-    ValidationError,
-    ResourceNotFoundError,
-} from '../../../types/errors.js'
-import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { ValidationError, ResourceNotFoundError } from '../../../types/errors.js'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../../utils/security-utils.js'
 import { getCallerIdentity } from './rbac.js'
-
-// ============================================================================
-// Schemas
-// ============================================================================
-
-const aliasNames = ['text', 'message', 'description', 'name', 'from', 'source'];
-const canonicalNames = ['target', 'to', 'canonical', 'dest'];
-const searchNames = ['q', 'query', 'search'];
-
-const preprocessAlias = (val: unknown): unknown => {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) };
-        let modified = false;
-        
-        for (const key of aliasNames) {
-            if (key in obj && !('alias' in obj)) {
-                obj['alias'] = obj[key];
-                Reflect.deleteProperty(obj, key);
-                modified = true;
-                break;
-            }
-        }
-        for (const key of canonicalNames) {
-            if (key in obj && !('canonical_author' in obj)) {
-                obj['canonical_author'] = obj[key];
-                Reflect.deleteProperty(obj, key);
-                modified = true;
-                break;
-            }
-        }
-        for (const key of searchNames) {
-            if (key in obj) {
-                if (!('canonical_author' in obj) && !('author' in obj) && !('alias' in obj)) {
-                    // map q to canonical_author, author, or alias based on which schema it is
-                    obj['canonical_author'] = obj[key];
-                    obj['author'] = obj[key];
-                    obj['alias'] = obj[key];
-                }
-                Reflect.deleteProperty(obj, key);
-                modified = true;
-                break;
-            }
-        }
-        // fix 'author' vs 'canonical_author' confusion
-        if ('author' in obj && !('canonical_author' in obj)) {
-            obj['canonical_author'] = obj['author'];
-        }
-        return modified ? obj : val;
-    }
-    return val;
-};
-
-const AddAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
-    alias: z.string().min(1).max(255).describe('The raw author name to map (e.g., "Chris" or "GitHub: neverinfamous")'),
-    canonical_author: z.string().min(1).max(255).describe('The canonical author identity to map the alias to (e.g., "christopher")'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}))
-
-const AddAuthorAliasOutputSchema = z.object({
-    success: z.boolean(),
-    alias: z.object({
-        id: z.number(),
-        alias: z.string(),
-        canonicalAuthor: z.string(),
-        createdAt: z.string(),
-        createdBy: z.string().nullable().optional()
-    }).optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
-
-const RemoveAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
-    alias: z.string().min(1).max(255).describe('The alias mapping to remove'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}))
-
-const RemoveAuthorAliasOutputSchema = z.object({
-    success: z.boolean().optional(),
-    error: z.string().optional()
-}).extend(ErrorFieldsMixin.shape)
-
-const ListAuthorAliasesSchema = z.preprocess(preprocessAlias, z.object({
-    canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}))
-
-const ListAuthorAliasesOutputSchema = z.object({
-    success: z.boolean().default(true),
-    aliases: z.array(z.object({
-        id: z.number(),
-        alias: z.string(),
-        canonicalAuthor: z.string(),
-        createdAt: z.string(),
-        createdBy: z.string().nullable().optional()
-    })).optional(),
-    error: z.string().optional()
-}).extend(ErrorFieldsMixin.shape)
-
-const ResolveAuthorSchema = z.preprocess(preprocessAlias, z.object({
-    author: z.string().min(1).describe('The raw author name to resolve'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}))
-
-const ResolveAuthorOutputSchema = z.object({
-    original_author: z.string().optional(),
-    canonical_author: z.string().optional(),
-    is_aliased: z.boolean().optional(),
-    error: z.string().optional()
-}).extend(ErrorFieldsMixin.shape)
-
-const ConsolidateAuthorsSchema = z.preprocess(preprocessAlias, z.object({
-    canonical_author: z.string().min(1).max(255).describe('The canonical author name. All entries matching any of this author\'s aliases will be updated to use this canonical name.'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}))
-
-const ConsolidateAuthorsOutputSchema = z.object({
-    success: z.boolean().optional(),
-    updated_count: z.number().optional(),
-    canonical_author: z.string().optional(),
-    error: z.string().optional()
-}).extend(ErrorFieldsMixin.shape)
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import {
+    AddAuthorAliasSchema,
+    AddAuthorAliasSchemaMcp,
+    AddAuthorAliasOutputSchema,
+    RemoveAuthorAliasSchema,
+    RemoveAuthorAliasSchemaMcp,
+    RemoveAuthorAliasOutputSchema,
+    ListAuthorAliasesSchema,
+    ListAuthorAliasesSchemaMcp,
+    ListAuthorAliasesOutputSchema,
+    ResolveAuthorSchema,
+    ResolveAuthorSchemaMcp,
+    ResolveAuthorOutputSchema,
+    ConsolidateAuthorsSchema,
+    ConsolidateAuthorsSchemaMcp,
+    ConsolidateAuthorsOutputSchema,
+} from './alias-schemas.js'
 
 // ============================================================================
 // Handlers
 // ============================================================================
+
+function scopedWorkspace(
+    workspaceId: string | undefined,
+    projectNumber: number | undefined,
+    context: ToolContext
+): string {
+    return resolveWorkspaceId(workspaceId, projectNumber, context.config)
+}
+
+function scopedWriteWorkspace(
+    workspaceId: string | undefined,
+    projectNumber: number | undefined,
+    context: ToolContext
+): string {
+    return resolveWriteWorkspaceId(workspaceId, projectNumber, context.config)
+}
+
+function sanitizeAliasRecord<
+    T extends { alias: string; canonicalAuthor: string; createdBy?: string | null },
+>(record: T): T {
+    return {
+        ...record,
+        alias: sanitizeAuthor(record.alias),
+        canonicalAuthor: sanitizeAuthor(record.canonicalAuthor),
+        ...(record.createdBy !== undefined
+            ? { createdBy: record.createdBy !== null ? sanitizeAuthor(record.createdBy) : null }
+            : {}),
+    }
+}
 
 function handleAddAuthorAlias(context: ToolContext) {
     return (params: unknown) => {
@@ -140,7 +65,8 @@ function handleAddAuthorAlias(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { alias, canonical_author } = AddAuthorAliasSchema.parse(params)
+            const { alias, canonical_author, project_number, workspace_id } = AddAuthorAliasSchema.parse(params)
+            const workspaceId = scopedWriteWorkspace(workspace_id, project_number, context)
 
             // Check if the alias is actually an existing canonical member
             const existingMember = teamDb.getTeamMember(alias)
@@ -151,11 +77,12 @@ function handleAddAuthorAlias(context: ToolContext) {
                 )
             }
 
-            const createdAlias = teamDb.addAuthorAlias(alias, canonical_author, getCallerIdentity(params as Record<string, unknown>))
-            
+            const caller = getCallerIdentity()
+            const createdAlias = teamDb.addAuthorAlias(alias, canonical_author, caller, workspaceId)
+
             return {
                 success: true,
-                alias: createdAlias,
+                alias: sanitizeAliasRecord(createdAlias),
             }
         } catch (error) {
             return formatHandlerError(error)
@@ -170,13 +97,14 @@ function handleRemoveAuthorAlias(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { alias } = RemoveAuthorAliasSchema.parse(params)
+            const { alias, project_number, workspace_id } = RemoveAuthorAliasSchema.parse(params)
+            const workspaceId = scopedWriteWorkspace(workspace_id, project_number, context)
 
-            const success = teamDb.removeAuthorAlias(alias)
+            const success = teamDb.removeAuthorAlias(alias, workspaceId)
             if (!success) {
                 throw new ResourceNotFoundError('AuthorAlias', alias)
             }
-            
+
             return {
                 success: true,
             }
@@ -193,13 +121,14 @@ function handleListAuthorAliases(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { canonical_author } = ListAuthorAliasesSchema.parse(params)
+            const { canonical_author, project_number, workspace_id } = ListAuthorAliasesSchema.parse(params)
+            const workspaceId = scopedWorkspace(workspace_id, project_number, context)
 
-            const aliases = teamDb.listAuthorAliases(canonical_author)
-            
+            const aliases = teamDb.listAuthorAliases(canonical_author, workspaceId)
+
             return {
                 success: true,
-                aliases,
+                aliases: aliases.map(sanitizeAliasRecord),
             }
         } catch (error) {
             return formatHandlerError(error)
@@ -214,13 +143,18 @@ function handleResolveAuthor(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { author } = ResolveAuthorSchema.parse(params)
+            const { author, project_number, workspace_id } = ResolveAuthorSchema.parse(params)
+            if (workspace_id?.trim() === '*') {
+                throw new ValidationError("workspace_id '*' is not valid for team_resolve_author; pass a specific workspace_id.")
+            }
+            const workspaceId = scopedWorkspace(workspace_id, project_number, context)
 
-            const resolved = teamDb.resolveAuthor(author)
-            
+            const resolved = teamDb.resolveAuthor(author, workspaceId)
+
             return {
-                original_author: author,
-                canonical_author: resolved,
+                success: true,
+                original_author: sanitizeAuthor(author),
+                canonical_author: sanitizeAuthor(resolved),
                 is_aliased: resolved !== author,
             }
         } catch (error) {
@@ -236,14 +170,38 @@ function handleConsolidateAuthors(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { canonical_author } = ConsolidateAuthorsSchema.parse(params)
+            const { canonical_author, project_number, workspace_id } = ConsolidateAuthorsSchema.parse(params)
+            if (workspace_id?.trim() === '*') {
+                throw new ValidationError(
+                    "Wildcard workspace_id '*' is not supported for team_consolidate_authors. Specify a concrete workspace_id."
+                )
+            }
+            const workspaceId = scopedWriteWorkspace(workspace_id, project_number, context)
+            const scopedProject = resolveTeamProjectNumber(
+                context,
+                workspaceId,
+                project_number,
+                workspace_id
+            )
+            const effectiveProject = alignedProjectFilter(
+                workspaceId,
+                scopedProject ?? undefined,
+                activeProjectRegistry(context.config?.projectRegistry)
+            )
 
-            const updatedCount = teamDb.consolidateAuthors(canonical_author)
-            
+            const updatedCount =
+                effectiveProject !== undefined
+                    ? teamDb.consolidateAuthors(canonical_author, workspaceId, effectiveProject)
+                    : teamDb.consolidateAuthors(canonical_author, workspaceId)
+
+            if (updatedCount > 0) {
+                triggerTeamNotifications(context)
+            }
+
             return {
                 success: true,
                 updated_count: updatedCount,
-                canonical_author,
+                canonical_author: sanitizeAuthor(canonical_author),
             }
         } catch (error) {
             return formatHandlerError(error)
@@ -255,6 +213,26 @@ function handleConsolidateAuthors(context: ToolContext) {
 // Tool Registration
 // ============================================================================
 
+function createTeamConsolidateAuthorsTool(context: ToolContext): ToolDefinition {
+    return {
+        name: 'team_consolidate_authors',
+        title: 'Consolidate Authors',
+        description:
+            "Retroactively rewrite all past entries matching an author's aliases to the canonical author name. Requires admin role. This operation modifies database entries.",
+        group: 'team',
+        inputSchema: ConsolidateAuthorsSchemaMcp,
+        outputSchema: ConsolidateAuthorsOutputSchema,
+        annotations: {
+            readOnlyHint: false,
+            destructiveHint: true,
+            idempotentHint: false,
+            openWorldHint: false,
+        },
+        handler: handleConsolidateAuthors(context),
+        capabilities: { requiresAdminScope: true },
+    }
+}
+
 export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -262,7 +240,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'Add Author Alias',
             description: 'Map a raw author name to a canonical identity. Requires admin role. Used to consolidate attribution for team analytics when one person uses multiple usernames.',
             group: 'team',
-            inputSchema: AddAuthorAliasSchema,
+            inputSchema: AddAuthorAliasSchemaMcp,
             outputSchema: AddAuthorAliasOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -278,7 +256,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'Remove Author Alias',
             description: 'Remove an author alias mapping. Requires admin role.',
             group: 'team',
-            inputSchema: RemoveAuthorAliasSchema,
+            inputSchema: RemoveAuthorAliasSchemaMcp,
             outputSchema: RemoveAuthorAliasOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -294,7 +272,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'List Author Aliases',
             description: 'List all registered author aliases. Requires admin role.',
             group: 'team',
-            inputSchema: ListAuthorAliasesSchema,
+            inputSchema: ListAuthorAliasesSchemaMcp,
             outputSchema: ListAuthorAliasesOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -310,7 +288,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             title: 'Resolve Author',
             description: 'Resolve a raw author name to its canonical identity using registered aliases. Requires admin role.',
             group: 'team',
-            inputSchema: ResolveAuthorSchema,
+            inputSchema: ResolveAuthorSchemaMcp,
             outputSchema: ResolveAuthorOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -321,22 +299,6 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             handler: handleResolveAuthor(context),
             capabilities: { requiresAdminScope: true },
         },
-        {
-            name: 'team_consolidate_authors',
-            title: 'Consolidate Authors',
-            description: 'Retroactively rewrite all past entries matching an author\'s aliases to the canonical author name. Requires admin role. This operation modifies database entries.',
-            group: 'team',
-            inputSchema: ConsolidateAuthorsSchema,
-            outputSchema: ConsolidateAuthorsOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: true,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: handleConsolidateAuthors(context),
-            capabilities: { requiresAdminScope: true },
-        },
+        createTeamConsolidateAuthorsTool(context),
     ]
 }
-

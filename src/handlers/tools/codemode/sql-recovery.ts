@@ -2,370 +2,372 @@
  * SQL and prepared statement recovery helpers for Code Mode execution payloads.
  */
 
-import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
-import { extractAndRecoverEntryCode } from './json-entry-recovery.js'
+import {
+    ENTRY_TABLE_NAMES,
+    extractFromTableName,
+    extractTopLevelUpdateSetClause,
+    extractTopLevelWhereClause,
+    findTopLevelSqlKeyword,
+    hasUnsupportedWherePredicate,
+    isSingleSqlStringLiteral,
+    isSupportedWhereClause,
+    scopeFromSqlLiterals,
+    splitSqlValueList,
+    splitTopLevelSqlAndClauses,
+    stripBalancedOuterParens,
+} from '../../../codemode/sql-literal-scope.js'
+import { cleanSqlText, parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
+import { hasUnsupportedSqlTrailingClause } from '../../../codemode/sql-clause-validator.js'
+import { hasMultipleTopLevelSqlStatements } from '../../../codemode/sql-placeholder-helpers.js'
+import {
+    parseCanonicalPositiveInt,
+    parsePositiveProjectNumber,
+} from '../../../utils/safe-positive-int.js'
+
+const SPECIAL_TABLES = new Set([
+    'tags',
+    'entry_tags',
+    'journal_tags',
+    'projects',
+    'project_registry',
+    'relationships',
+    'entry_relationships',
+    'links',
+    'team_members',
+    'members',
+    'author_aliases',
+    'aliases',
+    'audit_log',
+    'audit',
+    'audit_logs',
+])
+
+const CLAUSE_ID_REGEX =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)$/i
+const CLAUSE_LIKE_REGEX =
+    /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:content|title|tags|body|text|summary|name)[`"']?\s+(?:LIKE|ILIKE|=)\s*('(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*")$/i
+
+function unquoteSqlString(raw: string): string | null {
+    const trimmed = raw.trim()
+    if (!isSingleSqlStringLiteral(trimmed)) return null
+    const quote = trimmed[0]
+    const inner = trimmed.slice(1, -1)
+    const doubled = quote === "'" ? inner.replace(/''/g, "'") : inner.replace(/""/g, '"')
+    return doubled.replace(/\\(['"\\])/g, '$1')
+}
+
+function parseCleanRecoverableSql(code: string): string | null {
+    if (!code || typeof code !== 'string') return null
+    const trimmed = code.trim()
+    if (/\b(?:const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
+        return null
+    }
+    const cleanSql = cleanSqlText(trimmed)
+    if (hasMultipleTopLevelSqlStatements(cleanSql)) return null
+    const isSql =
+        /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(cleanSql) ||
+        /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
+    if (!isSql) return null
+    if (
+        /^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN|SCHEMA|TABLES)\b/i.test(cleanSql) ||
+        /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
+    ) {
+        return null
+    }
+    if (/^SELECT\b/i.test(cleanSql) && hasUnsupportedSqlTrailingClause(cleanSql, 'select')) {
+        return null
+    }
+    if (/^(?:UPDATE|DELETE)\b/i.test(cleanSql) && hasUnsupportedSqlTrailingClause(cleanSql, 'mutation')) {
+        return null
+    }
+    return cleanSql
+}
+
+function extractTopLevelWhereId(whereClause: string): number | undefined {
+    for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
+        const match = CLAUSE_ID_REGEX.exec(stripBalancedOuterParens(rawClause))
+        if (match?.[1] !== undefined) return parsePositiveProjectNumber(match[1])
+    }
+    return undefined
+}
+
+function extractTopLevelWhereLikeQuery(whereClause: string): string | undefined {
+    for (const rawClause of splitTopLevelSqlAndClauses(whereClause)) {
+        const match = CLAUSE_LIKE_REGEX.exec(stripBalancedOuterParens(rawClause))
+        if (match?.[1] === undefined) continue
+        const unquoted = unquoteSqlString(match[1])
+        if (unquoted === null) continue
+        const query = unquoted.replace(/^%+|%+$/g, '')
+        if (query !== '') return query
+    }
+    return undefined
+}
+
+function extractTopLevelLimit(cleanSql: string): number | undefined {
+    const limitIdx = findTopLevelSqlKeyword(cleanSql, 'LIMIT')
+    if (limitIdx < 0) return undefined
+    const match = /^LIMIT\s+(\d+)\b/i.exec(cleanSql.slice(limitIdx))
+    return match?.[1] !== undefined ? parseCanonicalPositiveInt(match[1]) : undefined
+}
+
+function specialWhereAllowedCols(table: string): readonly string[] {
+    if (
+        table === 'projects' ||
+        table === 'project_registry' ||
+        table === 'team_members' ||
+        table === 'members'
+    ) {
+        return []
+    }
+    if (table === 'relationships' || table === 'entry_relationships' || table === 'links') {
+        return ['workspace_id', 'project_number', 'project_id', 'id', 'entry_id']
+    }
+    return ['workspace_id', 'project_number', 'project_id']
+}
+
+function isValidSpecialWhereRhs(col: string, rhs: string): boolean {
+    if (col === 'workspace_id') {
+        const val = unquoteSqlString(rhs)
+        return val !== null && val.trim() !== ''
+    }
+    const raw = (unquoteSqlString(rhs) ?? rhs).trim()
+    return parseCanonicalPositiveInt(raw) !== undefined
+}
+
+function hasUnsupportedSpecialTableWhere(sqlWhere: string, allowedCols: readonly string[]): boolean {
+    const clauses = splitTopLevelSqlAndClauses(sqlWhere)
+    if (clauses.length === 0) return false
+    const allowedSet = new Set(allowedCols.map((c) => c.toLowerCase()))
+    const seenCols = new Set<string>()
+    for (const rawClause of clauses) {
+        const clause = stripBalancedOuterParens(rawClause)
+        if (clause === '') return true
+        const match =
+            /^(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z_][\w]*)[`"']?\s*=\s*('(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"|\d+)$/i.exec(
+                clause
+            )
+        if (match?.[1] === undefined || match[2] === undefined) return true
+        const col = match[1].toLowerCase()
+        const canonicalCol =
+            col === 'id' || col === 'entry_id'
+                ? 'id'
+                : col === 'project_number' || col === 'project_id'
+                  ? 'project_number'
+                  : col
+        if (!allowedSet.has(col) || seenCols.has(canonicalCol) || !isValidSpecialWhereRhs(col, match[2])) {
+            return true
+        }
+        seenCols.add(canonicalCol)
+    }
+    return false
+}
+
+function recoverSpecialTableSelect(
+    cleanSql: string,
+    tableName: string,
+    whereClause: string,
+    idVal: number | undefined,
+    limitVal: number | undefined,
+    scopeFields: Record<string, unknown>
+): string | null {
+    if (!/^SELECT\b/i.test(cleanSql)) return null
+    if (hasUnsupportedSpecialTableWhere(whereClause, specialWhereAllowedCols(tableName))) {
+        return null
+    }
+    if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
+        const relParams: Record<string, unknown> = idVal !== undefined ? { entry_id: idVal, ...scopeFields } : { ...scopeFields }
+        if (limitVal !== undefined) relParams['limit'] = limitVal
+        return `return await mj.relationships.visualizeRelationships(${JSON.stringify(relParams)});`
+    }
+    if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
+        const auditParams: Record<string, unknown> = limitVal !== undefined ? { ...scopeFields, limit: limitVal } : scopeFields
+        return `return await mj.admin.searchAuditLog(${JSON.stringify(auditParams)});`
+    }
+    if (limitVal !== undefined) return null
+    if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
+        return `return await mj.core.listTags(${JSON.stringify(scopeFields)});`
+    }
+    if (tableName === 'projects' || tableName === 'project_registry') {
+        return `return await mj.admin.listProjects(${JSON.stringify(scopeFields)});`
+    }
+    if (tableName === 'team_members' || tableName === 'members') {
+        return `return await mj.team.teamListMembers(${JSON.stringify(scopeFields)});`
+    }
+    return `return await mj.team.teamListAuthorAliases(${JSON.stringify(scopeFields)});`
+}
+
+function recoverEntrySelect(
+    cleanSql: string,
+    tableName: string | undefined,
+    whereClause: string,
+    idVal: number | undefined,
+    limitVal: number | undefined,
+    scopeFields: Record<string, unknown>
+): string | null {
+    if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return null
+    if (
+        whereClause === '' ||
+        !isSupportedWhereClause(whereClause, {
+            allowPlaceholder: false,
+            allowSelectContentEquality: true,
+        })
+    ) {
+        return null
+    }
+    const wherePos = findTopLevelSqlKeyword(cleanSql, 'WHERE')
+    const selectHead = (wherePos >= 0 ? cleanSql.slice(0, wherePos) : cleanSql).replace(
+        /'(?:\\.|''|[^'\\])*'|"(?:\\.|""|[^"\\])*"/g,
+        "''"
+    )
+    if (/\b(?:COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(selectHead)) return null
+    if (idVal !== undefined) {
+        if (extractTopLevelWhereLikeQuery(whereClause) !== undefined) return null
+        if (Object.keys(scopeFields).length === 0) {
+            return `return await mj.core.getEntryById({ entry_id: ${String(idVal)} });`
+        }
+        return `return await mj.core.getEntryById(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
+    }
+    const searchQuery = extractTopLevelWhereLikeQuery(whereClause)
+    if (searchQuery !== undefined) {
+        const searchParams: Record<string, unknown> = { query: searchQuery, ...scopeFields }
+        if (limitVal !== undefined) searchParams['limit'] = limitVal
+        return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
+    }
+    return null
+}
+
+function assignSqlUpdateSetField(
+    setFields: Record<string, unknown>,
+    col: string,
+    rhs: string
+): boolean {
+    if (col === 'content' || col === 'title' || col === 'entry_type' || col === 'type') {
+        const val = unquoteSqlString(rhs)
+        if (val === null || val === '') return false
+        setFields[col === 'type' ? 'entry_type' : col] = val
+        return true
+    }
+    if (col === 'significance_type') {
+        if (/^null$/i.test(rhs)) {
+            setFields['significance_type'] = null
+            return true
+        }
+        const val = unquoteSqlString(rhs)
+        if (val === null) return false
+        setFields['significance_type'] = val
+        return true
+    }
+    if (col === 'workspace_id') {
+        const ws = unquoteSqlString(rhs)?.trim()
+        if (ws === undefined || ws === '') return false
+        setFields['target_workspace_id'] = ws
+        return true
+    }
+    if (col === 'project_number' || col === 'project_id') {
+        if (/^null$/i.test(rhs)) {
+            setFields['project_number'] = null
+            return true
+        }
+        const cleaned = (unquoteSqlString(rhs) ?? rhs).trim()
+        const n = parsePositiveProjectNumber(cleaned)
+        if (n === undefined) return false
+        setFields['project_number'] = n
+        return true
+    }
+    return false
+}
+
+function recoverEntryUpdate(
+    cleanSql: string,
+    updateTable: string | undefined,
+    whereClause: string,
+    idVal: number | undefined,
+    scopeFields: Record<string, unknown>
+): string | null {
+    if (updateTable === undefined || !ENTRY_TABLE_NAMES.has(updateTable) || idVal === undefined) {
+        return null
+    }
+    if (whereClause === '' || !isSupportedWhereClause(whereClause, { allowPlaceholder: false })) {
+        return null
+    }
+    const setClause = extractTopLevelUpdateSetClause(cleanSql)
+    const assignments = splitSqlValueList(setClause)
+    if (assignments.length === 0) return null
+    const setFields: Record<string, unknown> = {}
+    for (const assignment of assignments) {
+        const eq = assignment.indexOf('=')
+        if (eq < 0) return null
+        const col = assignment
+            .slice(0, eq)
+            .trim()
+            .replace(/[`"']/g, '')
+            .replace(/^[a-zA-Z_][\w]*\./, '')
+            .toLowerCase()
+        const rhs = assignment.slice(eq + 1).trim()
+        if (!assignSqlUpdateSetField(setFields, col, rhs)) return null
+    }
+    if (Object.keys(setFields).length === 0) return null
+    const whereProj =
+        typeof scopeFields['project_number'] === 'number' ? scopeFields['project_number'] : undefined
+    const hasSetProj = Object.hasOwn(setFields, 'project_number') && setFields['project_number'] !== undefined
+    if (hasSetProj && whereProj !== undefined && setFields['project_number'] !== whereProj) {
+        return null
+    }
+    const updatePayload: Record<string, unknown> = {
+        entry_id: idVal,
+        ...setFields,
+        ...scopeFields,
+        ...(whereProj !== undefined ? { project_number: whereProj } : {}),
+    }
+    return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
+}
 
 /**
  * Auto-heals raw SQL queries passed as code or script in Code Mode,
  * translating them to corresponding type-safe mj.* Code Mode API calls.
  */
 export function extractAndRecoverSqlCode(code: string): string | null {
-    if (!code || typeof code !== 'string') return null
-    const trimmed = code.trim()
+    const cleanSql = parseCleanRecoverableSql(code)
+    if (cleanSql === null) return null
+    if (hasUnsupportedWherePredicate(cleanSql)) return null
 
-    if (/\b(?:const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
+    const tableName = extractFromTableName(cleanSql)
+    const updateTableMatch = /^UPDATE\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const updateTable = updateTableMatch?.[1]?.toLowerCase()
+    const limitVal = extractTopLevelLimit(cleanSql)
+    const whereClause = extractTopLevelWhereClause(cleanSql)
+    const idVal = extractTopLevelWhereId(whereClause)
+    const scopeFields = scopeFromSqlLiterals(cleanSql)
+
+    if (/^SELECT\b/i.test(cleanSql) && tableName !== undefined && SPECIAL_TABLES.has(tableName)) {
+        return recoverSpecialTableSelect(cleanSql, tableName, whereClause, idVal, limitVal, scopeFields)
+    }
+    if (/^SELECT\b/i.test(cleanSql)) {
+        return recoverEntrySelect(cleanSql, tableName, whereClause, idVal, limitVal, scopeFields)
+    }
+    if (/^INSERT\s+INTO\b/i.test(cleanSql)) {
+        const parsedInsert = parseSqlStatement(cleanSql, [])
+        if (parsedInsert.action === 'create') {
+            return `return await mj.core.createEntry(${JSON.stringify(parsedInsert.params)});`
+        }
         return null
     }
-
-    const cleanSql = trimmed
-        .replace(/^--[^\n]*\n/gm, '')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .trim()
-
-    const isSql =
-        /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(cleanSql) ||
-        /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
-    if (!isSql) return null
-
-    if (
-        /^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN|SCHEMA|TABLES)\b/i.test(cleanSql) ||
-        /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
-    ) {
-        return `return await mj.analytics.getStatistics({});`
-    }
-
-    const fromMatch = /\bFROM\s+[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
-    const tableName = fromMatch?.[1]?.toLowerCase()
-
-    const limitMatch = /\bLIMIT\s+(\d+)/i.exec(cleanSql)
-    const limitVal = limitMatch?.[1] !== undefined ? parseInt(limitMatch[1], 10) : undefined
-
-    const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
-    const idVal = idMatch?.[1] !== undefined ? parseInt(idMatch[1], 10) : undefined
-
-    const likeMatch = /\bWHERE\s+[`"']?(?:[a-zA-Z0-9_]+)[`"']?\s+(?:LIKE|ILIKE|=)\s*['"]%?([^%'"]+)%?['"]/i.exec(cleanSql)
-    const searchQuery = likeMatch?.[1]
-
-    const isCount = /\bCOUNT\s*\(/i.test(cleanSql)
-
-    if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
-        return `return await mj.core.listTags({});`
-    }
-    if (tableName === 'projects' || tableName === 'project_registry') {
-        return `return await mj.admin.listProjects({});`
-    }
-    if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
-        if (idVal !== undefined) {
-            return `return await mj.relationships.visualizeRelationships({ entry_id: ${idVal} });`
-        }
-        return `return await mj.relationships.visualizeRelationships({});`
-    }
-    if (tableName === 'team_members' || tableName === 'members') {
-        return `return await mj.team.teamListMembers({});`
-    }
-    if (tableName === 'author_aliases' || tableName === 'aliases') {
-        return `return await mj.team.teamListAuthorAliases({});`
-    }
-    if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
-        return `return await mj.core.searchAuditLog({});`
-    }
-
-    if (/^SELECT\b/i.test(cleanSql)) {
-        if (isCount) {
-            return `return await mj.analytics.getStatistics({});`
-        }
-        if (idVal !== undefined) {
-            return `return await mj.core.getEntryById({ entry_id: ${idVal} });`
-        }
-        if (searchQuery !== undefined && searchQuery !== '') {
-            const searchParams: Record<string, unknown> = { query: searchQuery }
-            if (limitVal !== undefined) searchParams['limit'] = limitVal
-            return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
-        }
-        const projectMatch = /\bWHERE\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
-        const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
-
-        const typeMatch = /\bWHERE\s+[`"']?(?:type|entry_type)[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
-        const typeVal = typeMatch?.[1]
-
-        const params: Record<string, unknown> = {
-            limit: limitVal ?? 10,
-        }
-        if (projectVal !== undefined) params['project_number'] = projectVal
-        if (typeVal !== undefined) params['entry_type'] = typeVal
-
-        return `return await mj.core.getRecentEntries(${JSON.stringify(params)});`
-    }
-
-    if (/^INSERT\s+INTO\b/i.test(cleanSql)) {
-        const rec = extractAndRecoverEntryCode(cleanSql)
-        if (rec !== null) return rec
-        return `return await mj.createEntry({ content: ${JSON.stringify(cleanSql)} });`
-    }
-
     if (/^UPDATE\b/i.test(cleanSql)) {
-        if (idVal !== undefined) {
-            const updatePayload: Record<string, unknown> = { entry_id: idVal }
-            const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*(['"])([\s\S]*?)\1/i.exec(cleanSql)
-            if (setContentMatch?.[2] !== undefined) {
-                updatePayload['content'] = setContentMatch[2]
-            }
-            return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
-        }
+        return recoverEntryUpdate(cleanSql, updateTable, whereClause, idVal, scopeFields)
     }
-
-    if (/^DELETE\s+FROM\b/i.test(cleanSql)) {
-        if (idVal !== undefined) {
-            return `return await mj.core.deleteEntry({ entry_id: ${idVal} });`
+    if (/^DELETE\b/i.test(cleanSql)) {
+        if (
+            tableName === undefined ||
+            !ENTRY_TABLE_NAMES.has(tableName) ||
+            idVal === undefined ||
+            whereClause === '' ||
+            !isSupportedWhereClause(whereClause, { allowPlaceholder: false })
+        ) {
+            return null
         }
+        return `return await mj.admin.deleteEntry(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
     }
-
-    return `return await mj.core.getRecentEntries({ limit: ${limitVal ?? 10} });`
-}
-
-function splitTopLevelCommaArgs(rawArgs: string): string[] {
-    const tokens: string[] = []
-    let current = ''
-    let quote: string | null = null
-    let escaped = false
-    let depth = 0
-
-    for (const ch of rawArgs) {
-        if (quote !== null) {
-            current += ch
-            if (escaped) {
-                escaped = false
-            } else if (ch === '\\') {
-                escaped = true
-            } else if (ch === quote) {
-                quote = null
-            }
-            continue
-        }
-
-        if (ch === '"' || ch === "'" || ch === '`') {
-            quote = ch
-            current += ch
-        } else if (ch === '[' || ch === '{' || ch === '(') {
-            depth++
-            current += ch
-        } else if (ch === ']' || ch === '}' || ch === ')') {
-            if (depth > 0) depth--
-            current += ch
-        } else if (ch === ',' && depth === 0) {
-            tokens.push(current)
-            current = ''
-        } else {
-            current += ch
-        }
-    }
-    if (current.trim().length > 0) {
-        tokens.push(current)
-    }
-    return tokens
-}
-
-function unescapeStringLiteral(inner: string): string {
-    let result = ''
-    for (let i = 0; i < inner.length; i++) {
-        const ch = inner[i] ?? ''
-        if (ch === '\\' && i + 1 < inner.length) {
-            const next = inner[++i] ?? ''
-            if (next === 'n') result += '\n'
-            else if (next === 'r') result += '\r'
-            else if (next === 't') result += '\t'
-            else result += next
-        } else {
-            result += ch
-        }
-    }
-    return result
-}
-
-function parseSingleArgToken(rawToken: string): unknown {
-    const trimmed = rawToken.trim()
-    if (trimmed === 'null' || trimmed === 'undefined') return null
-    if (trimmed === 'true') return true
-    if (trimmed === 'false') return false
-    if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed)
-    if (
-        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-        (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-        (trimmed.startsWith('`') && trimmed.endsWith('`'))
-    ) {
-        return unescapeStringLiteral(trimmed.slice(1, -1))
-    }
-    if (trimmed.startsWith('JSON.stringify(') && trimmed.endsWith(')')) {
-        try {
-            const inner = trimmed.slice(15, -1).trim()
-            const parsed: unknown = JSON.parse(inner)
-            return parsed
-        } catch {
-            return trimmed
-        }
-    }
-    if (
-        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
-        (trimmed.startsWith('{') && trimmed.endsWith('}'))
-    ) {
-        try {
-            return JSON.parse(trimmed) as unknown
-        } catch {
-            return trimmed
-        }
-    }
-    return trimmed
-}
-
-function parsePreparedStatementArgs(rawArgs: string): unknown[] {
-    if (rawArgs.length > 50_000) return []
-    // 1. Try safe JSON.parse first
-    try {
-        const parsed: unknown = JSON.parse(`[${rawArgs}]`)
-        if (Array.isArray(parsed)) return parsed
-    } catch {
-        // Fallback to linear state-machine splitter (no vm.runInNewContext or catastrophic regexes)
-    }
-
-    // 2. Linear O(N) top-level comma splitter and literal parser
-    const tokens = splitTopLevelCommaArgs(rawArgs)
-    return tokens.map(parseSingleArgToken)
-}
-
-/**
- * Auto-heals prepared statement execution patterns (db.prepare(...).run(...), stmt.run(...))
- * into corresponding canonical mj.* API calls.
- */
-export function extractAndRecoverPreparedStatementCode(code: string): string | null {
-    if (!code || typeof code !== 'string') return null
-    if (!code.includes('.prepare(')) return null
-
-    const prepMatch = /\.prepare\s*\(\s*(['"`])([\s\S]*?)\1\s*\)/.exec(code)
-    if (prepMatch?.[2] === undefined) return null
-    const rawSql = prepMatch[2].trim()
-
-    const runMatch = /\.(?:run|get|all)\s*\(([\s\S]*?)\)(?:\s*;|\s*\n|$)/.exec(code)
-    let parsedArgs: unknown[] = []
-    if (runMatch?.[1] !== undefined) {
-        const rawArgs = runMatch[1].trim()
-        if (rawArgs.length > 0) {
-            parsedArgs = parsePreparedStatementArgs(rawArgs)
-        }
-    }
-
-    const cleanSql = rawSql.replace(/^--[^\n]*\n/gm, '').trim()
-    const isUpdate = /^UPDATE\b/i.test(cleanSql)
-    const isInsert = /^INSERT\b/i.test(cleanSql)
-    const isDelete = /^DELETE\b/i.test(cleanSql)
-    const isSelect = /^SELECT\b/i.test(cleanSql)
-
-    if (isUpdate) {
-        const payload: Record<string, unknown> = {}
-        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
-        if (idMatch?.[1] !== undefined) {
-            payload['entry_id'] = parseInt(idMatch[1], 10)
-        }
-
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'number') {
-                payload['entry_id'] = arg
-            } else if (typeof arg === 'string') {
-                let isTags = false
-                if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
-                    try {
-                        const parsed: unknown = JSON.parse(arg)
-                        if (Array.isArray(parsed)) {
-                            payload['tags'] = parsed.map(String)
-                            isTags = true
-                        }
-                    } catch {
-                        // ignore
-                    }
-                }
-                if (!isTags) {
-                    if (payload['content'] === undefined) payload['content'] = arg
-                    else if (payload['title'] === undefined) payload['title'] = arg
-                }
-            } else if (Array.isArray(arg)) {
-                payload['tags'] = arg.map(String)
-            } else if (isRecord(arg)) {
-                if (typeof arg['entry_id'] === 'number') payload['entry_id'] = arg['entry_id']
-                if (typeof arg['id'] === 'number') payload['entry_id'] = arg['id']
-                if (typeof arg['content'] === 'string') payload['content'] = arg['content']
-                if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
-            }
-        }
-
-        if (payload['content'] === undefined) {
-            const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
-            if (setContentMatch?.[1] !== undefined) {
-                payload['content'] = setContentMatch[1]
-            }
-        }
-
-        if (payload['entry_id'] !== undefined) {
-            return `return await mj.admin.updateEntry(${JSON.stringify(payload)});`
-        }
-    }
-
-    if (isInsert) {
-        const payload: Record<string, unknown> = {
-            entry_type: 'technical_decision',
-        }
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'string') {
-                let isTags = false
-                if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
-                    try {
-                        const parsed: unknown = JSON.parse(arg)
-                        if (Array.isArray(parsed)) {
-                            payload['tags'] = parsed.map(String)
-                            isTags = true
-                        }
-                    } catch {
-                        // ignore
-                    }
-                }
-                if (!isTags) {
-                    if (typeof payload['content'] !== 'string') payload['content'] = arg
-                    else if (typeof payload['title'] !== 'string') payload['title'] = arg
-                }
-            } else if (Array.isArray(arg)) {
-                payload['tags'] = arg.map(String)
-            } else if (isRecord(arg)) {
-                if (typeof arg['content'] === 'string') payload['content'] = arg['content']
-                if (typeof arg['title'] === 'string') payload['title'] = arg['title']
-                if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
-            }
-        }
-        if (typeof payload['title'] !== 'string') payload['title'] = 'Journal Entry'
-        return `return await mj.core.createEntry(${JSON.stringify(payload)});`
-    }
-
-    if (isDelete) {
-        let entryId: number | undefined
-        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
-        if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'number') entryId = arg
-        }
-        if (entryId !== undefined) {
-            return `return await mj.admin.deleteEntry({ entry_id: ${entryId} });`
-        }
-    }
-
-    if (isSelect) {
-        let entryId: number | undefined
-        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
-        if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'number') entryId = arg
-        }
-        if (entryId !== undefined) {
-            return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
-        }
-        return `return await mj.core.getRecentEntries({ limit: 10 });`
-    }
-
     return null
 }
+
+export { extractAndRecoverPreparedStatementCode } from './sql-prepared-recovery.js'

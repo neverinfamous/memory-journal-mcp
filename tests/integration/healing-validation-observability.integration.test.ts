@@ -155,7 +155,6 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
             vectorManager,
             github,
             configManager,
-            scheduler: null,
             allowedIoRoots: [tempDir],
         }
 
@@ -329,7 +328,7 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
                 params: {
                     name: 'mj_execute_code',
                     arguments: {
-                        code: 'SELECT * FROM memory_journal LIMIT 5',
+                        code: 'SELECT * FROM memory_journal WHERE id = 1',
                         workspace_id: 'healed-proj',
                         project_number: 77,
                     },
@@ -339,8 +338,9 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         )
         const sqlPayload = parseToolResponsePayload(sqlRecoveryRes)
         expect(getProp(sqlPayload, 'success')).toBe(true)
-        const sqlEntries = getProp(getProp(sqlPayload, 'result'), 'entries')
-        expect(Array.isArray(sqlEntries) ? sqlEntries.length : 0).toBe(1)
+        const sqlResult = getProp(sqlPayload, 'result')
+        const sqlEntry = isRecord(sqlResult) ? (getProp(sqlResult, 'entry') ?? sqlResult) : undefined
+        expect(getProp(sqlEntry, 'id')).toBe(1)
     }, 30_000)
 
     it('returns structured VALIDATION_ERROR payloads for unhealable Zod errors and records error telemetry', async () => {
@@ -415,8 +415,10 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         const firstPayload = parseToolResponsePayload(firstRes)
         expect(getProp(firstPayload, 'success')).toBe(true)
         const firstId = Number(getProp(firstPayload, 'id'))
-        expect(db.getAnchorsByEntryId(firstId).length).toBe(1)
-        expect(db.getAnchorsByEntryId(firstId)[0]?.anchorPath).toBe('src/handlers/tools/core/tools.ts')
+        expect(db.getAnchorsByEntryId(firstId, 'healed-proj').length).toBe(1)
+        expect(db.getAnchorsByEntryId(firstId, 'healed-proj')[0]?.anchorPath).toBe(
+            'src/handlers/tools/core/tools.ts'
+        )
 
         const secondRes = await callToolHandler(
             {
@@ -441,7 +443,7 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         expect(getProp(secondEntry, 'entryType')).toBe('maintenance')
 
         const secondId = Number(getProp(secondPayload, 'id'))
-        const rels = db.getRelationships(secondId)
+        const rels = db.getRelationships(secondId, 'healed-proj')
         expect(rels.some((r) => r.toEntryId === firstId && r.relationshipType === 'resolved')).toBe(true)
 
         const linkRes = await callToolHandler(

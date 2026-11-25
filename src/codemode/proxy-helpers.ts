@@ -4,6 +4,7 @@
  */
 
 import { wrapResult } from './worker-result-proxy.js'
+import { IMMUTABLE_PROXY_TRAPS } from './worker/result-proxy-aliases.js'
 
 /**
  * Wraps a tool call Promise with a Proxy that gives actionable Autonomous Healing
@@ -11,6 +12,7 @@ import { wrapResult } from './worker-result-proxy.js'
  */
 export function wrapPromise(promise: Promise<unknown>, methodName: string): Promise<unknown> {
     return new Proxy(promise, {
+        ...IMMUTABLE_PROXY_TRAPS,
         get(target, prop): unknown {
             if (prop === 'then') return target.then.bind(target)
             if (prop === 'catch') return target.catch.bind(target)
@@ -99,9 +101,10 @@ const RESOURCE_SUGGESTIONS: Record<string, string> = {
     'memory://recent': 'mj.core.getRecentEntries()',
     'memory://statistics': 'mj.analytics.getStatistics()',
     'memory://tags': 'mj.core.listTags()',
-    'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
     'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
     'memory://insights': 'mj.analytics.getCrossProjectInsights()',
+    'memory://agent-context': 'mj.analytics.getStatistics() or mj.admin.listProjects()',
+    'memory://agent-id': 'mj.analytics.getStatistics() or mj.admin.listProjects()',
 }
 
 /**
@@ -111,7 +114,13 @@ export function createReadResourceInterceptor(): (uri?: string) => Promise<unkno
     return (uri?: string) => {
         let hint = ''
         if (typeof uri === 'string') {
-            const match = Object.entries(RESOURCE_SUGGESTIONS).find(([k]) => uri.startsWith(k))
+            const match = Object.entries(RESOURCE_SUGGESTIONS).find(
+                ([k]) =>
+                    uri === k ||
+                    uri.startsWith(`${k}/`) ||
+                    uri.startsWith(`${k}?`) ||
+                    uri.startsWith(`${k}#`)
+            )
             if (match !== undefined) hint = ` Try: ${match[1]}`
         }
         return wrapPromise(
@@ -137,6 +146,7 @@ export function createFactoryFnProxy(api: Record<string, unknown>): object {
         return api
     }
     return new Proxy(factoryFn, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply: () => api,
         construct: () => api,
         get(_t, p): unknown {
@@ -156,6 +166,7 @@ export function createFactoryFnProxy(api: Record<string, unknown>): object {
  */
 export function createUnknownGroupRejectionProxy(prop: string, reason: string): object {
     return new Proxy(() => undefined, {
+        ...IMMUTABLE_PROXY_TRAPS,
         apply(): Promise<unknown> {
             return wrapPromise(
                 Promise.resolve(
@@ -172,12 +183,13 @@ export function createUnknownGroupRejectionProxy(prop: string, reason: string): 
         },
         get(_t, subProp): unknown {
             if (typeof subProp === 'symbol' || subProp === 'then') return undefined
-            return (..._args: unknown[]): Promise<unknown> =>
+            const fullReason = `${reason} (Attempted to access 'mj.${prop}.${subProp}')`
+            const subFn = (..._args: unknown[]): Promise<unknown> =>
                 wrapPromise(
                     Promise.resolve(
                         wrapResult({
                             success: false,
-                            error: `${reason} (Attempted to access 'mj.${prop}.${subProp}')`,
+                            error: fullReason,
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             recoverable: true,
@@ -185,6 +197,8 @@ export function createUnknownGroupRejectionProxy(prop: string, reason: string): 
                     ),
                     `${prop}.${subProp}`
                 )
+            attachMethodIntrospection(subFn, prop, subProp, () => 'unknown', fullReason)
+            return subFn
         },
     })
 }

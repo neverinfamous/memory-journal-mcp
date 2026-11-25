@@ -112,6 +112,21 @@ describe('Git Tools Handler', () => {
         expect(res.commits[0]?.scope).toBe('core')
     })
 
+    it('get_commit_history passes %(trailers) and %(trailers:separator=%x1C) so multi-trailer commits parse cleanly', async () => {
+        const tools = getGitTools(context)
+        const tool = tools.find((t) => t.name === 'get_commit_history')!
+        const res = (await tool.handler({ maxCount: 5 })) as { success: boolean }
+
+        expect(res.success).toBe(true)
+        expect(mockStreamGitRecords).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.stringContaining('%(trailers)'),
+                expect.stringContaining('%(trailers:separator=%x1C)'),
+            ]),
+            expect.any(String)
+        )
+    })
+
     it('search_commits should search commit history by query', async () => {
         const tools = getGitTools(context)
         const tool = tools.find((t) => t.name === 'search_commits')!
@@ -146,11 +161,56 @@ describe('Git Tools Handler', () => {
         const tool = tools.find((t) => t.name === 'get_unreleased_commits')!
         const res = (await tool.handler({})) as {
             success: boolean
-            changelog: { latestTag: string | null; commits: unknown[] }
+            changelog: { latestTag: string | null; commits: unknown[]; truncated: boolean }
         }
 
         expect(res.success).toBe(true)
         expect(res.changelog.commits).toHaveLength(2)
+        expect(res.changelog.truncated).toBe(false)
+    })
+
+    it('get_unreleased_commits should flag truncation when the commit cap is reached', async () => {
+        mockProcessBatch.mockResolvedValue(
+            Array.from({ length: 5000 }, (_, i) => ({
+                hash: String(i).padStart(12, '0'),
+                shortHash: String(i).padStart(7, '0'),
+                author: 'Alice',
+                date: '2026-03-01T10:00:00Z',
+                subject: `chore: commit ${String(i)}`,
+                type: 'chore',
+                isBreaking: false,
+                totalInsertions: 0,
+                totalDeletions: 0,
+            }))
+        )
+        const tools = getGitTools(context)
+        const tool = tools.find((t) => t.name === 'get_unreleased_commits')!
+        const res = (await tool.handler({})) as {
+            success: boolean
+            changelog: { commits: unknown[]; truncated: boolean }
+        }
+
+        expect(res.success).toBe(true)
+        expect(res.changelog.truncated).toBe(true)
+        expect(res.changelog.commits).toHaveLength(100)
+    })
+
+    it('get_unreleased_commits should honor explicit limit and summary options', async () => {
+        const tools = getGitTools(context)
+        const tool = tools.find((t) => t.name === 'get_unreleased_commits')
+        if (tool === undefined) throw new Error('get_unreleased_commits missing')
+        const res = (await tool.handler({ limit: 25, summary: true })) as {
+            success: boolean
+            changelog: { commits: unknown[]; truncated: boolean }
+        }
+
+        expect(res.success).toBe(true)
+        expect(res.changelog.commits).toHaveLength(2)
+        expect(res.changelog.truncated).toBe(false)
+        expect(mockBuildGitBaseArgs).toHaveBeenCalledWith(
+            expect.objectContaining({ limit: 26, summary: true }),
+            expect.any(String)
+        )
     })
 
     it('analyze_commit_patterns should aggregate commit types, authors, breaking changes, and categories', async () => {
@@ -183,6 +243,12 @@ describe('Git Tools Handler', () => {
 
     describe('check_entry_staleness', () => {
         it('should return error when entry does not exist', async () => {
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entryId: 99999 })) as {
@@ -195,6 +261,12 @@ describe('Git Tools Handler', () => {
 
         it('should return empty results when entry has no anchors', async () => {
             const entry = db.createEntry({ content: 'Entry without file references' })
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entryId: entry.id })) as {
@@ -205,8 +277,15 @@ describe('Git Tools Handler', () => {
             expect(res.results).toEqual([])
         })
 
-        it('should locate entry across workspaces or with explicit workspace_id', async () => {
+        it('should locate an entry only in its own workspace', async () => {
             const entry = db.createEntry({ content: 'Non-default workspace entry', workspaceId: 'custom-ws' })
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                    'custom-ws': { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entry_id: entry.id, workspace_id: 'custom-ws' })) as {
@@ -216,12 +295,12 @@ describe('Git Tools Handler', () => {
             expect(res.success).toBe(true)
             expect(res.results).toEqual([])
 
-            const resFallback = (await tool.handler({ entry_id: entry.id })) as {
+            const resOmitted = (await tool.handler({ entry_id: entry.id })) as {
                 success: boolean
-                results: unknown[]
+                error?: string
             }
-            expect(resFallback.success).toBe(true)
-            expect(resFallback.results).toEqual([])
+            expect(resOmitted.success).toBe(false)
+            expect(resOmitted.error).toContain('not found')
         })
 
         it('should detect existing modified files, deleted files, and path traversal anchors', async () => {
@@ -237,6 +316,12 @@ describe('Git Tools Handler', () => {
                 { anchorPath: '../../outside-traversal.ts', anchorType: 'file' },
             ])
 
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entryId: entry.id })) as {
@@ -266,6 +351,112 @@ describe('Git Tools Handler', () => {
                 (r) => r.path === '../../outside-traversal.ts'
             )
             expect(traversalAnchor?.newStatus).toBe('unresolvable')
+        })
+
+        it('does not persist unresolvable when git fails', async () => {
+            mockStreamGitRecords.mockImplementation(() => {
+                throw new Error('git failed')
+            })
+            const update = vi.spyOn(db, 'updateAnchorStatus')
+            const entry = db.createEntry({ content: 'Entry whose git lookup fails' })
+            const nativeDb = (
+                db as unknown as { connection: { getNativeDb: () => never } }
+            ).connection.getNativeDb()
+            insertAnchors({ db: nativeDb } as never, entry.id, [
+                { anchorPath: 'package.json', anchorType: 'file' },
+            ])
+
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({ entryId: entry.id })) as {
+                success: boolean
+                error?: string
+                results: { path: string; newStatus: string; error?: string }[]
+            }
+
+            expect(res.success).toBe(false)
+            expect(res.results[0]?.newStatus).toBe('pending')
+            expect(res.results[0]?.error).toContain('git failed')
+            expect(update).not.toHaveBeenCalled()
+        })
+
+        it('refuses a staleness check when the workspace has no registered path', async () => {
+            context.config = { projectRegistry: {} }
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({})) as { success: boolean; error?: string }
+            expect(res.success).toBe(false)
+            expect(res.error).toContain('No registered repository path')
+        })
+
+        it('records workspaces skipped by a star scan when they have no repository path', async () => {
+            context.config = {
+                projectRegistry: {
+                    alpha: { path: '' },
+                    beta: { path: '' },
+                },
+            }
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({ workspace_id: '*' })) as {
+                success: boolean
+                error?: string
+                skippedWorkspaces?: string[]
+            }
+            expect(res.success).toBe(false)
+            expect(res.error).toContain('No anchor check ran')
+            expect(res.skippedWorkspaces).toEqual(['alpha', 'beta'])
+        })
+
+        it('uses lightweight --name-status -z prefetch without processBatch when prefetching >= 4 live anchors', async () => {
+            const futureDate = new Date(Date.now() + 60_000).toISOString()
+            mockStreamGitRecords.mockImplementationOnce(() =>
+                fakeAsyncRecords([`${futureDate}\n\0M\0package.json\0`])
+            )
+
+            const entry = db.createEntry({ content: 'Entry with four live file anchors' })
+            const nativeDb = (
+                db as unknown as { connection: { getNativeDb: () => never } }
+            ).connection.getNativeDb()
+            insertAnchors({ db: nativeDb } as never, entry.id, [
+                { anchorPath: 'package.json', anchorType: 'file' },
+                { anchorPath: 'README.md', anchorType: 'file' },
+                { anchorPath: 'AGENT_README.md', anchorType: 'file' },
+                { anchorPath: 'tsconfig.json', anchorType: 'file' },
+            ])
+
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({ entryId: entry.id })) as {
+                success: boolean
+                results: { path: string; newStatus: string; commitsSince: number }[]
+            }
+
+            expect(res.success).toBe(true)
+            expect(mockStreamGitRecords).toHaveBeenCalledWith(
+                expect.arrayContaining(['--name-status', '-z', '--no-merges']),
+                expect.any(String)
+            )
+            expect(mockProcessBatch).not.toHaveBeenCalled()
+            const pkgRow = res.results.find((r) => r.path === 'package.json')
+            expect(pkgRow?.newStatus).toBe('stale')
+            expect(pkgRow?.commitsSince).toBe(1)
         })
     })
 })

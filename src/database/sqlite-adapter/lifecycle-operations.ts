@@ -1,5 +1,185 @@
 import type { NativeConnectionManager } from './native-connection.js'
-import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
+import { isMissingTableError } from './schema-errors.js'
+import { bucketInParams, runImmediateWriteTx, SCOPED_IN_PARAM_BUCKETS } from './row-helpers.js'
+import {
+    buildCandidateQueries,
+    type CandidateQueries,
+    type CandidateQuery,
+    type LifecycleOptions,
+    type LifecycleResult,
+} from './lifecycle-query-builders.js'
+
+type NativeDb = ReturnType<NativeConnectionManager['getNativeDb']>
+
+const toNumberId = (id: number | bigint): number => (typeof id === 'bigint' ? Number(id) : id)
+
+/** Run the candidate SELECTs without mutating anything (dry-run mode). */
+function collectDryRun(
+    db: NativeDb,
+    options: LifecycleOptions,
+    queries: CandidateQueries
+): LifecycleResult {
+    const candidates = {
+        archived: [] as { id: number; importance_score: number }[],
+        pruned: [] as { id: number; importance_score: number }[],
+        hardDeleted: [] as { id: number; age_days: number }[],
+    }
+
+    if (options.hardDeleteOlderThanDays > 0) {
+        const rows = db
+            .prepare<unknown[], { id: number | bigint; age_days: number }>(queries.hardDelete.sql)
+            .all(...queries.hardDelete.params)
+        candidates.hardDeleted = rows.map((r) => ({
+            id: toNumberId(r.id),
+            age_days: r.age_days,
+        }))
+    }
+    if (options.pruneOlderThanDays > 0) {
+        const sql = `WITH ${queries.cte} ${queries.prune.sql}`
+        const rows = db
+            .prepare<unknown[], { id: number | bigint; importance_score: number }>(sql)
+            .all(...queries.cteParams, ...queries.prune.params)
+        candidates.pruned = rows.map((r) => ({
+            id: toNumberId(r.id),
+            importance_score: r.importance_score,
+        }))
+    }
+    if (options.archiveOlderThanDays > 0) {
+        const sql = `WITH ${queries.cte} ${queries.archive.sql}`
+        const rows = db
+            .prepare<unknown[], { id: number | bigint; importance_score: number }>(sql)
+            .all(...queries.cteParams, ...queries.archive.params)
+        candidates.archived = rows.map((r) => ({
+            id: toNumberId(r.id),
+            importance_score: r.importance_score,
+        }))
+        const prunedIds = new Set(candidates.pruned.map((c) => c.id))
+        candidates.archived = candidates.archived.filter((c) => !prunedIds.has(c.id))
+    }
+
+    return { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0, candidates }
+}
+
+function deleteVecChunk(db: NativeDb, placeholders: string, chunk: number[]): void {
+    try {
+        const bigIds = chunk.map((id) => BigInt(Math.trunc(id)))
+        db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(...bigIds)
+    } catch (err) {
+        if (!isMissingTableError(err)) throw err
+    }
+}
+
+function executeHardDeleteStep(db: NativeDb, query: CandidateQuery): number {
+    const rows = db.prepare<unknown[], { id: number | bigint }>(query.sql).all(...query.params)
+    const ids = rows.map((r) => toNumberId(r.id))
+    let hardDeletedCount = 0
+    for (const { placeholders, params } of bucketInParams(ids, SCOPED_IN_PARAM_BUCKETS)) {
+        const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
+        hardDeletedCount += db.prepare(deleteSql).run(...params).changes
+        deleteVecChunk(db, placeholders, params)
+    }
+    return hardDeletedCount
+}
+
+function executePruneStep(
+    db: NativeDb,
+    query: CandidateQuery,
+    cte: string,
+    cteParams: unknown[],
+    deletedAt: string
+): number {
+    const selectSql = `WITH ${cte} ${query.sql}`
+    const rows = db
+        .prepare<unknown[], { id: number | bigint }>(selectSql)
+        .all(...cteParams, ...query.params)
+    const ids = rows.map((r) => toNumberId(r.id))
+    if (ids.length === 0) return 0
+
+    let prunedCount = 0
+    for (const { placeholders, params } of bucketInParams(ids, SCOPED_IN_PARAM_BUCKETS)) {
+        prunedCount += db
+            .prepare(
+                `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+            )
+            .run(deletedAt, ...params).changes
+        deleteVecChunk(db, placeholders, params)
+    }
+    return prunedCount
+}
+
+function executeArchiveStep(
+    db: NativeDb,
+    query: CandidateQuery,
+    cte: string,
+    cteParams: unknown[]
+): number {
+    const sql = `
+        WITH ${cte}
+        UPDATE memory_journal
+        SET is_archived = 1
+        WHERE id IN (
+            SELECT id FROM (${query.sql})
+        )
+    `
+    return db.prepare(sql).run(...cteParams, ...query.params).changes
+}
+
+function isFtsCorruptError(error: unknown): boolean {
+    return (
+        (error !== null &&
+            typeof error === 'object' &&
+            'code' in error &&
+            error.code === 'SQLITE_CORRUPT_VTAB') ||
+        (error instanceof Error && error.message.includes('malformed'))
+    )
+}
+
+function rebuildFtsContentIndex(db: NativeDb): void {
+    runImmediateWriteTx(db, () => {
+        db.exec("INSERT INTO fts_content(fts_content) VALUES ('delete-all')")
+        db.exec(
+            'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
+        )
+    })
+}
+
+/** Run the hard-delete / prune / archive mutations in a transaction, retrying once after an FTS rebuild. */
+function runLifecycleTx(
+    db: NativeDb,
+    options: LifecycleOptions,
+    queries: CandidateQueries
+): LifecycleResult {
+    const deletedAt = new Date().toISOString()
+
+    const runTx = (): LifecycleResult =>
+        runImmediateWriteTx(db, (): LifecycleResult => {
+            const hardDeletedCount =
+                options.hardDeleteOlderThanDays > 0
+                    ? executeHardDeleteStep(db, queries.hardDelete)
+                    : 0
+            const prunedCount =
+                options.pruneOlderThanDays > 0
+                    ? executePruneStep(db, queries.prune, queries.cte, queries.cteParams, deletedAt)
+                    : 0
+            const archivedCount =
+                options.archiveOlderThanDays > 0
+                    ? executeArchiveStep(db, queries.archive, queries.cte, queries.cteParams)
+                    : 0
+            return { archivedCount, prunedCount, hardDeletedCount }
+        })
+
+    try {
+        return runTx()
+    } catch (error: unknown) {
+        if (!isFtsCorruptError(error)) {
+            throw error
+        }
+        // FTS5 index is out of sync with external content table.
+        // Rebuild it atomically (live entries only) and retry the transaction.
+        rebuildFtsContentIndex(db)
+        return runTx()
+    }
+}
 
 export class LifecycleOperations {
     constructor(private connection: NativeConnectionManager) {}
@@ -11,6 +191,8 @@ export class LifecycleOperations {
         importanceThreshold: number
         dryRun?: boolean
         excludeTags?: string[]
+        workspaceId?: string
+        projectNumber?: number
     }): {
         archivedCount: number
         prunedCount: number
@@ -22,169 +204,11 @@ export class LifecycleOperations {
         }
     } {
         const db = this.connection.getNativeDb()
-        const cte = buildImportanceCte()
-        const importanceExpr = buildImportanceSqlExpression()
-        const deletedAt = new Date().toISOString()
-        
-        let excludeTagsSql = ''
-        const excludeTags = options.excludeTags ?? []
-        
-        if (excludeTags.length > 0) {
-            const placeholders = excludeTags.map(() => '?').join(',')
-            excludeTagsSql = `AND e.id NOT IN (
-                SELECT entry_id FROM entry_tags 
-                JOIN tags ON tags.id = entry_tags.tag_id 
-                WHERE tags.name IN (${placeholders})
-            )`
-        }
-
-        // --- Candidates Generation ---
-        
-        const hardDeleteSelect = `
-            SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
-            FROM memory_journal
-            WHERE deleted_at IS NOT NULL
-              AND julianday('now') - julianday(deleted_at) > ?
-        `
-
-        const pruneSelect = `
-            SELECT e.id, ${importanceExpr} as importance_score
-            FROM memory_journal e
-            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
-            WHERE e.deleted_at IS NULL
-              AND julianday('now') - julianday(e.timestamp) > ?
-              AND ${importanceExpr} < ?
-              ${excludeTagsSql}
-        `
-        const pruneParams: unknown[] = [
-            options.pruneOlderThanDays,
-            options.importanceThreshold,
-            ...excludeTags,
-        ]
-
-        const archiveSelect = `
-            SELECT e.id, ${importanceExpr} as importance_score
-            FROM memory_journal e
-            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
-            WHERE e.deleted_at IS NULL AND e.is_archived = 0
-            AND julianday('now') - julianday(e.timestamp) > ?
-            AND ${importanceExpr} < ?
-            ${excludeTagsSql}
-        `
-        const archiveParams: unknown[] = [
-            options.archiveOlderThanDays,
-            options.importanceThreshold,
-            ...excludeTags,
-        ]
-
-        let archivedCount = 0
-        let prunedCount = 0
-        let hardDeletedCount = 0
-        const candidates = {
-            archived: [] as { id: number, importance_score: number }[],
-            pruned: [] as { id: number, importance_score: number }[],
-            hardDeleted: [] as { id: number, age_days: number }[]
-        }
+        const queries = buildCandidateQueries(options)
 
         if (options.dryRun) {
-            if (options.hardDeleteOlderThanDays > 0) {
-                const rows = db.prepare(hardDeleteSelect).all(options.hardDeleteOlderThanDays) as { id: number | bigint, age_days: number }[]
-                candidates.hardDeleted = rows.map(r => ({
-                    id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
-                    age_days: r.age_days
-                }))
-            }
-            if (options.pruneOlderThanDays > 0) {
-                const sql = `WITH ${cte} ${pruneSelect}`
-                const rows = db.prepare(sql).all(...pruneParams) as { id: number | bigint, importance_score: number }[]
-                candidates.pruned = rows.map(r => ({
-                    id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
-                    importance_score: r.importance_score
-                }))
-            }
-            if (options.archiveOlderThanDays > 0) {
-                const sql = `WITH ${cte} ${archiveSelect}`
-                const rows = db.prepare(sql).all(...archiveParams) as { id: number | bigint, importance_score: number }[]
-                candidates.archived = rows.map(r => ({
-                    id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
-                    importance_score: r.importance_score
-                }))
-                const prunedIds = new Set(candidates.pruned.map(c => c.id))
-                candidates.archived = candidates.archived.filter(c => !prunedIds.has(c.id))
-            }
-
-            return { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0, candidates }
+            return collectDryRun(db, options, queries)
         }
-
-        const runTx = db.transaction(() => {
-            if (options.hardDeleteOlderThanDays > 0) {
-                const rows = db.prepare(hardDeleteSelect).all(options.hardDeleteOlderThanDays) as { id: number | bigint }[]
-                const ids = rows.map(r => typeof r.id === 'bigint' ? Number(r.id) : r.id)
-                if (ids.length > 0) {
-                    const placeholders = ids.map(() => '?').join(',')
-                    const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
-                    const result = db.prepare(deleteSql).run(...ids)
-                    hardDeletedCount = result.changes
-                    
-                    try {
-                        db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(...ids)
-                    } catch {
-                        // ignore vector cleanup error if table doesn't exist
-                    }
-                }
-            }
-
-            if (options.pruneOlderThanDays > 0) {
-                const sql = `
-                    WITH ${cte}
-                    UPDATE memory_journal
-                    SET deleted_at = ?
-                    WHERE id IN (
-                        SELECT id FROM (${pruneSelect})
-                    )
-                `
-                const result = db.prepare(sql).run(deletedAt, ...pruneParams)
-                prunedCount = result.changes
-            }
-
-            if (options.archiveOlderThanDays > 0) {
-                const sql = `
-                    WITH ${cte}
-                    UPDATE memory_journal
-                    SET is_archived = 1
-                    WHERE id IN (
-                        SELECT id FROM (${archiveSelect})
-                    )
-                `
-                const result = db.prepare(sql).run(...archiveParams)
-                archivedCount = result.changes
-            }
-        })
-        
-        try {
-            runTx()
-        } catch (error: unknown) {
-            const isCorrupt =
-                (error !== null && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CORRUPT_VTAB') ||
-                (error instanceof Error && error.message.includes('malformed'))
-            if (isCorrupt) {
-                // FTS5 index is out of sync with external content table.
-                // Rebuild it synchronously and retry the transaction.
-                db.prepare("INSERT INTO fts_content(fts_content) VALUES ('rebuild')").run()
-                
-                // Reset counters before retry
-                hardDeletedCount = 0
-                prunedCount = 0
-                archivedCount = 0
-                
-                runTx()
-            } else {
-                throw error
-            }
-        }
-
-        return { archivedCount, prunedCount, hardDeletedCount }
+        return runLifecycleTx(db, options, queries)
     }
 }

@@ -8,22 +8,26 @@ import { logger } from '../utils/logger.js'
 /**
  * Session Commit Context Schema
  */
-export const SessionCommitContextSchema = z.object({
-    commits: z.array(z.string().regex(/^[0-9a-fA-F]{7,40}$/)),
-    branch: z.string().optional(),
-    pr: z.number().optional(),
-    repo: z.string().optional(),
-})
+export const SessionCommitContextSchema = z
+    .object({
+        commits: z.array(z.string().regex(/^[0-9a-fA-F]{7,40}$/)).max(500),
+        branch: z.string().optional(),
+        pr: z.number().int().positive().optional(),
+        repo: z.string().optional(),
+    })
+    .loose()
 
 export type SessionCommitContext = z.infer<typeof SessionCommitContextSchema>
 
 /**
  * Versioned Envelope Schema for explicit typing
  */
-export const VersionedEnvelopeSchema = z.object({
-    version: z.string(),
-    data: z.unknown(),
-})
+export const VersionedEnvelopeSchema = z
+    .object({
+        version: z.string(),
+        data: z.unknown(),
+    })
+    .loose()
 
 export type VersionedEnvelope = z.infer<typeof VersionedEnvelopeSchema>
 
@@ -34,6 +38,8 @@ export const AutoContextSchema = z.union([
     VersionedEnvelopeSchema,
     SessionCommitContextSchema,
 ])
+
+const FreeformRecordSchema = z.record(z.string(), z.unknown())
 
 /**
  * Helper to safely parse and validate autoContext JSON.
@@ -46,7 +52,7 @@ export function parseAutoContext(
 
     try {
         const parsed = JSON.parse(autoContext) as unknown
-        if (typeof parsed !== 'object' || parsed === null) {
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
             return null
         }
 
@@ -60,7 +66,8 @@ export function parseAutoContext(
             issues: result.error.issues,
         })
 
-        return parsed as Record<string, unknown>
+        const freeform = FreeformRecordSchema.safeParse(parsed)
+        return freeform.success ? freeform.data : null
     } catch (error: unknown) {
         logger.warning('Failed to parse auto_context JSON', {
             module: 'Validator',

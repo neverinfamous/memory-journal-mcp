@@ -15,38 +15,48 @@ These prompts are used to initialize sessions, manage entries, and handle core j
 ### `load-briefing`
 **Description**: Load one or more project briefings to initialize your session context. Pass project names or leave blank to see the full list and choose interactively.
 - **Arguments**:
-  - `projects` (optional) - Comma-separated project names or numbers (e.g., `memory-journal-mcp`, `adamic,1`, `5`)
+  - `projects` (optional) - Comma-separated project names or numbers (e.g., `memory-journal-mcp`, `db-mcp,1`, `5`)
 - **Behavior**:
   - **No args**: Returns a formatted markdown table of all registered projects and instructs the agent to ask the user which to load.
   - **With args**: Resolves the requested projects (exact match > case-insensitive exact > project number > partial match) and instructs the agent to call `read_resource` on the corresponding URIs.
 
 ### `session-summary`
-**Description**: Generate a comprehensive session summary of recent journal entries.
-- **Arguments**: None
+**Description**: Create a formatted session summary entry.
+- **Arguments**:
+  - `workspace_id` (optional) - Target workspace ID (rejects `*`).
+  - `project_number` (optional) - Target GitHub project number.
 
 ### `team-session-summary`
-**Description**: Generate a comprehensive session summary of recent team journal entries.
-- **Arguments**: None
+**Description**: Create a formatted team session summary entry.
+- **Arguments**:
+  - `workspace_id` (optional) - Target workspace ID.
+  - `project_number` (optional) - Target GitHub project number.
 
 ### `create-entry`
-**Description**: Create a new personal journal entry.
-- **Arguments**: None
+**Description**: Create a structured mid-thread journal entry.
+- **Arguments**:
+  - `workspace_id` (optional) - Target workspace ID.
+  - `project_number` (optional) - Target GitHub project number.
 
 ### `create-team-entry`
-**Description**: Create a new team journal entry.
-- **Arguments**: None
+**Description**: Create a structured mid-thread team journal entry.
+- **Arguments**:
+  - `workspace_id` (optional) - Target workspace ID.
+  - `project_number` (optional) - Target GitHub project number.
 
 ### `update-entry`
-**Description**: Update an existing personal journal entry.
-- **Arguments**: None
+**Description**: Safely update an existing mid-thread entry or session summary.
+- **Arguments**:
+  - `entry_id` (optional) - Entry ID to inspect and update.
+  - `workspace_id` (optional) - Target workspace ID.
+  - `project_number` (optional) - Target GitHub project number.
 
 ### `update-team-entry`
-**Description**: Update an existing team journal entry.
-- **Arguments**: None
-
-### `mcp-heal`
-**Description**: Autonomous healing workflow to resolve tool execution failures.
-- **Arguments**: None
+**Description**: Safely update an existing team entry or team session summary.
+- **Arguments**:
+  - `entry_id` (optional) - Team entry ID to inspect and update.
+  - `workspace_id` (optional) - Target workspace ID.
+  - `project_number` (optional) - Target GitHub project number.
 
 ### `project-setup`
 **Description**: Set up a new project tracking environment.
@@ -67,23 +77,11 @@ These prompts aggregate metrics and synthesize insights for agile ceremonies or 
 - **Arguments**: None
 
 ### `weekly-digest`
-**Description**: Generate a high-level weekly digest of all journal activity.
+**Description**: Create a weekly digest formatted day-by-day.
 - **Arguments**: None
 
-### `get-context-bundle`
-**Description**: Get a comprehensive bundle of recent journal context.
-- **Arguments**: None
-
-### `get-recent-entries`
-**Description**: Get the most recent journal entries.
-- **Arguments**: None
-
-### `confirm-briefing`
-**Description**: Confirm the current session briefing.
-- **Arguments**: None
-
-### `analyze-period`
-**Description**: Analyze journal activity over a specific time period.
+### `goal-tracker`
+**Description**: Milestone and achievement tracking based on significant entries.
 - **Arguments**: None
 
 ---
@@ -93,24 +91,26 @@ These prompts aggregate metrics and synthesize insights for agile ceremonies or 
 These prompts orchestrate multi-step GitHub interactions.
 
 ### `issue-commander`
-**Description**: Comprehensive dashboard for viewing and managing project issues.
+**Description**: Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints.
 - **Arguments**:
-  - `project_number` (required) - The ID of the project to manage.
+  - `project_number` (optional) - GitHub project number (falls back to unambiguously configured `defaultProjectNumber`).
+  - `workflow_type` (optional) - Commander workflow: `triage` or `milestone`.
 
 ### `project-status-summary`
-**Description**: Generate a high-level status summary for a project.
+**Description**: Generate a comprehensive status summary for a GitHub project.
 - **Arguments**:
-  - `project_number` (required) - The ID of the project.
+  - `project_number` (optional) - GitHub project number (falls back to unambiguously configured `defaultProjectNumber`).
 
 ### `project-milestone-tracker`
-**Description**: Track milestone progress and open issues for a project.
+**Description**: Track progress against a specific project milestone.
 - **Arguments**:
-  - `project_number` (required) - The ID of the project.
+  - `project_number` (optional) - GitHub project number (falls back to unambiguously configured `defaultProjectNumber`).
 
 ### `pr-commander`
-**Description**: Comprehensive dashboard for reviewing and managing a Pull Request.
+**Description**: Pull request summary, review prep, and dependency updates with validation gates.
 - **Arguments**:
-  - `pr_number` (required) - The ID of the PR to manage.
+  - `pr_number` (optional) - Pull request number for the commander workflow.
+  - `workflow_type` (optional) - Commander workflow: `summary`, `review`, or `dependencies`.
 
 ### `pr-summary`
 **Description**: Generate a summary of a Pull Request.
@@ -138,9 +138,13 @@ These prompts orchestrate multi-step GitHub interactions.
 These prompts manage local git repository interactions.
 
 ### `commit`
-**Description**: Execute a standard interactive commit workflow.
+**Description**: Procedure for committing code changes with intelligent validation gates.
 - **Arguments**:
-  - `validation` (optional) - Validation level to run before committing (none, lint, full). Default: full.
+  - `validation` (optional) - Validation level to run before committing (`lint`, `none`, `full`). Default: `lint`.
+
+### `quickcommit`
+**Description**: Quick commit for configuration, documentation, Markdown, and text files — skips lint/typecheck, commits directly.
+- **Arguments**: None
 
 ---
 
@@ -185,6 +189,12 @@ These prompts execute deep, parallelized audits using subagents.
   - `target` (optional) - The skill to audit.
   - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
+### `adversarial-build-skill`
+**Description**: Author, refine, and trigger-tune an agent skill (frontmatter, progressive disclosure, negative triggers, trigger evals, validation). Companion to `adversarial-audit-skill`.
+- **Arguments**:
+  - `target` (optional) - The skill path to refine, or the name and purpose of a new skill.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
+
 ### `adversarial-audit-workflow`
 **Description**: Audit an agent workflow configuration.
 - **Arguments**:
@@ -212,12 +222,3 @@ These prompts focus on maintaining system health, consolidating memory (`CMS-02`
 - **Arguments**:
   - `lookbackHours` (optional): Hours to look back for `CMS-02` maintenance entries and soft-deleted entries (default: `24`)
   - `autoRestore` (optional): Boolean (`true` | `false`), automatically restores any high-significance entry erroneously soft-deleted (default: `true`)
-
-### `verify-work`
-**Description**: Verify recently completed work against requirements.
-- **Arguments**: None
-
-### `flag-dashboard`
-**Description**: View and manage system flags and alerts.
-- **Arguments**:
-  - `flag_type` (optional) - Filter by specific flag type.

@@ -94,7 +94,7 @@ describe('resolveIssueUrl', () => {
         expect(result).toBe('https://github.com/dynamic-owner/dynamic-test-repo/issues/123')
     })
 
-    it('should fallback to cached info if projectRegistry lacks projectNumber', async () => {
+    it('does not borrow the process repo when the project number is not registered', async () => {
         const context = {
             github: {
                 getCachedRepoInfo: vi
@@ -112,6 +112,6 @@ describe('resolveIssueUrl', () => {
         }
         // passing 99 while registry only has 55
         const result = await resolveIssueUrl(context as never, 99, 124, undefined)
-        expect(result).toBe('https://github.com/cached-owner/cached-repo/issues/124')
+        expect(result).toBeUndefined()
     })
 })

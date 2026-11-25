@@ -8,7 +8,7 @@
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { BriefingConfig } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import type { ServerRuntime } from '../../../../utils/maintenance-lock.js'
 import {
     resolveBriefingRepo,
     fetchCiStatus,
@@ -17,6 +17,12 @@ import {
     fetchInsights,
     fetchCopilotReviews,
 } from './github-repo-and-kanban.js'
+import {
+    assembleBriefingGitHub,
+    hideResolvedIssues,
+    loadActivePr,
+    unpackGitHubFetches,
+} from './github-section-settle.js'
 
 export {
     resolveBriefingRepo,
@@ -70,6 +76,7 @@ export interface BriefingGitHub {
               modified: number
               untracked: number
               isClean: boolean
+              error?: string | undefined
               degraded?: boolean | undefined
           }
         | undefined
@@ -84,10 +91,60 @@ export interface BriefingGitHub {
               reviewStatus?: string | undefined
               commentCount?: number | undefined
               ciStatus?: string | undefined
+              reviewSuppressed?: boolean | undefined
+              ciSuppressed?: boolean | undefined
           }
         | undefined
+    ciSuppressed?: boolean | undefined
+    issuesSuppressed?: boolean | undefined
+    prsSuppressed?: boolean | undefined
     degraded?: boolean | undefined
     degradedReasons?: string[] | undefined
+}
+
+async function collectGitHubBriefingData(
+    repoGithub: GitHubIntegration,
+    owner: string,
+    repo: string,
+    config: BriefingConfig
+): ReturnType<typeof unpackGitHubFetches> extends infer R ? Promise<R> : never {
+    const issuesAndPrsPromise = fetchIssuesAndPrs(repoGithub, owner, repo, config)
+    const [
+        ciStatusResult,
+        issuesAndPrsResult,
+        milestonesResult,
+        insightsResult,
+        copilotReviewsResult,
+        localGitStatusResult,
+    ] = await Promise.allSettled([
+        fetchCiStatus(repoGithub, owner, repo, config),
+        issuesAndPrsPromise,
+        fetchMilestones(repoGithub, owner, repo, config.milestoneCount ?? 3),
+        config.insights !== false
+            ? fetchInsights(repoGithub, owner, repo)
+            : Promise.resolve({}),
+        config.copilotReviews
+            ? fetchCopilotReviews(
+                  repoGithub,
+                  owner,
+                  repo,
+                  config.prStatusBreakdown
+                      ? issuesAndPrsPromise.then((res) => res.allPrs)
+                      : undefined
+              )
+            : Promise.resolve(undefined),
+        repoGithub.getLocalGitStatus(
+            config.issueCount <= 0 ? { includeResolvedIssues: false } : undefined
+        ),
+    ])
+    return unpackGitHubFetches({
+        ciStatusResult,
+        issuesAndPrsResult,
+        milestonesResult,
+        insightsResult,
+        copilotReviewsResult,
+        localGitStatusResult,
+    })
 }
 
 /**
@@ -96,202 +153,48 @@ export interface BriefingGitHub {
  */
 export async function buildGitHubSection(
     github: GitHubIntegration | null | undefined,
-    config: BriefingConfig
+    config: BriefingConfig,
+    targetRepo?: string,
+    runtime?: ServerRuntime,
 ): Promise<BriefingGitHub | null> {
     if (!github) return null
 
     try {
-        const resolved = await resolveBriefingRepo(github, config)
+        const resolved = await resolveBriefingRepo(github, config, targetRepo, runtime)
         if (!resolved) return null
-        const { owner, repo } = resolved
-
-        const [
-            ciStatusResult,
-            issuesAndPrsResult,
-            milestonesResult,
-            insightsResult,
-            copilotReviewsResult,
-            localGitStatusResult,
-        ] = await Promise.allSettled([
-            fetchCiStatus(github, owner, repo, config),
-            fetchIssuesAndPrs(github, owner, repo, config),
-            fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
-            fetchInsights(github, owner, repo),
-            config.copilotReviews
-                ? fetchCopilotReviews(github, owner, repo)
-                : Promise.resolve(undefined),
-            github.getLocalGitStatus(),
-        ])
-
-        const degradedReasons: string[] = []
-
-        const ciStatus =
-            ciStatusResult.status === 'fulfilled'
-                ? ciStatusResult.value
-                : { status: 'unknown' as const, workflowSummary: undefined, degraded: true }
-        if (ciStatusResult.status === 'rejected')
-            degradedReasons.push(`CI Status fetch failed: ${String(ciStatusResult.reason)}`)
-        else if (ciStatus.degraded === true) degradedReasons.push('CI Status partially degraded')
-
-        const issuesAndPrs =
-            issuesAndPrsResult.status === 'fulfilled'
-                ? issuesAndPrsResult.value
-                : {
-                      openIssues: 0,
-                      openIssueList: undefined,
-                      openPRs: 0,
-                      openPrList: undefined,
-                      allPrs: undefined,
-                      degraded: true,
-                  }
-        if (issuesAndPrsResult.status === 'rejected')
-            degradedReasons.push(`Issues/PRs fetch failed: ${String(issuesAndPrsResult.reason)}`)
-        else if (issuesAndPrs.degraded === true)
-            degradedReasons.push('Issues/PRs partially degraded')
-
-        const milestonesData =
-            milestonesResult.status === 'fulfilled'
-                ? milestonesResult.value
-                : { items: [], degraded: true }
-        if (milestonesResult.status === 'rejected')
-            degradedReasons.push(`Milestones fetch failed: ${String(milestonesResult.reason)}`)
-        else if (milestonesData.degraded === true)
-            degradedReasons.push('Milestones partially degraded')
-
-        const insightsData =
-            insightsResult.status === 'fulfilled' ? insightsResult.value : { degraded: true }
-        if (insightsResult.status === 'rejected')
-            degradedReasons.push(`Insights fetch failed: ${String(insightsResult.reason)}`)
-        else if (insightsData.degraded === true) degradedReasons.push('Insights partially degraded')
-
-        const copilotReviewsData =
-            copilotReviewsResult.status === 'fulfilled'
-                ? (copilotReviewsResult.value ?? {})
-                : { degraded: true }
-        if (copilotReviewsResult.status === 'rejected')
-            degradedReasons.push(
-                `Copilot Reviews fetch failed: ${String(copilotReviewsResult.reason)}`
-            )
-        else if (copilotReviewsData.degraded === true)
-            degradedReasons.push('Copilot Reviews partially degraded')
-
-        const localGitStatus =
-            localGitStatusResult.status === 'fulfilled'
-                ? localGitStatusResult.value
-                : {
-                      modified: 0,
-                      untracked: 0,
-                      isClean: true,
-                      degraded: true,
-                      resolvedIssues: undefined,
-                  }
-
-        if (localGitStatusResult.status === 'rejected')
-            degradedReasons.push(
-                `Local Git Status fetch failed: ${String(localGitStatusResult.reason)}`
-            )
-
-        let { openIssues, openIssueList } = issuesAndPrs
-        const { openPRs, openPrList, allPrs } = issuesAndPrs
-        const workflowSummary = ciStatus.workflowSummary
-        const ciName = ciStatus.ciName
-        const milestones = milestonesData.items ?? []
-        const insights = insightsData.insights
-        const copilotReviews = copilotReviewsData.reviews
-
-        const resolvedIssues = localGitStatus.resolvedIssues
-        if (
-            resolvedIssues !== undefined &&
-            resolvedIssues.length > 0 &&
-            openIssueList !== undefined
-        ) {
-            const initialListLength = openIssueList.length
-            openIssueList = openIssueList.filter((i) => !resolvedIssues.includes(i.number))
-            const removedCount = initialListLength - openIssueList.length
-            openIssues = Math.max(0, openIssues - removedCount)
-        }
-
-        const degraded = degradedReasons.length > 0
-
-        let activePr: BriefingGitHub['activePr'] = undefined
-        const localBranch = 'branch' in localGitStatus ? localGitStatus.branch : undefined
-        const activePrData =
-            localBranch !== undefined && localBranch !== '' && allPrs !== undefined
-                ? allPrs.find((p) => p.headRef === localBranch)
-                : undefined
-
-        if (activePrData !== undefined) {
-            let reviewStatus: string | undefined
-            let commentCount = 0
-            try {
-                const reviewSummary = await github.getCopilotReviewSummary(
-                    owner,
-                    repo,
-                    activePrData.number
-                )
-                if (reviewSummary.state !== 'none') {
-                    reviewStatus = reviewSummary.state
-                    commentCount = reviewSummary.commentCount
-                }
-            } catch {
-                // ignore
-            }
-
-            let prCiStatus: string | undefined
-            try {
-                const runs = await github.getWorkflowRuns(owner, repo, 20)
-                const prRun = runs.find((r) => r.headBranch === activePrData.headRef)
-                if (prRun !== undefined) {
-                    if (prRun.status !== 'completed') prCiStatus = 'pending'
-                    else if (prRun.conclusion === 'success') prCiStatus = 'passing'
-                    else if (prRun.conclusion === 'failure') prCiStatus = 'failing'
-                    else if (prRun.conclusion === 'cancelled') prCiStatus = 'cancelled'
-                }
-            } catch {
-                // ignore
-            }
-
-            activePr = {
-                number: activePrData.number,
-                title: markUntrustedContentInline(activePrData.title),
-                url: activePrData.url,
-                state: activePrData.state,
-                reviewStatus,
-                commentCount,
-                ciStatus: prCiStatus,
-            }
-        }
-
-        return {
-            repo: `${owner}/${repo}`,
+        const { owner, repo, github: repoGithub } = resolved
+        const unpacked = await collectGitHubBriefingData(repoGithub, owner, repo, config)
+        const issues = hideResolvedIssues(unpacked.issuesAndPrs, unpacked.localGitStatus.resolvedIssues)
+        const localBranch =
+            'branch' in unpacked.localGitStatus ? unpacked.localGitStatus.branch : undefined
+        const includePrs = config.prCount > 0 || config.prStatusBreakdown
+        const includeCi = config.workflowCount > 0 || config.workflowStatusBreakdown
+        const activePr = includePrs
+            ? await loadActivePr(
+                  repoGithub,
+                  owner,
+                  repo,
+                  unpacked.issuesAndPrs.allPrs,
+                  localBranch,
+                  {
+                      includeCopilot: config.copilotReviews,
+                      includeCi,
+                      ...(unpacked.ciStatus.runs !== undefined
+                          ? { prefetchedRuns: unpacked.ciStatus.runs }
+                          : {}),
+                  },
+              )
+            : undefined
+        return assembleBriefingGitHub({
+            owner,
+            repo,
             branch: resolved.branch,
-            ci: ciStatus.status,
-            ciName,
-            ciUpdatedAt: ciStatus.ciUpdatedAt,
-            localGitStatus,
-            openIssues,
-            openPRs,
-            milestones,
-            insights,
-            openIssueList,
-            openPrList,
-            ...(activePr !== undefined ? { activePr } : {}),
-            ...(config.prStatusBreakdown && openPrList !== undefined
-                ? {
-                      prStatusSummary: {
-                          open:
-                              openPrList.filter((p) => p.state === 'OPEN').length +
-                              (openPRs -
-                                  (openPrList.filter((p) => p.state === 'OPEN').length ?? 0)),
-                          merged: openPrList.filter((p) => p.state === 'MERGED').length,
-                          closed: openPrList.filter((p) => p.state === 'CLOSED').length,
-                      },
-                  }
-                : {}),
-            ...(workflowSummary !== undefined ? { workflowSummary } : {}),
-            ...(copilotReviews !== undefined ? { copilotReviews } : {}),
-            ...(degraded ? { degraded: true, degradedReasons } : {}),
-        }
+            unpacked,
+            openIssues: issues.openIssues,
+            openIssueList: issues.openIssueList,
+            activePr,
+            config,
+        })
     } catch (error) {
         logger.debug('Failed to build GitHub briefing section', {
             module: 'BRIEFING',
@@ -302,4 +205,3 @@ export async function buildGitHubSection(
     }
 }
 
-export const fetchGitHubSection = buildGitHubSection

@@ -10,7 +10,7 @@ describe('Briefing Insights Section', () => {
         expect(result).toBeNull()
     })
 
-    it('should build insights section from scheduler digest', () => {
+    it('should build insights section from live compute digest', () => {
         const mockSnapshot: DigestSnapshot = {
             computedAt: '2026-04-11T12:00:00Z',
             currentPeriodEntries: 10,
@@ -28,8 +28,8 @@ describe('Briefing Insights Section', () => {
         }
 
         const context: ResourceContext = {
-            scheduler: {
-                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot),
+            db: {
+                computeDigest: vi.fn().mockReturnValue(mockSnapshot),
             } as any,
         }
 
@@ -38,7 +38,9 @@ describe('Briefing Insights Section', () => {
         expect(result?.activityTrend).toBe('+100% vs. last period (10 entries)')
         expect(result?.significanceSpike).toBe('2 significant entries (2× avg)')
         expect(result?.staleProjects[0]?.projectNumber).toBe(42)
-        expect(result?.topImportance[0]?.preview).toBe('Top entry')
+        expect(result?.topImportance[0]?.preview).toBe(
+            '<untrusted_remote_content>Top entry</untrusted_remote_content>'
+        )
         expect(result?.relationshipDensity).toBe(0.1)
     })
 
@@ -89,13 +91,70 @@ describe('Briefing Insights Section', () => {
         }
 
         const context: ResourceContext = {
-            scheduler: {
-                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot),
+            db: {
+                computeDigest: vi.fn().mockReturnValue(mockSnapshot),
             } as any,
         }
 
         const result = buildInsightsSection(context)
         expect(result?.activityTrend).toBe('-50% vs. last period (5 entries)') // sign = '' since it's < 0
         expect(result?.significanceSpike).toBeNull()
+    })
+
+    it('redacts home paths in topImportance previews and degrades gracefully when persisted lookup throws', () => {
+        const throwingCtx: ResourceContext = {
+            db: {
+                getLatestAnalyticsSnapshot: vi.fn(() => {
+                    throw new Error('corrupt snapshot')
+                }),
+            } as never,
+        }
+        expect(buildInsightsSection(throwingCtx)).toBeNull()
+
+        const pathSnapshot: DigestSnapshot = {
+            computedAt: '2026-04-11T12:00:00Z',
+            currentPeriodEntries: 2,
+            previousPeriodEntries: 1,
+            activityGrowthPercent: 100,
+            currentPeriodSignificant: 0,
+            historicalAvgSignificant: 0,
+            significanceMultiplier: null,
+            staleProjects: [],
+            currentRelDensity: 0,
+            previousRelDensity: 0,
+            topImportanceEntries: [
+                { id: 7, score: 0.9, preview: 'Edited C:\\Users\\alice\\Desktop\\secret\\file.ts' },
+            ],
+        }
+        const res = buildInsightsSection({
+            db: { computeDigest: vi.fn().mockReturnValue(pathSnapshot) } as never,
+        })
+        expect(res?.topImportance[0]?.preview).not.toContain('alice')
+        expect(res?.topImportance[0]?.preview).toContain('&lt;desktop&gt;')
+    })
+
+    it('normalizes empty/whitespace workspaceId cache keys and omits topImportance when includeTopImportance is false', () => {
+        const mockSnapshot: DigestSnapshot = {
+            computedAt: '2026-04-11T12:00:00Z',
+            currentPeriodEntries: 4,
+            previousPeriodEntries: 2,
+            activityGrowthPercent: 100,
+            currentPeriodSignificant: 1,
+            historicalAvgSignificant: 1,
+            significanceMultiplier: 1.0,
+            staleProjects: [],
+            currentRelDensity: 0,
+            previousRelDensity: 0,
+            topImportanceEntries: [{ id: 1, score: 0.9, preview: 'Top entry' }],
+        }
+        const computeDigest = vi.fn().mockReturnValue(mockSnapshot)
+        const context: ResourceContext = { db: { computeDigest } as never }
+
+        const first = buildInsightsSection(context, '   ', { includeTopImportance: false })
+        const second = buildInsightsSection(context, '')
+        expect(computeDigest).toHaveBeenCalledTimes(1)
+        expect(computeDigest).toHaveBeenCalledWith('default')
+        expect(first?.topImportance).toEqual([])
+        expect(second?.topImportance).toHaveLength(1)
     })
 })

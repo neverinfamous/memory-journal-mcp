@@ -57,146 +57,61 @@ export interface AuthorizationServerMetadata {
     issuer: string
 
     /** Authorization endpoint URL */
-    authorization_endpoint?: string
+    authorization_endpoint?: string | undefined
 
     /** Token endpoint URL */
     token_endpoint: string
 
     /** JWKS URI */
-    jwks_uri?: string
+    jwks_uri?: string | undefined
 
     /** Registration endpoint (RFC 7591) */
-    registration_endpoint?: string
+    registration_endpoint?: string | undefined
 
     /** Scopes supported */
-    scopes_supported?: string[]
+    scopes_supported?: string[] | undefined
 
     /** Response types supported */
-    response_types_supported?: string[]
+    response_types_supported?: string[] | undefined
 
     /** Response modes supported */
-    response_modes_supported?: string[]
+    response_modes_supported?: string[] | undefined
 
     /** Grant types supported */
-    grant_types_supported?: string[]
+    grant_types_supported?: string[] | undefined
 
     /** Token endpoint auth methods supported */
-    token_endpoint_auth_methods_supported?: string[]
+    token_endpoint_auth_methods_supported?: string[] | undefined
 
     /** Token endpoint auth signing algorithms */
-    token_endpoint_auth_signing_alg_values_supported?: string[]
+    token_endpoint_auth_signing_alg_values_supported?: string[] | undefined
 
     /** Service documentation URL */
-    service_documentation?: string
+    service_documentation?: string | undefined
 
     /** UI locales supported */
-    ui_locales_supported?: string[]
+    ui_locales_supported?: string[] | undefined
 
     /** OP policy URI */
-    op_policy_uri?: string
+    op_policy_uri?: string | undefined
 
     /** OP terms of service URI */
-    op_tos_uri?: string
+    op_tos_uri?: string | undefined
 
     /** Revocation endpoint */
-    revocation_endpoint?: string
+    revocation_endpoint?: string | undefined
 
     /** Revocation endpoint auth methods */
-    revocation_endpoint_auth_methods_supported?: string[]
+    revocation_endpoint_auth_methods_supported?: string[] | undefined
 
     /** Introspection endpoint */
-    introspection_endpoint?: string
+    introspection_endpoint?: string | undefined
 
     /** Introspection endpoint auth methods */
-    introspection_endpoint_auth_methods_supported?: string[]
+    introspection_endpoint_auth_methods_supported?: string[] | undefined
 
     /** Code challenge methods supported (PKCE) */
-    code_challenge_methods_supported?: string[]
-}
-
-// =============================================================================
-// RFC 7591 - Dynamic Client Registration
-// =============================================================================
-
-/**
- * OAuth 2.0 Dynamic Client Registration Request (RFC 7591)
- *
- * @see https://datatracker.ietf.org/doc/html/rfc7591
- */
-export interface ClientRegistrationRequest {
-    /** Redirect URIs */
-    redirect_uris?: string[]
-
-    /** Token endpoint auth method */
-    token_endpoint_auth_method?: string
-
-    /** Grant types requested */
-    grant_types?: string[]
-
-    /** Response types requested */
-    response_types?: string[]
-
-    /** Client name */
-    client_name?: string
-
-    /** Client URI */
-    client_uri?: string
-
-    /** Logo URI */
-    logo_uri?: string
-
-    /** Scopes requested */
-    scope?: string
-
-    /** Contacts */
-    contacts?: string[]
-
-    /** Terms of service URI */
-    tos_uri?: string
-
-    /** Policy URI */
-    policy_uri?: string
-
-    /** JWKS URI for client authentication */
-    jwks_uri?: string
-
-    /** JWKS document for client authentication */
-    jwks?: JWKSDocument
-
-    /** Software ID */
-    software_id?: string
-
-    /** Software version */
-    software_version?: string
-
-    /** Software statement (signed JWT) */
-    software_statement?: string
-}
-
-/**
- * OAuth 2.0 Dynamic Client Registration Response (RFC 7591)
- */
-export interface ClientRegistrationResponse {
-    /** Client identifier */
-    client_id: string
-
-    /** Client secret (for confidential clients) */
-    client_secret?: string
-
-    /** Client secret expiration timestamp */
-    client_secret_expires_at?: number
-
-    /** Registration access token */
-    registration_access_token?: string
-
-    /** Registration client URI */
-    registration_client_uri?: string
-
-    /** Client ID issued at timestamp */
-    client_id_issued_at?: number
-
-    /** All other fields from the request */
-    [key: string]: unknown
+    code_challenge_methods_supported?: string[] | undefined
 }
 
 // =============================================================================
