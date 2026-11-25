@@ -57,9 +57,10 @@ function validateUpdateProjectScope(
         return { errorResponse: notFoundErrorResponse(entryId) }
     }
     const registry = activeProjectRegistry(config?.projectRegistry)
+    const trimmedWsInput = workspaceInput?.trim()
     const existingWs = scoped.workspaceId ?? resolvedWorkspace
     if (scoped.projectNumber !== undefined && scoped.projectNumber !== null) {
-        if (workspaceInput === '*' || existingWs.toLowerCase() !== 'default') {
+        if (trimmedWsInput === '*' || existingWs.toLowerCase() !== 'default') {
             if (projectOwnershipMismatch(requestedProject, scoped.projectNumber)) {
                 return { errorResponse: notFoundErrorResponse(entryId) }
             }
@@ -72,7 +73,7 @@ function validateUpdateProjectScope(
             ? { assignedWorkspace: scoped.workspaceId }
             : {}
     }
-    if (workspaceInput === '*') {
+    if (trimmedWsInput === '*') {
         return { errorResponse: notFoundErrorResponse(entryId) }
     }
     pairStoredScope(existingWs, requestedProject, registry)
@@ -179,9 +180,10 @@ export function resolveUpdateScope(
         return resolveMoveUpdateScope(input, targetWorkspaceId, db, config)
     }
 
+    const trimmedInputWs = input.workspace_id?.trim()
     const resolved = resolveProjectContext(
         {
-            workspace_id: input.workspace_id,
+            workspace_id: trimmedInputWs === '*' ? '*' : input.workspace_id,
             ...(typeof input.project_number === 'number'
                 ? { project_number: input.project_number }
                 : {}),
@@ -194,7 +196,7 @@ export function resolveUpdateScope(
             : input.project_number === null
               ? null
               : resolved.projectNumber
-    let wsId = input.workspace_id === '*' ? '*' : resolved.workspaceId
+    let wsId = trimmedInputWs === '*' ? '*' : resolved.workspaceId
     const needsUnscopedLookup =
         input.workspace_id === undefined &&
         (input.project_number === undefined || input.project_number === null)

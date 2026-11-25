@@ -378,7 +378,7 @@ export async function runEntryIdVectorLookup(opts: {
     targetWs: string
     projectNumber: number | undefined
     prefetchedEntry: JournalEntry | undefined
-    expectedDimensions: number | undefined
+    expectedDimensions: number | (() => number | undefined) | undefined
     initialize: () => Promise<void>
     generateEmbedding: (text: string) => Promise<Float32Array>
     isDisposed: () => boolean
@@ -394,6 +394,10 @@ export async function runEntryIdVectorLookup(opts: {
     const safeLimit = Math.min(opts.limit, 10_000)
     await opts.initialize()
     if (opts.isDisposed()) throw new Error(opts.disposedErrorMessage)
+    const expectedDims =
+        typeof opts.expectedDimensions === 'function'
+            ? opts.expectedDimensions()
+            : opts.expectedDimensions
 
     try {
         return await searchSimilarEntriesById(
@@ -405,7 +409,7 @@ export async function runEntryIdVectorLookup(opts: {
             opts.targetWs,
             opts.projectNumber,
             opts.prefetchedEntry,
-            opts.expectedDimensions,
+            expectedDims,
             opts.persistVector
         )
     } catch (error) {

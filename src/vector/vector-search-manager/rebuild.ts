@@ -7,83 +7,22 @@ import { REBUILD_BATCH_SIZE, REBUILD_PAGE_SIZE } from './types.js'
 import type { VectorSearchManager } from './manager.js'
 import { formatEntryForEmbedding } from './candidate-search.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
-import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
-import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
+import { DISPOSED_MANAGER_ERROR, verifyVecTableSchema } from './lifecycle-helpers.js'
+
+export { verifyVecTableSchema }
 
 // Allow mocking in tests
 export const setTimeoutFn = globalThis.setTimeout
+
+function isManagerDisposed(manager: VectorSearchManager): boolean {
+    return typeof manager.isDisposed === 'function' && manager.isDisposed()
+}
 
 interface RebuildStats {
     indexed: number
     skipped: number
     errorsCount: number
     firstError: string | null
-}
-
-/**
- * Verify `vec_journal_entries` exists and matches model dimensions; recreate on mismatch.
- */
-export function verifyVecTableSchema(
-    dbAdapter: IDatabaseAdapter,
-    modelName: string,
-    dimensions: number
-): void {
-    let needsRecreation = false
-    let missingModelMetadata = false
-    try {
-        const existingDimStr = dbAdapter.getVectorMetadata('dimensions')
-        const existingModel = dbAdapter.getVectorMetadata('model_name')
-        if (existingDimStr) {
-            const existingDim = parseCanonicalPositiveInt(existingDimStr)
-            if (
-                existingDim !== dimensions ||
-                (existingModel !== null &&
-                    existingModel !== undefined &&
-                    existingModel !== '' &&
-                    existingModel !== modelName)
-            ) {
-                needsRecreation = true
-                logger.info('Vector model or dimensions changed, dropping old index', {
-                    oldModel: existingModel || 'unknown',
-                    newModel: modelName,
-                    oldDimensions: existingDim,
-                    newDimensions: dimensions,
-                })
-            } else if (!existingModel || existingModel.trim() === '') {
-                missingModelMetadata = true
-            }
-        } else {
-            needsRecreation = true
-        }
-    } catch (err) {
-        if (isMissingTableError(err)) {
-            needsRecreation = true
-            logger.warning('Vector metadata table not found, recreating vector index', { error: err })
-        } else {
-            logger.error('Failed to verify vector table dimensions due to database error', { error: err })
-            throw err
-        }
-    }
-
-    if (needsRecreation) {
-        try {
-            dbAdapter.executeInTransaction(() => {
-                dbAdapter.dropVecTable()
-                dbAdapter.createVecTable(dimensions)
-                dbAdapter.setVectorMetadata('model_name', modelName)
-                dbAdapter.setVectorMetadata('dimensions', dimensions.toString())
-            })
-            logger.info(`Created new vec_journal_entries table with ${dimensions} dimensions`)
-        } catch (err) {
-            logger.error('Failed to recreate vector table', { error: err })
-            throw err
-        }
-    } else {
-        dbAdapter.createVecTable(dimensions)
-        if (missingModelMetadata) {
-            dbAdapter.setVectorMetadata('model_name', modelName)
-        }
-    }
 }
 
 /** Returns true when the entry should be skipped (filtered out or already indexed). */
@@ -131,12 +70,14 @@ async function embedEntry(
     entry: JournalEntry,
     stats: RebuildStats
 ): Promise<{ entryId: number; embedding: Float32Array } | null> {
+    if (isManagerDisposed(manager)) return null
     try {
         const embedding = await manager.generateEmbedding(formatEntryForEmbedding(entry), {
             bypassQueryCache: true,
         })
         return { entryId: entry.id, embedding }
     } catch (err) {
+        if (isManagerDisposed(manager)) return null
         recordEmbedError(entry.id, err, stats)
         return null
     }
@@ -172,6 +113,52 @@ function lookupExistingBatchVectorIds(
     }
 }
 
+async function generateBatchVectors(
+    manager: VectorSearchManager,
+    toEmbed: JournalEntry[],
+    stats: RebuildStats
+): Promise<{ entryId: number; embedding: Float32Array }[] | null> {
+    const canBatchPipeline =
+        toEmbed.length > 1 &&
+        typeof manager.generateEmbeddingsSettled === 'function' &&
+        typeof manager.hasCustomEmbeddingGenerator === 'function' &&
+        !manager.hasCustomEmbeddingGenerator()
+
+    if (!canBatchPipeline) {
+        return await toEmbed.reduce<Promise<{ entryId: number; embedding: Float32Array }[]>>(
+            async (accPromise, entry) => {
+                const acc = await accPromise
+                if (isManagerDisposed(manager)) return acc
+                const vector = await embedEntry(manager, entry, stats)
+                if (vector !== null) acc.push(vector)
+                return acc
+            },
+            Promise.resolve([])
+        )
+    }
+
+    let settled: PromiseSettledResult<Float32Array>[]
+    try {
+        settled = await manager.generateEmbeddingsSettled(toEmbed.map(formatEntryForEmbedding))
+    } catch (err) {
+        if (isManagerDisposed(manager)) return null
+        throw err
+    }
+    if (isManagerDisposed(manager)) return null
+    const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
+    for (let idx = 0; idx < toEmbed.length; idx++) {
+        const entry = toEmbed[idx]
+        const outcome = settled[idx]
+        if (!entry || !outcome) continue
+        if (outcome.status === 'fulfilled') {
+            vectorsToUpsert.push({ entryId: entry.id, embedding: outcome.value })
+        } else if (!isManagerDisposed(manager)) {
+            recordEmbedError(entry.id, outcome.reason, stats)
+        }
+    }
+    return vectorsToUpsert
+}
+
 /** Embed and upsert one batch of entries, updating `stats`. Returns true when embedding work ran. */
 async function processBatch(
     manager: VectorSearchManager,
@@ -183,6 +170,7 @@ async function processBatch(
     existingVectorIds: ReadonlySet<number> | undefined,
     stats: RebuildStats
 ): Promise<boolean> {
+    if (isManagerDisposed(manager)) return false
     const toEmbed: JournalEntry[] = []
     for (const entry of batch) {
         if (
@@ -202,40 +190,9 @@ async function processBatch(
     }
     if (toEmbed.length === 0) return false
 
-    const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
-    const canBatchPipeline =
-        toEmbed.length > 1 &&
-        typeof manager.generateEmbeddingsSettled === 'function' &&
-        typeof manager.hasCustomEmbeddingGenerator === 'function' &&
-        !manager.hasCustomEmbeddingGenerator()
+    const vectorsToUpsert = await generateBatchVectors(manager, toEmbed, stats)
+    if (vectorsToUpsert === null || isManagerDisposed(manager)) return false
 
-    if (canBatchPipeline) {
-        const settled = await manager.generateEmbeddingsSettled(toEmbed.map(formatEntryForEmbedding))
-        for (let idx = 0; idx < toEmbed.length; idx++) {
-            const entry = toEmbed[idx]
-            const outcome = settled[idx]
-            if (!entry || !outcome) continue
-            if (outcome.status === 'fulfilled') {
-                vectorsToUpsert.push({ entryId: entry.id, embedding: outcome.value })
-            } else {
-                recordEmbedError(entry.id, outcome.reason, stats)
-            }
-        }
-    } else {
-        const vectors = await toEmbed.reduce<Promise<{ entryId: number; embedding: Float32Array }[]>>(
-            async (accPromise, entry) => {
-                const acc = await accPromise
-                const vector = await embedEntry(manager, entry, stats)
-                if (vector !== null) acc.push(vector)
-                return acc
-            },
-            Promise.resolve([])
-        )
-        vectorsToUpsert.push(...vectors)
-    }
-
-    // Upsert the batch into the database, skipping entries deleted while embedding
-    if (manager.isDisposed()) return false
     const liveVectors = manager.filterLiveVectors(vectorsToUpsert)
     if (liveVectors.length === 0) return true
     try {
@@ -288,7 +245,7 @@ async function processPageBatchesSequentially(
     batchOffset: number,
     anyEmbedded = false
 ): Promise<boolean> {
-    if (batchOffset >= entries.length) return anyEmbedded
+    if (batchOffset >= entries.length || isManagerDisposed(ctx.manager)) return anyEmbedded
     const batch = entries.slice(batchOffset, batchOffset + ctx.batchSize)
     const didEmbed = await processBatch(
         ctx.manager,
@@ -300,6 +257,7 @@ async function processPageBatchesSequentially(
         pageExistingVectorIds,
         ctx.stats
     )
+    if (isManagerDisposed(ctx.manager)) return anyEmbedded || didEmbed
     if (didEmbed) {
         await new Promise((resolve) => setTimeoutFn(resolve, 0))
     }
@@ -324,7 +282,7 @@ async function runRebuildPagesSequentially(
     offset: number,
     cursor: { timestamp: string; id: number } | undefined
 ): Promise<void> {
-    if (offset >= ctx.totalEntries) return
+    if (offset >= ctx.totalEntries || isManagerDisposed(ctx.manager)) return
     const entries = ctx.useKeyset
         ? ctx.dbAdapter.getEntriesAfter?.(ctx.pageSize, ctx.wsScope, ctx.projectNumber, cursor) ?? []
         : ctx.dbAdapter.getEntriesPage(offset, ctx.pageSize, ctx.wsScope, ctx.projectNumber).entries
@@ -344,6 +302,7 @@ async function runRebuildPagesSequentially(
         offset,
         0
     )
+    if (isManagerDisposed(ctx.manager)) return
     if (!pageEmbedded) {
         await new Promise((resolve) => setTimeoutFn(resolve, 0))
     }
@@ -408,6 +367,9 @@ export async function rebuildIndex(
         workspaceId?: string
     }
 ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
+    if (isManagerDisposed(manager)) {
+        return { success: false, indexed: 0, failed: 0, firstError: DISPOSED_MANAGER_ERROR }
+    }
     const force = options?.force ?? false
     const rawBatch = options?.batchSize
     const batchSize =
@@ -433,7 +395,7 @@ export async function rebuildIndex(
     }
 
     if (totalEntries === 0) {
-        const cleanupError = cleanupStaleVectorsSafely(dbAdapter)
+        const cleanupError = !isManagerDisposed(manager) ? cleanupStaleVectorsSafely(dbAdapter) : undefined
         return {
             success: cleanupError === undefined,
             indexed: 0,
@@ -461,7 +423,16 @@ export async function rebuildIndex(
         stats
     )
 
-    const cleanupError = !manager.isDisposed() ? cleanupStaleVectorsSafely(dbAdapter) : undefined
+    if (isManagerDisposed(manager)) {
+        return {
+            success: false,
+            indexed: stats.indexed,
+            failed: stats.errorsCount,
+            firstError: stats.firstError ?? DISPOSED_MANAGER_ERROR,
+        }
+    }
+
+    const cleanupError = cleanupStaleVectorsSafely(dbAdapter)
 
     return {
         success: stats.errorsCount === 0 && cleanupError === undefined,

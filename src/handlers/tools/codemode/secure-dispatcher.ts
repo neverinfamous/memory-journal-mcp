@@ -227,11 +227,18 @@ async function executeDispatcherCall(
         return invokeToolWithGuards(tool, finalParams, sessionContext)
     }
 
+    const maintenanceManager = sessionContext.config?.runtime?.maintenanceManager
+    const runTracked =
+        typeof maintenanceManager?.withActiveJob === 'function'
+            ? (): Promise<unknown> =>
+                  maintenanceManager.withActiveJob(executeWithScope, tool.name === 'restore_backup')
+            : executeWithScope
+
     return runInAdjustedRequestContext(
         callUseTestDb,
         rpcOverrides,
         scopeRes.effectiveUseSessionIdInCtx,
-        executeWithScope
+        runTracked
     )
 }
 

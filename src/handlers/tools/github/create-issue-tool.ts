@@ -25,10 +25,14 @@ const CreateIssueHandlerInputSchema = z.preprocess(
         if (!isRecord(val)) return val
         const obj: Record<string, unknown> = { ...val }
         if ('journal_content' in obj) {
-            if (obj['entry_content'] === undefined && obj['journal_content'] !== undefined) {
-                obj['entry_content'] = obj['journal_content']
+            const canonical = obj['entry_content']
+            const alias = obj['journal_content']
+            if (canonical === undefined && alias !== undefined) {
+                obj['entry_content'] = alias
+                Reflect.deleteProperty(obj, 'journal_content')
+            } else if (alias === undefined || canonical === alias) {
+                Reflect.deleteProperty(obj, 'journal_content')
             }
-            Reflect.deleteProperty(obj, 'journal_content')
         }
         return obj
     },

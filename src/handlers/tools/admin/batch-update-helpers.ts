@@ -18,7 +18,9 @@ function resolveBatchUpdateItemScope(
     prefetchedById?: ReadonlyMap<number, { workspaceId?: string }>
 ): { resolvedWs: string; projectNumberForUpdate: number | null | undefined; targetWorkspaceId: string | undefined } {
     const { db, config } = context
-    const explicitWs = u.workspace_id ?? input.workspace_id
+    const rawExplicitWs = u.workspace_id ?? input.workspace_id
+    const trimmedExplicitWs = rawExplicitWs?.trim()
+    const explicitWs = trimmedExplicitWs === '*' ? '*' : rawExplicitWs
     const explicitPn = inheritBatchProjectNumber(
         u.workspace_id,
         u.project_number,
@@ -124,7 +126,7 @@ function buildWildcardMismatchError(
     projectNumber?: number
 ): Record<string, unknown> {
     const suggestion =
-        workspaceId === '*' && projectNumber !== undefined
+        workspaceId?.trim() === '*' && projectNumber !== undefined
             ? `🛠️ AUTONOMOUS HEALING: Cross-workspace batch updates are restricted to project_number ${String(projectNumber)} because project_number was pinned (often inherited from top-level mj_execute_code({ project_number })). Re-run mj_execute_code with workspace_id: '*' and omit top-level project_number when updating entries across multiple projects.`
             : 'Verify the entry identifiers and project number'
     return {

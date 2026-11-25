@@ -102,33 +102,37 @@ function coerceLinkEndpointId(val: unknown): unknown {
     return val
 }
 
-/** Preprocessor for TeamLinkEntriesSchema & TeamLinkEntriesSchemaMcp: normalizes aliases while preserving unknown keys for .strict(). */
+function normalizeAliasGroup(
+    normalized: Record<string, unknown>,
+    canonicalKey: string,
+    aliasKeys: readonly string[],
+    transformVal: (val: unknown) => unknown
+): void {
+    const allKeys = [canonicalKey, ...aliasKeys]
+    const definedPairs = allKeys
+        .filter((k) => normalized[k] !== undefined)
+        .map((k) => ({ key: k, val: transformVal(normalized[k]) }))
+    if (definedPairs.length === 0) return
+
+    const first = definedPairs[0]
+    if (first === undefined) return
+    const hasConflict = definedPairs.some((pair) => !Object.is(pair.val, first.val))
+    if (hasConflict) return
+
+    for (const alias of aliasKeys) {
+        Reflect.deleteProperty(normalized, alias)
+    }
+    normalized[canonicalKey] = first.val
+}
+
+/** Preprocessor for TeamLinkEntriesSchema & TeamLinkEntriesSchemaMcp: normalizes aliases while preserving conflicting or unknown keys for .strict(). */
 export function preprocessTeamLinkEntries(val: unknown): unknown {
     if (!isRecord(val)) return val
     const normalized: Record<string, unknown> = { ...val }
-    const fromId =
-        normalized['from_entry_id'] ??
-        normalized['from_id'] ??
-        normalized['from'] ??
-        normalized['source_id']
-    const toId =
-        normalized['to_entry_id'] ??
-        normalized['to_id'] ??
-        normalized['to'] ??
-        normalized['target_id']
-    const rawRel =
-        normalized['relationship_type'] ?? normalized['type'] ?? normalized['rel']
-    const description = normalized['description'] ?? normalized['message'] ?? normalized['text']
-
-    for (const alias of ['from_id', 'from', 'source_id', 'to_id', 'to', 'target_id', 'type', 'rel', 'message', 'text']) {
-        Reflect.deleteProperty(normalized, alias)
-    }
-    if (fromId !== undefined) normalized['from_entry_id'] = coerceLinkEndpointId(fromId)
-    if (toId !== undefined) normalized['to_entry_id'] = coerceLinkEndpointId(toId)
-    if (rawRel !== undefined) {
-        normalized['relationship_type'] = normalizeTeamLinkRelationshipType(rawRel)
-    }
-    if (description !== undefined) normalized['description'] = description
+    normalizeAliasGroup(normalized, 'from_entry_id', ['from_id', 'from', 'source_id'], coerceLinkEndpointId)
+    normalizeAliasGroup(normalized, 'to_entry_id', ['to_id', 'to', 'target_id'], coerceLinkEndpointId)
+    normalizeAliasGroup(normalized, 'relationship_type', ['type', 'rel'], normalizeTeamLinkRelationshipType)
+    normalizeAliasGroup(normalized, 'description', ['message', 'text'], (v) => v)
     return normalized
 }
 

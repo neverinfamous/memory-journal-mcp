@@ -86,10 +86,12 @@ const CleanupBackupsOutputSchema = z
 async function runLockedRestore(
     db: ToolContext['db'],
     config: ToolContext['config'],
+    vectorManager: ToolContext['vectorManager'],
     filename: string
 ): Promise<{
     preRestoreBackup: Awaited<ReturnType<ToolContext['db']['exportToFile']>>
     result: Awaited<ReturnType<ToolContext['db']['restoreFromFile']>>
+    vectorWarningSuffix: string
 }> {
     if (config?.runtime?.maintenanceManager) {
         await config.runtime.maintenanceManager.acquireMaintenanceLock()
@@ -99,7 +101,8 @@ async function runLockedRestore(
         // maintenance lock before replacing database contents; abort if it fails.
         const preRestoreBackup = await db.exportToFile(`pre_restore_${String(Date.now())}`)
         const result = await db.restoreFromFile(filename, config?.runtime)
-        return { preRestoreBackup, result }
+        const vectorWarningSuffix = await rebuildVectorAfterRestore(vectorManager)
+        return { preRestoreBackup, result, vectorWarningSuffix }
     } finally {
         if (config?.runtime?.maintenanceManager) {
             config.runtime.maintenanceManager.releaseMaintenanceLock()
@@ -213,8 +216,12 @@ async function executeRestoreBackup(
     await sendProgress(progress, 1, 3, 'Preparing restore...')
     await sendProgress(progress, 2, 3, 'Restoring database from backup...')
 
-    const { preRestoreBackup, result } = await runLockedRestore(db, config, input.filename)
-    const vectorWarningSuffix = await rebuildVectorAfterRestore(vectorManager)
+    const { preRestoreBackup, result, vectorWarningSuffix } = await runLockedRestore(
+        db,
+        config,
+        vectorManager,
+        input.filename
+    )
     // Send directly using captured primitives (db.restoreFromFile reinitializes DB)
     await notifyRestoreProgressComplete(progressServer, progressTokenValue)
 

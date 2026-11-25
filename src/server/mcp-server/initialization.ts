@@ -9,7 +9,7 @@ import { logger } from '../../utils/logger.js'
 import { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { ConfigManager } from '../../utils/config-manager.js'
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
-import { awaitPendingVectorInit } from './core-helpers.js'
+import { teardownVectorManagers } from './core-helpers.js'
 import { createVectorManagers } from './initialization-helpers.js'
 import { initConfigAndStartupJobs, resolveFinalAllowedIoRoots } from './initialization-config.js'
 
@@ -234,8 +234,7 @@ async function safeCloseStartupResources(resources: {
     if (resources.runtime.auditLogger !== null) {
         await resources.runtime.auditLogger.close().catch(() => undefined)
     }
-    await awaitPendingVectorInit(resources.runtime)
-    await resources.runtime.disposeVectorManagers?.().catch(() => undefined)
+    await teardownVectorManagers(resources.runtime)
     for (const adapter of [
         resources.testTeamDb,
         resources.primaryTeamDb,

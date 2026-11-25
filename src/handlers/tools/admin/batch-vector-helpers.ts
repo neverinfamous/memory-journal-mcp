@@ -67,7 +67,7 @@ function isMoveTargetProjectMismatch(
 ): boolean {
     const sourceWs = u.workspace_id ?? rootWorkspaceId
     const entry = resolveEntry(u.entry_id)
-    const isWildcardSource = sourceWs === '*'
+    const isWildcardSource = sourceWs?.trim() === '*'
     const isDefaultSource =
         sourceWs?.toLowerCase() === 'default' ||
         (sourceWs === undefined && entry?.workspaceId?.toLowerCase() === 'default')
@@ -162,18 +162,20 @@ export function findWildcardProjectMismatches(
                     resolveEntry
                 )
             }
-            if (rootWorkspaceId === '*' && rootProjectNumber !== undefined) {
+            const normRootWs = rootWorkspaceId?.trim()
+            if (normRootWs === '*' && rootProjectNumber !== undefined) {
                 if (u.project_number !== undefined && u.project_number !== rootProjectNumber) {
                     return true
                 }
                 const entry = resolveEntry(u.entry_id)
                 return entry?.projectNumber !== rootProjectNumber
             }
-            const ws = u.workspace_id ?? rootWorkspaceId
+            const rawWs = u.workspace_id ?? rootWorkspaceId
+            const ws = rawWs?.trim() === '*' ? '*' : rawWs
             const pn = inheritBatchProjectNumber(
                 u.workspace_id,
                 u.project_number,
-                rootWorkspaceId,
+                normRootWs === '*' ? '*' : rootWorkspaceId,
                 rootProjectNumber
             )
             if (pn === undefined || pn === null) return false
@@ -334,7 +336,7 @@ async function runScopedBatchDelete(
 ): Promise<Record<string, unknown>> {
     const { db, vectorManager, progress } = context
     const wsId =
-        input.workspace_id === '*'
+        input.workspace_id?.trim() === '*'
             ? '*'
             : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
     const prefetched =

@@ -342,11 +342,13 @@ export const GetRecentEntriesSchemaMcp = z.preprocess(
 // History Schemas
 // ============================================================================
 
-export const GetEntryHistorySchema = z.object({
-    entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
-    project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
-    workspace_id: z.string().max(255).optional(),
-})
+export const GetEntryHistorySchema = z
+    .object({
+        entry_id: z.preprocess(coerceIntString, z.number().int().positive()),
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 export const GetEntryHistorySchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('The numeric ID of the entry'),
@@ -398,19 +400,23 @@ export const GetRecentEntriesOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-export const ListTagsSchema = z.object({
-    project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
-    workspace_id: z.string().max(255).optional(),
-})
+export const ListTagsSchema = z
+    .object({
+        project_number: z.preprocess(coerceIntString, StrictProjectNumberSchema).optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 export const ListTagsSchemaMcp = z.object({
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),
 })
 
-export const TestSimpleSchema = z.object({
-    message: z.string().optional().default('Hello'),
-})
+export const TestSimpleSchema = z
+    .object({
+        message: z.string().optional().default('Hello'),
+    })
+    .strict()
 
 export const TestSimpleOutputSchema = z
     .object({

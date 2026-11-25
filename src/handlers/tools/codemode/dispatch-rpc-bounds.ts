@@ -7,50 +7,22 @@ import type { RpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { pairStoredScope, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { cwdMatchesRegistryPath, findCanonicalRegistryKey } from '../../../utils/workspace-registry-match.js'
-import { assertSafeDirectoryPath, PathTraversalError } from '../../../utils/security-utils.js'
-
-function validationErrResult(error: string): Record<string, unknown> {
-    return {
-        success: false,
-        error,
-        code: 'VALIDATION_ERROR',
-        category: 'validation',
-        recoverable: true,
-    }
-}
-
-function workspacesConflict(
-    explicitWs: string,
-    pinnedWs: string,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
-): boolean {
-    const canonExplicit = findCanonicalRegistryKey(explicitWs, registry) ?? explicitWs
-    const canonPinned = findCanonicalRegistryKey(pinnedWs, registry) ?? pinnedWs
-    return canonExplicit.toLowerCase() !== canonPinned.toLowerCase()
-}
-
-function resolveRegistryEntryProject(
-    keyOrRepo: string,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
-): { matchedKey: string | undefined; projectNumber: number | undefined } {
-    if (registry === undefined) return { matchedKey: undefined, projectNumber: undefined }
-    const direct = findCanonicalRegistryKey(keyOrRepo, registry)
-    if (direct !== undefined) {
-        return { matchedKey: direct, projectNumber: registry[direct]?.project_number }
-    }
-    const slug = keyOrRepo.split(/[/\\]/).filter(Boolean).pop()
-    const slugKey = slug !== undefined && slug !== '' ? findCanonicalRegistryKey(slug, registry) : undefined
-    return {
-        matchedKey: slugKey,
-        projectNumber: slugKey !== undefined ? registry[slugKey]?.project_number : undefined,
-    }
-}
+import {
+    checkScopedRepoAndOwnerFields,
+    checkToolSpecificRpcBounds,
+    collectNestedContainerRecords,
+    parsePrefixedProjectInt,
+    resolveRegistryEntryProject,
+    validationErrResult,
+    workspacesConflict,
+    type RegistryMap,
+} from './dispatch-rpc-bounds-helpers.js'
 
 function checkRecordCwdAgainstRpcBounds(
     rawCwd: unknown,
     effectivePinnedWs: string | undefined,
     pinnedProj: number | undefined,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
+    registry: RegistryMap
 ): Record<string, unknown> | undefined {
     if (typeof rawCwd !== 'string' || rawCwd.trim() === '') return undefined
     const trimmedCwd = rawCwd.trim()
@@ -87,9 +59,9 @@ function checkRecordCwdAgainstRpcBounds(
 function checkRecordWorkspaceAgainstPinnedProj(
     rec: Record<string, unknown>,
     pinnedProj: number,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
+    registry: RegistryMap
 ): Record<string, unknown> | undefined {
-    for (const key of ['workspace_id', 'target_workspace_id', 'repo', 'repo_name', 'repository'] as const) {
+    for (const key of ['workspace_id', 'target_workspace_id', 'workspace', 'repo', 'repo_name', 'repository'] as const) {
         const raw = rec[key]
         if (typeof raw !== 'string') continue
         const trimmed = raw.trim()
@@ -109,126 +81,106 @@ function checkRecordWorkspaceAgainstPinnedProj(
     return undefined
 }
 
-function resolvePinnedPathsForScope(
+function checkRecordProjectAliasAgainstBounds(
+    rawProject: unknown,
     effectivePinnedWs: string | undefined,
     pinnedProj: number | undefined,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
-): string[] {
-    if (registry === undefined) return []
-    if (effectivePinnedWs !== undefined) {
-        const key = findCanonicalRegistryKey(effectivePinnedWs, registry) ?? effectivePinnedWs
-        const p = registry[key]?.path
-        return typeof p === 'string' && p.trim() !== '' ? [p] : []
+    registry: RegistryMap
+): Record<string, unknown> | undefined {
+    if (typeof rawProject === 'number') {
+        if (Number.isFinite(rawProject) && pinnedProj !== undefined && rawProject !== pinnedProj) {
+            return validationErrResult(
+                `project ${String(rawProject)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+            )
+        }
+        return undefined
     }
-    if (pinnedProj !== undefined) {
-        return Object.values(registry).flatMap((e) =>
-            e.project_number === pinnedProj && typeof e.path === 'string' && e.path.trim() !== ''
-                ? [e.path]
-                : []
+    if (typeof rawProject !== 'string') return undefined
+    const trimmed = rawProject.trim()
+    if (trimmed === '') return undefined
+    if (trimmed === '*') {
+        return effectivePinnedWs !== undefined
+            ? validationErrResult(`project '*' is not allowed inside nested executeCode scope '${effectivePinnedWs}'.`)
+            : undefined
+    }
+    if (/^[+-]?\d+$/.test(trimmed) || /^[p#]-?\d+$/i.test(trimmed)) {
+        const parsed = parsePrefixedProjectInt(trimmed)
+        if (pinnedProj !== undefined && parsed !== pinnedProj) {
+            return validationErrResult(
+                `project '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+            )
+        }
+        return undefined
+    }
+    if (effectivePinnedWs !== undefined && workspacesConflict(trimmed, effectivePinnedWs, registry)) {
+        return validationErrResult(
+            `project '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
         )
     }
-    return []
-}
-
-function checkScopedRepoAndOwnerFields(
-    rec: Record<string, unknown>,
-    effectivePinnedWs: string,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
-): Record<string, unknown> | undefined {
-    const pinnedOwner = effectivePinnedWs.includes('/') ? effectivePinnedWs.split('/')[0] : undefined
-    const rawOwner = rec['owner']
-    if (typeof rawOwner === 'string' && rawOwner.trim() !== '' && pinnedOwner !== undefined) {
-        if (rawOwner.trim().toLowerCase() !== pinnedOwner.toLowerCase()) {
+    if (pinnedProj !== undefined) {
+        if (trimmed.toLowerCase() === 'default' || resolveRegistryEntryProject(trimmed, registry).projectNumber !== pinnedProj) {
             return validationErrResult(
-                `owner '${rawOwner.trim()}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
-            )
-        }
-    }
-    for (const repoKey of ['repo', 'repo_name', 'repository'] as const) {
-        const rawRepo = rec[repoKey]
-        if (typeof rawRepo !== 'string' || rawRepo.trim() === '') continue
-        const trimmedRepo = rawRepo.trim()
-        const slashParts = trimmedRepo.split(/[/\\]/).filter(Boolean)
-        if (pinnedOwner !== undefined && slashParts.length >= 2 && slashParts[0]?.toLowerCase() !== pinnedOwner.toLowerCase()) {
-            return validationErrResult(
-                `${repoKey} '${trimmedRepo}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
-            )
-        }
-        const repoSlug = slashParts.pop() ?? trimmedRepo
-        const resolvedRepo =
-            findCanonicalRegistryKey(trimmedRepo, registry) ??
-            findCanonicalRegistryKey(repoSlug, registry) ??
-            repoSlug
-        if (workspacesConflict(resolvedRepo, effectivePinnedWs, registry)) {
-            return validationErrResult(
-                `${repoKey} '${trimmedRepo}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+                `project '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
             )
         }
     }
     return undefined
 }
 
-const PROJECT_ADMIN_TOOL_NAMES = new Set([
-    'get_project', 'register_project', 'update_project', 'delete_project',
-])
-const IO_DIR_TOOL_NAMES = new Set([
-    'export_markdown', 'import_markdown', 'import_external',
-    'team_export_markdown', 'team_import_markdown', 'team_import_external',
-])
-
-function checkDirectoryBoundsForScope(
-    dirVal: unknown,
-    fieldName: string,
-    effectivePinnedWs: string | undefined,
-    pinnedProj: number | undefined,
-    registry: NonNullable<ToolContext['config']>['projectRegistry'],
-    requirePinnedPath: boolean
-): Record<string, unknown> | undefined {
-    if (typeof dirVal !== 'string' || dirVal.trim() === '') return undefined
-    const allowedPaths = resolvePinnedPathsForScope(effectivePinnedWs, pinnedProj, registry)
-    if (allowedPaths.length === 0) {
-        return requirePinnedPath
-            ? validationErrResult(`${fieldName} is not allowed without a registered path in nested executeCode scope.`)
-            : undefined
-    }
-    try {
-        assertSafeDirectoryPath(dirVal.trim(), allowedPaths)
-        return undefined
-    } catch (err) {
-        const msg = err instanceof PathTraversalError ? err.message : `${fieldName} conflicts with nested executeCode scope.`
-        return validationErrResult(msg)
-    }
-}
-
-function checkToolSpecificRpcBounds(
-    toolName: string,
+function checkPinnedProjectNumberField(
     rec: Record<string, unknown>,
-    effectivePinnedWs: string | undefined,
-    pinnedProj: number | undefined,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
+    pinnedProj: number,
+    registry: RegistryMap
 ): Record<string, unknown> | undefined {
-    if (toolName === 'update_configuration') {
-        return validationErrResult("Tool 'update_configuration' is not allowed inside a scope-narrowed nested executeCode call.")
+    const rawProj = rec['project_number']
+    if (rawProj === null) {
+        return validationErrResult(
+            `project_number cannot be cleared (null) inside nested executeCode pinned to project_number ${String(pinnedProj)}.`
+        )
     }
-    if (PROJECT_ADMIN_TOOL_NAMES.has(toolName)) {
-        for (const nameKey of ['name', 'new_name'] as const) {
-            const rawName = rec[nameKey]
-            if (typeof rawName !== 'string' || rawName.trim() === '') continue
-            const trimmed = rawName.trim()
-            if (effectivePinnedWs !== undefined && workspacesConflict(trimmed, effectivePinnedWs, registry)) {
-                return validationErrResult(`${nameKey} '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`)
-            }
-            if (pinnedProj !== undefined && resolveRegistryEntryProject(trimmed, registry).projectNumber !== pinnedProj) {
-                return validationErrResult(`${nameKey} '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`)
+    let resolvedProjNum: number | undefined
+    if (typeof rawProj === 'number') {
+        if (Number.isFinite(rawProj) && rawProj !== pinnedProj) {
+            return validationErrResult(
+                `project_number ${String(rawProj)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+            )
+        }
+        resolvedProjNum = rawProj
+    } else if (typeof rawProj === 'string') {
+        const trimmed = rawProj.trim()
+        if (trimmed !== '') {
+            const parsedInt = parsePrefixedProjectInt(trimmed)
+            if (parsedInt !== undefined) {
+                if (parsedInt !== pinnedProj) {
+                    return validationErrResult(
+                        `project_number '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+                    )
+                }
+                resolvedProjNum = parsedInt
+            } else {
+                const regProj =
+                    trimmed.toLowerCase() === 'default'
+                        ? undefined
+                        : resolveRegistryEntryProject(trimmed, registry).projectNumber
+                if (regProj !== pinnedProj) {
+                    return validationErrResult(
+                        `project_number '${trimmed}' conflicts with nested executeCode project_number ${String(pinnedProj)}.`
+                    )
+                }
+                resolvedProjNum = regProj
             }
         }
-        return checkDirectoryBoundsForScope(rec['absolute_path'], 'absolute_path', effectivePinnedWs, pinnedProj, registry, true)
     }
-    if (IO_DIR_TOOL_NAMES.has(toolName)) {
-        for (const dirKey of ['output_dir', 'source_dir', 'target_dir', 'path', 'filepath', 'dir'] as const) {
-            const dirErr = checkDirectoryBoundsForScope(rec[dirKey], dirKey, effectivePinnedWs, pinnedProj, registry, false)
-            if (dirErr !== undefined) return dirErr
-        }
+    const rawWs =
+        typeof rec['workspace_id'] === 'string'
+            ? rec['workspace_id'].trim()
+            : typeof rec['workspace'] === 'string'
+              ? rec['workspace'].trim()
+              : undefined
+    if (rawWs === '*' && resolvedProjNum !== pinnedProj) {
+        return validationErrResult(
+            `workspace_id '*' requires project_number ${String(pinnedProj)} inside nested executeCode.`
+        )
     }
     return undefined
 }
@@ -237,56 +189,39 @@ function checkRecordAgainstRpcBounds(
     rec: Record<string, unknown>,
     pinnedWs: string | undefined,
     pinnedProj: number | undefined,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
+    registry: RegistryMap
 ): Record<string, unknown> | undefined {
     const effectivePinnedWs =
         pinnedWs ?? (pinnedProj !== undefined ? uniqueWorkspaceForProject(pinnedProj, registry) : undefined)
     if (effectivePinnedWs !== undefined) {
-        for (const wsKey of ['workspace_id', 'target_workspace_id'] as const) {
+        for (const wsKey of ['workspace_id', 'target_workspace_id', 'workspace'] as const) {
             const rawWs = rec[wsKey]
-            if (typeof rawWs === 'string') {
-                const trimmed = rawWs.trim()
-                if (trimmed === '*') {
-                    return validationErrResult(
-                        `${wsKey} '*' is not allowed inside nested executeCode scope '${effectivePinnedWs}'.`
-                    )
-                }
-                if (trimmed !== '' && workspacesConflict(trimmed, effectivePinnedWs, registry)) {
-                    return validationErrResult(
-                        `${wsKey} '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
-                    )
-                }
+            if (typeof rawWs !== 'string') continue
+            const trimmed = rawWs.trim()
+            if (trimmed === '*') {
+                return validationErrResult(
+                    `${wsKey} '*' is not allowed inside nested executeCode scope '${effectivePinnedWs}'.`
+                )
+            }
+            if (trimmed !== '' && workspacesConflict(trimmed, effectivePinnedWs, registry)) {
+                return validationErrResult(
+                    `${wsKey} '${trimmed}' conflicts with nested executeCode scope '${effectivePinnedWs}'.`
+                )
             }
         }
         const repoErr = checkScopedRepoAndOwnerFields(rec, effectivePinnedWs, registry)
         if (repoErr !== undefined) return repoErr
     }
+    const projAliasErr = checkRecordProjectAliasAgainstBounds(rec['project'], effectivePinnedWs, pinnedProj, registry)
+    if (projAliasErr !== undefined) return projAliasErr
     const cwdErr = checkRecordCwdAgainstRpcBounds(rec['cwd'], effectivePinnedWs, pinnedProj, registry)
     if (cwdErr !== undefined) return cwdErr
 
     if (pinnedProj !== undefined) {
         const wsProjErr = checkRecordWorkspaceAgainstPinnedProj(rec, pinnedProj, registry)
         if (wsProjErr !== undefined) return wsProjErr
-        const rawProj = rec['project_number']
-        if (rawProj === null) {
-            return validationErrResult(
-                `project_number cannot be cleared (null) inside nested executeCode pinned to project_number ${String(pinnedProj)}.`
-            )
-        }
-        if (typeof rawProj === 'number' && Number.isFinite(rawProj) && rawProj !== pinnedProj) {
-            return validationErrResult(
-                `project_number ${String(rawProj)} conflicts with nested executeCode project_number ${String(pinnedProj)}.`
-            )
-        }
-        if (
-            typeof rec['workspace_id'] === 'string' &&
-            rec['workspace_id'].trim() === '*' &&
-            rawProj !== pinnedProj
-        ) {
-            return validationErrResult(
-                `workspace_id '*' requires project_number ${String(pinnedProj)} inside nested executeCode.`
-            )
-        }
+        const pnErr = checkPinnedProjectNumberField(rec, pinnedProj, registry)
+        if (pnErr !== undefined) return pnErr
     }
     return undefined
 }
@@ -402,7 +337,7 @@ export function validateRpcOverrideBounds(
     tool: ToolDefinition,
     normalizedParams: unknown,
     rpcOverrides: RpcExecutionOverrides | undefined,
-    registry: NonNullable<ToolContext['config']>['projectRegistry']
+    registry: RegistryMap
 ): Record<string, unknown> | undefined {
     if (rpcOverrides === undefined || !isRecord(normalizedParams)) return undefined
     const rawWs = rpcOverrides.workspaceId?.trim()
@@ -412,18 +347,22 @@ export function validateRpcOverrideBounds(
 
     const effectivePinnedWs =
         pinnedWs ?? (pinnedProj !== undefined ? uniqueWorkspaceForProject(pinnedProj, registry) : undefined)
-    const toolErr = checkToolSpecificRpcBounds(tool.name, normalizedParams, effectivePinnedWs, pinnedProj, registry)
-    if (toolErr !== undefined) return toolErr
+    for (const candidate of [normalizedParams, ...collectNestedContainerRecords(normalizedParams)]) {
+        const toolErr = checkToolSpecificRpcBounds(tool.name, candidate, effectivePinnedWs, pinnedProj, registry)
+        if (toolErr !== undefined) return toolErr
 
-    const topErr = checkRecordAgainstRpcBounds(normalizedParams, pinnedWs, pinnedProj, registry)
-    if (topErr !== undefined) return topErr
+        const recErr = checkRecordAgainstRpcBounds(candidate, pinnedWs, pinnedProj, registry)
+        if (recErr !== undefined) return recErr
+    }
 
     const resolvedBatch = resolveBatchItemsForBounds(tool.name, normalizedParams)
     if (resolvedBatch !== undefined) {
         for (const item of resolvedBatch.items) {
             if (!isRecord(item)) continue
-            const itemErr = checkRecordAgainstRpcBounds(item, pinnedWs, pinnedProj, registry)
-            if (itemErr !== undefined) return itemErr
+            for (const candidate of [item, ...collectNestedContainerRecords(item)]) {
+                const itemErr = checkRecordAgainstRpcBounds(candidate, pinnedWs, pinnedProj, registry)
+                if (itemErr !== undefined) return itemErr
+            }
         }
     }
     return undefined

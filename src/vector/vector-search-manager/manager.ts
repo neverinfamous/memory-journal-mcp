@@ -177,17 +177,20 @@ export class VectorSearchManager {
     }
 
     /** Latch disposed state synchronously, drain pending init/mutations/reads, and dispose ONNX pipeline. */
-    public async dispose(): Promise<void> {
+    public async dispose(timeoutMs = 5_000): Promise<void> {
         this.disposed = true
-        await drainVectorPendingState(() => ({
-            init: this.initializationPromise,
-            tail: this.writeTail,
-            reads: this.activeReads !== undefined ? [...this.activeReads] : [],
-            isUnchanged: (init, tail) =>
-                this.initializationPromise === init &&
-                this.writeTail === tail &&
-                (this.activeReads === undefined || this.activeReads.size === 0),
-        }))
+        await drainVectorPendingState(
+            () => ({
+                init: this.initializationPromise,
+                tail: this.writeTail,
+                reads: this.activeReads !== undefined ? [...this.activeReads] : [],
+                isUnchanged: (init, tail) =>
+                    this.initializationPromise === init &&
+                    this.writeTail === tail &&
+                    (this.activeReads === undefined || this.activeReads.size === 0),
+            }),
+            timeoutMs
+        )
         const pipelineToDispose = this.pipeline
         this.pipeline = null
         this.ready = false
@@ -394,7 +397,7 @@ export class VectorSearchManager {
                 targetWs: effectiveWorkspace(workspaceId),
                 projectNumber,
                 prefetchedEntry,
-                expectedDimensions: this.dimensions ?? undefined,
+                expectedDimensions: () => this.dimensions ?? undefined,
                 initialize: () => this.initialize(),
                 generateEmbedding: (text) =>
                     this.generateEmbedding(text, { bypassQueryCache: true }),

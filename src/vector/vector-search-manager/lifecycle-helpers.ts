@@ -6,6 +6,8 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { JournalEntry } from '../../types/index.js'
 import { logger } from '../../utils/logger.js'
 import { isRecord } from '../../utils/type-guards.js'
+import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
+import { parseCanonicalPositiveInt } from '../../utils/safe-positive-int.js'
 import {
     embedTextsSequentiallySettled,
     formatEntryForEmbedding,
@@ -238,20 +240,61 @@ export async function runAddBatchVectorEntries(opts: {
     )
 }
 
-/** Drain in-flight init, mutation tail, and active read promises until quiescent. */
-export async function drainVectorPendingState(
-    snapshot: () => {
-        init: Promise<void> | null
-        tail: Promise<void>
-        reads: Promise<unknown>[]
-        isUnchanged: (init: Promise<void> | null, tail: Promise<void>) => boolean
-    }
+type VectorPendingSnapshot = () => {
+    init: Promise<void> | null
+    tail: Promise<void>
+    reads: Promise<unknown>[]
+    isUnchanged: (init: Promise<void> | null, tail: Promise<void>) => boolean
+}
+
+async function runBoundedDrainPass(
+    snapshot: VectorPendingSnapshot,
+    deadline: number | undefined
 ): Promise<void> {
     const { init, tail, reads, isUnchanged } = snapshot()
-    await Promise.allSettled([...(init !== null ? [init] : []), tail, ...reads])
-    if (!isUnchanged(init, tail)) {
-        await drainVectorPendingState(snapshot)
+    const pending = Promise.allSettled([...(init !== null ? [init] : []), tail, ...reads])
+    if (deadline === undefined) {
+        await pending
+    } else {
+        const remaining = deadline - Date.now()
+        if (remaining <= 0) {
+            logger.debug('Timed out draining vector search manager pending state')
+            return
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let timedOut = false
+        try {
+            await Promise.race([
+                pending,
+                new Promise<void>((resolve) => {
+                    timer = setTimeout(() => {
+                        timedOut = true
+                        resolve()
+                    }, remaining)
+                    timer.unref()
+                }),
+            ])
+        } finally {
+            if (timer !== undefined) clearTimeout(timer)
+        }
+        if (timedOut) {
+            logger.debug('Timed out draining vector search manager pending state')
+            return
+        }
     }
+    if (!isUnchanged(init, tail)) {
+        await runBoundedDrainPass(snapshot, deadline)
+    }
+}
+
+/** Drain in-flight init, mutation tail, and active read promises until quiescent or timed out. */
+export async function drainVectorPendingState(
+    snapshot: VectorPendingSnapshot,
+    timeoutMs?: number
+): Promise<void> {
+    const hasDeadline = typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0
+    const deadline = hasDeadline ? Date.now() + timeoutMs : undefined
+    await runBoundedDrainPass(snapshot, deadline)
 }
 
 /** Generate and validate a single embedding using optional query cache or HF pipeline. */
@@ -344,5 +387,71 @@ export async function disposePipelineHandle(pipeline: unknown): Promise<void> {
         logger.debug('Failed to dispose vector pipeline session', {
             error: error instanceof Error ? error.message : String(error),
         })
+    }
+}
+
+/**
+ * Verify `vec_journal_entries` exists and matches model dimensions; recreate on mismatch.
+ */
+export function verifyVecTableSchema(
+    dbAdapter: IDatabaseAdapter,
+    modelName: string,
+    dimensions: number
+): void {
+    let needsRecreation = false
+    let missingModelMetadata = false
+    try {
+        const existingDimStr = dbAdapter.getVectorMetadata('dimensions')
+        const existingModel = dbAdapter.getVectorMetadata('model_name')
+        if (existingDimStr) {
+            const existingDim = parseCanonicalPositiveInt(existingDimStr)
+            if (
+                existingDim !== dimensions ||
+                (existingModel !== null &&
+                    existingModel !== undefined &&
+                    existingModel !== '' &&
+                    existingModel !== modelName)
+            ) {
+                needsRecreation = true
+                logger.info('Vector model or dimensions changed, dropping old index', {
+                    oldModel: existingModel || 'unknown',
+                    newModel: modelName,
+                    oldDimensions: existingDim,
+                    newDimensions: dimensions,
+                })
+            } else if (!existingModel || existingModel.trim() === '') {
+                missingModelMetadata = true
+            }
+        } else {
+            needsRecreation = true
+        }
+    } catch (err) {
+        if (isMissingTableError(err)) {
+            needsRecreation = true
+            logger.warning('Vector metadata table not found, recreating vector index', { error: err })
+        } else {
+            logger.error('Failed to verify vector table dimensions due to database error', { error: err })
+            throw err
+        }
+    }
+
+    if (needsRecreation) {
+        try {
+            dbAdapter.executeInTransaction(() => {
+                dbAdapter.dropVecTable()
+                dbAdapter.createVecTable(dimensions)
+                dbAdapter.setVectorMetadata('model_name', modelName)
+                dbAdapter.setVectorMetadata('dimensions', dimensions.toString())
+            })
+            logger.info(`Created new vec_journal_entries table with ${dimensions} dimensions`)
+        } catch (err) {
+            logger.error('Failed to recreate vector table', { error: err })
+            throw err
+        }
+    } else {
+        dbAdapter.createVecTable(dimensions)
+        if (missingModelMetadata) {
+            dbAdapter.setVectorMetadata('model_name', modelName)
+        }
     }
 }

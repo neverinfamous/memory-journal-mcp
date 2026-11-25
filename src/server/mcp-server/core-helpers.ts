@@ -116,6 +116,24 @@ export async function awaitPendingVectorInit(
     }
 }
 
+/**
+ * Cancel background vector work synchronously via `disposeVectorManagers`, wait boundedly for
+ * active operations to drain, then give the outer `pendingVectorInit` chain a brief window to settle.
+ */
+export async function teardownVectorManagers(
+    runtime:
+        | {
+              pendingVectorInit?: Promise<void> | null
+              disposeVectorManagers?: ((timeoutMs?: number) => Promise<void>) | null
+          }
+        | undefined,
+    timeoutMs = 2000
+): Promise<void> {
+    if (runtime === undefined) return
+    await runtime.disposeVectorManagers?.(timeoutMs).catch(() => undefined)
+    await awaitPendingVectorInit(runtime, Math.min(timeoutMs, 500))
+}
+
 /** Dispose codemode resources and close every database handle, logging (not throwing) failures. */
 export function closeServerResources(
     handles: (Pick<IDatabaseAdapter, 'close'> | undefined)[]

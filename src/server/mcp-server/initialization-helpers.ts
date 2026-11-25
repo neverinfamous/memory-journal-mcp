@@ -78,7 +78,7 @@ export interface VectorManagers {
     vectorManager: VectorSearchManagerProxyResult
     teamVectorManager: VectorSearchManagerProxyResult | undefined
     pendingVectorInit: Promise<void>
-    disposeVectorManagers: () => Promise<void>
+    disposeVectorManagers: (timeoutMs?: number) => Promise<void>
 }
 
 type VectorSearchManagerProxyResult = ReturnType<typeof VectorSearchManagerProxy.create>
@@ -350,9 +350,9 @@ export function createVectorManagers(inputs: VectorManagerInputs): VectorManager
         primaryTeamVectorManager,
         testTeamVectorManager,
     ].filter((m): m is VectorSearchManager => m !== undefined)
-    const disposeVectorManagers = async (): Promise<void> => {
+    const disposeVectorManagers = async (timeoutMs = 2_000): Promise<void> => {
         cancelled = true
-        await Promise.allSettled(allManagers.map((m) => m.dispose()))
+        await Promise.allSettled(allManagers.map((m) => m.dispose(timeoutMs)))
     }
     const pendingVectorInit = Promise.allSettled(pendingInits).then(() => undefined)
     return { vectorManager, teamVectorManager, pendingVectorInit, disposeVectorManagers }

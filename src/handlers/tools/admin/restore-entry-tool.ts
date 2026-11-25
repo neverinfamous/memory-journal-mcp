@@ -23,10 +23,14 @@ function normalizeRestoreEntryParams(val: unknown): unknown {
     if (!isRecord(val)) return val
     const obj: Record<string, unknown> = { ...val }
     if ('id' in obj) {
-        if (obj['entry_id'] === undefined) {
-            obj['entry_id'] = obj['id']
+        const canonical = obj['entry_id']
+        const alias = obj['id']
+        if (canonical === undefined) {
+            obj['entry_id'] = alias
+            Reflect.deleteProperty(obj, 'id')
+        } else if (alias === undefined || coerceIntString(canonical) === coerceIntString(alias)) {
+            Reflect.deleteProperty(obj, 'id')
         }
-        Reflect.deleteProperty(obj, 'id')
     }
     return obj
 }

@@ -33,30 +33,51 @@ function coerceCanonicalId(v: number | string | undefined): number | undefined {
 // Input Schemas
 // ============================================================================
 
+function normalizeLinkRelationship(raw: string): string {
+    if (raw === 'resolves') return 'resolved'
+    if (raw === 'relates_to') return 'references'
+    if (raw === 'depends_on') return 'blocked_by'
+    return raw
+}
+
+function addConflictIfDifferent(
+    values: readonly unknown[],
+    path: string[],
+    message: string,
+    ctx: z.RefinementCtx
+): void {
+    const defined = values.filter((v) => v !== undefined)
+    if (defined.length > 1 && defined.some((v) => !Object.is(v, defined[0]))) {
+        ctx.addIssue({ code: 'custom', path, message })
+    }
+}
+
 /** Strict schema — used inside handler for structured Zod errors */
-export const LinkEntriesSchema = z.object({
-    from_entry_id: z.number().int().positive(),
-    to_entry_id: z.number().int().positive(),
-    relationship_type: z
-        .enum(
-            [
-                'evolves_from',
-                'references',
-                'implements',
-                'clarifies',
-                'response_to',
-                'blocked_by',
-                'resolved',
-                'caused',
-            ],
-            { error: relationshipTypeEnumError }
-        )
-        .optional()
-        .default('references'),
-    description: z.string().optional(),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().max(255).optional(),
-})
+export const LinkEntriesSchema = z
+    .object({
+        from_entry_id: z.number().int().positive(),
+        to_entry_id: z.number().int().positive(),
+        relationship_type: z
+            .enum(
+                [
+                    'evolves_from',
+                    'references',
+                    'implements',
+                    'clarifies',
+                    'response_to',
+                    'blocked_by',
+                    'resolved',
+                    'caused',
+                ],
+                { error: relationshipTypeEnumError }
+            )
+            .optional()
+            .default('references'),
+        description: z.string().optional(),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().max(255).optional(),
+    })
+    .strict()
 
 export const LinkEntriesSchemaMcp = z
     .object({
@@ -77,128 +98,194 @@ export const LinkEntriesSchemaMcp = z
         message: z.string().optional(),
         text: z.string().optional(),
     })
-    .transform((data) => {
-        const rawRel = data.relationship_type ?? data.type ?? data.rel ?? 'references'
-        const normalizedRel =
-            rawRel === 'resolves'
-                ? 'resolved'
-                : rawRel === 'relates_to'
-                  ? 'references'
-                  : rawRel === 'depends_on'
-                    ? 'blocked_by'
-                    : rawRel
+    .strict()
+    .superRefine((data, ctx) => {
+        addConflictIfDifferent(
+            [data.from_entry_id, data.from_id, data.from, data.source_id].map(coerceCanonicalId),
+            ['from_entry_id'],
+            "Conflicting values provided for 'from_entry_id' and its aliases.",
+            ctx
+        )
+        addConflictIfDifferent(
+            [data.to_entry_id, data.to_id, data.to, data.target_id].map(coerceCanonicalId),
+            ['to_entry_id'],
+            "Conflicting values provided for 'to_entry_id' and its aliases.",
+            ctx
+        )
+        addConflictIfDifferent(
+            [data.relationship_type, data.type, data.rel].map((v) =>
+                v !== undefined ? normalizeLinkRelationship(v) : undefined
+            ),
+            ['relationship_type'],
+            "Conflicting values provided for 'relationship_type' and its aliases.",
+            ctx
+        )
+        addConflictIfDifferent(
+            [data.description, data.message, data.text],
+            ['description'],
+            "Conflicting values provided for 'description', 'message', or 'text'.",
+            ctx
+        )
+    })
+    .transform(({ from, to, from_id, to_id, source_id, target_id, type, rel, message, text, ...data }) => {
+        const rawRel = data.relationship_type ?? type ?? rel ?? 'references'
         return {
             ...data,
-            from_entry_id: coerceCanonicalId(data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id),
-            to_entry_id: coerceCanonicalId(data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id),
-            relationship_type: normalizedRel,
-            description: data.description ?? data.message ?? data.text,
+            from_entry_id: coerceCanonicalId(data.from_entry_id ?? from_id ?? from ?? source_id),
+            to_entry_id: coerceCanonicalId(data.to_entry_id ?? to_id ?? to ?? target_id),
+            relationship_type: normalizeLinkRelationship(rawRel),
+            description: data.description ?? message ?? text,
             project_number: coerceCanonicalId(data.project_number),
             workspace_id: data.workspace_id,
         }
     })
 
-export const VisualizeInputSchema = z.object({
-    entry_id: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe('Specific entry ID to visualize (shows connected entries)'),
-    tags: z.array(z.string()).optional().describe('Filter entries by tags'),
-    relationship_type: z
-        .enum([
-            'evolves_from',
-            'references',
-            'implements',
-            'clarifies',
-            'response_to',
-            'blocked_by',
-            'resolved',
-            'caused',
-        ])
-        .optional()
-        .describe('Filter to show only this relationship type'),
-    depth: z.number().int().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
-    limit: z.number().int().min(1).max(500).optional().default(20).describe('Maximum entries to include'),
-    include_content: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Include full entry content in node metadata (default false: 120-char preview only, saves tokens)'),
-    format: z
-        .enum(['mermaid', 'edges', 'both'])
-        .optional()
-        .default('both')
-        .describe("Output shape: 'mermaid' (diagram only), 'edges' (nodes + edges arrays, no diagram), or 'both' (default)"),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().max(255).optional(),
-    source: z.enum(['personal', 'team']).optional(),
-})
+export const VisualizeInputSchema = z
+    .object({
+        entry_id: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe('Specific entry ID to visualize (shows connected entries)'),
+        tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+        relationship_type: z
+            .enum([
+                'evolves_from',
+                'references',
+                'implements',
+                'clarifies',
+                'response_to',
+                'blocked_by',
+                'resolved',
+                'caused',
+            ])
+            .optional()
+            .describe('Filter to show only this relationship type'),
+        depth: z.number().int().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
+        limit: z.number().int().min(1).max(500).optional().default(20).describe('Maximum entries to include'),
+        include_content: z
+            .boolean()
+            .optional()
+            .default(false)
+            .describe('Include full entry content in node metadata (default false: 120-char preview only, saves tokens)'),
+        format: z
+            .enum(['mermaid', 'edges', 'both'])
+            .optional()
+            .default('both')
+            .describe("Output shape: 'mermaid' (diagram only), 'edges' (nodes + edges arrays, no diagram), or 'both' (default)"),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().max(255).optional(),
+        source: z.enum(['personal', 'team']).optional(),
+    })
+    .strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
-export const VisualizeInputSchemaMcp = z.object({
-    entry_id: relaxedNumber()
-        .optional()
-        .describe('Specific entry ID to visualize (shows connected entries)'),
-    id: relaxedNumber().optional(),
-    tags: z.array(z.string()).optional().describe('Filter entries by tags'),
-    q: z.string().optional(),
-    text: z.string().optional(),
-    message: z.string().optional(),
-    description: z.string().optional(),
-    relationship_type: z
-        .string()
-        .optional()
-        .describe('Filter to show only this relationship type (e.g., blocked_by, implements)'),
-    type: z.string().optional(),
-    rel: z.string().optional(),
-    depth: relaxedNumber().optional().describe('Relationship traversal depth'),
-    path: relaxedNumber().optional(),
-    limit: relaxedNumber()
-        .optional()
-        .describe(
-            'Maximum entries to include (1-500, default: 20). Anti-Hallucination Hint: Values > 500 will be auto-clamped to 500.'
-        ),
-    keep: relaxedNumber().optional(),
-    include_content: z
-        .boolean()
-        .optional()
-        .describe('Include full entry content in node metadata (default false: 120-char preview only, saves tokens)'),
-    format: z
-        .string()
-        .optional()
-        .describe("Output shape: 'mermaid' (diagram only), 'edges' (nodes + edges arrays, no diagram), or 'both' (default)"),
-    project_number: relaxedNumber().optional(),
-    workspace_id: z.string().optional(),
-    source: z.string().optional().describe("Store to visualize: 'personal' (default) or 'team'"),
-}).transform(data => {
-    // Collect all string queries into an array of tags
-    let extractedTags = data.tags;
-    if (!extractedTags) {
-        const queryVal = data.q ?? data.text ?? data.message ?? data.description;
-        if (queryVal) extractedTags = [queryVal];
-    }
-    const rawLimit = data.limit ?? data.keep
-    const numLimit = coerceRelaxed(rawLimit)
-    const clampedLimit =
-        numLimit === undefined
-            ? 20
-            : Number.isSafeInteger(numLimit) && numLimit >= 1
-              ? Math.min(numLimit, 500)
-              : numLimit
-    return {
-        ...data,
-        entry_id: coerceCanonicalId(data.entry_id ?? data.id),
-        relationship_type: data.relationship_type ?? data.type ?? data.rel,
-        depth: coerceRelaxed(data.depth ?? data.path) ?? 2,
-        project_number: coerceCanonicalId(data.project_number),
-        limit: clampedLimit,
-        tags: extractedTags,
-        format: data.format?.trim().toLowerCase(),
-        ...(data.source !== undefined ? { source: data.source.trim().toLowerCase() } : {}),
-    };
-})
+export const VisualizeInputSchemaMcp = z
+    .object({
+        entry_id: relaxedNumber()
+            .optional()
+            .describe('Specific entry ID to visualize (shows connected entries)'),
+        id: relaxedNumber().optional(),
+        tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+        q: z.string().optional(),
+        text: z.string().optional(),
+        message: z.string().optional(),
+        description: z.string().optional(),
+        relationship_type: z
+            .string()
+            .optional()
+            .describe('Filter to show only this relationship type (e.g., blocked_by, implements)'),
+        type: z.string().optional(),
+        rel: z.string().optional(),
+        depth: relaxedNumber().optional().describe('Relationship traversal depth'),
+        path: relaxedNumber().optional(),
+        limit: relaxedNumber()
+            .optional()
+            .describe(
+                'Maximum entries to include (1-500, default: 20). Anti-Hallucination Hint: Values > 500 will be auto-clamped to 500.'
+            ),
+        keep: relaxedNumber().optional(),
+        include_content: z
+            .boolean()
+            .optional()
+            .describe('Include full entry content in node metadata (default false: 120-char preview only, saves tokens)'),
+        format: z
+            .string()
+            .optional()
+            .describe("Output shape: 'mermaid' (diagram only), 'edges' (nodes + edges arrays, no diagram), or 'both' (default)"),
+        project_number: relaxedNumber().optional(),
+        workspace_id: z.string().optional(),
+        source: z.string().optional().describe("Store to visualize: 'personal' (default) or 'team'"),
+    })
+    .strict()
+    .superRefine((data, ctx) => {
+        addConflictIfDifferent(
+            [coerceCanonicalId(data.entry_id), coerceCanonicalId(data.id)],
+            ['entry_id'],
+            "Conflicting values provided for 'entry_id' and 'id'.",
+            ctx
+        )
+        addConflictIfDifferent(
+            [data.relationship_type, data.type, data.rel],
+            ['relationship_type'],
+            "Conflicting values provided for 'relationship_type', 'type', or 'rel'.",
+            ctx
+        )
+        addConflictIfDifferent(
+            [coerceRelaxed(data.depth), coerceRelaxed(data.path)],
+            ['depth'],
+            "Conflicting values provided for 'depth' and 'path'.",
+            ctx
+        )
+        addConflictIfDifferent(
+            [coerceRelaxed(data.limit), coerceRelaxed(data.keep)],
+            ['limit'],
+            "Conflicting values provided for 'limit' and 'keep'.",
+            ctx
+        )
+        const definedQueries = [data.q, data.text, data.message, data.description].filter(
+            (v): v is string => v !== undefined && v !== ''
+        )
+        addConflictIfDifferent(definedQueries, ['tags'], 'Conflicting tag filter query aliases.', ctx)
+        if (
+            data.tags !== undefined &&
+            definedQueries[0] !== undefined &&
+            (data.tags.length !== 1 || data.tags[0] !== definedQueries[0])
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['tags'],
+                message: "Conflicting values provided for 'tags' and tag query alias.",
+            })
+        }
+    })
+    .transform(({ id, q, text, message, description, type, rel, path, keep, ...data }) => {
+        let extractedTags = data.tags
+        if (!extractedTags) {
+            const queryVal = q ?? text ?? message ?? description
+            if (queryVal) extractedTags = [queryVal]
+        }
+        const rawLimit = data.limit ?? keep
+        const numLimit = coerceRelaxed(rawLimit)
+        const clampedLimit =
+            numLimit === undefined
+                ? 20
+                : Number.isSafeInteger(numLimit) && numLimit >= 1
+                  ? Math.min(numLimit, 500)
+                  : numLimit
+        return {
+            ...data,
+            entry_id: coerceCanonicalId(data.entry_id ?? id),
+            relationship_type: data.relationship_type ?? type ?? rel,
+            depth: coerceRelaxed(data.depth ?? path) ?? 2,
+            project_number: coerceCanonicalId(data.project_number),
+            limit: clampedLimit,
+            tags: extractedTags,
+            format: data.format?.trim().toLowerCase(),
+            ...(data.source !== undefined ? { source: data.source.trim().toLowerCase() } : {}),
+        }
+    })
 
 // ============================================================================
 // Output Schemas

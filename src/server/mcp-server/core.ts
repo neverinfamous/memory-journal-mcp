@@ -16,9 +16,9 @@ import { logger } from '../../utils/logger.js'
 import { flushAgentIssues } from '../../utils/issue-logger.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import {
-    awaitPendingVectorInit,
     buildBaseToolConfig,
     closeServerResources,
+    teardownVectorManagers,
 } from './core-helpers.js'
 import { closeCrossTeamAdapters } from '../../handlers/tools/search/cross-team.js'
 import { resolveActiveBriefingConfig } from './tool-registration/register-tools-helpers.js'
@@ -124,8 +124,7 @@ async function cleanupFailedStartup(params: {
     }
     await runtime.auditLogger?.close().catch(() => undefined)
     await flushAgentIssues().catch(() => undefined)
-    await awaitPendingVectorInit(runtime)
-    await runtime.disposeVectorManagers?.().catch(() => undefined)
+    await teardownVectorManagers(runtime)
     try {
         closeDatabases()
     } catch {

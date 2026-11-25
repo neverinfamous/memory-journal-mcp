@@ -444,6 +444,6 @@ describe('Pass 87 Audit — High, Moderate & Low Regressions', () => {
     })
 
     it('bumps AUDIT_PROMPT_REVISION to Pass 87', () => {
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass89')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass90')
     })
 })

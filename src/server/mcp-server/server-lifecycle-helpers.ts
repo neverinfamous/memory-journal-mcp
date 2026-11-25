@@ -13,10 +13,10 @@ import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
 import type { ServerOptions } from './types.js'
 import {
-    awaitPendingVectorInit,
     buildHttpTransportConfig,
     logShutdownError,
     runShutdownStep,
+    teardownVectorManagers,
 } from './core-helpers.js'
 import { resolveActiveBriefingConfig } from './tool-registration/register-tools-helpers.js'
 
@@ -69,8 +69,7 @@ export async function executeGracefulShutdown(params: GracefulShutdownParams): P
     } finally {
         params.detachSignals?.()
         await flushAgentIssues().catch(() => undefined)
-        await awaitPendingVectorInit(runtime)
-        await runtime.disposeVectorManagers?.().catch(() => undefined)
+        await teardownVectorManagers(runtime)
         closeDatabases()
         // [INTENT] Preserve any non-zero exit code set earlier instead of forcing 0 (L6).
         const code = typeof process.exitCode === 'number' ? process.exitCode : 0

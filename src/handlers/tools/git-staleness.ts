@@ -176,7 +176,8 @@ export function resolveStalenessTargetWorkspaces(
     config: ToolHandlerConfig | undefined
 ): string[] {
     const defaultWs = resolveWorkspaceId(undefined, undefined, config)
-    if (rawWs !== '*') {
+    const trimmedRawWs = rawWs?.trim()
+    if (trimmedRawWs !== '*') {
         return [resolveWorkspaceId(rawWs, rawProj, config)]
     }
     if (resolvedEntryId !== undefined) {
@@ -204,9 +205,10 @@ function collectStalenessTargetsForWorkspace(
     sessionId?: string
 ): { id: number; timestamp: string }[] {
     if (resolvedEntryId !== undefined) {
-        const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
+        const isWildcard = rawWs?.trim() === '*'
+        const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, isWildcard ? '*' : wsId)
         if (!entry || (typeof rawProj === 'number' && entry.projectNumber !== rawProj)) {
-            if (rawWs !== '*') throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+            if (!isWildcard) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
             return []
         }
         return [{ id: entry.id, timestamp: entry.timestamp }]
@@ -303,7 +305,7 @@ export async function evaluateWorkspaceAnchors(options: {
     const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
     const registryPath = registry?.[canonicalWs]?.path
     if (registryPath === undefined || registryPath.length === 0 || !(await pathExistsAsync(registryPath))) {
-        if (rawWs === '*') return { rows: [], skipped: true }
+        if (rawWs?.trim() === '*') return { rows: [], skipped: true }
         throw new ValidationError(
             registryPath !== undefined && registryPath.length > 0
                 ? `Registered repository path for workspace '${wsId}' does not exist: ${registryPath}`
@@ -364,15 +366,35 @@ const coercedPositiveInt = z.preprocess(
     z.number().int().positive()
 )
 
-const CheckEntryStalenessParseSchema = z.object({
-    entry_id: coercedPositiveInt.optional(),
-    entryId: coercedPositiveInt.optional(),
-    workspace_id: z.string().max(255).optional(),
-    workspaceId: z.string().max(255).optional(),
-    project_number: coercedPositiveInt.optional(),
-    projectNumber: coercedPositiveInt.optional(),
-    session_id: z.string().optional(),
-})
+const CheckEntryStalenessParseSchema = z
+    .object({
+        entry_id: coercedPositiveInt.optional(),
+        entryId: coercedPositiveInt.optional(),
+        workspace_id: z.string().max(255).optional(),
+        workspaceId: z.string().max(255).optional(),
+        project_number: coercedPositiveInt.optional(),
+        projectNumber: coercedPositiveInt.optional(),
+        session_id: z.string().optional(),
+    })
+    .strict()
+
+function assertNoStalenessAliasConflicts(parsed: z.infer<typeof CheckEntryStalenessParseSchema>): void {
+    if (parsed.entry_id !== undefined && parsed.entryId !== undefined && parsed.entry_id !== parsed.entryId) {
+        throw new ValidationError("Conflicting values provided for 'entry_id' and 'entryId'.")
+    }
+    if (
+        parsed.project_number !== undefined &&
+        parsed.projectNumber !== undefined &&
+        parsed.project_number !== parsed.projectNumber
+    ) {
+        throw new ValidationError("Conflicting values provided for 'project_number' and 'projectNumber'.")
+    }
+    const wsA = parsed.workspace_id?.trim()
+    const wsB = parsed.workspaceId?.trim()
+    if (wsA !== undefined && wsB !== undefined && wsA.toLowerCase() !== wsB.toLowerCase()) {
+        throw new ValidationError("Conflicting values provided for 'workspace_id' and 'workspaceId'.")
+    }
+}
 
 /** Execute `check_entry_staleness` across target workspaces and format the aggregate result. */
 export async function runCheckEntryStaleness(
@@ -383,8 +405,9 @@ export async function runCheckEntryStaleness(
 ): Promise<unknown> {
     try {
         const parsed = CheckEntryStalenessParseSchema.parse(params)
+        assertNoStalenessAliasConflicts(parsed)
         const resolvedEntryId = parsed.entry_id ?? parsed.entryId
-        const rawWs = parsed.workspace_id ?? parsed.workspaceId
+        const rawWs = (parsed.workspace_id ?? parsed.workspaceId)?.trim()
         const rawProj = parsed.project_number ?? parsed.projectNumber
         const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
         const targetWorkspaces = resolveStalenessTargetWorkspaces(context.db, rawWs, rawProj, resolvedEntryId, registry, context.config)

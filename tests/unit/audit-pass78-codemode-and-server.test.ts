@@ -341,8 +341,8 @@ describe('Pass 78 Audit — Code Mode, Server Interceptor, Scope & Prompts', () 
             sandbox.dispose()
         }
 
-        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass89')
-        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass89')
+        expect(AUDIT_PROMPT_REVISION).toBe('2026-11-24-audit-pass90')
+        expect(CODE_QUALITY_PROMPT_REVISION).toBe('2026-11-24-audit-pass90')
         const cqDef = getCodeQualityAuditPromptDefinition()
         const cqRendered = await cqDef.handler(
             { target: 'src', copilot: 'false' },
@@ -350,7 +350,7 @@ describe('Pass 78 Audit — Code Mode, Server Interceptor, Scope & Prompts', () 
         )
         const cqText =
             (cqRendered as { messages?: { content?: { text?: string } }[] }).messages?.[0]?.content?.text ?? ''
-        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass89')
+        expect(cqText).toContain('Prompt revision: 2026-11-24-audit-pass90')
         expect(cqText).toContain('hasUnsafeAdsColon')
         expect(cqText).toContain('_alias_derived_workspace')
         expect(cqText).toContain('isSingleSqlStringLiteral')

@@ -237,11 +237,19 @@ export const GetProjectSchemaMcp = z.preprocess(
                     obj['name'] = String(obj['id'])
                 }
             }
-            // [INVARIANT] Strip alias keys once resolved so .strict() doesn't reject them.
-            if ('name' in obj) {
-                delete obj['project_name']
-                delete obj['project']
-                delete obj['id']
+            // [INVARIANT] Preserve conflicting aliases so .strict() fails closed instead of dropping them.
+            if (typeof obj['name'] === 'string') {
+                const canonicalNorm = obj['name'].trim().toLowerCase()
+                for (const aliasKey of ['project_name', 'project', 'id'] as const) {
+                    const aliasVal = obj[aliasKey]
+                    if (
+                        aliasVal === undefined ||
+                        ((typeof aliasVal === 'string' || typeof aliasVal === 'number') &&
+                            String(aliasVal).trim().toLowerCase() === canonicalNorm)
+                    ) {
+                        Reflect.deleteProperty(obj, aliasKey)
+                    }
+                }
             }
             return obj
         }

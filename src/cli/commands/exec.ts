@@ -1,6 +1,6 @@
 import type { Command } from 'commander'
 import { initializeDependencies } from '../../server/mcp-server/initialization.js'
-import { awaitPendingVectorInit, closeServerResources } from '../../server/mcp-server/core-helpers.js'
+import { closeServerResources, teardownVectorManagers } from '../../server/mcp-server/core-helpers.js'
 import { resolveActiveBriefingConfig } from '../../server/mcp-server/tool-registration/register-tools-helpers.js'
 import { callTool } from '../../handlers/tools/index.js'
 import { disposeCodemodeResources } from '../../handlers/tools/codemode/singleton-state.js'
@@ -192,8 +192,7 @@ async function cleanupExecResources(context: ServerContext): Promise<void> {
     } catch {
         // best-effort codemode worker teardown
     }
-    await awaitPendingVectorInit(context.runtime)
-    await context.runtime.disposeVectorManagers?.().catch(() => undefined)
+    await teardownVectorManagers(context.runtime)
     try {
         closeServerResources([context.db, context.testDb, context.teamDb, context.testTeamDb])
     } catch {
@@ -223,12 +222,15 @@ export async function execAction(scriptPath: string, options: ExecOptions, comma
             execWorkspaceId,
             explicitDefaultProject
         )
+        const execProjectNumber =
+            options.defaultProject ??
+            (execWorkspaceId !== undefined ? customToolHandlerConfig.defaultProjectNumber : undefined)
         const result = await callTool(
             'mj_execute_code',
             {
                 code: scriptContent,
                 ...(execWorkspaceId !== undefined ? { workspace_id: execWorkspaceId } : {}),
-                ...(options.defaultProject !== undefined ? { project_number: options.defaultProject } : {}),
+                ...(execProjectNumber !== undefined ? { project_number: execProjectNumber } : {}),
             },
             context.db,
             context.vectorManager,
