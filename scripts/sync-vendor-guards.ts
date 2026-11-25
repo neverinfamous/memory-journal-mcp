@@ -232,7 +232,7 @@ export function writeBufferAtomicIfChanged(destFile: string, nextContent: Buffer
   if (existingStat !== undefined) {
     if (existingStat.isSymbolicLink()) throw new Error(`Refusing symbolic link at vendor destination: ${destFile}`);
     if (!existingStat.isFile()) throw new Error(`Refusing non-regular file at vendor destination: ${destFile}`);
-    if (readFileSync(destFile).equals(nextContent)) return false;
+    if (existingStat.size === nextContent.byteLength && readFileSync(destFile).equals(nextContent)) return false;
   } else {
     mkdirSync(dirname(destFile), { recursive: true });
   }

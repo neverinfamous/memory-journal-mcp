@@ -12,34 +12,14 @@ import {
 } from './sync-vendor-guards.js';
 import { hasHostScriptReferences, neutralizeVendoredDoc } from './vendor-doc-neutralizer.js';
 
+const BUILTIN_MODULES = new Set(builtinModules);
+
 function collectModuleSpecifiers(source: string): string[] {
-  const sf = ts.createSourceFile('vendor.ts', source, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
-  const specifiers: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      specifiers.push(node.moduleSpecifier.text);
-    } else if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      node.arguments.length >= 1
-    ) {
-      const firstArg = node.arguments[0];
-      if (firstArg !== undefined && ts.isStringLiteral(firstArg)) {
-        specifiers.push(firstArg.text);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
-  return specifiers;
+  return ts.preProcessFile(source, true, true).importedFiles.map((entry) => entry.fileName);
 }
 
 /**
- * Extract relative and third-party package specifiers from a single TypeScript AST parse.
+ * Extract relative and third-party package specifiers using TypeScript's lightweight preprocessor scan.
  */
 function classifyVendorSpecifiers(source: string): { relative: string[]; packages: Set<string> } {
   const relativeSpecifiers: string[] = [];
@@ -54,7 +34,7 @@ function classifyVendorSpecifiers(source: string): { relative: string[]; package
     }
     const parts = specifier.split('/');
     const name = specifier.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] ?? specifier);
-    if (builtinModules.includes(name)) continue;
+    if (BUILTIN_MODULES.has(name)) continue;
     packages.add(name);
   }
   return { relative: relativeSpecifiers, packages };
@@ -224,6 +204,8 @@ function validateVendorLibraries(
 ): { unresolved: Map<string, Set<string>>; missing: Map<string, Set<string>> } {
   const missing = new Map<string, Set<string>>();
   const unresolved = new Map<string, Set<string>>();
+  const existingTargets = new Set<string>(stagedPaths);
+  const missingTargets = new Set<string>();
   for (const lib of libsToSync) {
     const libConfig = manifest.libs[lib];
     if (libConfig === undefined) continue;
@@ -234,7 +216,14 @@ function validateVendorLibraries(
       const { relative: relativeSpecifiers, packages } = classifyVendorSpecifiers(source);
       for (const specifier of relativeSpecifiers) {
         const target = resolve(dirname(filePath), specifier.replace(/\.js$/, '.ts'));
-        if ((stagedPaths?.has(target) ?? false) || existsSync(target)) continue;
+        if (existingTargets.has(target)) continue;
+        if (!missingTargets.has(target)) {
+          if (existsSync(target)) {
+            existingTargets.add(target);
+            continue;
+          }
+          missingTargets.add(target);
+        }
         const normalizedSpecifier = specifier.replace(/\\/g, '/');
         const normalizedFile = file.replace(/\\/g, '/');
         const users = unresolved.get(`${lib}/${normalizedSpecifier}`) ?? new Set<string>();
@@ -272,7 +261,7 @@ function findNonNeutralVendorDocs(cwd: string, libsToSync: string[], manifest: V
 function assertNoVendorIssues(
   unresolved: Map<string, Set<string>>,
   missing: Map<string, Set<string>>,
-  upstreamDeps: Record<string, string>
+  resolveUpstreamDeps: () => Record<string, string>
 ): void {
   if (unresolved.size > 0) {
     console.error('\nVendored files import sibling modules that are not synced (add them to src/vendor/VENDOR.json "files"):');
@@ -281,6 +270,7 @@ function assertNoVendorIssues(
     }
   }
   if (missing.size > 0) {
+    const upstreamDeps = resolveUpstreamDeps();
     console.error('\nVendored code imports packages that are not declared in package.json:');
     for (const [pkg, users] of missing) {
       const range = upstreamDeps[pkg];
@@ -323,11 +313,17 @@ function commitStagedVendorWrites(
   );
 }
 
-function runVendorSelfTests(cwd: string, rawLib?: string): void {
+function runVendorSelfTests(
+  cwd: string,
+  vendorJsonPath: string,
+  rawLib: string | undefined,
+  rawUpstream: string | undefined,
+  alreadyChecked: boolean
+): void {
   console.log('\nRunning tests...');
-  const checkArgs = [join(cwd, 'node_modules', 'tsx', 'dist', 'cli.mjs'), join(cwd, 'scripts', 'sync-vendor.ts'), '--check'];
-  if (rawLib !== undefined) checkArgs.push('--lib', rawLib);
-  execFileSync(process.execPath, checkArgs, { stdio: 'inherit', shell: false });
+  if (!alreadyChecked) {
+    runCheckMode(cwd, vendorJsonPath, rawLib, rawUpstream);
+  }
   const testFiles =
     rawLib === 'lib-agent-exec'
       ? ['tests/unit/vendor-doc-neutralizer.test.ts']
@@ -349,11 +345,10 @@ function validateAndAssertLibraries(
   cwd: string,
   libsToSync: string[],
   manifest: VendorManifest,
-  upstreamRoot: string | undefined,
+  resolveUpstreamDeps: () => Record<string, string>,
   staged?: ReturnType<typeof stageVendorWrites>
 ): void {
   const declared = readDeclaredPackages(cwd);
-  const upstreamDeps = readUpstreamDepRanges(upstreamRoot);
   const { unresolved, missing } = validateVendorLibraries(
     cwd,
     libsToSync,
@@ -362,19 +357,20 @@ function validateAndAssertLibraries(
     staged?.stagedTsSources,
     staged?.stagedPaths
   );
-  assertNoVendorIssues(unresolved, missing, upstreamDeps);
+  assertNoVendorIssues(unresolved, missing, resolveUpstreamDeps);
 }
 
 function runCheckMode(cwd: string, vendorJsonPath: string, rawLib?: string, rawUpstream?: string): void {
   const vendorData = VendorManifestSchema.parse(JSON.parse(readFileSync(vendorJsonPath, 'utf8')));
   const libsToSync = resolveSelectedLibs(vendorData, rawLib);
-  let upstreamRoot: string | undefined;
-  try {
-    upstreamRoot = resolveUpstreamRoot(cwd, rawUpstream);
-  } catch {
-    upstreamRoot = undefined;
-  }
-  validateAndAssertLibraries(cwd, libsToSync, vendorData, upstreamRoot);
+  const resolveUpstreamDeps = (): Record<string, string> => {
+    try {
+      return readUpstreamDepRanges(resolveUpstreamRoot(cwd, rawUpstream));
+    } catch {
+      return {};
+    }
+  };
+  validateAndAssertLibraries(cwd, libsToSync, vendorData, resolveUpstreamDeps);
 
   // [INVARIANT] Synced docs are neutralized at stage time; --check guards against hand-copied upstream READMEs.
   const nonNeutralDocs = findNonNeutralVendorDocs(cwd, libsToSync, vendorData);
@@ -400,7 +396,7 @@ function runWriteMode(
     const upstreamRoot = resolveUpstreamRoot(cwd, rawUpstream);
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamRoot, encoding: 'utf8', windowsHide: true }).trim();
     const staged = stageVendorWrites(cwd, upstreamRoot, headSha, libsToSync, vendorData);
-    validateAndAssertLibraries(cwd, libsToSync, staged.nextManifest, upstreamRoot, staged);
+    validateAndAssertLibraries(cwd, libsToSync, staged.nextManifest, () => readUpstreamDepRanges(upstreamRoot), staged);
     commitStagedVendorWrites(vendorJsonPath, vendorData, libsToSync, staged);
   } finally {
     releaseLock();
@@ -429,7 +425,7 @@ function runSyncVendor(): void {
   }
 
   if (args.values.test) {
-    runVendorSelfTests(cwd, rawLib);
+    runVendorSelfTests(cwd, vendorJsonPath, rawLib, rawUpstream, args.values.check);
   }
 }
 
