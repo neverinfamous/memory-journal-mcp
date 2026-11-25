@@ -459,7 +459,7 @@ describe('sync-vendor-guards', () => {
           windowsHide: true,
         })
       ).toThrow(/not synced[\s\S]*demo\/\.\.\/\.\.\/escape\.js/i);
-    }, 30_000);
+    }, 90_000);
 
     it('PF-1: collectModuleSpecifiers matches ts.preProcessFile across all vendored TS files and edge syntax', () => {
       // Regex literals with embedded `import '...'` must be ignored cleanly

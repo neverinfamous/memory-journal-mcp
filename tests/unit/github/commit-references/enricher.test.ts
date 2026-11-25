@@ -2,19 +2,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { enrichCommits } from '../../../../src/github/commit-references/enricher.js'
 import type { GitHubIntegration } from '../../../../src/github/github-integration/index.js'
 
-vi.mock('simple-git', () => ({
-    simpleGit: vi.fn(() => ({
-        log: vi.fn().mockResolvedValue({
-            latest: {
-                hash: '1234567890abcdef',
-                message: 'Fix some bug',
-                body: 'This fixes #42 and closes #43',
-                author_name: 'Test Author',
-                date: '2023-01-01T00:00:00Z',
-            },
-        }),
-    })),
-}))
+vi.mock('simple-git', () => {
+    const mockCommit = {
+        hash: '1234567890abcdef',
+        message: 'Fix some bug',
+        body: 'This fixes #42 and closes #43',
+        author_name: 'Test Author',
+        date: '2023-01-01T00:00:00Z',
+    }
+    return {
+        simpleGit: vi.fn(() => ({
+            log: vi.fn().mockResolvedValue({
+                all: [mockCommit],
+                latest: mockCommit,
+                total: 1,
+            }),
+        })),
+    }
+})
 
 describe('enrichCommits', () => {
     beforeEach(() => {
